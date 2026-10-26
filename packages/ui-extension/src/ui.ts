@@ -5,7 +5,7 @@ import {
 } from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
-import { driveAsync } from "@repo/interpreter/drive";
+import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
@@ -15,6 +15,7 @@ import {
 	jsonToLisp,
 	type List,
 	listToArray,
+	newLispKeyword,
 	newSym,
 	Unspecified,
 } from "@repo/interpreter/objects";
@@ -32,7 +33,10 @@ import {
 	FOLDERS,
 	type Folder,
 	fileTab,
+	noPanel,
 	type PanelOp,
+	type PanelReader,
+	type PanelTab,
 	panelOps,
 	SPLITS,
 	type Split,
@@ -44,6 +48,8 @@ export {
 	fileTab,
 	type PanelContent,
 	type PanelOp,
+	type PanelReader,
+	type PanelTab,
 	panelOps,
 	viewTab,
 } from "./panel.ts";
@@ -421,7 +427,26 @@ function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
 }
 
-function registerUi(interp: Interp, surface: UiSurface): void {
+function tabList(tab: PanelTab): List {
+	return arrayToList([
+		newLispKeyword("id"),
+		tab.id,
+		newLispKeyword("kind"),
+		newLispKeyword(tab.kind),
+		newLispKeyword("title"),
+		tab.title,
+		newLispKeyword("shown"),
+		tab.shown || null,
+		newLispKeyword("focused"),
+		tab.focused || null,
+	]);
+}
+
+function registerUi(
+	interp: Interp,
+	surface: UiSurface,
+	panel: PanelReader,
+): void {
 	surface.bind(interp);
 	surface.reset();
 	interp.recovery.kind({
@@ -742,6 +767,18 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		},
 	);
 
+	interp.defGen(
+		"ui/tabs",
+		0,
+		"(ui/tabs)",
+		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
+		z.tuple([]),
+		function* (): Eval {
+			const tabs = yield* settled(panel.tabs());
+			return arrayToList(tabs.map(tabList));
+		},
+	);
+
 	interp.def(
 		"ui/send",
 		-1,
@@ -828,6 +865,7 @@ function renderView(surface: UiSurface, view: UiElement): string {
 
 export interface UiHost {
 	prompt: PromptSource;
+	panel?: PanelReader;
 }
 
 export interface UiOptions {
@@ -841,26 +879,32 @@ export function uiExtension(
 	options: UiOptions = {},
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
-	return Object.assign((interp: Interp): void => registerUi(interp, surface), {
-		surface,
-		prompt: host.prompt(),
-		session(hooks: SessionHooks): void {
-			hooks.invoke.use(async (ctx) => {
-				await surface.invoke(ctx.action, ctx.values);
-			});
-			hooks.annotate.use((buffer, into, next) => {
-				const view = buffer.collect(rendered).at(-1);
-				const panel = buffer.collect(panelOps);
-				const viewed =
-					view === undefined ? into : annotate(into, viewKey, viewOf(view));
-				return next(
-					buffer,
-					panel.length === 0 ? viewed : annotating(viewed, "output", { panel }),
+	const panel = host.panel ?? noPanel;
+	return Object.assign(
+		(interp: Interp): void => registerUi(interp, surface, panel),
+		{
+			surface,
+			prompt: host.prompt(),
+			session(hooks: SessionHooks): void {
+				hooks.invoke.use(async (ctx) => {
+					await surface.invoke(ctx.action, ctx.values);
+				});
+				hooks.annotate.use((buffer, into, next) => {
+					const view = buffer.collect(rendered).at(-1);
+					const panel = buffer.collect(panelOps);
+					const viewed =
+						view === undefined ? into : annotate(into, viewKey, viewOf(view));
+					return next(
+						buffer,
+						panel.length === 0
+							? viewed
+							: annotating(viewed, "output", { panel }),
+					);
+				});
+				hooks.message.use(
+					(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
 				);
-			});
-			hooks.message.use(
-				(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
-			);
+			},
 		},
-	});
+	);
 }

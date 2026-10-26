@@ -43,6 +43,7 @@ import { ConvexImageStore } from "./image-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
+import { ConvexPanelReader } from "./panel-store.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
@@ -124,7 +125,10 @@ export async function workspaceExtensions(
 			}),
 		),
 		proseExtension(proseHost),
-		uiExtension(uiHost),
+		uiExtension({
+			...uiHost,
+			panel: new ConvexPanelReader(workspaceId, connect),
+		}),
 		diagnosticsExtension(diagnosticsHost),
 	];
 }

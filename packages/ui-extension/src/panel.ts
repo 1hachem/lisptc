@@ -1,4 +1,5 @@
 import { topic } from "@repo/interpreter/channels";
+import type { Awaitable } from "@repo/shared/host";
 import type { UiValue } from "./view.ts";
 
 export const FOLDERS = ["attachments", "knowledge"] as const;
@@ -27,3 +28,17 @@ export function fileTab(folder: Folder, name: string): string {
 export function viewTab(title: string): string {
 	return `view:${title}`;
 }
+
+export interface PanelTab {
+	id: string;
+	kind: string;
+	title: string;
+	shown: boolean;
+	focused: boolean;
+}
+
+export interface PanelReader {
+	tabs(): Awaitable<PanelTab[]>;
+}
+
+export const noPanel: PanelReader = { tabs: () => [] };

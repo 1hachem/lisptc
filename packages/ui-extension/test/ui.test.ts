@@ -557,6 +557,43 @@ describe("the panel beside the chat", () => {
 		);
 	});
 
+	it("lists the tabs the panel reader reports", () => {
+		const interp = new Interp({
+			extensions: [
+				uiExtension({
+					...uiHost,
+					panel: {
+						tabs: () => [
+							{
+								id: "file:knowledge/notes.md",
+								kind: "file",
+								title: "notes.md",
+								shown: true,
+								focused: true,
+							},
+							{
+								id: "view:counts",
+								kind: "view",
+								title: "counts",
+								shown: false,
+								focused: false,
+							},
+						],
+					},
+				}),
+			],
+		});
+		runSync(interp, prelude);
+		expect(str(runSync(interp, "(ui/tabs)"))).toBe(
+			'((:id "file:knowledge/notes.md" :kind :file :title "notes.md" :shown t :focused t) (:id "view:counts" :kind :view :title "counts" :shown nil :focused nil))',
+		);
+	});
+
+	it("lists no tabs without a panel", () => {
+		const { interp } = fresh();
+		expect(str(runSync(interp, "(ui/tabs)"))).toBe("nil");
+	});
+
 	it("closes and focuses tabs by id", () => {
 		const { ops } = opened('(ui/focus "view:counts") (ui/close "view:counts")');
 		expect(ops).toEqual([
