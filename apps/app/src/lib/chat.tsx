@@ -485,16 +485,18 @@ export function useAgentSender(
 	message: ChatMessage,
 	chatId: Id<"chats"> | null,
 	parentSource: string | undefined,
-): { parent: boolean; name: string } {
-	const source = envelopeOf(message.additional_kwargs).source ?? "";
+): { parent: boolean; name: string; failed: boolean } {
+	const envelope = envelopeOf(message.additional_kwargs);
+	const source = envelope.source ?? "";
+	const failed = envelope.failed === true;
 	const sender = source.slice("agent:".length);
 	const { data: children } = useQuery(
 		convexQuery(api.chats.children, chatId ? { chatId } : "skip"),
 	);
 	if (source === parentSource || sender === chatId)
-		return { parent: true, name: "parent agent" };
+		return { parent: true, name: "parent agent", failed };
 	const name = children?.find((child) => child._id === sender)?.title;
-	return { parent: false, name: name ?? sender };
+	return { parent: false, name: name ?? sender, failed };
 }
 
 export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {

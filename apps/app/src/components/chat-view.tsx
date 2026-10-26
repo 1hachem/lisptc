@@ -453,7 +453,9 @@ function AgentMessage({
 					aria-hidden
 					className={`size-icon-sm flex-none ${text}`}
 				/>
-				<span className="min-w-0 truncate">agent {sender.name} responded</span>
+				<span className={`min-w-0 truncate ${sender.failed ? "text-red" : ""}`}>
+					agent {sender.name} {sender.failed ? "failed" : "responded"}
+				</span>
 			</button>
 		);
 	}
