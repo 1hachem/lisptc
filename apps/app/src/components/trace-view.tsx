@@ -142,7 +142,6 @@ function StepHeader({
 	open: boolean;
 	toggle: () => void;
 }) {
-	const shown = useChannels();
 	return (
 		<button
 			type="button"
