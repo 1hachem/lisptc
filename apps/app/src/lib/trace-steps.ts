@@ -9,6 +9,7 @@ import {
 	stepMeta,
 	toolActivity,
 	toolFailed,
+	toolIntent,
 } from "./chat.tsx";
 
 const SNIPPET = 60;
@@ -37,16 +38,24 @@ function snippet(text: string): string {
 	return line.length > SNIPPET ? `${line.slice(0, SNIPPET)}…` : line;
 }
 
+function doingOf(messages: readonly ChatMessage[]): string | undefined {
+	const declared = messages
+		.filter(isToolMessage)
+		.map((m) => toolIntent(m)?.doing?.trim())
+		.filter((doing): doing is string => doing !== undefined && doing !== "");
+	return declared.at(-1);
+}
+
 function titleOf(messages: readonly ChatMessage[]): string {
+	const doing = doingOf(messages);
+	if (doing !== undefined) return snippet(doing);
 	const lead = messages.find((m) => !isToolMessage(m));
 	if (lead === undefined) return "tool result";
-	const text = messageText(lead);
-	const { prose, heads } = formsIn(
-		text,
+	const { prose } = formsIn(
+		messageText(lead),
 		messageProse(lead).map((s) => s.span),
 	);
-	const head = heads[0];
-	return head === undefined ? snippet(prose) || "step" : `(${head})`;
+	return snippet(prose) || "step";
 }
 
 function durationOf(messages: readonly ChatMessage[]): number | undefined {

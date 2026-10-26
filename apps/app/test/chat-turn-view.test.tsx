@@ -409,6 +409,23 @@ describe("the trace", () => {
 		);
 	});
 
+	it("titles a step by its intent, else by the agent's prose, never by a form's name", async () => {
+		const host = await mount(
+			<TraceLines
+				messages={[
+					...MESSAGES,
+					{ id: "a3", type: "ai", content: "(draw-chart)" },
+					{ id: "t3", type: "tool", content: '{"source":"lisp-repl"}' },
+				]}
+			/>,
+		);
+		const titles = [
+			...host.querySelectorAll("[data-step-header] .truncate"),
+		].map((t) => t.textContent);
+
+		expect(titles).toEqual(["drawing the chart", PROSE, "step"]);
+	});
+
 	it("hides a channel its toolbar turns off", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
 		const output = [...host.querySelectorAll("button[aria-pressed]")].find(
@@ -702,7 +719,7 @@ describe("a trace's steps", () => {
 		);
 
 		expect(headers).toHaveLength(9);
-		expect(open.map((h) => h.textContent)).toEqual(["▾step 5(step-4)failed"]);
+		expect(open.map((h) => h.textContent)).toEqual(["▾step 5stepfailed"]);
 		expect(host.textContent).toContain("OUT-4");
 		expect(host.textContent).not.toContain("OUT-3");
 		expect(
@@ -764,6 +781,7 @@ describe("a trace's steps", () => {
 				id: "c2",
 				type: "tool",
 				content: '{"source":"lisp-repl","output":"CHILD-SAW"}',
+				additional_kwargs: { intent: { doing: "looking around" } },
 			},
 		];
 		const source = (chatId: string) => (chatId === "child-chat" ? child : []);
@@ -777,11 +795,11 @@ describe("a trace's steps", () => {
 		);
 
 		expect(opener?.textContent).toContain("scout");
-		expect(host.textContent).not.toContain("(look-around)");
+		expect(host.textContent).not.toContain("looking around");
 
 		await act(async () => opener?.click());
 
-		expect(host.textContent).toContain("(look-around)");
+		expect(host.textContent).toContain("looking around");
 	});
 });
 
