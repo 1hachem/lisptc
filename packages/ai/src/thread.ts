@@ -67,8 +67,6 @@ interface Tracked {
 
 const WITHDRAWN: TurnOutcome = { stopped: "withdrawn before a turn took it" };
 
-const CANCELLED: TurnOutcome = { stopped: "cancelled" };
-
 function openingMessage(envelope: Envelope): WireMessage {
 	if (envelope.kind === "event")
 		return systemEventMessage(envelope, envelope.id);
@@ -165,16 +163,16 @@ export class Thread {
 		return this.watchers.attach(signal);
 	}
 
-	stop(): boolean {
+	stop(why: TurnOutcome): boolean {
 		if (this.halting === undefined || this.halting.signal.aborted) return false;
-		this.halting.abort();
+		this.halting.abort(why);
 		return true;
 	}
 
-	async cancel(): Promise<boolean> {
-		const stopped = this.stop();
+	async cancel(why: TurnOutcome): Promise<boolean> {
+		const stopped = this.stop(why);
 		const dropped = await this.ports.mailbox.take(this.id);
-		for (const envelope of dropped) this.release(envelope.id, CANCELLED);
+		for (const envelope of dropped) this.release(envelope.id, why);
 		return stopped || dropped.length > 0;
 	}
 
@@ -317,7 +315,11 @@ export class Thread {
 			},
 		);
 		await this.pump(response);
-		const ended = await outcome;
+		const settled = await outcome;
+		const ended: TurnOutcome =
+			halting.signal.aborted && failed === undefined && "stopped" in settled
+				? halting.signal.reason
+				: settled;
 		if (this.halting === halting) this.halting = undefined;
 		this.held = "held" in ended;
 		this.watchers.publish({ type: "status", ...settledState(ended, failed) });

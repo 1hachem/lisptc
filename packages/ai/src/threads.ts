@@ -61,6 +61,8 @@ const LOST: TurnOutcome = { stopped: "lost in a restart" };
 
 const CANCELLED: TurnOutcome = { stopped: "cancelled" };
 
+const STOPPED: TurnOutcome = { stopped: "stopped by the user" };
+
 const OUTSIDE: UiActionResult = {
 	output: "that ask belongs to no thread under this one",
 	error: true,
@@ -328,22 +330,52 @@ export class Threads {
 			if (await this.get(job.thread).withdraw(job.envelope)) return true;
 			return await this.cancel(job.thread);
 		}
-		return await this.halt([id, ...(await this.descendants(id))]);
+		return await this.halt(
+			[id, ...(await this.descendants(id))],
+			CANCELLED,
+			(_, job) => this.release(job),
+		);
 	}
 
-	stop(threadId: string): Promise<boolean> {
-		return this.halt([threadId]);
+	async stop(
+		threadId: string,
+		scope: "thread" | "tree" = "thread",
+	): Promise<boolean> {
+		const doomed =
+			scope === "tree"
+				? [threadId, ...(await this.descendants(threadId))]
+				: [threadId];
+		const unheard = (job: Job) =>
+			job.replyTo !== undefined && doomed.includes(job.replyTo);
+		for (const job of this.jobs.values())
+			if (
+				job.state === "pending" &&
+				doomed.includes(job.thread) &&
+				unheard(job)
+			)
+				job.state = "cancelled";
+		return await this.halt(doomed, STOPPED, (id, job) => {
+			if (unheard(job)) return this.release(job);
+			this.asking.delete(job.thread);
+			void this.settle(id, job, STOPPED);
+		});
 	}
 
-	private async halt(doomed: readonly string[]): Promise<boolean> {
+	private async halt(
+		doomed: readonly string[],
+		why: TurnOutcome,
+		held: (id: string, job: Job) => void,
+	): Promise<boolean> {
 		const released = doomed.map((threadId) => {
-			const job = this.jobs.get(this.asking.get(threadId) ?? "");
-			if (job === undefined || job.state !== "held") return false;
-			this.release(job);
+			const id = this.asking.get(threadId);
+			const job = id === undefined ? undefined : this.jobs.get(id);
+			if (id === undefined || job === undefined || job.state !== "held")
+				return false;
+			held(id, job);
 			return true;
 		});
 		const cancelled = await Promise.all(
-			doomed.map((threadId) => this.live.get(threadId)?.thread.cancel()),
+			doomed.map((threadId) => this.live.get(threadId)?.thread.cancel(why)),
 		);
 		return [...released, ...cancelled].some((done) => done === true);
 	}
