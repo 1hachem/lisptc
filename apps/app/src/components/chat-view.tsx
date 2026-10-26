@@ -1,4 +1,3 @@
-import { AiChat02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MessageMemories } from "@repo/components";
 import type { Progress } from "@repo/interpreter/annotations";
@@ -26,6 +25,7 @@ import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
 import {
+	agentSender,
 	type ChatMessage,
 	isParentMessage,
 	isSystemMessage,
@@ -35,6 +35,7 @@ import {
 	messageProse,
 	messageReasoning,
 	messageText,
+	parentSourceOf,
 	type StepMeta,
 	toolActivity,
 	toolAnswers,
@@ -87,10 +88,23 @@ const Traced = createContext(false);
 const channel = (id: string) =>
 	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
 
-function ChannelLabel({ id }: { id: string }) {
-	const { label, icon, text } = channel(id);
+const ParentSource = createContext<string | undefined>(undefined);
+
+function ChannelLabel({
+	id,
+	label: named,
+	tight = false,
+}: {
+	id: string;
+	label?: string;
+	tight?: boolean;
+}) {
+	const { icon, text, ...rest } = channel(id);
+	const label = named ?? rest.label;
 	return (
-		<div className={`mt-2 mb-1 flex items-center gap-1.5 ${text}`}>
+		<div
+			className={`${tight ? "" : "mt-2 "}mb-1 flex items-center gap-1.5 ${text}`}
+		>
 			<HugeiconsIcon
 				icon={icon}
 				aria-hidden
@@ -327,7 +341,15 @@ function ToolResult({ message }: { message: ChatMessage }) {
 		>
 			{ui !== undefined && (
 				<Channel id="ui" labelled={labelled}>
-					<GenerativeUI node={ui} />
+					{traced ? (
+						<ChannelText
+							code
+							text={JSON.stringify(ui, null, 2)}
+							tone={channel("ui").text}
+						/>
+					) : (
+						<GenerativeUI node={ui} />
+					)}
 				</Channel>
 			)}
 			{attachments.length > 0 && (
@@ -390,6 +412,10 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
 }
 
 export function SystemLine({ message }: { message: ChatMessage }) {
+	const shown = useChannels();
+	if (isParentMessage(message))
+		return shown.agents ? <AgentMessage message={message} /> : null;
+	if (!shown.system) return null;
 	const { text } = channel("system");
 	return (
 		<div className="min-w-0 break-words">
@@ -401,20 +427,15 @@ export function SystemLine({ message }: { message: ChatMessage }) {
 	);
 }
 
-function ParentMessage({ message }: { message: ChatMessage }) {
+function AgentMessage({ message }: { message: ChatMessage }) {
+	const parentSource = useContext(ParentSource);
 	return (
 		<div className="min-w-0 break-words">
-			<div className="mt-2 mb-1 flex items-center gap-1.5 text-purple">
-				<HugeiconsIcon
-					icon={AiChat02Icon}
-					aria-hidden
-					className="size-icon-sm flex-none"
-				/>
-				<span className="flex-none text-[11px] tracking-[0.1em]">
-					parent agent
-				</span>
-				<span aria-hidden className="h-px flex-1 bg-dim/20" />
-			</div>
+			<ChannelLabel
+				id="agents"
+				label={agentSender(message, parentSource)}
+				tight
+			/>
 			<div className="border-purple/40 border-l pl-3">
 				<ChannelText text={messageText(message)} tone="text-fg" />
 			</div>
@@ -694,6 +715,7 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 			/>
 		),
 	);
+	const shown = useChannels();
 	const traceAt = (message: ChatMessage | undefined) => {
 		const id = message?.id;
 		return onTrace && id !== undefined ? () => onTrace(id) : undefined;
@@ -704,10 +726,10 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 		error ?? (!live && shape.failed ? "a step in this turn failed" : undefined);
 	return (
 		<div data-turn={turn.id} className="flex min-w-0 flex-col gap-3">
-			{turn.asked && (
+			{turn.asked && (!isParentMessage(turn.asked) || shown.agents) && (
 				<div className="min-w-0 break-words text-fg">
 					{isParentMessage(turn.asked) ? (
-						<ParentMessage message={turn.asked} />
+						<AgentMessage message={turn.asked} />
 					) : (
 						<UserMessage message={turn.asked} />
 					)}
@@ -825,17 +847,19 @@ export function ChatView() {
 				className="mx-auto w-full max-w-[680px] gap-3 pb-3"
 				scrollClassName="min-w-0"
 			>
-				{turns.map((turn, at) => (
-					<TurnView
-						key={turn.id}
-						turn={turn}
-						index={at}
-						live={isLoading && at === last}
-						meta={meta}
-						error={at === last ? error : undefined}
-						onTrace={chatId === null || !traceLink ? undefined : onTrace}
-					/>
-				))}
+				<ParentSource.Provider value={parentSourceOf(briefing)}>
+					{turns.map((turn, at) => (
+						<TurnView
+							key={turn.id}
+							turn={turn}
+							index={at}
+							live={isLoading && at === last}
+							meta={meta}
+							error={at === last ? error : undefined}
+							onTrace={chatId === null || !traceLink ? undefined : onTrace}
+						/>
+					))}
+				</ParentSource.Provider>
 				<SteerQueue />
 				<div className="-mt-5 flex items-center gap-2 pt-[1.7em]">
 					<AgentAvatar />

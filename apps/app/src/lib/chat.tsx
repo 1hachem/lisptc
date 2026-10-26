@@ -474,6 +474,22 @@ export function briefingOf(chat: Briefed | undefined): ChatMessage[] {
 	];
 }
 
+export function parentSourceOf(
+	briefing: readonly ChatMessage[],
+): string | undefined {
+	const [opening] = briefing;
+	return opening && envelopeOf(opening.additional_kwargs).source;
+}
+
+export function agentSender(
+	message: ChatMessage,
+	parentSource: string | undefined,
+): string {
+	const source = envelopeOf(message.additional_kwargs).source ?? "";
+	if (source === parentSource) return "parent agent";
+	return `sub-agent ${source.slice("agent:".length)}`;
+}
+
 export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {
 	const { data: chat } = useQuery(
 		convexQuery(api.chats.get, chatId ? { chatId } : "skip"),

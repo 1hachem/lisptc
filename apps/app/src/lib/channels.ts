@@ -10,6 +10,7 @@ import {
 	HelpCircleIcon,
 	InformationCircleIcon,
 	SourceCodeIcon,
+	UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
@@ -24,7 +25,8 @@ export type ChannelId =
 	| "asks"
 	| "errors"
 	| "model"
-	| "system";
+	| "system"
+	| "agents";
 
 export interface Channel {
 	id: ChannelId;
@@ -111,6 +113,13 @@ export const CHANNELS: Channel[] = [
 		label: "system",
 		hint: "what the system told the agent between turns",
 		text: "text-dim",
+	},
+	{
+		id: "agents",
+		icon: UserGroupIcon,
+		label: "agents",
+		hint: "what the parent agent and its sub-agents sent each other",
+		text: "text-purple",
 	},
 ];
 

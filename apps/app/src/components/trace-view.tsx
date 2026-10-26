@@ -70,6 +70,7 @@ function TraceLine({
 }) {
 	const { metaShown } = useUI();
 	const { openModelPicker } = useModelPicker();
+	const shown = useChannels();
 	const stats = useMemo(() => stepMeta(message), [message]);
 	return (
 		<div className="group relative min-w-0 empty:hidden">
@@ -78,7 +79,9 @@ function TraceLine({
 			) : (
 				<ChatLine message={message} index={index} busy={false} />
 			)}
-			{stats?.memories && <MessageMemories memories={stats.memories} />}
+			{shown.memory && stats?.memories && (
+				<MessageMemories memories={stats.memories} />
+			)}
 			{stats && (
 				<MessageMeta
 					meta={stats}
@@ -145,6 +148,7 @@ function StepHeader({
 	open: boolean;
 	toggle: () => void;
 }) {
+	const shown = useChannels();
 	return (
 		<button
 			type="button"
@@ -157,12 +161,14 @@ function StepHeader({
 				{open ? "▾" : "▸"}
 			</span>
 			<span className="flex-none">step {step.number}</span>
-			<span className="min-w-0 truncate text-fg">{step.title}</span>
-			<span
-				className={`ml-auto flex-none ${step.failed ? "text-red" : "text-green"}`}
-			>
-				{step.failed ? "failed" : "ok"}
-			</span>
+			<span className="min-w-0 flex-1 truncate text-fg">{step.title}</span>
+			{(!step.failed || shown.errors) && (
+				<span
+					className={`ml-auto flex-none ${step.failed ? "text-red" : "text-green"}`}
+				>
+					{step.failed ? "failed" : "ok"}
+				</span>
+			)}
 			{step.durationMs !== undefined && (
 				<span className="flex-none tabular-nums">
 					{formatElapsed(step.durationMs)}
@@ -252,13 +258,14 @@ function TraceEntries({
 							flashing={flashing}
 						>
 							{isSystemMessage(message) ? (
-								shown.system && <SystemLine message={message} />
+								<SystemLine message={message} />
 							) : (
 								<TraceLine message={message} index={at} />
 							)}
 						</TracedMessage>
 					);
 				}
+				if (!Object.values(shown).some(Boolean)) return null;
 				const { step } = entry;
 				const open = steps.isOpen(step.id);
 				return (
