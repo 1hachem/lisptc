@@ -14,19 +14,31 @@ vi.mock("../src/lib/panels.tsx", () => ({
 }));
 vi.mock("@convex-dev/react-query", () => ({
 	useConvexMutation: () => vi.fn(),
-	convexQuery: () => ({}),
+	convexQuery: (_query: unknown, args: unknown) => args,
 }));
 vi.mock("@tanstack/react-query", () => ({
-	useQuery: () => ({
-		data: panels.shown
-			? [{ _id: "c2", workspaceId: "w1", title: "a sub-agent" }]
-			: undefined,
+	useQuery: (options: { chatId?: string }) => ({
+		data:
+			panels.shown && options.chatId === "c1"
+				? [{ _id: "c2", workspaceId: "w1", title: "a sub-agent" }]
+				: undefined,
 	}),
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/chat.tsx", () => ({ abandonChat: vi.fn() }));
 vi.mock("../src/components/panel-link.tsx", () => ({
-	PanelLink: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+	PanelLink: ({
+		children,
+		onClick,
+	}: {
+		children: ReactNode;
+		onClick?: () => void;
+	}) => (
+		// biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: the mock stands in for a link
+		<span data-link onClick={onClick}>
+			{children}
+		</span>
+	),
 	useShown: () => (content: { chatId?: string }) =>
 		panels.shown && content.chatId === "c1",
 }));
@@ -78,6 +90,14 @@ const CHAT = {
 	title: "a chat",
 } as Doc<"chats">;
 
+function mount() {
+	const host = document.createElement("div");
+	document.body.append(host);
+	const root = createRoot(host);
+	roots.push(root);
+	return { host, root };
+}
+
 describe("a chat's row in the sidebar", () => {
 	it("opens the chat's trace from its menu", async () => {
 		const host = document.createElement("div");
@@ -105,5 +125,36 @@ describe("a chat's row in the sidebar", () => {
 		panels.shown = true;
 		await act(async () => root.render(<SessionRow chat={{ ...CHAT }} />));
 		expect(host.textContent).toContain("a sub-agent");
+	});
+	it("collapses and expands its sub-agents on a click while open", async () => {
+		panels.shown = true;
+		const { host, root } = mount();
+		await act(async () => root.render(<SessionRow chat={CHAT} />));
+		expect(host.textContent).toContain("a sub-agent");
+
+		const link = host.querySelector<HTMLElement>("[data-link]");
+		await act(async () => link?.click());
+		expect(host.textContent).not.toContain("a sub-agent");
+
+		const again = host.querySelector<HTMLElement>("[data-link]");
+		await act(async () => again?.click());
+		expect(host.textContent).toContain("a sub-agent");
+	});
+	it("marks a chat that has sub-agents", async () => {
+		panels.shown = true;
+		const { host, root } = mount();
+		await act(async () => root.render(<SessionRow chat={CHAT} />));
+
+		const toggle = host.querySelector<HTMLButtonElement>(
+			"button[aria-expanded]",
+		);
+		expect(toggle).not.toBeNull();
+		expect(toggle?.title).toBe("1 sub-agent");
+	});
+	it("shows no sub-agent toggle for a chat without sub-agents", async () => {
+		const { host, root } = mount();
+		await act(async () => root.render(<SessionRow chat={CHAT} />));
+
+		expect(host.querySelector("button[aria-expanded]")).toBeNull();
 	});
 });
