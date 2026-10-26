@@ -209,8 +209,10 @@ function AssistantText({
 	text: string;
 	skipped: Skipped[];
 }) {
+	const traced = useContext(Traced);
 	const spans = useMemo(() => skipped.map((s) => s.span), [skipped]);
 	const { prose } = useMemo(() => formsIn(text, spans), [text, spans]);
+	if (traced) return <ChannelBody text={text} code />;
 	return (
 		<SkippedProse text={text} spans={spans}>
 			{prose && <Markdown>{prose}</Markdown>}

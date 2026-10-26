@@ -379,6 +379,36 @@ describe("the trace", () => {
 		expect(text).toContain("MODEL-SAW");
 	});
 
+	it("shows every form a step ran as its raw source, not only its name", async () => {
+		const source =
+			'(setq scout (spawn "scout" :prompt "Summarise what a task needs."))\n(setq critic (spawn "critic" :prompt "Name the biggest risk."))';
+		const host = await mount(
+			<TraceLines
+				messages={[
+					{ id: "h1", type: "human", content: "spawn them" },
+					{ id: "a1", type: "ai", content: source },
+					{
+						id: "t1",
+						type: "tool",
+						content: '{"source":"lisp-repl","output":""}',
+					},
+				]}
+			/>,
+		);
+		for (const header of host.querySelectorAll<HTMLButtonElement>(
+			"[data-step-header]",
+		))
+			await act(async () => header.click());
+		const text = host.textContent ?? "";
+
+		expect(text).toContain(
+			'(setq scout (spawn "scout" :prompt "Summarise what a task needs."))',
+		);
+		expect(text).toContain(
+			'(setq critic (spawn "critic" :prompt "Name the biggest risk."))',
+		);
+	});
+
 	it("hides a channel its toolbar turns off", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
 		const output = [...host.querySelectorAll("button[aria-pressed]")].find(
