@@ -1,245 +1,31 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { carriers } from "./check-arch/carriers.ts";
+import { type Check, exportedFiles, type Tree } from "./check-arch/check.ts";
+import { extensionBlind } from "./check-arch/extension-blind.ts";
+import { extensionHost } from "./check-arch/extension-host.ts";
+import { extensionReach } from "./check-arch/extension-reach.ts";
+import { manifests } from "./check-arch/manifests.ts";
+import { relays } from "./check-arch/relays.ts";
+import { restrictedImports } from "./check-arch/restricted-imports.ts";
+import { sessionDrivers } from "./check-arch/session-drivers.ts";
+import { sniffers } from "./check-arch/sniffers.ts";
+import { staticPackages } from "./check-arch/static-packages.ts";
 
-type Field = "dependencies" | "devDependencies" | "peerDependencies";
-
-type Rule = {
-	manifest: string;
-	fields: Field[];
-	forbidden: (name: string) => boolean;
-	reason: string;
-};
-
-const RULES: Rule[] = [
-	{
-		manifest: "packages/shared/package.json",
-		fields: ["dependencies", "peerDependencies"],
-		forbidden: (name) => name !== "zod",
-		reason:
-			"@repo/shared is the utility layer and carries zod, the schemas its contracts are written in, and nothing else.",
-	},
-	...staticRules(),
-	{
-		manifest: "packages/ui/package.json",
-		fields: ["dependencies", "devDependencies", "peerDependencies"],
-		forbidden: (name) =>
-			name.startsWith("@repo/") && name !== "@repo/tsconfigs",
-		reason:
-			"@repo/ui is the base design system and depends on no other workspace package.",
-	},
-	{
-		manifest: "packages/interpreter/package.json",
-		fields: ["dependencies", "devDependencies"],
-		forbidden: (name) =>
-			name === "@modelcontextprotocol/sdk" || name === "@langchain/openai",
-		reason:
-			"@repo/mcp and @repo/llm carry those SDKs so the interpreter does not.",
-	},
+const CHECKS: Check[] = [
+	manifests,
+	staticPackages,
+	restrictedImports,
+	extensionReach,
+	extensionHost,
+	sessionDrivers,
+	extensionBlind,
+	carriers,
+	sniffers,
+	relays,
 ];
-
-interface ImportRule {
-	modules: string[];
-	allow: string[];
-	reason: string;
-}
-
-const IMPORTS: ImportRule[] = [
-	{
-		modules: ["@repo/evals/global-setup", "@repo/evals/runner"],
-		allow: [
-			"apps/trace-viewer/evals/",
-			"apps/trace-viewer/vitest.evals.config.ts",
-		],
-		reason:
-			"Only the eval cases run a suite. Read reports through @repo/evals/report, /review and /storage instead.",
-	},
-	{
-		modules: ["lucide-react"],
-		allow: [],
-		reason:
-			"Icons come from @hugeicons/core-free-icons, drawn with <HugeiconsIcon icon={...} />.",
-	},
-];
-
-const EXTENSION_DIRS = [
-	"packages/agents/src/",
-	"packages/compaction/src/",
-	"packages/diagnostics/src/",
-	"packages/introspection/src/",
-	"packages/knowledge/src/",
-	"packages/memory/src/",
-	"packages/permissions/src/",
-	"packages/preferences/src/",
-	"packages/promises/src/",
-	"packages/prose/src/",
-	"packages/secrets/src/",
-	"packages/ui-extension/src/",
-	"packages/workspace/src/",
-];
-
-const EXTENSION_FILES = [
-	"packages/llm/src/llm.ts",
-	"packages/mcp/src/mcp.ts",
-	"packages/mcp/src/ports.ts",
-];
-
-const HOST_REACHES: { pattern: RegExp; what: string }[] = [
-	{ pattern: /^node:/, what: "a node builtin" },
-	{ pattern: /^@repo\/env\//, what: "a typed env module" },
-	{ pattern: /^@modelcontextprotocol\/sdk/, what: "the MCP SDK" },
-	{ pattern: /^@langchain\//, what: "a langchain package" },
-	{ pattern: /^dotenv$/, what: "dotenv" },
-	{ pattern: /^unpdf$/, what: "the PDF parser" },
-];
-
-const HOST_GLOBALS = /\bprocess\.(env|cwd|platform|kill)\b/;
-
-interface DriverRule {
-	file: string;
-	carried: string[];
-}
-
-const DRIVERS: DriverRule[] = [
-	{
-		file: "packages/repl/src/repl.ts",
-		carried: [],
-	},
-];
-
-interface BlindRule {
-	dir: string;
-	roster: string[];
-}
-
-const BLIND: BlindRule[] = [
-	{ dir: "packages/ai/src/", roster: [] },
-	{ dir: "packages/repl/src/", roster: ["packages/repl/src/repl.ts"] },
-];
-
-const CARRIERS = ["apps/app/server/agent/"];
-
-const SNIFFER = /export function (\w+)\([^)]*: InterpExtension[,)]/g;
-
-function isExtensionModule(file: string): boolean {
-	if (file.endsWith("-host.ts")) return false;
-	if (EXTENSION_FILES.includes(file)) return true;
-	return EXTENSION_DIRS.some((dir) => file.startsWith(dir));
-}
-
-function valueNames(clause: string): string[] {
-	return clause
-		.replace(/[{}]/g, " ")
-		.split(",")
-		.map((part) => part.trim())
-		.filter((part) => part !== "" && !part.startsWith("type "))
-		.map((part) => part.split(/\s+as\s+/)[0].trim());
-}
-
-interface Import {
-	module: string;
-	names: string[];
-}
-
-function runtimeImports(text: string): Import[] {
-	const out: Import[] = [];
-	const re = /import\s+(type\s+)?([\s\S]*?)from\s+"([^"]+)"/g;
-	for (let m = re.exec(text); m !== null; m = re.exec(text))
-		if (m[1] === undefined) out.push({ module: m[3], names: valueNames(m[2]) });
-	return out;
-}
-
-function manifestsTagged(tag: string): string[] {
-	return execFileSync(
-		"git",
-		["ls-files", "packages/*/turbo.json", "apps/*/turbo.json"],
-		{ encoding: "utf8" },
-	)
-		.split("\n")
-		.filter((file) => file !== "")
-		.filter((file) =>
-			(
-				JSON.parse(readFileSync(file, "utf8")) as { tags?: string[] }
-			).tags?.includes(tag),
-		)
-		.map((file) => join(dirname(file), "package.json"));
-}
-
-function staticRules(): Rule[] {
-	const foundation = new Set(
-		manifestsTagged("foundation").map(
-			(manifest) =>
-				(JSON.parse(readFileSync(manifest, "utf8")) as { name: string }).name,
-		),
-	);
-	return manifestsTagged("static").flatMap((manifest): Rule[] => [
-		{
-			manifest,
-			fields: ["dependencies", "peerDependencies"],
-			forbidden: (name) => !foundation.has(name),
-			reason:
-				"A static package is data and depends on a foundation package at most.",
-		},
-		{
-			manifest,
-			fields: ["devDependencies"],
-			forbidden: (name) => name.startsWith("@repo/") && !foundation.has(name),
-			reason:
-				"A static package builds on no workspace package outside the foundation.",
-		},
-	]);
-}
-
-function exportedFiles(): Map<string, string> {
-	const out = new Map<string, string>();
-	const manifests = execFileSync(
-		"git",
-		["ls-files", "packages/*/package.json", "apps/*/package.json"],
-		{ encoding: "utf8" },
-	)
-		.split("\n")
-		.filter((file) => file !== "");
-	for (const manifest of manifests) {
-		const pkg = JSON.parse(readFileSync(manifest, "utf8")) as {
-			name?: string;
-			exports?: Record<string, unknown>;
-		};
-		if (pkg.name === undefined) continue;
-		for (const [subpath, target] of Object.entries(pkg.exports ?? {}))
-			if (typeof target === "string")
-				out.set(
-					subpath === "." ? pkg.name : `${pkg.name}/${subpath.slice(2)}`,
-					join(dirname(manifest), target),
-				);
-	}
-	return out;
-}
-
-function hostReaches(text: string): string[] {
-	const found: string[] = [];
-	for (const { module } of runtimeImports(text))
-		for (const { pattern, what } of HOST_REACHES)
-			if (pattern.test(module)) found.push(`imports ${what} (${module})`);
-	const global = HOST_GLOBALS.exec(text);
-	if (global) found.push(`reads ${global[0]}`);
-	return found;
-}
-
-function many(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
-
-type Manifest = Partial<Record<Field, Record<string, string>>>;
-
-const offenders = RULES.flatMap((rule) => {
-	const manifest = JSON.parse(readFileSync(rule.manifest, "utf8")) as Manifest;
-	return rule.fields.flatMap((field) =>
-		Object.keys(manifest[field] ?? {})
-			.filter(rule.forbidden)
-			.map((name) => ({ rule, field, name })),
-	);
-});
 
 const self = relative(process.cwd(), fileURLToPath(import.meta.url));
 
@@ -247,277 +33,63 @@ const sources = execFileSync("git", ["ls-files", "*.ts", "*.tsx"], {
 	encoding: "utf8",
 })
 	.split("\n")
-	.filter((file) => file !== "" && file !== self && existsSync(file));
+	.filter(
+		(file) =>
+			file !== "" &&
+			file !== self &&
+			!file.startsWith("scripts/check-arch/") &&
+			existsSync(file),
+	);
 
-const reaches = IMPORTS.flatMap((rule) =>
-	sources
-		.filter((file) => !rule.allow.some((prefix) => file.startsWith(prefix)))
-		.flatMap((file) => {
-			const text = readFileSync(file, "utf8");
-			return rule.modules
-				.filter((module) => text.includes(`"${module}"`))
-				.map((module) => ({ rule, file, module }));
-		}),
-);
+const texts = new Map<string, string>();
 
-const extensionModules = sources.filter(isExtensionModule);
+const tree: Tree = {
+	sources,
+	exported: exportedFiles(),
+	read: (file) => {
+		const known = texts.get(file);
+		if (known !== undefined) return known;
+		const text = readFileSync(file, "utf8");
+		texts.set(file, text);
+		return text;
+	},
+};
 
-const hosted = extensionModules.flatMap((file) =>
-	hostReaches(readFileSync(file, "utf8")).map((what) => ({ file, what })),
-);
-
-const exported = exportedFiles();
-
-function resolved(file: string, module: string): string {
-	if (module.startsWith(".")) return join(dirname(file), module);
-	return exported.get(module) ?? "";
+function many(count: number, noun: string): string {
+	return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-const hostBound = extensionModules.flatMap((file) =>
-	[...readFileSync(file, "utf8").matchAll(/from\s+"([^"]+)"/g)]
-		.map((found) => found[1])
-		.filter((module) => resolved(file, module).endsWith("-host.ts"))
-		.map((module) => ({ file, module })),
-);
+const failed = CHECKS.map((check) => ({
+	check,
+	violations: check.run(tree),
+})).filter(({ violations }) => violations.length > 0);
 
-const drifted = DRIVERS.flatMap(({ file, carried }) => {
-	const crossings = runtimeImports(readFileSync(file, "utf8"))
-		.filter(({ module }) => isExtensionModule(exported.get(module) ?? ""))
-		.flatMap(({ module, names }) => names.map((name) => ({ module, name })));
-	return [
-		...crossings
-			.filter(({ name }) => !carried.includes(name))
-			.map(({ module, name }) => ({
-				file,
-				what: `imports ${name} from ${module}`,
-			})),
-		...carried
-			.filter((name) => !crossings.some((crossed) => crossed.name === name))
-			.map((name) => ({ file, what: `no longer imports ${name}` })),
-	];
-});
-
-const blinded = BLIND.flatMap(({ dir, roster }) =>
-	sources
-		.filter((file) => file.startsWith(dir) && !roster.includes(file))
-		.flatMap((file) =>
-			[...readFileSync(file, "utf8").matchAll(/from\s+"([^"]+)"/g)]
-				.map((found) => found[1])
-				.filter((module) => isExtensionModule(exported.get(module) ?? ""))
-				.map((module) => ({ file, module })),
-		),
-);
-
-const interpreting = CARRIERS.flatMap((dir) =>
-	sources
-		.filter((file) => file.startsWith(dir))
-		.flatMap((file) =>
-			runtimeImports(readFileSync(file, "utf8"))
-				.filter(({ module }) => isExtensionModule(exported.get(module) ?? ""))
-				.map(({ module }) => ({ file, module })),
-		),
-);
-
-const sniffers = sources.flatMap((file) =>
-	[...readFileSync(file, "utf8").matchAll(SNIFFER)].map((found) => ({
-		file,
-		name: found[1],
-	})),
-);
-
-const entrypoints = new Set(
-	[...exported]
-		.filter(
-			([name]) => name.split("/").length === (name.startsWith("@") ? 2 : 1),
-		)
-		.map(([, file]) => file),
-);
-
-function importedNames(text: string): Set<string> {
-	const names = new Set<string>();
-	const re = /import\s+(?:type\s+)?([\s\S]*?)\s+from\s+"[^"]+"/g;
-	for (let m = re.exec(text); m !== null; m = re.exec(text))
-		for (const part of m[1].replace(/[{}]/g, ",").split(",")) {
-			const name = part
-				.trim()
-				.replace(/^type\s+/, "")
-				.split(/\s+as\s+/)
-				.pop()
-				?.replace(/^\*\s*/, "")
-				.trim();
-			if (name) names.add(name);
-		}
-	return names;
-}
-
-function relaysIn(file: string, text: string): string[] {
-	const found: string[] = [];
-	const entry = entrypoints.has(file);
-	for (const m of text.matchAll(
-		/^export\s+(?:type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\})\s*from\s+"([^"]+)"/gm,
-	))
-		if (!entry || !m[1].startsWith(".")) found.push(`re-exports from ${m[1]}`);
-	const imported = importedNames(text);
-	for (const m of text.matchAll(/^export\s+(?:type\s+)?\{([^}]*)\}\s*;/gm))
-		for (const part of m[1].split(",")) {
-			const name = part
-				.trim()
-				.replace(/^type\s+/, "")
-				.split(/\s+as\s+/)[0];
-			if (imported.has(name)) found.push(`re-exports ${name}`);
-		}
-	for (const m of text.matchAll(
-		/^export\s+(?:type|const)\s+(\w+)\s*=\s*(\w+)\s*;/gm,
-	))
-		if (imported.has(m[2])) found.push(`renames ${m[2]} to ${m[1]}`);
-	return found;
-}
-
-const relays = sources.flatMap((file) =>
-	relaysIn(file, readFileSync(file, "utf8")).map((what) => ({ file, what })),
-);
-
-if (
-	offenders.length === 0 &&
-	reaches.length === 0 &&
-	hosted.length === 0 &&
-	hostBound.length === 0 &&
-	drifted.length === 0 &&
-	blinded.length === 0 &&
-	interpreting.length === 0 &&
-	sniffers.length === 0 &&
-	relays.length === 0
-) {
+if (failed.length === 0) {
 	console.log(
-		`No architecture violations in ${RULES.length} manifests, ${sources.length} sources, ${extensionModules.length} extension modules, ${many(DRIVERS.length, "session driver")}, ${many(BLIND.length, "extension-blind tree")} and ${many(CARRIERS.length, "carrier tree")}.`,
+		`No architecture violations: ${many(CHECKS.length, "check")} passed over ${many(sources.length, "source")}.`,
 	);
 	process.exit(0);
 }
 
-for (const { rule, field, name } of offenders) {
-	console.error(`${rule.manifest} ${field}.${name}`);
-	console.error(`  ${rule.reason}`);
+for (const { check, violations } of failed) {
+	console.error(`✗ ${check.name}: ${many(violations.length, "violation")}`);
+	for (const line of check.rule) console.error(`  ${line}`);
+	console.error("");
+	for (const { file, what, why } of violations) {
+		console.error(`  ${file} ${what}`);
+		if (why) console.error(`    ${why}`);
+	}
+	console.error("");
+	console.error("  Way out:");
+	for (const line of check.fix) console.error(`    ${line}`);
+	console.error("");
 }
 
-for (const { rule, file, module } of reaches) {
-	console.error(`${file} imports ${module}`);
-	console.error(`  ${rule.reason}`);
-}
-
-for (const { file, what } of hosted) {
-	console.error(`${file} ${what}`);
-	console.error(
-		"  An extension defines the interface; the host lives in its colocated",
-	);
-	console.error(
-		`  -host.ts, which a composition root passes in. Move it to ${file.replace(/\.ts$/, "-host.ts")}.`,
-	);
-}
-
-for (const { file, module } of hostBound) {
-	console.error(`${file} imports ${module}`);
-	console.error(
-		"  An extension declares its host interface and is handed one. It never",
-	);
-	console.error(
-		"  names the implementation, so there is no default argument to fall back",
-	);
-	console.error(
-		"  on and a composition root passes the host. What the host needs but does",
-	);
-	console.error(
-		"  not depend on belongs in the package's ports.ts, which both sides import.",
-	);
-}
-
-for (const { file, what } of drifted) {
-	console.error(`${file} ${what}`);
-	console.error(
-		"  A session driver runs the lifecycle for extensions it cannot name.",
-	);
-	console.error(
-		"  Declare a session hook in the extension, or a slot for the capability,",
-	);
-	console.error(
-		"  and import the module for types only. DRIVERS in scripts/check-arch.ts",
-	);
-	console.error("  lists what each driver still carries.");
-}
-
-for (const { file, module } of blinded) {
-	console.error(`${file} imports ${module}`);
-	console.error(
-		"  The agent loop runs whatever extensions the repl was built with and",
-	);
-	console.error(
-		"  names none of them, types included. Take what the step reports through",
-	);
-	console.error(
-		"  its annotations, ask the repl, or move the contract out of the",
-	);
-	console.error("  extension module.");
-}
-
-for (const { file, module } of interpreting) {
-	console.error(`${file} runs ${module}`);
-	console.error(
-		"  A carrier builds a turn and writes what comes back. What reads or",
-	);
-	console.error(
-		"  writes an extension's own shape belongs below the seam, in that",
-	);
-	console.error(
-		"  extension's -host.ts, and the carrier is handed the result. Import the",
-	);
-	console.error("  extension for types only.");
-}
-
-for (const { file, name } of sniffers) {
-	console.error(
-		`${file} exports ${name}, which digs a capability out of an extension`,
-	);
-	console.error(
-		"  An extension hands its capability over with hooks.fill(slot, value),",
-	);
-	console.error(
-		"  and the consumer reads it with hooks.filled(slot). Nobody searches",
-	);
-	console.error("  the extension list.");
-}
-
-for (const { file, what } of relays) {
-	console.error(`${file} ${what}`);
-	console.error(
-		"  A name is exported once, by the module that declares it, and every",
-	);
-	console.error(
-		"  importer names that module. Import it from where it is declared, and",
-	);
-	console.error(
-		"  add a package.json export for that module if it has none. Only a",
-	);
-	console.error(
-		"  package's root entrypoint gathers names, and only from its own files.",
-	);
-}
-
-console.error("");
-const total =
-	offenders.length +
-	reaches.length +
-	hosted.length +
-	hostBound.length +
-	drifted.length +
-	blinded.length +
-	interpreting.length +
-	sniffers.length +
-	relays.length;
-console.error(`${total} forbidden dependenc${total === 1 ? "y" : "ies"}.`);
-console.error("");
-console.error("`turbo boundaries` holds the layer direction; these are the");
-console.error("manifest rules it cannot express, because the root package's");
-console.error("@repo/env devDependency puts @repo/env and @repo/shared in");
-console.error("every package's turbo dependency graph. Drop the dependency,");
-console.error("or change RULES in scripts/check-arch.ts if the architecture");
-console.error("really moved.");
+const total = failed.reduce(
+	(sum, { violations }) => sum + violations.length,
+	0,
+);
+console.error(
+	`${many(total, "violation")} in ${many(failed.length, "check")} of ${CHECKS.length}: ${failed.map(({ check }) => check.name).join(", ")}.`,
+);
 process.exit(1);
