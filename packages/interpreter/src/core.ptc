@@ -175,6 +175,8 @@ Introspection
 - (doc name) print binding's signature and doc; (doc) lists all documented
   names. Read it before guessing an argument, and again after a rejected call.
 - (dump) list every global symbol · (import "path") load and eval Lisp file.
+- (makunbound 'name) drops global from setq, defun or defmacro, doc and source
+  too. t if bound. Builtins and read-only globals stay.
 
 Globals: *gensym-counter*, *version*.
 
