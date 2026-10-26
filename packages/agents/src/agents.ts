@@ -1,6 +1,6 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
-import { snapshot } from "@repo/interpreter/image";
+import { implant, snapshot } from "@repo/interpreter/image";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -10,14 +10,22 @@ import {
 	listToArray,
 	newLispKeyword,
 	newSym,
+	Sym,
 } from "@repo/interpreter/objects";
 import { keyName } from "@repo/interpreter/plist";
 import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
-import type { InterpExtension } from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
 import { AGENT_FOLDER, writeDefinition } from "./definition.ts";
+import {
+	EXPORTS_GLOBAL,
+	EXPORTS_STATE,
+	type Export,
+	exportsCodec,
+	listed,
+} from "./exports.ts";
 import { Handles, handlesCodec } from "./handles.ts";
 import { AgentLibrary } from "./library.ts";
 import { DELEGATE_PREFIX, delegateName, isDelegateName } from "./names.ts";
@@ -50,6 +58,14 @@ export const FORGET = "agent-forget";
 export const DELEGATE_PROMPT =
 	"Do the brief, nothing else. Final answer: result first, then evidence (forms run, values seen, paths), then what not checked.";
 
+export interface SubAgentHost {
+	prompt: PromptSource;
+}
+
+export const EXPORT = "agents/export";
+
+export const TAKE = "agent-take";
+
 export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
@@ -59,6 +75,64 @@ export function agentsExtension(host: AgentsHost): AgentsExtension {
 		prompt: host.prompt(),
 		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
 	});
+}
+
+export function subAgentExtension(host: SubAgentHost): InterpExtension {
+	return Object.assign((interp: Interp): void => registerExports(interp), {
+		prompt: host.prompt(),
+		session(hooks: SessionHooks): void {
+			hooks.answer.use((interp, code, next) =>
+				withExports(interp, next(interp, code)),
+			);
+		},
+	});
+}
+
+function exportsOf(interp: Interp): readonly Export[] {
+	return exportsCodec.fromLisp(interp.getGlobal(newSym(EXPORTS_GLOBAL)));
+}
+
+function withExports(interp: Interp, answer: string): string {
+	const exports = exportsOf(interp);
+	if (exports.length === 0) return answer;
+	return `${answer}\n\nexports, take with (${TAKE} "agent" 'name):\n${listed(exports)}`;
+}
+
+function symbolName(form: string, value: unknown): string {
+	if (value instanceof Sym) return value.name;
+	throw new EvalException(
+		`${form}: name the value with a quoted symbol`,
+		value,
+	);
+}
+
+function registerExports(interp: Interp): void {
+	const exports = interp.state(
+		EXPORTS_STATE,
+		exportsCodec,
+		[],
+		"The values this sub-agent hands its parent, by name, with what each holds.",
+	);
+	interp.def(
+		EXPORT,
+		2,
+		`(${EXPORT} 'name "what it holds")`,
+		`Offer the global bound to name to the agent that spawned you, described for it: what it is and its shape. Your final answer lists every export, and that agent copies one with ${TAKE} when it wants it, as the value stands then. Exporting a name again replaces its description. Return the name.`,
+		z.tuple([z.unknown(), zString]),
+		([value, description]) => {
+			const name = symbolName(EXPORT, value);
+			if (interp.getGlobal(value as Sym) === undefined)
+				throw new EvalException(
+					`${EXPORT}: bind it before exporting it`,
+					value,
+				);
+			exports.set([
+				...exports.get().filter((entry) => entry.name !== name),
+				{ name, description },
+			]);
+			return value;
+		},
+	);
 }
 
 interface Parsed {
@@ -438,6 +512,38 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
 			if ("reply" in outcome) return outcome.reply;
 			throw new EvalException(`job ${job}`, outcome.failure, false);
+		},
+	);
+
+	async function read(child: string, name: string): Promise<unknown> {
+		try {
+			return implant(interp, await threads(TAKE).read(child, name));
+		} catch (error) {
+			if (error instanceof EvalException) throw error;
+			const reason = error instanceof Error ? error.message : String(error);
+			throw new EvalException(`${TAKE}: ${reason}`, name, false);
+		}
+	}
+
+	interp.def(
+		TAKE,
+		2,
+		`(${TAKE} "name" 'value)`,
+		`Copy a value a spawned agent exported into this session and return it; bind it where you want. Its reply lists what it exports. A function comes with its captured variables, and calls the globals it names by name here.`,
+		z.tuple([zString, z.unknown()]),
+		async ([target, value]) => {
+			const name = nameOf(TAKE, target);
+			const wanted = symbolName(TAKE, value);
+			const child = handles.child(name);
+			if (child === undefined)
+				throw new EvalException(`${TAKE}: no agent spawned by that name`, name);
+			const offered = exportsCodec.fromLisp(await read(child, EXPORTS_GLOBAL));
+			if (!offered.some((entry) => entry.name === wanted))
+				throw new EvalException(
+					`${TAKE}: ${name} exports ${offered.map((entry) => entry.name).join(" ") || "nothing"}`,
+					value,
+				);
+			return await read(child, wanted);
 		},
 	);
 

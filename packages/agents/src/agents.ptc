@@ -34,6 +34,11 @@ Named agent, kept chat across sends, order always:
   (agent-forget "scratch")               ; delete sub-agents/scratch.ptc; t, or nil if none
   (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)
 
+Sub-agent may export values. Reply then ends with exports: name, what it
+holds, shape. Want one? Copy it into your image, bind it yourself:
+  (setq rows (agent-take "scratch" 'prices))
+Function taken keeps captured variables; globals it names resolve in your image.
+
 Brief: carries all it needs: goal, inputs, what done means. Spawn: prefer
 :chat :fresh; :chat :fork only to continue this exact work, and ask reply as
 result, evidence, what not checked. Reply is claim, not fact: check key fact

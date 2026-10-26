@@ -7,7 +7,7 @@ export interface Handle {
 	readonly unsaved?: string;
 }
 
-function itemsOf(x: unknown): unknown[] {
+export function itemsOf(x: unknown): unknown[] {
 	const items: unknown[] = [];
 	for (let at = x; at instanceof Cell; at = at.cdr) items.push(at.car);
 	return items;

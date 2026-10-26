@@ -1,4 +1,4 @@
-import type { Image } from "@repo/interpreter/image";
+import type { Fragment, Image } from "@repo/interpreter/image";
 import type { Awaitable } from "@repo/shared/host";
 
 export interface AgentDefinition {
@@ -47,4 +47,5 @@ export interface AgentThreads {
 	wait(job: string, signal: AbortSignal): Promise<Outcome>;
 	state(job: string): Awaitable<Seen>;
 	cancel(id: string): Awaitable<boolean>;
+	read(child: string, name: string): Promise<Fragment>;
 }

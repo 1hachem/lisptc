@@ -1,7 +1,13 @@
-import { restore, snapshot } from "@repo/interpreter/image";
+import {
+	extract,
+	type Fragment,
+	restore,
+	snapshot,
+} from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { newSessionHooks } from "@repo/interpreter/session";
 import { describe, expect, test } from "vitest";
 import {
 	agentsExtension,
@@ -10,8 +16,13 @@ import {
 	DELEGATE_PROMPT,
 	FORGET,
 	KEEP,
+	subAgentExtension,
 } from "../src/agents.ts";
-import { agentsHostFor, MemorySourceFolder } from "../src/agents-host.ts";
+import {
+	agentsHostFor,
+	MemorySourceFolder,
+	subAgentHost,
+} from "../src/agents-host.ts";
 import { readDefinition, writeDefinition } from "../src/definition.ts";
 import type {
 	AgentThreads,
@@ -25,6 +36,7 @@ class FakeThreads implements AgentThreads {
 	readonly spawned: Spawn[] = [];
 	readonly sent: { child: string; message: Message }[] = [];
 	readonly cancelled: string[] = [];
+	readonly children = new Map<string, Interp>();
 
 	async spawn(spawn: Spawn): Promise<string> {
 		this.spawned.push(spawn);
@@ -51,6 +63,12 @@ class FakeThreads implements AgentThreads {
 	cancel(id: string): boolean {
 		this.cancelled.push(id);
 		return true;
+	}
+
+	async read(child: string, name: string): Promise<Fragment> {
+		const interp = this.children.get(child);
+		if (interp === undefined) throw new Error("the agent has run nothing yet");
+		return extract(JSON.parse(JSON.stringify(snapshot(interp))), name);
 	}
 }
 
@@ -487,5 +505,93 @@ describe("agent-keep", () => {
 		expect(
 			readDefinition(after.folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
 		).toEqual({ name: "scratch", prompt: "dig" });
+	});
+});
+
+function subAgent() {
+	const extension = subAgentExtension(subAgentHost());
+	const interp = new Interp({ extensions: [extension] });
+	runSync(interp, prelude);
+	const hooks = newSessionHooks();
+	extension.session?.(hooks);
+	const answer = (code: string) => hooks.answer.run((_i, c) => c, interp, code);
+	return { interp, answer };
+}
+
+describe("a sub-agent's exports", () => {
+	test("leave the answer alone until something is exported", () => {
+		const { interp, answer } = subAgent();
+		expect(answer("all done")).toBe("all done");
+		runSync(
+			interp,
+			'(setq prices (list 1 2)) (agents/export \'prices "list of numbers")',
+		);
+		runSync(
+			interp,
+			'(agents/export \'prices "list of integers: price per SKU")',
+		);
+		expect(answer("all done")).toBe(
+			'all done\n\nexports, take with (agent-take "agent" \'name):\n  prices: list of integers: price per SKU',
+		);
+	});
+
+	test("refuse a name that is not a bound symbol", () => {
+		const { interp } = subAgent();
+		expect(() => runSync(interp, '(agents/export \'nothing "x")')).toThrow(
+			"bind it before exporting it",
+		);
+		expect(() => runSync(interp, '(agents/export "prices" "x")')).toThrow(
+			"quoted symbol",
+		);
+	});
+
+	test("survive an image", () => {
+		const { interp } = subAgent();
+		runSync(interp, '(setq n 1) (agents/export \'n "a number")');
+		const back = new Interp({
+			extensions: [subAgentExtension(subAgentHost())],
+		});
+		restore(back, snapshot(interp));
+		expect(str(runSync(back, "*agents/exports*"))).toBe('(("n" "a number"))');
+	});
+});
+
+describe("agent-take", () => {
+	async function spawnedWith(code: string) {
+		const parent = world();
+		await parent.run('(spawn "scratch" :prompt "dig")');
+		const child = subAgent();
+		runSync(child.interp, code);
+		parent.threads.children.set("child-1", child.interp);
+		return parent;
+	}
+
+	test("copies an exported value into this session", async () => {
+		const { shown } = await spawnedWith(
+			'(setq rows (list (list :sku "a" :price 2.5))) (agents/export \'rows "rows")',
+		);
+		expect(await shown('(setq mine (agent-take "scratch" \'rows))')).toBe(
+			'((:sku "a" :price 2.5))',
+		);
+		expect(await shown("(car mine)")).toBe('(:sku "a" :price 2.5)');
+	});
+
+	test("brings a function with its captured variables", async () => {
+		const { shown } = await spawnedWith(
+			'(setq add (let ((n 5)) (lambda (x) (+ x n)))) (agents/export \'add "adds five")',
+		);
+		expect(await shown('((agent-take "scratch" \'add) 1)')).toBe("6");
+	});
+
+	test("refuses what was not exported, and an agent never spawned", async () => {
+		const { run } = await spawnedWith(
+			'(setq rows 1 secret 2) (agents/export \'rows "rows")',
+		);
+		await expect(run('(agent-take "scratch" \'secret)')).rejects.toThrow(
+			"scratch exports rows",
+		);
+		await expect(run('(agent-take "other" \'rows)')).rejects.toThrow(
+			"no agent spawned by that name",
+		);
 	});
 });
