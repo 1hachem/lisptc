@@ -1,4 +1,3 @@
-import type { StepAnnotations } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import { envelopeOf } from "@repo/shared/messages";
@@ -221,9 +220,21 @@ export class Threads {
 		values: Record<string, unknown>,
 		ask?: string,
 	): Promise<UiActionResult> {
-		const target = ask === undefined ? root : await this.asker(root, ask);
-		if (target === undefined) return OUTSIDE;
+		const asker =
+			ask === undefined ? { thread: root } : await this.asker(root, ask);
+		if (asker === undefined) return OUTSIDE;
+		const target = asker.thread;
 		const result = await uiActionOn(await this.repl(target), action, values);
+		if (
+			asker.asked !== undefined &&
+			result.annotations !== undefined &&
+			Object.keys(result.annotations).length > 0
+		)
+			await this.host.ports.transcript.annotate(
+				target,
+				asker.asked,
+				result.annotations,
+			);
 		if (result.message !== undefined && !result.error)
 			await this.followUp(target, {
 				kind: "event",
@@ -234,13 +245,17 @@ export class Threads {
 		return result;
 	}
 
-	private async asker(root: string, ask: string): Promise<string | undefined> {
-		const asked = (await this.host.ports.transcript.read(root)).find(
+	private async asker(
+		root: string,
+		ask: string,
+	): Promise<{ thread: string; asked?: string } | undefined> {
+		const surfaced = (await this.host.ports.transcript.read(root)).find(
 			(message) => message.id === ask,
 		);
-		const stamped = envelopeOf(asked?.additional_kwargs).thread;
-		if (stamped === undefined || stamped === root) return root;
-		return (await this.ancestors(stamped)).includes(root) ? stamped : undefined;
+		const { thread, asked } = envelopeOf(surfaced?.additional_kwargs);
+		if (thread === undefined || thread === root) return { thread: root };
+		if (!(await this.ancestors(thread)).includes(root)) return undefined;
+		return asked === undefined ? { thread } : { thread, asked };
 	}
 
 	private async followUp(target: string, envelope: Envelope): Promise<void> {
@@ -273,14 +288,14 @@ export class Threads {
 	private async surface(
 		thread: string,
 		root: string,
-		held: StepAnnotations,
+		{ held, message: asked }: Extract<TurnOutcome, { held: unknown }>,
 	): Promise<void> {
 		const { title } = await this.lineage(thread);
 		const message: WireMessage = {
 			id: crypto.randomUUID(),
 			type: "tool",
 			content: `agent ${title ?? thread} is waiting on you`,
-			additional_kwargs: { ...held.output, thread },
+			additional_kwargs: { ...held.output, thread, asked },
 		};
 		await this.host.ports.transcript.append(root, [message]);
 		this.get(root).relay(message);
@@ -410,7 +425,7 @@ export class Threads {
 			if (root !== job.thread) {
 				job.state = "held";
 				this.asking.set(job.thread, id);
-				await this.surface(job.thread, root, outcome.held);
+				await this.surface(job.thread, root, outcome);
 				return;
 			}
 		}

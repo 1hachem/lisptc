@@ -132,6 +132,8 @@ const waiting = topic<string>("waiting");
 
 const approved = topic<string>("approved");
 
+const decided = topic<string>("decided");
+
 export function holding(): InterpExtension {
 	return Object.assign(
 		(interp: Interp) => {
@@ -147,16 +149,22 @@ export function holding(): InterpExtension {
 			session: (hooks: SessionHooks) => {
 				hooks.annotate.use((buffer, into, next) => {
 					const seen = buffer.collect(waiting);
-					return next(
-						buffer,
+					const answers = buffer.collect(decided);
+					const asked =
 						seen.length === 0
 							? into
-							: annotating(into, "output", { waiting: seen }),
+							: annotating(into, "output", { waiting: seen });
+					return next(
+						buffer,
+						answers.length === 0
+							? asked
+							: annotating(asked, "output", { decided: answers }),
 					);
 				});
 				hooks.invoke.use(async (ctx, next) => {
 					if (ctx.action !== "approve") return next(ctx);
 					approved.emit(ctx.interp.channels, { user: "approved, carry on" });
+					decided.emit(ctx.interp.channels, { user: "approve" });
 				});
 				hooks.message.use(
 					(buffer, next) => buffer.collect(approved)[0] ?? next(buffer),

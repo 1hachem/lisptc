@@ -59,7 +59,22 @@ class World {
 								...messages,
 							]);
 						},
-						annotate: async () => {},
+						annotate: async (id, message, kwargs) => {
+							this.stored.set(
+								id,
+								(this.stored.get(id) ?? []).map((m) =>
+									m.id === message
+										? {
+												...m,
+												additional_kwargs: {
+													...m.additional_kwargs,
+													...kwargs,
+												},
+											}
+										: m,
+								),
+							);
+						},
 					},
 					status: { start: async () => {}, settle: async () => {} },
 					setup: async () => ({ runsForms: true }),
@@ -378,6 +393,13 @@ describe("a thread's budget", () => {
 		expect(await finished).toEqual({ answer: "done." });
 		expect(world.heard("grand", "approve")).toBe(true);
 		expect(world.heard("root", "approve")).toBe(false);
+		const held = (world.stored.get("grand") ?? []).find(
+			(m) => m.id === asked()?.additional_kwargs?.asked,
+		);
+		expect(held?.additional_kwargs).toMatchObject({
+			waiting: ["approve it"],
+			decided: ["approve"],
+		});
 	});
 
 	test("refuse an answer stamped with a thread outside the caller's tree", async () => {
