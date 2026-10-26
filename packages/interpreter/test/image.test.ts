@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ImageError, snapshot } from "../src/image.ts";
+import { extract, ImageError, implant, snapshot } from "../src/image.ts";
 import { Interp, runSync, type State } from "../src/lisp.ts";
 import { newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
 import type { LispPromise } from "../src/promise.ts";
-import { ev, freshInterp, roundTrip } from "./helpers.ts";
+import { ev, freshInterp, imageOf, roundTrip } from "./helpers.ts";
 
 function imagedAfter(setup: string): Interp {
 	const interp = freshInterp();
@@ -232,5 +232,72 @@ describe("extension state", () => {
 		handle?.set(5);
 		roundTrip(interp, { extensions: [ext] });
 		expect(handle?.get()).toBe(5);
+	});
+});
+
+describe("a value taken out of an image", () => {
+	function carried(setup: string, name: string, into = freshInterp()): Interp {
+		const from = freshInterp();
+		ev(setup, from);
+		into.defineGlobal(
+			newSym(name),
+			implant(into, extract(imageOf(from), name)),
+		);
+		return into;
+	}
+
+	it("carries nested data, and only what the global reaches", () => {
+		const from = freshInterp();
+		ev(
+			'(setq other (list 9 9 9) rows (list (list :sku "a" :price 2.5)))',
+			from,
+		);
+		const fragment = extract(imageOf(from), "rows");
+		expect(JSON.stringify(fragment)).not.toContain('"9"');
+		const into = freshInterp();
+		into.defineGlobal(newSym("rows"), implant(into, fragment));
+		expect(ev("(car rows)", into)).toBe('(:sku "a" :price 2.5)');
+	});
+
+	it("keeps a cycle and shared structure", () => {
+		const into = carried(
+			"(setq ring (list 1 2)) (setcdr (cdr ring) ring)",
+			"ring",
+		);
+		expect(ev("(eq ring (cddr ring))", into)).toBe("t");
+	});
+
+	it("carries a closure with its frame, and resolves its globals where it lands", () => {
+		const into = freshInterp();
+		ev("(defun scale (x) (* x 100))", into);
+		carried(
+			"(defun scale (x) (* x 2)) (setq add (let ((n 5)) (lambda (x) (scale (+ x n)))))",
+			"add",
+			into,
+		);
+		expect(ev("(add 1)", into)).toBe("600");
+	});
+
+	it("leaves the interpreter it lands in untouched but for the value", () => {
+		const into = freshInterp();
+		ev("(setq xs 1)", into);
+		carried("(setq xs 2 ys (list xs))", "ys", into);
+		expect(ev("(list xs ys)", into)).toBe("(1 (2))");
+	});
+
+	it("refuses an unknown name and a promise still running", () => {
+		const from = freshInterp();
+		from.defPromise(
+			"never",
+			0,
+			"(never)",
+			"",
+			z.tuple([]),
+			() => new Promise(() => {}),
+		);
+		ev("(setq waiting (list (never)))", from);
+		const image = imageOf(from);
+		expect(() => extract(image, "missing")).toThrow("missing is not defined");
+		expect(() => extract(image, "waiting")).toThrow("has not settled");
 	});
 });

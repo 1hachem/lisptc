@@ -329,7 +329,7 @@ function gone(name: string): BuiltInFunc {
 	});
 }
 
-export function kindsOf(image: Image): string[] {
+export function kindsOf(image: Pick<Image, "objects">): string[] {
 	const kinds = new Set<string>();
 	for (const json of image.objects) {
 		if (!isRecord(json)) continue;
@@ -352,7 +352,7 @@ function interrupted(into: LispPromise, reason: string): void {
 	into.outcome = new Error(reason);
 }
 
-export function restore(interp: Interp, image: Image): Restored {
+function readable(interp: Interp, image: Pick<Image, "format" | "objects">) {
 	if (image.format !== IMAGE_FORMAT)
 		throw new ImageError(`image format ${image.format} is not ${IMAGE_FORMAT}`);
 	const { recovery } = interp;
@@ -361,6 +361,72 @@ export function restore(interp: Interp, image: Image): Restored {
 	);
 	if (missing.length > 0)
 		throw new ImageError(`no extension restores ${missing.join(", ")}`);
+}
+
+export interface Fragment {
+	readonly format: number;
+	readonly objects: Json[];
+	readonly root: Json;
+}
+
+function isPending(json: Json): boolean {
+	return (
+		isRecord(json) &&
+		isRecord(json.promise ?? null) &&
+		(json.promise as { state: string }).state === "pending"
+	);
+}
+
+export function extract(image: Image, name: string): Fragment {
+	const entry = image.globals.find(([sym]) => isRecord(sym) && sym.s === name);
+	if (entry === undefined) throw new ImageError(`${name} is not defined`);
+	const objects: Json[] = [];
+	const ids = new Map<number, number>();
+	const pending: [number, number][] = [];
+	const renumber = (x: Json): Json => {
+		if (Array.isArray(x)) return x.map(renumber);
+		if (!isRecord(x)) return x;
+		const ref = x["#"];
+		if (typeof ref === "number") {
+			let id = ids.get(ref);
+			if (id === undefined) {
+				id = objects.length;
+				ids.set(ref, id);
+				objects.push(null);
+				pending.push([id, ref]);
+			}
+			return { "#": id };
+		}
+		return Object.fromEntries(
+			Object.entries(x).map(([key, value]) => [
+				key,
+				key === "foreign" ? value : renumber(value),
+			]),
+		);
+	};
+	const root = renumber(entry[1]);
+	for (let next = pending.pop(); next; next = pending.pop()) {
+		const [id, ref] = next;
+		const json = image.objects[ref];
+		if (json === undefined) throw new ImageError(`bad image reference ${ref}`);
+		if (isPending(json))
+			throw new ImageError(`${name} holds a promise that has not settled`);
+		objects[id] = renumber(json);
+	}
+	return { format: image.format, objects, root };
+}
+
+export function implant(interp: Interp, fragment: Fragment): unknown {
+	readable(interp, fragment);
+	const reader = new ImageReader(interp, fragment.objects);
+	reader.read();
+	for (const { into } of reader.resumed) interrupted(into, INTERRUPTED);
+	return reader.value(fragment.root);
+}
+
+export function restore(interp: Interp, image: Image): Restored {
+	readable(interp, image);
+	const { recovery } = interp;
 	const reader = new ImageReader(interp, image.objects);
 	reader.read();
 	interp.load({
