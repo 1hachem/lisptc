@@ -635,7 +635,9 @@ function TurnFoot({
 					{failure}
 				</span>
 			)}
-			{!live && memories.length > 0 && <MessageMemories memories={memories} />}
+			{!live && memories.length > 0 && (
+				<MessageMemories memories={memories} onOpen={onTrace} />
+			)}
 			{!live && (stats || onTrace) && (
 				<MessageMeta
 					meta={stats}

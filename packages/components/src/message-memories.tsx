@@ -51,7 +51,13 @@ function Dot({ on, stack }: { on?: string; stack?: Stack }) {
 	);
 }
 
-export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
+export function MessageMemories({
+	memories,
+	onOpen,
+}: {
+	memories: FiredMemory[];
+	onOpen?: () => void;
+}) {
 	const [open, setOpen] = useState(false);
 
 	if (memories.length === 0) return null;
@@ -65,7 +71,7 @@ export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
 		<div className="mt-1 select-none text-[11px] leading-[1.7]">
 			<button
 				type="button"
-				onClick={() => setOpen(!open)}
+				onClick={() => (onOpen ? onOpen() : setOpen(!open))}
 				title={label}
 				className="group inline-flex items-center gap-1.5 text-dim transition-colors hover:text-fg"
 			>

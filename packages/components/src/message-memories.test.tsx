@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type FiredMemory, firedMemories } from "./memories.ts";
 import { MessageMemories } from "./message-memories.tsx";
 
@@ -11,14 +11,14 @@ beforeAll(() => {
 	).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
-async function mounted(memories: FiredMemory[]) {
+async function mounted(memories: FiredMemory[], onOpen?: () => void) {
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
 	await act(async () => {
 		root.render(
 			<StrictMode>
-				<MessageMemories memories={memories} />
+				<MessageMemories memories={memories} onOpen={onOpen} />
 			</StrictMode>,
 		);
 	});
@@ -51,6 +51,18 @@ describe("the recalled memories of a step", () => {
 
 		await view.toggle();
 		expect(view.text()).toContain("navigate — use the tool");
+	});
+
+	it("opens the trace instead of expanding when given onOpen", async () => {
+		const onOpen = vi.fn();
+		const view = await mounted(
+			[{ key: "navigate", body: "use the tool" }],
+			onOpen,
+		);
+
+		await view.toggle();
+		expect(onOpen).toHaveBeenCalledTimes(1);
+		expect(view.text()).not.toContain("navigate — use the tool");
 	});
 
 	it("colors each one by the kind of event it fires on", async () => {
