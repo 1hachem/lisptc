@@ -517,6 +517,27 @@ describe("what a turn is doing", () => {
 		).toBe("failed");
 	});
 
+	it("shows a doing line once when the timeline already carries it", async () => {
+		session.messages = [
+			{ id: "h1", type: "human", content: "go" },
+			{
+				id: "t1",
+				type: "tool",
+				content: "",
+				additional_kwargs: {
+					intent: {
+						doing: "triaging",
+						log: [{ text: "triaging", startedAt: 1, state: "done", ms: 5 }],
+					},
+				},
+			},
+		];
+		const host = await mount(<ChatView />);
+
+		expect(host.querySelector("[data-step-call]")).toBeNull();
+		expect(host.textContent?.split("triaging").length).toBe(2);
+	});
+
 	it("adds no count once the turn settles", async () => {
 		session.messages = ACTING;
 		const host = await mount(<ChatView />);

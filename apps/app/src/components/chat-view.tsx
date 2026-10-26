@@ -629,11 +629,12 @@ function StepCall({
 	progress: Progress | undefined;
 	live: boolean;
 }) {
-	const label =
-		doing ??
-		toolActivity(result)
-			.map((entry) => entry.label)
-			.join(", ");
+	const label = entries.some((entry) => entry.kind === "intent")
+		? undefined
+		: (doing ??
+			toolActivity(result)
+				.map((entry) => entry.label)
+				.join(", "));
 	return (
 		<div className="flex min-w-0 flex-col gap-2 empty:hidden">
 			{label && (
