@@ -102,7 +102,7 @@ describe("a tool call from lisp", () => {
 				detail: "Searches the web for a query.",
 				state: "done",
 				id: "mcp-1",
-				startedAt: 1000,
+				startedAt: 1050,
 				ms: 25,
 			},
 		]);
@@ -118,7 +118,7 @@ describe("a tool call from lisp", () => {
 				state: "failed",
 				error: "boom",
 				id: "mcp-1",
-				startedAt: 1000,
+				startedAt: 1050,
 				ms: 25,
 			},
 		]);
@@ -131,10 +131,54 @@ describe("a tool call from lisp", () => {
 		expect(
 			activity?.map((a) => [a.id, a.label, a.state, a.startedAt, a.ms]),
 		).toEqual([
-			["mcp-1", "acme · Fetch page", "done", 1000, 25],
-			["mcp-2", "acme · Web search", "done", 1050, 25],
+			["mcp-1", "acme · Fetch page", "done", 1050, 25],
+			["mcp-2", "acme · Web search", "done", 1100, 25],
 		]);
 		expect(activity?.[0].detail?.length).toBeLessThanOrEqual(120);
 		expect(activity?.[0].detail?.endsWith("…")).toBe(true);
+	});
+});
+
+describe("loading a server", () => {
+	it("reports started to the user, then done once it connects", async () => {
+		const extension = mcpExtension({
+			...mcpHost,
+			client: fakeClient(),
+			clock: ticking(1000, 25),
+		});
+		const interp = new Interp({ extensions: [extension] });
+		runSync(interp, prelude);
+		const hooks = openSession([extension]);
+		const buffer = bufferTransport();
+		const detach = interp.channels.pipe(buffer);
+		try {
+			await (runSync(
+				interp,
+				'(load-mcp :name "acme" :url "https://acme.example/mcp")',
+			) as LispPromise);
+		} finally {
+			detach();
+		}
+		const into = hooks.annotate.run(
+			(_b, into) => into,
+			buffer,
+			noAnnotations(),
+		);
+		expect(
+			buffer.envelopes
+				.filter((e) => e.topic === "mcp-activity")
+				.map((e) => (e.payload as { state: string }).state),
+		).toEqual(["started", "done"]);
+		expect(activityKey.schema.parse(into.output[activityKey.name])).toEqual([
+			{
+				kind: "mcp",
+				icon: "tool",
+				label: "load-mcp · acme",
+				state: "done",
+				id: "mcp-load-1",
+				startedAt: 1000,
+				ms: 25,
+			},
+		]);
 	});
 });

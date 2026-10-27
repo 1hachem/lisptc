@@ -728,6 +728,12 @@ export function registerMcp(
 			})),
 	};
 	const loading = new Set<LispPromise>();
+	const loads = interp.state(
+		"mcp/loads",
+		callSeqCodec,
+		0,
+		"The number of the last MCP server load, which numbers the activity the user sees.",
+	);
 	const shown = (): Map<string, ConnConfig> =>
 		new Map(
 			toolkit
@@ -758,14 +764,41 @@ export function registerMcp(
 	}
 
 	function startLoad(args: List): LispPromise {
-		admitServer(policy, connConfigFromArgs(args, shown()).name);
+		const { name } = connConfigFromArgs(args, shown());
+		admitServer(policy, name);
+		const n = loads.get() + 1;
+		loads.set(n);
+		const startedAt = clock.now();
+		const report = (state: ActivityEntry["state"], error?: unknown): void =>
+			toolActivity.emit(interp.channels, {
+				user: {
+					kind: "mcp",
+					icon: "tool",
+					label: `load-mcp · ${name}`,
+					state,
+					...(error === undefined ? {} : { error: messageOf(error) }),
+					id: `mcp-load-${n}`,
+					startedAt,
+					...(state === "started" ? {} : { ms: clock.now() - startedAt }),
+				},
+			});
+		report("started");
 		const promise = interp.async.start((signal) => connect(args, signal), {
 			kind: "load-mcp",
 			args: [args],
 		});
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
-		void interp.async.promiseOf(promise).then(forget, forget);
+		void interp.async.promiseOf(promise).then(
+			() => {
+				forget();
+				report("done");
+			},
+			(error: unknown) => {
+				forget();
+				report("failed", error);
+			},
+		);
 		return promise;
 	}
 
