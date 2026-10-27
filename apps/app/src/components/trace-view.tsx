@@ -243,6 +243,51 @@ function useClipped(line: RefObject<HTMLElement | null>, text: string) {
 	return clipped;
 }
 
+type MessageKind = "agent" | "system" | "you";
+
+function messageKind(parent: boolean, system: boolean): MessageKind {
+	if (parent) return "agent";
+	return system ? "system" : "you";
+}
+
+function MessageMark({ kind, system }: { kind: MessageKind; system: boolean }) {
+	if (!system)
+		return (
+			<span aria-hidden className="flex-none select-none">
+				›
+			</span>
+		);
+	const marked = channelOf(kind === "agent" ? "agents" : "system");
+	return (
+		<HugeiconsIcon
+			icon={marked.icon}
+			aria-label={kind}
+			className={`size-icon-sm flex-none ${marked.text}`}
+		/>
+	);
+}
+
+function MessageLine({
+	line,
+	text,
+	open,
+}: {
+	line: RefObject<HTMLSpanElement | null>;
+	text: string;
+	open: boolean;
+}) {
+	return (
+		<span
+			ref={line}
+			className={`min-w-0 flex-1 text-fg ${
+				open ? "whitespace-pre-wrap break-words" : "truncate"
+			}`}
+		>
+			{open ? text.trim() : text.replace(/\s+/g, " ").trim()}
+		</span>
+	);
+}
+
 function MessageEntry({
 	message,
 	flashing,
@@ -258,8 +303,7 @@ function MessageEntry({
 	const parent = isParentMessage(message);
 	const system = isSystemMessage(message);
 	if (parent ? !shown.agents : system && !shown.system) return null;
-	const kind = parent ? "agent" : system ? "system" : "you";
-	const marked = channelOf(parent ? "agents" : "system");
+	const kind = messageKind(parent, system);
 	const attached = shown.attachments ? attachedTo(message) : [];
 	const foldable =
 		open || clipped || text.trim().includes("\n") || attached.length > 0;
@@ -275,25 +319,8 @@ function MessageEntry({
 					aria-expanded={foldable ? open : undefined}
 					onClick={() => setOpen((was) => !was)}
 				>
-					{system ? (
-						<HugeiconsIcon
-							icon={marked.icon}
-							aria-label={kind}
-							className={`size-icon-sm flex-none ${marked.text}`}
-						/>
-					) : (
-						<span aria-hidden className="flex-none select-none">
-							›
-						</span>
-					)}
-					<span
-						ref={line}
-						className={`min-w-0 flex-1 text-fg ${
-							open ? "whitespace-pre-wrap break-words" : "truncate"
-						}`}
-					>
-						{open ? text.trim() : text.replace(/\s+/g, " ").trim()}
-					</span>
+					<MessageMark kind={kind} system={system} />
+					<MessageLine line={line} text={text} open={open} />
 				</TraceRow>
 				{files.length > 0 && <AttachedFiles files={files} />}
 			</div>
