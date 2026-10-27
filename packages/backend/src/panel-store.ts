@@ -22,9 +22,7 @@ export class ConvexPanelReader implements PanelReader {
 						id: tab.id,
 						kind: tab.content.kind,
 						title:
-							tab.content.kind === "file"
-								? tab.content.name
-								: tab.content.title,
+							"title" in tab.content ? tab.content.title : tab.content.name,
 						shown: node.active === tab.id,
 						focused: node.active === tab.id && layout.focused === node.id,
 					}))
