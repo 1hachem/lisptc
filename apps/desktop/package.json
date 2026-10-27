@@ -46,22 +46,50 @@
         "repo": "lisptc"
       }
     ],
+    "directories": {
+      "output": "release"
+    },
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
+      "artifactName": "lisptc-${arch}.${ext}",
       "category": "public.app-category.developer-tools"
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "lisptc-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "shortcutName": "lisptc"
     },
     "linux": {
       "target": [
         "AppImage"
-      ]
+      ],
+      "artifactName": "lisptc.${ext}",
+      "category": "Development"
     }
   }
 }

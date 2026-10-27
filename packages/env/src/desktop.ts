@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const desktopEnv = createEnv({
 	server: {
-		LISPTC_DESKTOP_URL: z.url().default("http://localhost:3000"),
+		LISPTC_DESKTOP_URL: z.url().default("https://lisptc.taild4910a.ts.net/"),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
