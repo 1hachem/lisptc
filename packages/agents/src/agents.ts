@@ -27,15 +27,16 @@ import {
 	exportsCodec,
 	listed,
 } from "./exports.ts";
-import { type Handle, Handles, handlesCodec } from "./handles.ts";
+import { Handles, handlesCodec } from "./handles.ts";
 import { AgentLibrary } from "./library.ts";
 import { DELEGATE_PREFIX, delegateName, isDelegateName } from "./names.ts";
-import type {
-	AgentDefinition,
-	AgentThreads,
-	ChatSeed,
-	Outcome,
-	ReplSeed,
+import {
+	type AgentDefinition,
+	type AgentThreads,
+	type ChatSeed,
+	type Outcome,
+	PARENT_NAME,
+	type ReplSeed,
 } from "./ports.ts";
 
 export interface AgentsHost {
@@ -237,7 +238,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			"agents/spawned",
 			handlesCodec,
 			[],
-			"The sub-agents this session spawned, by name, with the thread each runs on.",
+			"The names of the sub-agents this session spawned, with the definition of each one not saved yet.",
 		),
 	);
 
@@ -373,7 +374,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"spawn",
 		-1,
 		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork])',
-		"Start a sub-agent on a thread of its own under a name and return the name. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that starts at once on that prompt; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far. Spawning a name again starts it over.",
+		"Start a sub-agent on a thread of its own under a name, print the name, and return it. A name is unique in this session: one spawned or delegated already is refused, finished or not. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that starts at once on that prompt; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("spawn", rest, [
@@ -391,26 +392,38 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 					`spawn: names starting ${DELEGATE_PREFIX} are kept for delegate`,
 					name,
 				);
+			if (name === PARENT_NAME)
+				throw new EvalException(
+					`spawn: ${PARENT_NAME} is what a sub-agent calls this session`,
+					name,
+				);
+			if (handles.of(name) !== undefined)
+				throw new EvalException(
+					"spawn: an agent of that name is spawned already; send to it, or spawn a new one under another name",
+					name,
+				);
 			const seed = seedOf(interp, options.get("repl"));
 			const chat = chatOf(options.get("chat"));
 			const definition = await definitionOf(name, options);
 			const port = threads("spawn");
-			const child = await port.spawn({ definition, seed, chat });
+			await port.spawn({ definition, seed, chat });
 			if (!options.has("prompt")) {
-				handles.adopt({ name, child });
-				return name;
+				handles.adopt({ name });
+				return announce(`spawned ${name}`, name);
 			}
-			handles.adopt({ name, child, unsaved: writeDefinition(definition) });
-			handles.sent(
-				name,
-				await port.send(child, {
-					text: definition.prompt,
-					maxSteps: DEFAULT_MAX_STEPS,
-				}),
-			);
-			return name;
+			handles.adopt({ name, unsaved: writeDefinition(definition) });
+			await port.send(name, {
+				text: definition.prompt,
+				maxSteps: DEFAULT_MAX_STEPS,
+			});
+			return announce(`spawned ${name}`, name);
 		},
 	);
+
+	function announce(line: string, name: string): string {
+		output.emit(interp.channels, { user: `${line}\n`, model: `${line}\n` });
+		return name;
+	}
 
 	interp.def(
 		KEEP,
@@ -466,16 +479,13 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 				throw new EvalException("send: say who with :to", rest);
 			const name = nameOf("send", to);
 			const maxSteps = stepsOf("send", options);
-			const child = handles.child(name);
-			if (child === undefined)
+			if (handles.of(name) === undefined)
 				throw new EvalException(
 					"send: no running agent by that name; spawn it first",
 					name,
 				);
-			return handles.sent(
-				name,
-				await threads("send").send(child, { text, maxSteps }),
-			);
+			await threads("send").send(name, { text, maxSteps });
+			return name;
 		},
 	);
 
@@ -504,56 +514,46 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			const seed = seedOf(interp, options.get("repl"));
 			const port = threads("delegate");
 			const name = delegateName(handles.names());
-			const child = await port.spawn({
+			await port.spawn({
 				definition: { name, prompt: DELEGATE_PROMPT },
 				seed,
 				chat: { from: "fresh" },
 			});
-			handles.adopt({ name, child });
-			handles.sent(name, await port.send(child, { text, maxSteps }));
-			output.emit(interp.channels, {
-				user: `delegated to ${name}\n`,
-				model: `delegated to ${name}\n`,
-			});
-			return name;
+			handles.adopt({ name });
+			await port.send(name, { text, maxSteps });
+			return announce(`delegated to ${name}`, name);
 		},
 	);
 
-	function handleOf(form: string, target: unknown): Handle {
+	function spawnedName(form: string, target: unknown): string {
 		const name = nameOf(form, target);
-		const handle = handles.of(name);
-		if (handle === undefined)
+		if (handles.of(name) === undefined)
 			throw new EvalException(
 				`${form}: no agent spawned by that name; (spawned) lists them`,
 				name,
 			);
-		return handle;
+		return name;
 	}
 
 	interp.def(
 		"agent-wait",
 		1,
 		'(agent-wait "name")',
-		"Wait in this step for the last message sent to that agent to finish and return what it replied. A message you wait on sends no system event later. A failed, cancelled or lost one raises an error, and so does an agent sent nothing yet.",
+		"Wait in this step for the last message sent to that agent to finish and return what it replied. A message you wait on sends no system event later. A failed, cancelled or lost one raises an error, and so does an agent sent nothing since the runtime started.",
 		z.tuple([zString]),
 		async ([target]) => {
-			const { name, job } = handleOf("agent-wait", target);
-			if (job === undefined)
-				throw new EvalException(
-					"agent-wait: that agent was sent nothing yet",
-					name,
-				);
+			const name = spawnedName("agent-wait", target);
 			const port = threads("agent-wait");
-			const waiting = interp.async.start((signal) => port.wait(job, signal));
+			const waiting = interp.async.start((signal) => port.wait(name, signal));
 			const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
 			if ("reply" in outcome) return outcome.reply;
 			throw new EvalException(name, outcome.failure, false);
 		},
 	);
 
-	async function read(child: string, name: string): Promise<unknown> {
+	async function read(agent: string, name: string): Promise<unknown> {
 		try {
-			return implant(interp, await threads(TAKE).read(child, name));
+			return implant(interp, await threads(TAKE).read(agent, name));
 		} catch (error) {
 			if (error instanceof EvalException) throw error;
 			const reason = error instanceof Error ? error.message : String(error);
@@ -568,15 +568,15 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		`Copy a value a spawned or delegated agent exported into this session and return it; bind it where you want. Its reply lists what it exports. A function comes with its captured variables, and calls the globals it names by name here.`,
 		z.tuple([zString, z.unknown()]),
 		async ([target, value]) => {
-			const { name, child } = handleOf(TAKE, target);
+			const name = spawnedName(TAKE, target);
 			const wanted = symbolName(TAKE, value);
-			const offered = exportsCodec.fromLisp(await read(child, EXPORTS_GLOBAL));
+			const offered = exportsCodec.fromLisp(await read(name, EXPORTS_GLOBAL));
 			if (!offered.some((entry) => entry.name === wanted))
 				throw new EvalException(
 					`${TAKE}: ${name} exports ${offered.map((entry) => entry.name).join(" ") || "nothing"}`,
 					value,
 				);
-			return await read(child, wanted);
+			return await read(name, wanted);
 		},
 	);
 
@@ -584,12 +584,11 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"agent-state",
 		1,
 		'(agent-state "name")',
-		"Return where the last message sent to that agent stands: :pending, :held, :done, :failed, :cancelled or :lost, or :idle when it was sent nothing yet. One the runtime lost to a restart reads :lost.",
+		"Return where the last message sent to that agent stands: :pending, :held, :done, :failed, :cancelled or :lost, or :idle when it was sent nothing since the runtime started.",
 		z.tuple([zString]),
 		async ([target]) => {
-			const { job } = handleOf("agent-state", target);
-			if (job === undefined) return newLispKeyword("idle");
-			return newLispKeyword((await threads("agent-state").state(job)).state);
+			const name = spawnedName("agent-state", target);
+			return newLispKeyword((await threads("agent-state").state(name)).state);
 		},
 	);
 
@@ -600,8 +599,8 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"Stop that agent and every agent under it. Return t when something was cancelled, nil otherwise.",
 		z.tuple([zString]),
 		async ([target]) => {
-			const { child } = handleOf("agent-cancel", target);
-			return (await threads("agent-cancel").cancel(child)) ? true : null;
+			const name = spawnedName("agent-cancel", target);
+			return (await threads("agent-cancel").cancel(name)) ? true : null;
 		},
 	);
 }

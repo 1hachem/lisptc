@@ -3,9 +3,7 @@ import { arrayToList, Cell } from "@repo/interpreter/objects";
 
 export interface Handle {
 	readonly name: string;
-	readonly child: string;
 	readonly unsaved?: string;
-	readonly job?: string;
 }
 
 export function itemsOf(x: unknown): unknown[] {
@@ -17,22 +15,15 @@ export function itemsOf(x: unknown): unknown[] {
 export const handlesCodec: StateCodec<readonly Handle[]> = {
 	toLisp: (handles) =>
 		arrayToList(
-			handles.map(({ name, child, unsaved, job }) =>
-				arrayToList([name, child, unsaved ?? null, job ?? null]),
+			handles.map(({ name, unsaved }) =>
+				arrayToList(unsaved === undefined ? [name] : [name, unsaved]),
 			),
 		),
 	fromLisp: (x) =>
 		itemsOf(x).flatMap((item) => {
-			const [name, child, unsaved, job] = itemsOf(item);
-			if (typeof name !== "string" || typeof child !== "string") return [];
-			return [
-				{
-					name,
-					child,
-					...(typeof unsaved === "string" ? { unsaved } : {}),
-					...(typeof job === "string" ? { job } : {}),
-				},
-			];
+			const [name, unsaved] = itemsOf(item);
+			if (typeof name !== "string") return [];
+			return typeof unsaved === "string" ? [{ name, unsaved }] : [{ name }];
 		}),
 };
 
@@ -43,35 +34,17 @@ export class Handles {
 		return this.held.get().find((entry) => entry.name === name);
 	}
 
-	child(name: string): string | undefined {
-		return this.of(name)?.child;
-	}
-
 	names(): string[] {
 		return this.held.get().map((entry) => entry.name);
 	}
 
 	adopt(handle: Handle): void {
-		this.held.set([
-			...this.held.get().filter((entry) => entry.name !== handle.name),
-			handle,
-		]);
+		this.held.set([...this.held.get(), handle]);
 	}
 
 	saved(name: string): void {
-		this.update(name, ({ unsaved: _, ...kept }) => kept);
-	}
-
-	sent(name: string, job: string): string {
-		this.update(name, (handle) => ({ ...handle, job }));
-		return name;
-	}
-
-	private update(name: string, change: (handle: Handle) => Handle): void {
 		this.held.set(
-			this.held
-				.get()
-				.map((entry) => (entry.name === name ? change(entry) : entry)),
+			this.held.get().map((entry) => (entry.name === name ? { name } : entry)),
 		);
 	}
 }

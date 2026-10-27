@@ -69,10 +69,16 @@ const OUTSIDE: UiActionResult = {
 
 const MAX_LIVE = 50;
 
+const UNNAMED = "unnamed";
+
 class SpawnTooDeep extends Error {
 	constructor(readonly parent: string) {
-		super(`thread ${parent} is too deep to spawn another`);
+		super("too deep to spawn another agent");
 	}
+}
+
+function nameOf({ title }: Lineage): string {
+	return title || UNNAMED;
 }
 
 function replyText(outcome: TurnOutcome): string | undefined {
@@ -133,7 +139,7 @@ export class Threads {
 	repl(threadId: string): Promise<AgentRepl> {
 		this.get(threadId);
 		const live = this.live.get(threadId);
-		if (live === undefined) throw new Error(`thread ${threadId} was evicted`);
+		if (live === undefined) throw new Error("the agent's thread was evicted");
 		live.repl ??= Promise.resolve(this.host.repl(threadId)).catch(
 			(error: unknown) => {
 				live.repl = undefined;
@@ -177,6 +183,7 @@ export class Threads {
 
 	async spawn(
 		parent: string,
+		title: string,
 		create: () => Promise<string>,
 		limits?: Limits,
 	): Promise<string> {
@@ -185,7 +192,7 @@ export class Threads {
 		const child = await create();
 		this.parents.set(child, parent);
 		this.budget.open(child, parent, limits);
-		this.lineages.set(child, Promise.resolve({ parent, limits }));
+		this.lineages.set(child, Promise.resolve({ parent, title, limits }));
 		return child;
 	}
 
@@ -290,11 +297,11 @@ export class Threads {
 		root: string,
 		{ held, message: asked }: Extract<TurnOutcome, { held: unknown }>,
 	): Promise<void> {
-		const { title } = await this.lineage(thread);
+		const lineage = await this.lineage(thread);
 		const message: WireMessage = {
 			id: crypto.randomUUID(),
 			type: "tool",
-			content: `agent ${title ?? thread} is waiting on you`,
+			content: `agent ${nameOf(lineage)} is waiting on you`,
 			additional_kwargs: { ...held.output, thread, asked },
 		};
 		await this.host.ports.transcript.append(root, [message]);
@@ -317,6 +324,12 @@ export class Threads {
 				resolve(outcome);
 			};
 		});
+	}
+
+	latest(threadId: string): string | undefined {
+		let last: string | undefined;
+		for (const [id, job] of this.jobs) if (job.thread === threadId) last = id;
+		return last;
 	}
 
 	state(id: string): Seen {
@@ -455,7 +468,7 @@ export class Threads {
 		const envelope: Envelope = {
 			kind: "event",
 			id: crypto.randomUUID(),
-			source: `agent:${lineage.title ?? job.thread}`,
+			source: `agent:${nameOf(lineage)}`,
 			text,
 			replyTo: job.thread,
 			job: id,

@@ -240,6 +240,18 @@ export class ThreadHost {
 		});
 	}
 
+	async child(
+		parent: Id<"chats">,
+		name: string,
+	): Promise<Id<"chats"> | undefined> {
+		return (
+			(await this.options.server.query(internal.threads.childNamed, {
+				parent,
+				name,
+			})) ?? undefined
+		);
+	}
+
 	async image(
 		parent: Id<"chats">,
 		child: Id<"chats">,
@@ -286,6 +298,8 @@ export class ThreadHost {
 							this.spawn(parent, agent, image),
 						copyTranscript: (from: Id<"chats">, to: Id<"chats">) =>
 							this.copyTranscript(from, to),
+						child: (parent: Id<"chats">, name: string) =>
+							this.child(parent, name),
 						image: (parent: Id<"chats">, child: Id<"chats">) =>
 							this.image(parent, child),
 					}

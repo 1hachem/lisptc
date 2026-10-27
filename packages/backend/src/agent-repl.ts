@@ -75,6 +75,7 @@ export interface Supervisor {
 		image?: Image,
 	): Promise<Id<"chats">>;
 	copyTranscript(from: Id<"chats">, to: Id<"chats">): Promise<void>;
+	child(parent: Id<"chats">, name: string): Promise<Id<"chats"> | undefined>;
 	image(parent: Id<"chats">, child: Id<"chats">): Promise<Image | undefined>;
 }
 
