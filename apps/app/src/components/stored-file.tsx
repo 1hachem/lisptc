@@ -2,6 +2,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { JsonView } from "@repo/components/json-view.tsx";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
@@ -12,6 +13,7 @@ import {
 	knowledgeViewer,
 	readsText,
 	type StoredText,
+	storedTextQuery,
 	type TextViewer,
 } from "../lib/file-viewer.ts";
 import { usePageHost } from "../lib/page-host.tsx";
@@ -96,26 +98,19 @@ const FILLS: ReadonlySet<KnowledgeViewer> = new Set([
 
 const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 	markdown: (text) => <Markdown>{text}</Markdown>,
+	json: (text) => <JsonView text={text} />,
 	text: (text) => (
 		<pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>
 	),
 };
-
-async function fetchText(url: string): Promise<string> {
-	const response = await fetch(url);
-	if (!response.ok) throw new Error(`fetch failed (${response.status})`);
-	return await response.text();
-}
 
 function useStoredText(
 	url: string | undefined,
 	viewer: KnowledgeViewer | undefined,
 ): StoredText {
 	const { data, error } = useQuery({
-		queryKey: ["knowledge-text", url],
-		queryFn: () => fetchText(url ?? ""),
+		...storedTextQuery(url ?? ""),
 		enabled: url !== undefined && readsText(viewer),
-		staleTime: Number.POSITIVE_INFINITY,
 	});
 	return { text: data, failure: error?.message };
 }
