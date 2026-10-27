@@ -86,7 +86,6 @@ export interface ChatSession {
 	saved: ChatMessage[];
 	queued: QueuedMessage[];
 	greeting: string | null;
-	greetingTyped: boolean;
 	meta: Record<string, StepMeta>;
 	fresh: boolean;
 	isLoading: boolean;
@@ -132,8 +131,8 @@ export function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
 	return stored.map(toChatMessage);
 }
 
-function greetingOf(line: string, typed: boolean): Greeted {
-	return { message: { id: GREETING_ID, type: "ai", content: line }, typed };
+function greetingOf(line: string): ChatMessage {
+	return { id: GREETING_ID, type: "ai", content: line };
 }
 
 function withGreeting(
@@ -149,22 +148,14 @@ function greetingText(greeting: ChatMessage | null): string | null {
 	return greeting === null ? null : messageText(greeting);
 }
 
-interface Greeted {
-	message: ChatMessage | null;
-	typed: boolean;
-}
-
-function useGreeting(key: string | undefined): Greeted {
-	const [greeting, setGreeting] = useState<Greeted>(() => {
+function useGreeting(key: string | undefined): ChatMessage | null {
+	const [greeting, setGreeting] = useState<ChatMessage | null>(() => {
 		const known = rememberedGreeting(key);
-		return known === undefined
-			? { message: null, typed: false }
-			: greetingOf(known, true);
+		return known === undefined ? null : greetingOf(known);
 	});
 	useEffect(() => {
-		if (greeting.message !== null) return;
-		const { line, typed } = greetingFor(key, new Date());
-		setGreeting(greetingOf(line, typed));
+		if (greeting !== null) return;
+		setGreeting(greetingOf(greetingFor(key, new Date())));
 	}, [greeting, key]);
 	return greeting;
 }
@@ -563,7 +554,6 @@ function useSessionStore(
 			saved: [],
 			queued: [],
 			greeting: null,
-			greetingTyped: false,
 			meta: {},
 			fresh,
 			isLoading: false,
@@ -632,7 +622,7 @@ export function ChatProvider({
 	);
 
 	const messages = useMemo(
-		() => withGreeting(greeting.message, turns),
+		() => withGreeting(greeting, turns),
 		[greeting, turns],
 	);
 	const meta = useTurnMeta(turns);
@@ -664,8 +654,7 @@ export function ChatProvider({
 			saved: persisted,
 			queued,
 			meta,
-			greeting: greetingText(greeting.message),
-			greetingTyped: greeting.typed,
+			greeting: greetingText(greeting),
 			fresh,
 			isLoading: running,
 			chatId,

@@ -41,15 +41,12 @@ function pickGreeting(now: Date, roll: number = Math.random()): string {
 
 const greeted = new Map<string, string>();
 
-export function greetingFor(
-	key: string | undefined,
-	now: Date,
-): { line: string; typed: boolean } {
+export function greetingFor(key: string | undefined, now: Date): string {
 	const known = key === undefined ? undefined : greeted.get(key);
-	if (known !== undefined) return { line: known, typed: true };
+	if (known !== undefined) return known;
 	const line = pickGreeting(now);
 	if (key !== undefined) greeted.set(key, line);
-	return { line, typed: false };
+	return line;
 }
 
 export function rememberedGreeting(

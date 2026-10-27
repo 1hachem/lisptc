@@ -105,7 +105,6 @@ function useMockSession(
 		saved: [],
 		queued: [],
 		greeting: null,
-		greetingTyped: false,
 		meta: {},
 		fresh: true,
 		isLoading: false,
