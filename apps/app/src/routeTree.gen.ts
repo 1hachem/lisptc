@@ -20,7 +20,6 @@ import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
 import { Route as AuthedWorkspaceIdSplatRouteImport } from './routes/_authed/$workspaceId/$'
-import { Route as AuthedDevChatRouteImport } from './routes/_authed/dev.chat'
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
 import { Route as ApiChatStopRouteImport } from './routes/api.chat.stop'
 import { Route as ApiChatWatchRouteImport } from './routes/api.chat.watch'
@@ -80,11 +79,6 @@ const AuthedWorkspaceIdSplatRoute = AuthedWorkspaceIdSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
-const AuthedDevChatRoute = AuthedDevChatRouteImport.update({
-  id: '/dev/chat',
-  path: '/dev/chat',
-  getParentRoute: () => AuthedRoute,
-} as any)
 const ApiChatSteerRoute = ApiChatSteerRouteImport.update({
   id: '/steer',
   path: '/steer',
@@ -116,7 +110,6 @@ export interface FileRoutesByFullPath {
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
-  '/dev/chat': typeof AuthedDevChatRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
@@ -132,7 +125,6 @@ export interface FileRoutesByTo {
   '/oauth/callback': typeof OauthCallbackRoute
   '/': typeof AuthedIndexRoute
   '/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
-  '/dev/chat': typeof AuthedDevChatRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
@@ -151,7 +143,6 @@ export interface FileRoutesById {
   '/oauth/callback': typeof OauthCallbackRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
-  '/_authed/dev/chat': typeof AuthedDevChatRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
@@ -170,7 +161,6 @@ export interface FileRouteTypes {
     | '/api/ui-action'
     | '/oauth/callback'
     | '/$workspaceId/$'
-    | '/dev/chat'
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
@@ -186,7 +176,6 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/'
     | '/$workspaceId/$'
-    | '/dev/chat'
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
@@ -204,7 +193,6 @@ export interface FileRouteTypes {
     | '/oauth/callback'
     | '/_authed/'
     | '/_authed/$workspaceId/$'
-    | '/_authed/dev/chat'
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
@@ -302,13 +290,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkspaceIdSplatRouteImport
       parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
-    '/_authed/dev/chat': {
-      id: '/_authed/dev/chat'
-      path: '/dev/chat'
-      fullPath: '/dev/chat'
-      preLoaderRoute: typeof AuthedDevChatRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/api/chat/steer': {
       id: '/api/chat/steer'
       path: '/steer'
@@ -359,13 +340,11 @@ const AuthedWorkspaceIdRouteRouteWithChildren =
 interface AuthedRouteChildren {
   AuthedWorkspaceIdRouteRoute: typeof AuthedWorkspaceIdRouteRouteWithChildren
   AuthedIndexRoute: typeof AuthedIndexRoute
-  AuthedDevChatRoute: typeof AuthedDevChatRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedWorkspaceIdRouteRoute: AuthedWorkspaceIdRouteRouteWithChildren,
   AuthedIndexRoute: AuthedIndexRoute,
-  AuthedDevChatRoute: AuthedDevChatRoute,
 }
 
 const AuthedRouteWithChildren =
@@ -399,12 +378,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
