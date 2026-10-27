@@ -187,7 +187,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
 	private recorder: FormRecorder | undefined;
-	private betweenSteps:
+	protected betweenSteps:
 		| { channels: Channels; buffer: ChannelBuffer; detach: () => void }
 		| undefined;
 	private readonly extensions: InterpExtension[];
@@ -584,7 +584,23 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
 	}
 
-	admit(code: string): Promise<Admission> {
+	async admit(code: string): Promise<Admission> {
+		const between = this.betweenSteps;
+		if (between === undefined) return this.runAdmit(code);
+		between.detach();
+		const reading = bufferTransport();
+		const detach = between.channels.pipe(reading);
+		try {
+			return await this.runAdmit(code);
+		} finally {
+			detach();
+			for (const envelope of reading.envelopes)
+				if (envelope.topic !== note.name) between.buffer.send(envelope);
+			between.detach = between.channels.pipe(between.buffer);
+		}
+	}
+
+	private runAdmit(code: string): Promise<Admission> {
 		return this.hooks.admit.run(
 			async (_i, c) => ({ code: c }),
 			this.interp,
