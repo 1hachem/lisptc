@@ -1,4 +1,4 @@
-import { type DragEvent, useState } from "react";
+import { type ClipboardEvent, type DragEvent, useState } from "react";
 
 export function useDropZone(add: (files: File[]) => void, disabled?: boolean) {
 	const [over, setOver] = useState(false);
@@ -22,6 +22,15 @@ export function useDropZone(add: (files: File[]) => void, disabled?: boolean) {
 				if (!carriesFiles(event)) return;
 				event.preventDefault();
 				add([...event.dataTransfer.files]);
+			},
+			onPaste: (event: ClipboardEvent) => {
+				if (disabled) return;
+				const images = [...event.clipboardData.files].filter((file) =>
+					file.type.startsWith("image/"),
+				);
+				if (images.length === 0) return;
+				event.preventDefault();
+				add(images);
 			},
 		},
 	};
