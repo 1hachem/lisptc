@@ -3,7 +3,8 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
-import { type ChatMessage, toChatMessages } from "./chat.tsx";
+import { type ChatMessage, sequenced } from "./chat.tsx";
+import { timelineOf } from "./timeline.ts";
 import { shownMessages, useWatch } from "./watch.ts";
 
 export type TraceSource = (chatId: Id<"chats">) => readonly ChatMessage[];
@@ -11,20 +12,19 @@ export type TraceSource = (chatId: Id<"chats">) => readonly ChatMessage[];
 function useLiveTrace(chatId: Id<"chats">): readonly ChatMessage[] {
 	const { data } = useQuery(convexQuery(api.messages.transcript, { chatId }));
 	const watched = useWatch(chatId);
-	const stored = useMemo(() => toChatMessages(data ?? []), [data]);
+	const stored = useMemo(() => sequenced(data ?? []), [data]);
 	return useMemo(
-		() => withUnstored(stored, shownMessages(watched, stored)),
+		() =>
+			timelineOf(
+				stored,
+				shownMessages(
+					watched,
+					stored.map(({ message }) => message),
+				),
+				false,
+			),
 		[stored, watched],
 	);
-}
-
-function withUnstored(
-	stored: readonly ChatMessage[],
-	streamed: readonly ChatMessage[],
-): readonly ChatMessage[] {
-	const known = new Set(stored.map((message) => message.id));
-	const unstored = streamed.filter((message) => !known.has(message.id));
-	return unstored.length === 0 ? stored : [...stored, ...unstored];
 }
 
 const TraceSourceContext = createContext<TraceSource>(useLiveTrace);

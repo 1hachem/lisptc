@@ -600,6 +600,12 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 	const items = shape.chain.map((link, at) =>
 		link.kind === "text" ? (
 			<StepText key={`text:${link.message.id ?? at}`} message={link.message} />
+		) : link.kind === "activity" ? (
+			<CallTimeline
+				key={`activity:${link.introduces[0]}`}
+				entries={placed.get(at) ?? []}
+				live={live}
+			/>
 		) : (
 			<StepCall
 				key={`call:${link.call?.id ?? link.result.id ?? at}`}

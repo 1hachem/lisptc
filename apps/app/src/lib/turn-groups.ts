@@ -36,6 +36,7 @@ export function turnMessages(turn: Turn): ChatMessage[] {
 
 export type TurnLink =
 	| { kind: "text"; message: ChatMessage }
+	| { kind: "activity"; introduces: string[] }
 	| {
 			kind: "call";
 			call?: ChatMessage;
@@ -64,6 +65,14 @@ export interface TurnShape {
 	chain: TurnLink[];
 	steps: number;
 	failed: boolean;
+}
+
+function adopt(chain: TurnLink[], introduces: string[]): void {
+	if (introduces.length === 0) return;
+	const current = chain.at(-1);
+	if (current === undefined || current.kind === "text")
+		chain.push({ kind: "activity", introduces });
+	else current.introduces.push(...introduces);
 }
 
 export function shapeTurn(turn: Turn): TurnShape {
@@ -115,7 +124,7 @@ export function shapeTurn(turn: Turn): TurnShape {
 			logged = Math.max(logged, log.length);
 			progressed ||= progress;
 			doing = intent?.doing ?? doing;
-		}
+		} else adopt(shape.chain, introduces);
 		call = undefined;
 		shape.intent = mergeIntent(shape.intent, intent);
 		shape.failed = toolFailed(message);

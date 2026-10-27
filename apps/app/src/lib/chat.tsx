@@ -36,7 +36,8 @@ import { answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
-import { isFreshChat, turnsToShow } from "./turns.ts";
+import { type Sequenced, timelineOf } from "./timeline.ts";
+import { isFreshChat } from "./turns.ts";
 import { shownMessages, useWatch } from "./watch.ts";
 
 export interface ChatMessage {
@@ -127,8 +128,8 @@ function toChatMessage(message: StoredMessage): ChatMessage {
 	return shown;
 }
 
-export function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
-	return stored.map(toChatMessage);
+export function sequenced(stored: readonly StoredMessage[]): Sequenced[] {
+	return stored.map((row) => ({ seq: row.seq, message: toChatMessage(row) }));
 }
 
 function greetingOf(line: string): ChatMessage {
@@ -137,8 +138,8 @@ function greetingOf(line: string): ChatMessage {
 
 function withGreeting(
 	greeting: ChatMessage | null,
-	turns: ChatMessage[],
-): ChatMessage[] {
+	turns: readonly ChatMessage[],
+): readonly ChatMessage[] {
 	if (greeting === null || turns.some((m) => m.id === GREETING_ID))
 		return turns;
 	return [greeting, ...turns];
@@ -182,7 +183,7 @@ function newMeta(
 	return found;
 }
 
-function useTurnMeta(turns: ChatMessage[]): Record<string, StepMeta> {
+function useTurnMeta(turns: readonly ChatMessage[]): Record<string, StepMeta> {
 	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
 	useEffect(() => {
 		const found = newMeta(meta, turns);
@@ -504,22 +505,20 @@ export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {
 	return useMemo(() => briefingOf(chat), [chat]);
 }
 
-function usePersisted(chatId: Id<"chats"> | null): ChatMessage[] {
+function usePersisted(chatId: Id<"chats"> | null): Sequenced[] {
 	const { data: stored } = useQuery(
 		convexQuery(api.messages.light, chatId ? { chatId } : "skip"),
 	);
-	return useMemo(() => toChatMessages(stored ?? []), [stored]);
+	return useMemo(() => sequenced(stored ?? []), [stored]);
 }
 
-function withPending(
-	turns: ChatMessage[],
+function pendingIn(
 	pending: Pending | null,
 	chatId: Id<"chats"> | null,
-): ChatMessage[] {
+): ChatMessage | undefined {
 	if (pending === null || (chatId !== null && pending.chatId !== chatId))
-		return turns;
-	if (turns.some((message) => message.id === pending.message.id)) return turns;
-	return [...turns, pending.message];
+		return undefined;
+	return pending.message;
 }
 
 function useSend(
@@ -607,7 +606,11 @@ export function ChatProvider({
 	const watched = useWatch(chatId);
 	const persisted = usePersisted(chatId);
 	const streamed = useMemo(
-		() => shownMessages(watched, persisted),
+		() =>
+			shownMessages(
+				watched,
+				persisted.map(({ message }) => message),
+			),
 		[watched, persisted],
 	);
 	const running = watched.status === "running";
@@ -618,8 +621,7 @@ export function ChatProvider({
 	const [pending, setPending] = usePending(chatId);
 
 	const turns = useMemo(
-		() =>
-			withPending(turnsToShow(streamed, persisted, running), pending, chatId),
+		() => timelineOf(persisted, streamed, running, pendingIn(pending, chatId)),
 		[streamed, persisted, running, pending, chatId],
 	);
 
@@ -652,8 +654,8 @@ export function ChatProvider({
 
 	useEffect(() => {
 		store.setState({
-			messages,
-			saved: persisted,
+			messages: [...messages],
+			saved: persisted.map(({ message }) => message),
 			queued,
 			meta,
 			greeting: greetingText(greeting),

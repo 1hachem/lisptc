@@ -106,16 +106,14 @@ export function placeTimeline(
 	live: boolean,
 ): Map<number, TimelineEntry[]> {
 	const owner = new Map<string, number>();
-	let last = -1;
 	for (const [at, link] of shape.chain.entries()) {
-		if (link.kind !== "call") continue;
-		last = at;
+		if (link.kind === "text") continue;
 		for (const id of link.introduces) if (!owner.has(id)) owner.set(id, at);
 	}
 	const placed = new Map<number, TimelineEntry[]>();
-	if (last === -1) return placed;
 	for (const entry of turnTimeline(shape.intent, shape.activity, live)) {
-		const at = owner.get(entry.id) ?? last;
+		const at = owner.get(entry.id);
+		if (at === undefined) continue;
 		placed.set(at, [...(placed.get(at) ?? []), entry]);
 	}
 	return placed;
