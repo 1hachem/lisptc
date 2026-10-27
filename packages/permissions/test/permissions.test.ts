@@ -1,6 +1,8 @@
 import type { Hold } from "@repo/interpreter/drive";
 import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
+import { SessionRules } from "../src/permissions.ts";
+import { MemoryPermissionsStore } from "../src/ports.ts";
 import { DECIDE_ACTION } from "../src/ui-approver.ts";
 import { recordingApprover, session } from "./helpers.ts";
 
@@ -724,5 +726,16 @@ describe("reporting a decision", () => {
 		});
 		expect(denied.message).toMatch(/denied/);
 		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
+	});
+});
+
+describe("following the saved config", () => {
+	it("decides by what the store holds now, not what it held at the start", () => {
+		const store = new MemoryPermissionsStore("(permission/deny eval)");
+		const rules = new SessionRules(store);
+		expect(rules.decide("eval").verdict).toBe("deny");
+		store.save("(permission/server fx (hide echo))");
+		expect(rules.decide("eval").verdict).toBe("allow");
+		expect(rules.tool("fx", "echo")).toBe(false);
 	});
 });

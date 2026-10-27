@@ -3,6 +3,7 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { type FlatLayout, unflatten } from "@repo/shared/split-layout";
 import type { QueryClient } from "@tanstack/react-query";
+import { knowledgeViewer, readsText, storedTextQuery } from "./file-viewer.ts";
 import { type PanelContent, type PanelLayout, shownTabs } from "./panel-ops.ts";
 import { panelAt } from "./panel-paths.ts";
 
@@ -22,14 +23,22 @@ function prefetchTranscript(
 	);
 }
 
-const prefetchFile: Prefetch<"file"> = (queryClient, workspaceId, content) =>
-	queryClient.ensureQueryData(
+const prefetchFile: Prefetch<"file"> = async (
+	queryClient,
+	workspaceId,
+	content,
+) => {
+	const file = await queryClient.ensureQueryData(
 		convexQuery(api.files.get, {
 			workspaceId,
 			folder: content.folder,
 			name: content.name,
 		}),
 	);
+	if (!file?.url || !readsText(knowledgeViewer(file.name, file.contentType)))
+		return;
+	await queryClient.ensureQueryData(storedTextQuery(file.url));
+};
 
 const prefetchPage: Prefetch<"page"> = (queryClient, workspaceId, content) => {
 	if (content.page === "memory")

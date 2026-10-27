@@ -11,6 +11,7 @@ import { requested } from "./channel.ts";
 import type {
 	ApprovalRequest,
 	PermissionsHost,
+	PermissionsStore,
 	Ruling,
 	ServerAccess,
 } from "./ports.ts";
@@ -73,21 +74,21 @@ function strongest(rulings: readonly Ruling[]): Ruling | undefined {
 
 export class SessionRules {
 	private readonly asks: ReadonlySet<string>;
+	private read: PermissionRules;
 
 	constructor(
-		private held: PermissionRules,
+		private readonly store: PermissionsStore,
 		asks: readonly string[] = [],
 		private readonly bounds: readonly PermissionRules[] = [],
 	) {
 		this.asks = new Set(asks);
+		this.read = parseRules(store.source());
 	}
 
 	get current(): PermissionRules {
-		return this.held;
-	}
-
-	replace(next: PermissionRules): void {
-		this.held = next;
+		const source = this.store.source();
+		if (source !== this.read.source) this.read = parseRules(source);
+		return this.read;
 	}
 
 	decide(name: string): Ruling {
@@ -101,12 +102,14 @@ export class SessionRules {
 
 	named(name: string): Ruling | undefined {
 		return strongest(
-			[this.held, ...this.bounds].flatMap((rules) => rules.named(name) ?? []),
+			[this.current, ...this.bounds].flatMap(
+				(rules) => rules.named(name) ?? [],
+			),
 		);
 	}
 
 	server(name: string): ServerAccess {
-		let access = this.held.server(name);
+		let access = this.current.server(name);
 		for (const bound of this.bounds) {
 			const tighter = bound.server(name);
 			if (SERVER_STRENGTH[tighter.access] > SERVER_STRENGTH[access.access])
@@ -116,17 +119,18 @@ export class SessionRules {
 	}
 
 	tool(server: string, tool: string): boolean {
-		return [this.held, ...this.bounds].every((rules) =>
+		return [this.current, ...this.bounds].every((rules) =>
 			rules.tool(server, tool),
 		);
 	}
 
 	private heldDecides(name: string): Ruling {
-		const ruling = this.held.decide(name);
+		const held = this.current;
+		const ruling = held.decide(name);
 		if (
 			ruling.verdict !== "allow" ||
 			!this.asks.has(name) ||
-			this.held.named(name) !== undefined
+			held.named(name) !== undefined
 		)
 			return ruling;
 		return { verdict: "ask" };
@@ -141,7 +145,7 @@ export function permissionsExtension(
 	host: PermissionsHost,
 ): PermissionsExtension {
 	const rules = new SessionRules(
-		parseRules(host.store.source()),
+		host.store,
 		host.asks,
 		(host.bounds ?? []).map(parseRules),
 	);
@@ -294,9 +298,7 @@ export function permissionsExtension(
 	}
 
 	function commit(form: Cell): unknown {
-		const next = changed(form);
-		rules.replace(next);
-		const saved = host.store.save(next.source);
+		const saved = host.store.save(changed(form).source);
 		return saved instanceof Promise ? saved.then(() => form) : form;
 	}
 
