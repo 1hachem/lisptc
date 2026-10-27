@@ -57,6 +57,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				const code = unquoted(ctx.code);
 				if (formsOnly(code).trim() === "") return true;
 				if (out.model !== "" || out.skipped.length === 0) return next(ctx, out);
+				if (ranCode(ctx.interp, ctx.code)) return next(ctx, out);
 				return !isTruncated(code);
 			});
 		},
@@ -157,6 +158,18 @@ export function proseSkipped(interp: Interp, text: string): Skipped[] {
 			skipped.push({ span: gap, reason: classification.reason });
 	}
 	return skipped;
+}
+
+function ranCode(interp: Interp, text: string): boolean {
+	const prose = proseSkipped(interp, text).map((s) => s.span);
+	const covered = (at: number) =>
+		prose.some(([start, end]) => at >= start && at < end);
+	for (const [start, end] of formSpans(unquoted(text))) {
+		if (unreadableReason(text, start, end) !== undefined) continue;
+		for (let at = start; at < end; at++)
+			if (!/\s/.test(text[at] ?? "") && !covered(at)) return true;
+	}
+	return false;
 }
 
 function ranSpans(
