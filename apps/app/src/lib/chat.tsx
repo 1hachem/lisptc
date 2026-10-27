@@ -3,7 +3,13 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import type { FiredMemory } from "@repo/components";
 import {
+	type ActivityEntry,
+	activityKey,
+	type Intent,
+	intentKey,
 	memoriesKey,
+	type Question,
+	questionKey,
 	readAnnotation,
 	type ViewNode,
 	viewKey,
@@ -28,11 +34,12 @@ import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
 import { answersOf, asksOf } from "./asks.ts";
 import { fileContext, type OpenFile } from "./files.ts";
-import { GREETING_ID, pickGreeting } from "./greeting.ts";
+import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
+import { type Sequenced, timelineOf } from "./timeline.ts";
 import { type ToolEnvelope, toolEnvelope } from "./tool-result.ts";
-import { isFreshChat, turnsToShow } from "./turns.ts";
-import { shownMessages, useWatch } from "./watch.ts";
+import { isFreshChat } from "./turns.ts";
+import { shownMessages, useWatch, type Watched } from "./watch.ts";
 
 export interface ChatMessage {
 	id?: string;
@@ -57,7 +64,7 @@ function named(value: string | undefined): string | undefined {
 	return value === "" ? undefined : value;
 }
 
-function parseMeta(message: ChatMessage): StepMeta | undefined {
+export function stepMeta(message: ChatMessage): StepMeta | undefined {
 	const { meta } = envelopeOf(message.additional_kwargs);
 	if (meta === undefined) return undefined;
 	const fired = readAnnotation(meta, memoriesKey);
@@ -103,25 +110,37 @@ export interface ChatSession {
 	fail: (message: string) => void;
 }
 
-type StoredMessage = FunctionReturnType<typeof api.messages.transcript>[number];
+export type StoredMessage = FunctionReturnType<
+	typeof api.messages.transcript
+>[number];
 
-function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
-	return stored.map((message) => ({
+const shaped = new WeakMap<StoredMessage, ChatMessage>();
+
+function toChatMessage(message: StoredMessage): ChatMessage {
+	const known = shaped.get(message);
+	if (known !== undefined) return known;
+	const shown: ChatMessage = {
 		id: message.wireId ?? message._id,
 		type: message.type,
 		content: message.content,
 		additional_kwargs: message.kwargs,
-	}));
+	};
+	shaped.set(message, shown);
+	return shown;
 }
 
-function greetingMessage(): ChatMessage {
-	return { id: GREETING_ID, type: "ai", content: pickGreeting(new Date()) };
+export function sequenced(stored: readonly StoredMessage[]): Sequenced[] {
+	return stored.map((row) => ({ seq: row.seq, message: toChatMessage(row) }));
+}
+
+function greetingOf(line: string): ChatMessage {
+	return { id: GREETING_ID, type: "ai", content: line };
 }
 
 function withGreeting(
 	greeting: ChatMessage | null,
-	turns: ChatMessage[],
-): ChatMessage[] {
+	turns: readonly ChatMessage[],
+): readonly ChatMessage[] {
 	if (greeting === null || turns.some((m) => m.id === GREETING_ID))
 		return turns;
 	return [greeting, ...turns];
@@ -131,11 +150,15 @@ function greetingText(greeting: ChatMessage | null): string | null {
 	return greeting === null ? null : messageText(greeting);
 }
 
-function useGreeting(): ChatMessage | null {
-	const [greeting, setGreeting] = useState<ChatMessage | null>(null);
+function useGreeting(key: string | undefined): ChatMessage | null {
+	const [greeting, setGreeting] = useState<ChatMessage | null>(() => {
+		const known = rememberedGreeting(key);
+		return known === undefined ? null : greetingOf(known);
+	});
 	useEffect(() => {
-		setGreeting(greetingMessage());
-	}, []);
+		if (greeting !== null) return;
+		setGreeting(greetingOf(greetingFor(key, new Date())));
+	}, [greeting, key]);
 	return greeting;
 }
 
@@ -144,7 +167,7 @@ function freshMeta(
 	message: ChatMessage,
 ): StepMeta | undefined {
 	if (!message.id || known[message.id]?.memories) return undefined;
-	const parsed = parseMeta(message);
+	const parsed = stepMeta(message);
 	if (parsed && known[message.id] && !parsed.memories) return undefined;
 	return parsed;
 }
@@ -161,7 +184,7 @@ function newMeta(
 	return found;
 }
 
-function useTurnMeta(turns: ChatMessage[]): Record<string, StepMeta> {
+function useTurnMeta(turns: readonly ChatMessage[]): Record<string, StepMeta> {
 	const [meta, setMeta] = useState<Record<string, StepMeta>>({});
 	useEffect(() => {
 		const found = newMeta(meta, turns);
@@ -426,22 +449,103 @@ function useTurnSend(
 	return { submitTurn, sendAbout };
 }
 
-function usePersisted(chatId: Id<"chats"> | null): ChatMessage[] {
-	const { data: stored } = useQuery(
-		convexQuery(api.messages.transcript, chatId ? { chatId } : "skip"),
-	);
-	return useMemo(() => toChatMessages(stored ?? []), [stored]);
+export interface Briefed {
+	_id: string;
+	parentChatId?: string;
+	agent?: { prompt: string };
 }
 
-function withPending(
-	turns: ChatMessage[],
+export function briefingOf(chat: Briefed | undefined): ChatMessage[] {
+	if (chat?.agent === undefined || chat.parentChatId === undefined) return [];
+	return [
+		{
+			id: `briefing:${chat._id}`,
+			type: "system",
+			content: chat.agent.prompt,
+			additional_kwargs: { source: `agent:${chat.parentChatId}` },
+		},
+	];
+}
+
+export function parentSourceOf(
+	briefing: readonly ChatMessage[],
+): string | undefined {
+	const [opening] = briefing;
+	return opening && envelopeOf(opening.additional_kwargs).source;
+}
+
+export function useAgentSender(
+	message: ChatMessage,
+	chatId: Id<"chats"> | null,
+	parentSource: string | undefined,
+): { parent: boolean; name: string; failed: boolean; cleared: boolean } {
+	const envelope = envelopeOf(message.additional_kwargs);
+	const source = envelope.source ?? "";
+	const failed = envelope.failed === true;
+	const sender = source.slice("agent:".length);
+	const { data: children } = useQuery(
+		convexQuery(api.chats.children, chatId ? { chatId } : "skip"),
+	);
+	if (source === parentSource || sender === chatId)
+		return { parent: true, name: "parent agent", failed, cleared: false };
+	const child = children?.find(
+		(child) => child._id === sender || child.title === sender,
+	);
+	return {
+		parent: false,
+		name: child?.title ?? sender,
+		failed,
+		cleared: children !== undefined && child === undefined,
+	};
+}
+
+export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {
+	const { data: chat } = useQuery(
+		convexQuery(api.chats.get, chatId ? { chatId } : "skip"),
+	);
+	return useMemo(() => briefingOf(chat), [chat]);
+}
+
+function useTranscript(chatId: Id<"chats"> | null) {
+	const watched = useWatch(chatId);
+	const persisted = usePersisted(chatId);
+	const streamed = useMemo(
+		() =>
+			shownMessages(
+				watched,
+				persisted.map(({ message }) => message),
+			),
+		[watched, persisted],
+	);
+	const running = useStreaming(chatId);
+	return { watched, persisted, streamed, running };
+}
+
+function watchedFailure(watched: Watched): string | undefined {
+	return watched.status === "errored" ? watched.failure : undefined;
+}
+
+function useStreaming(chatId: Id<"chats"> | null): boolean {
+	const { data: chat } = useQuery(
+		convexQuery(api.chats.get, chatId ? { chatId } : "skip"),
+	);
+	return chat?.status === "streaming";
+}
+
+function usePersisted(chatId: Id<"chats"> | null): Sequenced[] {
+	const { data: stored } = useQuery(
+		convexQuery(api.messages.light, chatId ? { chatId } : "skip"),
+	);
+	return useMemo(() => sequenced(stored ?? []), [stored]);
+}
+
+function pendingIn(
 	pending: Pending | null,
 	chatId: Id<"chats"> | null,
-): ChatMessage[] {
+): ChatMessage | undefined {
 	if (pending === null || (chatId !== null && pending.chatId !== chatId))
-		return turns;
-	if (turns.some((message) => message.id === pending.message.id)) return turns;
-	return [...turns, pending.message];
+		return undefined;
+	return pending.message;
 }
 
 function useSend(
@@ -493,39 +597,48 @@ function useSessionStore(
 	return store;
 }
 
+function usePending(chatId: Id<"chats"> | null) {
+	const [pending, setPending] = useState<Pending | null>(null);
+	useEffect(() => {
+		if (chatId === null) setPending(null);
+	}, [chatId]);
+	return [pending, setPending] as const;
+}
+
+function useAbandoning(abandon: (chatId: Id<"chats">) => void) {
+	useEffect(() => {
+		abandoning.add(abandon);
+		return () => {
+			abandoning.delete(abandon);
+		};
+	}, [abandon]);
+}
+
 export function ChatProvider({
 	workspaceId,
 	chatId,
 	onOpened,
+	greetingKey,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
 	chatId: Id<"chats"> | null;
 	onOpened: (chatId: Id<"chats">) => void;
+	greetingKey?: string;
 	children: React.ReactNode;
 }) {
 	const announce = useRef(onOpened);
 	announce.current = onOpened;
 	const drafted = useDrafted(workspaceId, chatId);
-	const watched = useWatch(chatId);
-	const persisted = usePersisted(chatId);
-	const streamed = useMemo(
-		() => shownMessages(watched, persisted),
-		[watched, persisted],
-	);
-	const running = watched.status === "running";
+	const { watched, persisted, streamed, running } = useTranscript(chatId);
 
-	const greeting = useGreeting();
+	const greeting = useGreeting(greetingKey);
 
 	const [failure, setFailure] = useState<Failure>(null);
-	const [pending, setPending] = useState<Pending | null>(null);
-	useEffect(() => {
-		if (chatId === null) setPending(null);
-	}, [chatId]);
+	const [pending, setPending] = usePending(chatId);
 
 	const turns = useMemo(
-		() =>
-			withPending(turnsToShow(streamed, persisted, running), pending, chatId),
+		() => timelineOf(persisted, streamed, running, pendingIn(pending, chatId)),
 		[streamed, persisted, running, pending, chatId],
 	);
 
@@ -558,8 +671,8 @@ export function ChatProvider({
 
 	useEffect(() => {
 		store.setState({
-			messages,
-			saved: persisted,
+			messages: [...messages],
+			saved: persisted.map(({ message }) => message),
 			queued,
 			meta,
 			greeting: greetingText(greeting),
@@ -568,11 +681,7 @@ export function ChatProvider({
 			chatId,
 			draftChatId: chatId === null ? drafted : null,
 			workspaceId,
-			error: errorFor(
-				chatId,
-				watched.status === "errored" ? watched.failure : undefined,
-				failure,
-			),
+			error: errorFor(chatId, watchedFailure(watched), failure),
 			send,
 			sendAbout,
 			stop,
@@ -601,12 +710,7 @@ export function ChatProvider({
 		withdraw,
 	]);
 
-	useEffect(() => {
-		abandoning.add(abandon);
-		return () => {
-			abandoning.delete(abandon);
-		};
-	}, [abandon]);
+	useAbandoning(abandon);
 
 	return <ChatContext.Provider value={store}>{children}</ChatContext.Provider>;
 }
@@ -643,12 +747,32 @@ export function isUserMessage(message: ChatMessage): boolean {
 	return message.type === "human" || message.type === "user";
 }
 
+export function isParentMessage(message: ChatMessage): boolean {
+	return (
+		isSystemMessage(message) &&
+		(envelopeOf(message.additional_kwargs).source?.startsWith("agent:") ??
+			false)
+	);
+}
+
+export function messageClassified(message: ChatMessage): boolean {
+	return envelopeOf(message.additional_kwargs).prose !== undefined;
+}
+
 export function messageProse(message: ChatMessage): Skipped[] {
 	return [...(envelopeOf(message.additional_kwargs).prose ?? [])];
 }
 
+export function toolQuiet(message: ChatMessage): boolean {
+	return envelopeOf(message.additional_kwargs).quiet === true;
+}
+
 export function toolFailed(message: ChatMessage): boolean {
 	return envelopeOf(message.additional_kwargs).failed === true;
+}
+
+export function toolFailure(message: ChatMessage): string {
+	return envelopeOf(message.additional_kwargs).failure ?? "";
 }
 
 export function toolResults(message: ChatMessage): string[] {
@@ -659,8 +783,20 @@ export function toolUi(message: ChatMessage): ViewNode | undefined {
 	return readAnnotation(message.additional_kwargs, viewKey);
 }
 
+export function toolActivity(message: ChatMessage): ActivityEntry[] {
+	return readAnnotation(message.additional_kwargs, activityKey) ?? [];
+}
+
+export function toolIntent(message: ChatMessage): Intent | undefined {
+	return readAnnotation(message.additional_kwargs, intentKey);
+}
+
 export function toolAsks(message: ChatMessage): Ask[] {
 	return asksOf(message.additional_kwargs);
+}
+
+export function toolQuestion(message: ChatMessage): Question | undefined {
+	return readAnnotation(message.additional_kwargs, questionKey);
 }
 
 export function toolAnswers(
@@ -675,11 +811,11 @@ export function toolModelOutput(message: ChatMessage): ToolEnvelope {
 }
 
 export function toolResult(message: ChatMessage): ToolEnvelope {
-	const text = messageText(message);
-	const envelope = toolEnvelope(text);
-	if (envelope === undefined) return { output: text, error: false };
-	const { display } = envelopeOf(message.additional_kwargs);
-	return display === undefined ? envelope : { ...envelope, output: display };
+	const { display, failed } = envelopeOf(message.additional_kwargs);
+	return {
+		output: display ?? "",
+		error: failed === true || toolModelOutput(message).error,
+	};
 }
 
 export function messageText(message: ChatMessage): string {

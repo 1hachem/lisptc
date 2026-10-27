@@ -4,6 +4,8 @@ import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
+import { intentExtension } from "@repo/intent-extension";
+import { intentHost } from "@repo/intent-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
@@ -29,6 +31,7 @@ export function docExtensions(): InterpExtension[] {
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
 		agentsExtension(agentsHostFor()),
+		intentExtension(intentHost),
 		mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
 		llmExtension(llmHost),
 		compactionExtension(compactionHost),
@@ -46,6 +49,7 @@ export function sessionExtensions(): InterpExtension[] {
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
 		agentsExtension(agentsHostFor()),
+		intentExtension(intentHost),
 		mcpExtension({
 			...mcpHostFor({
 				host: new LocalProcessHost(),

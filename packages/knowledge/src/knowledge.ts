@@ -1,4 +1,8 @@
-import { annotate, readAnnotation } from "@repo/interpreter/annotations";
+import {
+	annotate,
+	readAnnotation,
+	recordActivity,
+} from "@repo/interpreter/annotations";
 import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -10,6 +14,7 @@ import { z } from "zod";
 import { attachmentsKey } from "./attached.ts";
 import { ATTACHMENT_ASKS, registerAttachments } from "./attachment-forms.ts";
 import { BIN_ASKS, registerBin } from "./bin-forms.ts";
+import { fileActivity } from "./file-activity.ts";
 import { KNOWLEDGE_ASKS, registerKnowledge } from "./knowledge-forms.ts";
 import { fileName } from "./names.ts";
 import type { KnowledgeHost } from "./ports.ts";
@@ -54,9 +59,12 @@ function attachSession(hooks: SessionHooks): void {
 		const attachments = buffer.collect(attached);
 		return next(
 			buffer,
-			attachments.length === 0
-				? into
-				: annotate(into, attachmentsKey, attachments),
+			recordActivity(
+				attachments.length === 0
+					? into
+					: annotate(into, attachmentsKey, attachments),
+				buffer.collect(fileActivity),
+			),
 		);
 	});
 }

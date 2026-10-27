@@ -64,6 +64,7 @@ const skipped = z.object({
 
 export const messageEnvelope = z.object({
 	display: lenient(z.string()),
+	failure: lenient(z.string()),
 	failed: lenient(z.literal(true)),
 	riding: lenient(z.string()),
 	results: lenient(z.array(z.string())),
@@ -73,7 +74,7 @@ export const messageEnvelope = z.object({
 	source: lenient(z.string()),
 	quiet: lenient(z.literal(true)),
 	thread: lenient(z.string()),
-	asked: lenient(z.string()),
+	holding: lenient(z.string()),
 });
 
 export type MessageEnvelope = z.infer<typeof messageEnvelope>;
@@ -86,4 +87,53 @@ export function envelopeOf(
 	kwargs: Record<string, unknown> | undefined,
 ): MessageEnvelope {
 	return messageEnvelope.parse(kwargs ?? {});
+}
+
+export interface KwargMessage {
+	type: string;
+	content: string;
+	additional_kwargs?: MessageKwargs;
+}
+
+const TOOL_SHOWS: ReadonlySet<string> = new Set(["failed", "quiet"]);
+
+const USER_RUN_SHOWS: ReadonlySet<string> = new Set([
+	...TOOL_SHOWS,
+	"display",
+	"failure",
+	"results",
+]);
+
+const SAID_BY_USER: ReadonlySet<string> = new Set(["human", "user"]);
+
+const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
+
+function keeping<M extends KwargMessage>(
+	message: M,
+	shown: (key: string) => boolean,
+): M {
+	const kwargs = message.additional_kwargs;
+	return {
+		...message,
+		content: "",
+		...(kwargs === undefined
+			? {}
+			: {
+					additional_kwargs: Object.fromEntries(
+						Object.entries(kwargs).filter(([key]) => shown(key)),
+					),
+				}),
+	};
+}
+
+export function lighten<M extends KwargMessage>(messages: readonly M[]): M[] {
+	return messages.map((message, at) => {
+		if (message.type !== "tool") return message;
+		const before = messages[at - 1];
+		const shows =
+			before !== undefined && SAID_BY_USER.has(before.type)
+				? USER_RUN_SHOWS
+				: TOOL_SHOWS;
+		return keeping(message, (key) => !ENVELOPE.has(key) || shows.has(key));
+	});
 }

@@ -7,6 +7,8 @@ import { conversationExtension } from "@repo/conversation-extension";
 import { conversationHost } from "@repo/conversation-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
+import { intentExtension } from "@repo/intent-extension";
+import { intentHost } from "@repo/intent-extension/host";
 import type { Image } from "@repo/interpreter/image";
 import type {
 	ConversationEntry,
@@ -40,7 +42,7 @@ import { fonts } from "@repo/ui/fonts.ts";
 import { motions } from "@repo/ui/motions.ts";
 import { defaultThemeId, themes } from "@repo/ui/themes";
 import { uiExtension } from "@repo/ui-extension";
-import { uiHost } from "@repo/ui-extension/host";
+import { uiHostFor } from "@repo/ui-extension/host";
 import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
@@ -51,9 +53,9 @@ import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
+import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
-import { ConvexPanelReader } from "./panel-store.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
@@ -155,10 +157,9 @@ export async function workspaceExtensions(
 			motions,
 		}),
 	);
-	const ui = uiExtension({
-		...uiHost,
-		panel: new ConvexPanelReader(workspaceId, connect),
-	});
+	const ui = uiExtension(
+		uiHostFor({ panel: new ConvexLayoutStore(workspaceId, connect, chatId) }),
+	);
 	const exports = subAgentExtension(subAgentHost());
 	const rootOnly: InterpExtension[] = subAgent
 		? [agents, workspace, preferences, ui]
@@ -192,6 +193,7 @@ export async function workspaceExtensions(
 		recoveryExtension(recoveryHost),
 		lintExtension(),
 		ui,
+		intentExtension(intentHost),
 		diagnosticsExtension(diagnosticsHost),
 	].filter((extension) => !rootOnly.includes(extension));
 }

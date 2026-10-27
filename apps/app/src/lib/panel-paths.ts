@@ -37,6 +37,8 @@ export function panelPath(content: PanelContent): string | undefined {
 			return undefined;
 		case "chat":
 			return content.chatId === null ? "" : `chat/${content.chatId}`;
+		case "trace":
+			return `trace/${content.chatId}`;
 		case "file":
 		case "source":
 			return `${content.folder}/${content.name}`;
@@ -65,6 +67,7 @@ export function panelAt(path: string): PanelContent | undefined {
 		};
 	if (rest === "") return undefined;
 	if (head === "chat") return { kind: "chat", chatId: rest, title: "chat" };
+	if (head === "trace") return { kind: "trace", chatId: rest, title: "trace" };
 	const folder = FOLDERS.find((f) => f === head);
 	if (folder !== undefined) return { kind: "file", folder, name: rest };
 	if (SOURCE_FOLDERS.includes(head)) return sourcePanel(head, rest);

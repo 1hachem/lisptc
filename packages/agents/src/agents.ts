@@ -1,3 +1,8 @@
+import {
+	type ActivityEntry,
+	recordActivity,
+} from "@repo/interpreter/annotations";
+import { topic } from "@repo/interpreter/channels";
 import { conversationSlot } from "@repo/interpreter/conversation";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
@@ -77,6 +82,14 @@ export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
 
+const agentActivity = topic<ActivityEntry>("agents-activity");
+
+function reportActivity(hooks: SessionHooks): void {
+	hooks.annotate.use((buffer, into, next) =>
+		next(buffer, recordActivity(into, buffer.collect(agentActivity))),
+	);
+}
+
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	let session: SessionHooks | undefined;
 	return Object.assign(
@@ -91,6 +104,7 @@ export function agentsExtension(host: AgentsHost): AgentsExtension {
 			asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
 			session(hooks: SessionHooks): void {
 				session = hooks;
+				reportActivity(hooks);
 			},
 		},
 	);
@@ -272,6 +286,20 @@ export function registerAgents(
 
 	const library = new AgentLibrary(host.folder, host.workspace, host.roster);
 
+	function report(id: string, name: string, detail: string, chat: string) {
+		agentActivity.emit(interp.channels, {
+			user: {
+				kind: "agent",
+				icon: "agent",
+				label: name,
+				detail,
+				state: "done",
+				id,
+				chat,
+			},
+		});
+	}
+
 	function threads(form: string): AgentThreads {
 		if (host.threads === undefined)
 			throw new EvalException("this session runs no sub-agents", form, false);
@@ -293,7 +321,7 @@ export function registerAgents(
 		const definition = await library.saved(name);
 		if (definition === undefined)
 			throw new EvalException(
-				"spawn: no saved agent by that name; define it with defagent or pass :prompt",
+				'spawn: no saved agent by that name; pass :prompt "task" for a temporary agent that starts on that task, or delegate the work',
 				name,
 			);
 		return definition;
@@ -402,7 +430,7 @@ export function registerAgents(
 		"spawn",
 		-1,
 		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork])',
-		"Start a sub-agent on a thread of its own under a name, print the name, and return it. A name is unique in this session: one spawned or delegated already is refused, finished or not. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that starts at once on that prompt; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far.",
+		"Start a sub-agent on a thread of its own under a name, print the name, and return it. A name is unique in this session: one spawned or delegated already is refused, finished or not. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that runs that prompt at once as its first task and replies to it, so write a task with its expected reply, not a persona; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("spawn", rest, [
@@ -434,16 +462,18 @@ export function registerAgents(
 			const chat = chatOf(interp, options.get("chat"), conversation);
 			const definition = await definitionOf(name, options);
 			const port = threads("spawn");
-			await port.spawn({ definition, seed, chat });
+			const child = await port.spawn({ definition, seed, chat });
+			report(`agent-${child}`, name, "spawned", child);
 			if (!options.has("prompt")) {
 				handles.adopt({ name });
 				return announce(`spawned ${name}`, name);
 			}
 			handles.adopt({ name, unsaved: writeDefinition(definition) });
-			await port.send(name, {
+			const sent = await port.send(name, {
 				text: definition.prompt,
 				maxSteps: DEFAULT_MAX_STEPS,
 			});
+			report(sent.job, name, definition.prompt, sent.chat);
 			return announce(`spawned ${name}`, name);
 		},
 	);
@@ -512,7 +542,8 @@ export function registerAgents(
 					"send: no running agent by that name; spawn it first",
 					name,
 				);
-			await threads("send").send(name, { text, maxSteps });
+			const sent = await threads("send").send(name, { text, maxSteps });
+			report(sent.job, name, text, sent.chat);
 			return name;
 		},
 	);
@@ -624,7 +655,7 @@ export function registerAgents(
 		"agent-cancel",
 		1,
 		'(agent-cancel "name")',
-		"Stop that agent and every agent under it. Return t when something was cancelled, nil otherwise.",
+		"Stop that agent and every agent under it, the message it was last sent too, queued or running. Return t when something was cancelled, nil when it had nothing left to do.",
 		z.tuple([zString]),
 		async ([target]) => {
 			const name = spawnedName("agent-cancel", target);

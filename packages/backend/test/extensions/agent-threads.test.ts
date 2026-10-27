@@ -129,8 +129,13 @@ describe("the agent threads adapter", () => {
 
 	it("sends to the child by its name, from the parent by name, never an id", async () => {
 		const { seen, agents } = world();
-		await agents.spawn({ definition: { name: "r", prompt: "p" }, ...fresh });
-		await agents.send("r", { text: "dig", maxSteps: 4 });
+		expect(
+			await agents.spawn({ definition: { name: "r", prompt: "p" }, ...fresh }),
+		).toBe(CHILD);
+		expect(await agents.send("r", { text: "dig", maxSteps: 4 })).toEqual({
+			job: "job-1",
+			chat: CHILD,
+		});
 		expect(seen.asked).toEqual([
 			[
 				CHILD,
@@ -160,6 +165,14 @@ describe("the agent threads adapter", () => {
 			state: "done",
 			outcome: { reply: "found it" },
 		});
+	});
+
+	it("cancels the last job sent to a name, queued or running, then its thread", async () => {
+		const { seen, agents } = world();
+		await agents.spawn({ definition: { name: "r", prompt: "p" }, ...fresh });
+		await agents.send("r", { text: "dig", maxSteps: 4 });
+		expect(await agents.cancel("r")).toBe(true);
+		expect(seen.cancelled).toEqual(["job-1", CHILD]);
 	});
 
 	it("finds a child spawned before a restart by its name in the store", async () => {

@@ -1,3 +1,4 @@
+import { lighten } from "@repo/shared/messages";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
@@ -77,6 +78,24 @@ export const transcript = query({
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
 		return await transcriptOf(ctx, chatId);
+	},
+});
+
+export const light = query({
+	args: { chatId: v.id("chats") },
+	returns: v.array(message),
+	handler: async (ctx, { chatId }) => {
+		await requireChat(ctx, chatId);
+		const rows = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
+			.collect();
+		return lighten(
+			rows.map(({ kwargs, ...row }) => ({ ...row, additional_kwargs: kwargs })),
+		).map(({ additional_kwargs, ...row }) => ({
+			...row,
+			kwargs: additional_kwargs,
+		}));
 	},
 });
 

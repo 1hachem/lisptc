@@ -1,18 +1,4 @@
 export const DEFAULT_TOGGLES = {
-	channels: {
-		user: true,
-		results: true,
-		ui: true,
-		attachments: true,
-		lisp: false,
-		thinking: true,
-		edits: true,
-		memory: true,
-		asks: true,
-		errors: true,
-		model: false,
-		system: false,
-	},
 	metadata: {
 		time: true,
 		duration: true,
@@ -27,33 +13,33 @@ export const DEFAULT_TOGGLES = {
 		attach: true,
 		lisp: true,
 	},
-} as const satisfies Record<
-	"channels" | "metadata" | "input",
-	Record<string, boolean>
->;
+} as const satisfies Record<"metadata" | "input", Record<string, boolean>>;
 
 export type Toggles = Record<string, boolean>;
 
 export function withDefaults<
 	T extends {
-		channels?: Toggles;
 		metadata?: Toggles;
 		input?: Toggles;
 		panelMotion?: boolean;
+		traceBesideChat?: boolean;
+		traceLink?: boolean;
 	},
 >(
 	stored: T,
 ): T & {
-	channels: Toggles;
 	metadata: Toggles;
 	input: Toggles;
 	panelMotion: boolean;
+	traceBesideChat: boolean;
+	traceLink: boolean;
 } {
 	return {
 		...stored,
-		channels: { ...DEFAULT_TOGGLES.channels, ...stored.channels },
 		metadata: { ...DEFAULT_TOGGLES.metadata, ...stored.metadata },
 		input: { ...DEFAULT_TOGGLES.input, ...stored.input },
 		panelMotion: stored.panelMotion ?? true,
+		traceBesideChat: stored.traceBesideChat ?? false,
+		traceLink: stored.traceLink ?? true,
 	};
 }

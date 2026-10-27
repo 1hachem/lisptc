@@ -1,4 +1,5 @@
 import { oauthEnv } from "@repo/env/oauth";
+import { systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { LocalProcessHost } from "./local-host.ts";
 import type { McpExtensionHost } from "./mcp.ts";
@@ -46,6 +47,7 @@ export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 		toolkit: bundledToolkit(),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
+		clock: systemClock,
 	};
 }
 

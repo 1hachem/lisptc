@@ -10,7 +10,7 @@ import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import type { Ruling, ServerAccess, Verdict } from "./ports.ts";
 
-interface Rule {
+export interface Rule {
 	readonly verdict: Verdict;
 	readonly match: RegExp;
 	readonly reason?: string;

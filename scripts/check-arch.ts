@@ -3,7 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { carriers } from "./check-arch/carriers.ts";
-import { type Check, exportedFiles, type Tree } from "./check-arch/check.ts";
+import {
+	type Check,
+	exportedFiles,
+	type Tree,
+	type Violation,
+} from "./check-arch/check.ts";
 import { extensionBlind } from "./check-arch/extension-blind.ts";
 import { extensionHost } from "./check-arch/extension-host.ts";
 import { extensionReach } from "./check-arch/extension-reach.ts";
@@ -14,9 +19,14 @@ import { sessionDrivers } from "./check-arch/session-drivers.ts";
 import { sniffers } from "./check-arch/sniffers.ts";
 import { staticPackages } from "./check-arch/static-packages.ts";
 
-const TURN_STARTERS = [
+interface TurnStarterRule {
+	dir: string;
+	allowed: string[];
+}
+
+const TURN_STARTERS: TurnStarterRule[] = [
 	{ dir: "packages/ai/src/", allowed: ["packages/ai/src/thread.ts"] },
-	{ dir: "apps/app/server/", allowed: [] as string[] },
+	{ dir: "apps/app/server/", allowed: [] },
 ];
 
 const STARTS_A_TURN = /(?<!function\*?\s*)\brunAgentTurn\s*\(/;
@@ -29,15 +39,14 @@ const turnStarters: Check = {
 	],
 	fix: [
 		"Post an envelope to the thread, and the thread runs the turn.",
-		"TURN_STARTERS in scripts/check-arch.ts names the one file that may",
-		"start one.",
+		"TURN_STARTERS in scripts/check-arch.ts names the one file that may start one.",
 	],
 	run: (tree) =>
 		TURN_STARTERS.flatMap(({ dir, allowed }) =>
 			tree.sources
 				.filter((file) => file.startsWith(dir) && !allowed.includes(file))
 				.filter((file) => STARTS_A_TURN.test(tree.read(file)))
-				.map((file) => ({ file, what: "calls runAgentTurn" })),
+				.map((file): Violation => ({ file, what: "calls runAgentTurn" })),
 		),
 };
 

@@ -14,6 +14,7 @@ export interface ToolOutcome {
 	display: string;
 	error: boolean;
 	failed: boolean;
+	failure?: string;
 	riding?: string;
 	results: readonly string[];
 	annotations: StepAnnotations;
@@ -24,8 +25,9 @@ export interface ToolOutcome {
 
 export function toolMessage(outcome: ToolOutcome, id: string): ToolMessage {
 	const extras: MessageKwargs = { ...outcome.annotations.output };
-	if (outcome.display !== outcome.output) extras.display = outcome.display;
+	if (outcome.display !== "") extras.display = outcome.display;
 	if (outcome.failed) extras.failed = true;
+	if (outcome.failure) extras.failure = outcome.failure;
 	if (outcome.riding !== undefined) extras.riding = outcome.riding;
 	if (outcome.results.length > 0) extras.results = [...outcome.results];
 	if (outcome.quiet) extras.quiet = true;

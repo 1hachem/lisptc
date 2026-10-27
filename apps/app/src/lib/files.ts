@@ -45,23 +45,25 @@ function toggles(shown: Record<string, boolean>): string {
 
 export function preferencesSource(preferences: {
 	font: string;
-	channels: Record<string, boolean>;
 	metadata: Record<string, boolean>;
 	input: Record<string, boolean>;
 	sidebar: readonly string[];
 	hidden: readonly string[];
 	motion: string;
 	panelMotion: boolean;
+	traceBesideChat: boolean;
+	traceLink: boolean;
 }): string {
 	return [
 		`(preferences :font ${quoted(preferences.font)}`,
-		`  :channels ${toggles(preferences.channels)}`,
 		`  :metadata ${toggles(preferences.metadata)}`,
 		`  :input ${toggles(preferences.input)}`,
 		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
 		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
 		`  :motion ${quoted(preferences.motion)}`,
-		`  :panel-motion ${preferences.panelMotion ? "t" : "nil"})`,
+		`  :panel-motion ${preferences.panelMotion ? "t" : "nil"}`,
+		`  :trace-beside-chat ${preferences.traceBesideChat ? "t" : "nil"}`,
+		`  :trace-link ${preferences.traceLink ? "t" : "nil"})`,
 	].join("\n");
 }
 

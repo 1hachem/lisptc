@@ -5,7 +5,6 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { CHANNELS, type ChannelId } from "./channels.ts";
 import { INPUT_HELPERS, type InputHelper } from "./input-helpers.ts";
 import { META_FIELDS, type MetaField } from "./meta-fields.ts";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
@@ -16,8 +15,6 @@ import {
 	writeBoolPref,
 } from "./prefs.ts";
 import { togglesOf } from "./resolved-preferences.ts";
-
-type Shown = Record<ChannelId, boolean>;
 
 type MetaShown = Record<MetaField, boolean>;
 
@@ -30,8 +27,6 @@ interface UIContextValue {
 	rightOpen: boolean;
 	setRightOpen: (open: boolean) => void;
 	toggleRight: () => void;
-	shown: Shown;
-	toggleChannel: (id: ChannelId) => void;
 	metaShown: MetaShown;
 	toggleMeta: (id: MetaField) => void;
 	inputOn: InputOn;
@@ -59,10 +54,6 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 
 	const stored = usePreferences();
 	const put = usePutPreferences();
-	const shown: Shown = useMemo(
-		() => togglesOf(CHANNELS, stored?.channels),
-		[stored?.channels],
-	);
 	const metaShown: MetaShown = useMemo(
 		() => togglesOf(META_FIELDS, stored?.metadata),
 		[stored?.metadata],
@@ -70,11 +61,6 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 	const inputOn: InputOn = useMemo(
 		() => togglesOf(INPUT_HELPERS, stored?.input),
 		[stored?.input],
-	);
-
-	const toggleChannel = useCallback(
-		(id: ChannelId) => put({ channels: { ...shown, [id]: !shown[id] } }),
-		[shown, put],
 	);
 
 	const toggleMeta = useCallback(
@@ -96,8 +82,6 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 			rightOpen,
 			setRightOpen,
 			toggleRight: () => setRightOpen(!rightOpen),
-			shown,
-			toggleChannel,
 			metaShown,
 			toggleMeta,
 			inputOn,
@@ -106,11 +90,9 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 		[
 			leftOpen,
 			rightOpen,
-			shown,
 			metaShown,
 			setLeftOpen,
 			setRightOpen,
-			toggleChannel,
 			toggleMeta,
 			inputOn,
 			toggleInput,

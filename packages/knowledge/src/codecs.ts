@@ -1,4 +1,4 @@
-import { EvalException } from "@repo/interpreter/errors";
+import { EvalException, messageOf } from "@repo/interpreter/errors";
 import {
 	EndOfFile,
 	exactJsonToLisp,
@@ -16,10 +16,6 @@ export interface Codec {
 }
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
-
-function messageOf(ex: unknown): string {
-	return ex instanceof Error ? ex.message : String(ex);
-}
 
 function textOf(name: string, bytes: Uint8Array): string {
 	let decoded: string | undefined;
@@ -152,6 +148,7 @@ export const CODECS: ReadonlyMap<string, Codec> = new Map<string, Codec>([
 			write: (_name, value) => printForm(value),
 		},
 	],
+	["svg", text("image/svg+xml")],
 	["txt", PLAIN],
 	["xml", text("application/xml")],
 	["yaml", text("application/yaml")],

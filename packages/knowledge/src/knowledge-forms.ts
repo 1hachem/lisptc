@@ -4,6 +4,7 @@ import { arrayToList } from "@repo/interpreter/objects";
 import { zAny, zString } from "@repo/interpreter/schema";
 import { z } from "zod";
 import { codecFor } from "./codecs.ts";
+import { reporterFor, reporting } from "./file-activity.ts";
 import { fileName } from "./names.ts";
 import type { KnowledgeHost } from "./ports.ts";
 
@@ -14,8 +15,9 @@ export const KNOWLEDGE_ASKS = [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE] as const;
 
 export function registerKnowledge(
 	interp: Interp,
-	{ store, pdf }: KnowledgeHost,
+	{ store, pdf, clock }: KnowledgeHost,
 ): void {
+	const reporter = reporterFor(interp, clock);
 	interp.defGen(
 		"knowledge/list",
 		0,
@@ -35,10 +37,12 @@ export function registerKnowledge(
 		z.tuple([zString]),
 		function* ([name]): Eval {
 			const checked = fileName(name);
-			const bytes = yield* settled(store.read("knowledge", checked));
-			return bytes === undefined
-				? null
-				: yield* settled(codecFor(checked).read(checked, bytes, pdf));
+			return yield* reporting(reporter, "read", checked, function* () {
+				const bytes = yield* settled(store.read("knowledge", checked));
+				return bytes === undefined
+					? null
+					: yield* settled(codecFor(checked).read(checked, bytes, pdf));
+			});
 		},
 	);
 
@@ -51,15 +55,17 @@ export function registerKnowledge(
 		function* ([name, value]): Eval {
 			const checked = fileName(name);
 			const codec = codecFor(checked);
-			yield* settled(
-				store.write(
-					"knowledge",
-					checked,
-					new TextEncoder().encode(codec.write(checked, value)),
-					codec.contentType,
-				),
-			);
-			return checked;
+			return yield* reporting(reporter, "write", checked, function* () {
+				yield* settled(
+					store.write(
+						"knowledge",
+						checked,
+						new TextEncoder().encode(codec.write(checked, value)),
+						codec.contentType,
+					),
+				);
+				return checked;
+			});
 		},
 	);
 

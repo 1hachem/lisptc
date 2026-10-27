@@ -3,6 +3,7 @@ import {
 	contentToText,
 	ENVELOPE_KEYS,
 	envelopeOf,
+	lighten,
 	type MessageKwargs,
 } from "@repo/shared/messages";
 import {
@@ -131,7 +132,12 @@ function received(input: ChatInput): Annotations | undefined {
 
 function toTranscript(input: ChatInput): TranscriptEntry[] {
 	const transcript: TranscriptEntry[] = [];
-	for (const entry of (input.messages ?? []).map(toEntry)) {
+	const read = (input.messages ?? []).filter(
+		(m) =>
+			agentRole(m.type ?? m.role) !== "tool" ||
+			envelopeOf(m.additional_kwargs).quiet !== true,
+	);
+	for (const entry of read.map(toEntry)) {
 		const previous = transcript.at(-1);
 		if (entry.role === "tool" && previous && isUserPrompt(previous))
 			transcript.splice(-1, 1, ...withItsResult(previous, entry));
@@ -142,6 +148,7 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 
 export interface TurnStreamOptions {
 	signal?: AbortSignal;
+	onStep?: (produced: WireMessage[]) => Promise<void> | void;
 	onTurn?: (
 		messages: WireMessage[],
 		revised: ReadonlyMap<number, WireMessage>,
@@ -149,6 +156,7 @@ export interface TurnStreamOptions {
 	) => Promise<void> | void;
 	quiet?: boolean;
 	onOutcome?: (outcome: TurnOutcome) => void;
+	onOpen?: (insert: (message: WireMessage) => boolean) => void;
 }
 
 export type TurnRun = (
@@ -173,10 +181,16 @@ class TurnWire {
 	outcome: TurnOutcome = { stopped: "stopped without answering" };
 	private held: { held: StepAnnotations; message: string } | undefined;
 	private lastMeta: Record<string, unknown> | undefined;
+	private lastAnswer = -1;
+	private provisional: WireMessage | undefined;
+	private flushed: number;
+	private recorded: Promise<void> = Promise.resolve();
+	private sealed = false;
 
 	constructor(
 		input: ChatInput,
 		private readonly write: (chunk: Uint8Array) => boolean,
+		private readonly onStep: TurnStreamOptions["onStep"],
 	) {
 		this.wire = (input.messages ?? []).map((m, i) => ({
 			type: wireType(m.type ?? m.role),
@@ -187,16 +201,54 @@ class TurnWire {
 				: {}),
 		}));
 		this.carried = this.wire.length;
+		this.flushed = this.carried;
 	}
 
 	snapshot(): boolean {
-		return this.write(sse("values", { messages: this.wire }));
+		const shown =
+			this.provisional === undefined
+				? this.wire
+				: [...this.wire, this.provisional];
+		return this.write(sse("values", { messages: lighten(shown) }));
+	}
+
+	flush(): void {
+		const onStep = this.onStep;
+		if (onStep === undefined || this.flushed === this.wire.length) return;
+		const produced = this.wire.slice(this.flushed);
+		this.flushed = this.wire.length;
+		this.recorded = this.recorded
+			.then(() => onStep(produced))
+			.catch((error) => console.error("[ai] a step was not recorded:", error));
+	}
+
+	insert(message: WireMessage): boolean {
+		if (this.sealed) return false;
+		this.wire.push(message);
+		this.flush();
+		this.snapshot();
+		return true;
+	}
+
+	async unrecorded(): Promise<WireMessage[]> {
+		this.sealed = true;
+		this.flush();
+		await this.recorded;
+		return this.wire.slice(this.flushed);
 	}
 
 	apply(event: TurnEvent): boolean {
 		switch (event.type) {
 			case "delta":
 				return this.delta(event);
+			case "live":
+				this.provisional = {
+					type: "tool",
+					content: "",
+					id: `${event.stepId}:live`,
+					additional_kwargs: { ...event.annotations },
+				};
+				return this.snapshot();
 			case "steered":
 				this.wire.push(
 					event.source === undefined
@@ -219,6 +271,9 @@ class TurnWire {
 					!this.reviseLastHuman((m) => annotate(m, event.annotations)) ||
 					this.snapshot()
 				);
+			case "concluded":
+				this.conclude(event.annotations);
+				return this.snapshot();
 			case "rode":
 				this.reviseLastHuman((m) => carrying(m, event.text));
 				return true;
@@ -228,9 +283,13 @@ class TurnWire {
 			case "result":
 				return this.result(event);
 			case "halt":
+				this.provisional = undefined;
 				this.steps = event.steps;
 				this.outcome = this.held ?? { answer: event.answer };
-				if (this.lastMeta) this.lastMeta.steps = event.steps;
+				if (this.lastMeta) {
+					this.lastMeta.steps = event.steps;
+					this.reviseFlushed(this.lastAnswer);
+				}
 				this.snapshot();
 				return true;
 			case "capped":
@@ -247,6 +306,7 @@ class TurnWire {
 				);
 				return true;
 			case "failed":
+				this.provisional = undefined;
 				console.error("[ai] chat stream failed:", event.error);
 				this.failure = event.message;
 				this.outcome = { stopped: `failed: ${event.message}` };
@@ -258,20 +318,22 @@ class TurnWire {
 	}
 
 	private delta(event: Of<"delta">): boolean {
-		const chunk =
-			event.reasoning === undefined
-				? { type: "ai", id: event.stepId, content: event.text ?? "" }
-				: {
-						type: "ai",
-						id: event.stepId,
-						content: "",
-						additional_kwargs: { reasoning_content: event.reasoning },
-					};
-		return this.write(sse("messages", [chunk, {}]));
+		const chunk = event.reasoning
+			? {
+					type: "ai",
+					id: event.stepId,
+					content: "",
+					additional_kwargs: { reasoning_content: event.reasoning },
+				}
+			: event.text
+				? { type: "ai", id: event.stepId, content: event.text }
+				: undefined;
+		return chunk === undefined || this.write(sse("messages", [chunk, {}]));
 	}
 
 	private assistant(event: Of<"assistant">): void {
 		this.lastMeta = { ...event.meta };
+		this.lastAnswer = this.wire.length;
 		this.wire.push({
 			type: "ai",
 			content: event.code,
@@ -287,11 +349,33 @@ class TurnWire {
 
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
+		this.provisional = undefined;
 		const message = crypto.randomUUID();
 		if (event.held) this.held = { held: event.annotations, message };
 		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
 		this.wire.push(toolMessage(event, message));
+		this.flush();
 		return this.snapshot();
+	}
+
+	private conclude(annotations: Record<string, unknown>): void {
+		let at = this.wire.length - 1;
+		while (at >= this.carried && this.wire[at].type !== "tool") at--;
+		if (at < this.carried) {
+			this.wire.push({
+				type: "tool",
+				content: "",
+				id: crypto.randomUUID(),
+				additional_kwargs: { ...annotations, quiet: true },
+			});
+			return;
+		}
+		const kwargs: Record<string, unknown> = {
+			...this.wire[at].additional_kwargs,
+		};
+		mergeInto(kwargs, annotations);
+		this.wire[at] = { ...this.wire[at], additional_kwargs: kwargs };
+		this.reviseFlushed(at);
 	}
 
 	private reviseLastHuman(
@@ -300,8 +384,12 @@ class TurnWire {
 		const at = lastHuman(this.wire);
 		if (at === -1) return false;
 		this.wire[at] = update(this.wire[at]);
-		if (at < this.carried) this.revised.set(at, this.wire[at]);
+		this.reviseFlushed(at);
 		return true;
+	}
+
+	private reviseFlushed(at: number): void {
+		if (at !== -1 && at < this.flushed) this.revised.set(at, this.wire[at]);
 	}
 }
 
@@ -319,9 +407,10 @@ async function record(
 	onTurn: TurnStreamOptions["onTurn"],
 	turn: TurnWire,
 ): Promise<void> {
+	const unrecorded = await turn.unrecorded();
 	if (!onTurn) return;
 	try {
-		await onTurn(turn.wire.slice(turn.carried), turn.revised, turn.failure);
+		await onTurn(unrecorded, turn.revised, turn.failure);
 	} catch (error) {
 		console.error("[ai] the turn was not recorded:", error);
 	}
@@ -336,7 +425,7 @@ export function streamTurn(
 	run: TurnRun,
 	options: TurnStreamOptions = {},
 ): Response {
-	const { onTurn, signal, quiet, onOutcome } = options;
+	const { onStep, onTurn, signal, quiet, onOutcome, onOpen } = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
 	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
@@ -354,7 +443,8 @@ export function streamTurn(
 					return false;
 				}
 			};
-			const turn = new TurnWire(input, write);
+			const turn = new TurnWire(input, write, onStep);
+			onOpen?.((message) => turn.insert(message));
 
 			try {
 				turn.snapshot();

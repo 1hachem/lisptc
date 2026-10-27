@@ -6,6 +6,7 @@ describe("panel paths", () => {
 	it.each<[PanelContent, string]>([
 		[{ kind: "chat", chatId: null, title: "new chat" }, ""],
 		[{ kind: "chat", chatId: "abc", title: "chat" }, "chat/abc"],
+		[{ kind: "trace", chatId: "abc", title: "trace" }, "trace/abc"],
 		[
 			{ kind: "file", folder: "knowledge", name: "q3 plan.pdf" },
 			"knowledge/q3 plan.pdf",

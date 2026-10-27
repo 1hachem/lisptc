@@ -4,8 +4,7 @@ import { world } from "./helpers.ts";
 
 const HELD = {
 	font: "geist",
-	channels: { lisp: false, thinking: true },
-	metadata: { tokens: true },
+	metadata: { tokens: true, time: false },
 	input: { lisp: true },
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
@@ -13,13 +12,15 @@ const HELD = {
 	statusBarHidden: [],
 	motion: "slide",
 	panelMotion: true,
+	traceBesideChat: false,
+	traceLink: true,
 };
 
 describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :channels (:lisp nil :thinking t) :metadata (:tokens t) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("gap" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t)',
+			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("gap" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
 		);
 	});
 
@@ -49,10 +50,10 @@ describe("changing preferences", () => {
 
 	it("merges toggles and keeps the ones it does not name", async () => {
 		const { ev, store } = await world(HELD);
-		expect(await ev("(preferences/set :channels '(:lisp t))")).toContain(
-			":channels (:lisp t :thinking t)",
+		expect(await ev("(preferences/set :metadata '(:time t))")).toContain(
+			":metadata (:tokens t :time t)",
 		);
-		expect(store.read().channels).toEqual({ lisp: true, thinking: true });
+		expect(store.read().metadata).toEqual({ tokens: true, time: true });
 	});
 
 	it("turns a chat input helper off and keeps the rest", async () => {
@@ -73,15 +74,15 @@ describe("changing preferences", () => {
 
 	it("refuses a toggle the app has never listed", async () => {
 		const { ev } = await world(HELD);
-		await expect(ev("(preferences/set :channels '(:bogus t))")).rejects.toThrow(
-			/:lisp :thinking/,
+		await expect(ev("(preferences/set :metadata '(:bogus t))")).rejects.toThrow(
+			/:tokens :time/,
 		);
 	});
 
 	it("takes only t or nil for a toggle", async () => {
 		const { ev } = await world(HELD);
 		await expect(
-			ev('(preferences/set :channels \'(:lisp "yes"))'),
+			ev('(preferences/set :metadata \'(:tokens "yes"))'),
 		).rejects.toThrow(/t or nil/);
 	});
 
@@ -173,6 +174,32 @@ describe("changing preferences", () => {
 		expect(await ev("(preferences)")).toContain(":panel-motion nil");
 		await ev("(preferences/set :panel-motion t)");
 		expect(store.read().panelMotion).toBe(true);
+	});
+
+	it("opens the trace beside the chat for a developer, and stops", async () => {
+		const { ev, store } = await world(HELD);
+		await ev("(preferences/set :trace-beside-chat t)");
+		expect(store.read().traceBesideChat).toBe(true);
+		expect(await ev("(preferences)")).toContain(":trace-beside-chat t");
+		await ev("(preferences/set :trace-beside-chat nil)");
+		expect(store.read().traceBesideChat).toBe(false);
+	});
+
+	it("hides the message's trace link and shows it again", async () => {
+		const { ev, store } = await world(HELD);
+		await ev("(preferences/set :trace-link nil)");
+		expect(store.read().traceLink).toBe(false);
+		expect(await ev("(preferences)")).toContain(":trace-link nil");
+		await ev("(preferences/set :trace-link t)");
+		expect(store.read().traceLink).toBe(true);
+	});
+
+	it("has no channel toggles, the chat showing what it shows", async () => {
+		const { ev } = await world(HELD);
+		await expect(
+			ev("(preferences/set :channels '(:lisp t))"),
+		).rejects.toThrow();
+		expect(await ev("(preferences)")).not.toContain(":channels");
 	});
 
 	it("refuses a call that sets nothing", async () => {

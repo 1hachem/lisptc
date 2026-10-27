@@ -38,16 +38,17 @@ describe("preferencesSource", () => {
 		expect(
 			preferencesSource({
 				font: "mono",
-				channels: { lisp: false, thinking: true },
 				metadata: { tokens: true },
 				input: { lisp: true },
 				sidebar: ["README.md", "home"],
 				hidden: ["tests"],
 				motion: "lift",
 				panelMotion: false,
+				traceBesideChat: true,
+				traceLink: false,
 			}),
 		).toBe(
-			'(preferences :font "mono"\n  :channels (:lisp nil :thinking t)\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift"\n  :panel-motion nil)',
+			'(preferences :font "mono"\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift"\n  :panel-motion nil\n  :trace-beside-chat t\n  :trace-link nil)',
 		);
 	});
 });

@@ -4,7 +4,7 @@ import {
 	type Problem,
 	type StepAnnotations,
 } from "@repo/interpreter/session";
-import type { AgentRepl, EvalOutput } from "@repo/repl/repl";
+import type { AgentRepl, EvalOutput, LiveAnnotations } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
@@ -95,6 +95,7 @@ async function outcomeOf(
 	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
+	failure: string;
 	held: boolean;
 	results: readonly string[];
 }> {
@@ -106,12 +107,14 @@ async function outcomeOf(
 			effects,
 			emitted,
 			failed,
+			failure = "",
 			held,
 			results,
 		} = await run();
 		return {
 			output: model,
-			display: user,
+			display: without(user, failure),
+			failure,
 			error: false,
 			annotations,
 			effects,
@@ -129,7 +132,8 @@ async function outcomeOf(
 				: `REPL error: ${msg} (interpreter restored to its last checkpoint, changes since then lost)`;
 		return {
 			output: text,
-			display: text,
+			display: "",
+			failure: text,
 			error: true,
 			annotations: noAnnotations(),
 			effects: [],
@@ -141,8 +145,18 @@ async function outcomeOf(
 	}
 }
 
-export function evalCode(repl: AgentRepl, code: string, origin?: string) {
-	return outcomeOf(repl, () => repl.evalOutput(code, origin));
+function without(text: string, part: string): string {
+	const at = part === "" ? -1 : text.lastIndexOf(part);
+	return at < 0 ? text : text.slice(0, at) + text.slice(at + part.length);
+}
+
+export function evalCode(
+	repl: AgentRepl,
+	code: string,
+	origin?: string,
+	live?: LiveAnnotations,
+) {
+	return outcomeOf(repl, () => repl.evalOutput(code, origin, live));
 }
 
 export function evalMessageCode(

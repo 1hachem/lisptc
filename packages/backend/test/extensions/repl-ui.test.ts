@@ -1,5 +1,6 @@
 import { Compactor } from "@repo/compaction-extension";
 import type { EvalOutput } from "@repo/repl/repl";
+import type { PanelOp } from "@repo/ui-extension";
 import { describe, expect, it } from "vitest";
 import { memoryRepl, modelFacing } from "./helpers.ts";
 
@@ -55,11 +56,29 @@ describe("a step that renders", () => {
 });
 
 describe("a step that opens panel tabs", () => {
-	it("hands the panel ops back beside the output, in order", async () => {
-		const out = await memoryRepl().evalOutput(
+	it("writes the panel ops through the panel port, in order", async () => {
+		const ops: PanelOp[] = [];
+		const panel = {
+			apply: async (applied: readonly PanelOp[]) => void ops.push(...applied),
+			tabs: () =>
+				ops.some((op) => op.op === "open")
+					? [
+							{
+								id: "file:knowledge/q3.pdf",
+								kind: "file",
+								title: "q3.pdf",
+								shown: true,
+								focused: true,
+							},
+						]
+					: [],
+		};
+		const out = await memoryRepl(
+			modelFacing(undefined, undefined, panel),
+		).evalOutput(
 			'(ui/open-file "knowledge" "q3.pdf" :split "right") (ui/close "file:knowledge/q3.pdf")',
 		);
-		expect(out.annotations.output.panel).toEqual([
+		expect(ops).toEqual([
 			{
 				op: "open",
 				tab: "file:knowledge/q3.pdf",
@@ -68,11 +87,20 @@ describe("a step that opens panel tabs", () => {
 			},
 			{ op: "close", tab: "file:knowledge/q3.pdf" },
 		]);
+		expect(out.annotations.output).not.toHaveProperty("panel");
 	});
 
-	it("reports no panel ops for a step that opened none", async () => {
-		const out = await memoryRepl().evalOutput("(+ 1 2)");
-		expect(out.annotations.output.panel).toBeUndefined();
+	it("fails the step when the panel port refuses an op", async () => {
+		const panel = {
+			apply: async () => {
+				throw new Error("layout too large");
+			},
+			tabs: () => [],
+		};
+		const out = await memoryRepl(
+			modelFacing(undefined, undefined, panel),
+		).evalOutput('(ui/focus "view:counts")');
+		expect(out.failed).toBe(true);
 	});
 });
 

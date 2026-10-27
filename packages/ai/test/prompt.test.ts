@@ -75,11 +75,16 @@ describe("the REPL loop protocol", () => {
 		expect(PROMPT).toMatch(/there is no halt or exit built-in/i);
 	});
 
-	it("bans forms that only talk, while saying echoed output is read", () => {
-		expect(PROMPT).toMatch(/The user READS everything the REPL echoes/);
+	it("bans forms that only talk, while saying echoed output is for the agent alone", () => {
+		expect(PROMPT).toMatch(/The user NEVER sees text output/);
 		expect(PROMPT).toMatch(/What they cannot do is reply mid-loop/);
 		expect(PROMPT).toContain('(identity "Standing by.")');
 		expect(PROMPT).toMatch(/Every form you write must do real work/i);
+	});
+
+	it("leaves what reaches the user to the extensions' own prompts", () => {
+		expect(PROMPT).toMatch(/is set by the extensions in this session/);
+		expect(PROMPT).not.toMatch(/\b(ui|intent)\//);
 	});
 
 	it("says a request needing no computation is answered in prose at once", () => {

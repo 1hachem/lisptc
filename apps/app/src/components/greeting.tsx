@@ -1,16 +1,8 @@
-import { Typewriter } from "@repo/components";
 import { useChatSession } from "../lib/chat.tsx";
-import { usePrefersReducedMotion } from "../lib/motion.ts";
 
 export function Greeting() {
 	const greeting = useChatSession((state) => state.greeting);
-	const reduced = usePrefersReducedMotion();
-
 	return (
-		<div className="min-h-[1.7em] min-w-0 break-words text-fg">
-			{greeting && (
-				<Typewriter text={greeting} reveal="token" enabled={!reduced} />
-			)}
-		</div>
+		<div className="min-h-[1.7em] min-w-0 break-words text-fg">{greeting}</div>
 	);
 }

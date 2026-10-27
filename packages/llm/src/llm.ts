@@ -1,6 +1,16 @@
+import {
+	type ActivityEntry,
+	recordActivity,
+} from "@repo/interpreter/annotations";
 import { isNumeric } from "@repo/interpreter/arith";
-import { EvalException } from "@repo/interpreter/errors";
-import { type Interp, runSync } from "@repo/interpreter/lisp";
+import { topic } from "@repo/interpreter/channels";
+import { EvalException, messageOf } from "@repo/interpreter/errors";
+import {
+	type Interp,
+	runSync,
+	type State,
+	type StateCodec,
+} from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -31,6 +41,43 @@ import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
 
 export const LLM_TIMEOUT_MS = 60_000;
+
+const modelActivity = topic<ActivityEntry>("llm-activity");
+
+const callSeqCodec: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
+
+interface Timing {
+	readonly startedAt: number;
+	readonly ms?: number;
+}
+
+type Announce = (
+	id: string,
+	builtin: string,
+	state: ActivityEntry["state"],
+	target: { provider?: string; model?: string },
+	timing: Timing,
+	error?: unknown,
+) => void;
+
+function announcer(interp: Interp): Announce {
+	return (id, builtin, state, { provider, model }, timing, error) =>
+		modelActivity.emit(interp.channels, {
+			user: {
+				kind: "llm",
+				icon: "model",
+				label: `llm · ${model ?? provider ?? "default model"}`,
+				detail: builtin,
+				state,
+				...(error === undefined ? {} : { error: messageOf(error) }),
+				id,
+				...timing,
+			},
+		});
+}
 
 export interface LlmSchema {
 	name: string;
@@ -121,6 +168,9 @@ export function llmExtension(
 		{
 			prompt: host.prompt(),
 			session(hooks: SessionHooks): void {
+				hooks.annotate.use((buffer, into, next) =>
+					next(buffer, recordActivity(into, buffer.collect(modelActivity))),
+				);
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {
 						config.observe = observer;
@@ -403,8 +453,7 @@ function traceOf(
 		if (res.inputTokens !== undefined) call.inputTokens = res.inputTokens;
 		if (res.outputTokens !== undefined) call.outputTokens = res.outputTokens;
 	}
-	if (error !== undefined)
-		call.error = error instanceof Error ? error.message : String(error);
+	if (error !== undefined) call.error = messageOf(error);
 	return call;
 }
 
@@ -412,6 +461,8 @@ function caller(
 	generate: Generate,
 	clock: Clock,
 	observe: () => LlmObserver | undefined,
+	calls: State<number>,
+	announce: Announce,
 ): (builtin: string, req: LlmRequest, timeoutMs: number) => Promise<LlmResult> {
 	const report = (call: LlmCall): void => {
 		const observer = observe();
@@ -421,16 +472,33 @@ function caller(
 		} catch {}
 	};
 	return (builtin, req, timeoutMs) => {
+		const n = calls.get() + 1;
+		calls.set(n);
+		const id = `llm-${n}`;
 		const startedAt = clock.now();
+		announce(id, builtin, "started", req, { startedAt });
 		const controller = new AbortController();
 		return withTimeout(generate(req, controller.signal), timeoutMs, "llm").then(
 			(res) => {
-				report(traceOf(builtin, req, clock.now() - startedAt, res, undefined));
+				const ms = clock.now() - startedAt;
+				announce(
+					id,
+					builtin,
+					"done",
+					{
+						provider: res.provider ?? req.provider,
+						model: res.model ?? req.model,
+					},
+					{ startedAt, ms },
+				);
+				report(traceOf(builtin, req, ms, res, undefined));
 				return res;
 			},
 			(ex) => {
+				const ms = clock.now() - startedAt;
+				announce(id, builtin, "failed", req, { startedAt, ms }, ex);
 				controller.abort();
-				report(traceOf(builtin, req, clock.now() - startedAt, undefined, ex));
+				report(traceOf(builtin, req, ms, undefined, ex));
 				throw ex;
 			},
 		);
@@ -449,7 +517,19 @@ export function registerLlm(
 	observe: () => LlmObserver | undefined = () => undefined,
 ): void {
 	const providers = host.providers;
-	const call = caller(host.generate, host.clock, observe);
+	const calls = interp.state(
+		"llm/calls",
+		callSeqCodec,
+		0,
+		"The number of the last model call, which numbers the activity the user sees.",
+	);
+	const call = caller(
+		host.generate,
+		host.clock,
+		observe,
+		calls,
+		announcer(interp),
+	);
 
 	interp.defineGlobal(newSym(DEFAULTS_VAR), null, {
 		signature: DEFAULTS_VAR,

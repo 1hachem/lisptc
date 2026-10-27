@@ -1,13 +1,11 @@
+import { focusedTab, type PanelOp } from "@repo/shared/panel-layout";
 import {
 	allTabs,
-	closeTab,
-	focusTab,
 	openTab,
-	type Placement,
 	paneOf,
 	type SplitLayout,
 	type Tab,
-} from "@repo/components";
+} from "@repo/shared/split-layout";
 
 export type Folder = "attachments" | "knowledge";
 
@@ -23,12 +21,18 @@ const PAGES = [
 
 export type Page = (typeof PAGES)[number];
 
+export interface SideTrace {
+	shown: "open" | "collapsed";
+	turn?: string;
+}
+
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
 	| { kind: "source"; folder: string; name: string }
 	| { kind: "view"; title: string; node: unknown; chatId?: string }
-	| { kind: "chat"; chatId: string | null; title: string }
-	| { kind: "page"; page: Page; id?: string; title: string };
+	| { kind: "chat"; chatId: string | null; title: string; trace?: SideTrace }
+	| { kind: "page"; page: Page; id?: string; title: string }
+	| { kind: "trace"; chatId: string; title: string; turn?: string };
 
 export type PanelLayout = SplitLayout<PanelContent>;
 
@@ -43,13 +47,6 @@ export const STARTING_LAYOUT: PanelLayout = openTab(
 	{ id: "chat:new:start", content: NEW_CHAT },
 );
 
-export function focusedTab(layout: PanelLayout): Tab<PanelContent> | undefined {
-	return allTabs(layout).find((tab) => {
-		const pane = paneOf(layout, tab.id);
-		return pane?.id === layout.focused && pane.active === tab.id;
-	});
-}
-
 export function shownTabs(layout: PanelLayout): Tab<PanelContent>[] {
 	return allTabs(layout).filter(
 		(tab) => paneOf(layout, tab.id)?.active === tab.id,
@@ -62,29 +59,29 @@ export function leadChat(layout: PanelLayout): string | undefined {
 	return shownTabs(layout).find((t) => t.content.kind === "chat")?.id;
 }
 
-function placed(
-	layout: PanelLayout,
-	split: Split,
-	content: PanelContent,
-): Placement {
-	if (split !== "here") return PLACEMENT[split];
-	return content.kind !== "chat" && focusedTab(layout)?.content.kind === "chat"
-		? "right"
-		: "focused";
+function traceTab(chatId: string): string {
+	return `trace:${chatId}`;
 }
 
-export type Split = "here" | "right" | "down";
+function traceTabFor(chatId: string, turn?: string): Tab<PanelContent> {
+	return {
+		id: traceTab(chatId),
+		content: {
+			kind: "trace",
+			chatId,
+			title: "trace",
+			...(turn === undefined ? {} : { turn }),
+		},
+	};
+}
 
-export type PanelOp =
-	| { op: "open"; tab: string; split: Split; content: PanelContent }
-	| { op: "close"; tab: string }
-	| { op: "focus"; tab: string };
-
-const PLACEMENT: Record<Split, Placement> = {
-	here: "focused",
-	right: "right",
-	down: "down",
-};
+export function traceOpen(
+	chatId: string,
+	turn?: string,
+): PanelOp<PanelContent> {
+	const { id, content } = traceTabFor(chatId, turn);
+	return { op: "open", tab: id, split: "right", content };
+}
 
 export function fileTab(folder: Folder, name: string): string {
 	return `file:${folder}/${name}`;
@@ -125,11 +122,37 @@ function viewOf(content: Fields): PanelContent | undefined {
 	};
 }
 
+function sideTraceOf(value: unknown): SideTrace | undefined {
+	const trace = record(value);
+	if (trace?.shown !== "open" && trace?.shown !== "collapsed") return undefined;
+	return {
+		shown: trace.shown,
+		...(typeof trace.turn === "string" ? { turn: trace.turn } : {}),
+	};
+}
+
 function chatOf(content: Fields): PanelContent | undefined {
 	const { chatId, title } = content;
 	if (typeof chatId !== "string" && chatId !== null) return undefined;
 	if (typeof title !== "string") return undefined;
-	return { kind: "chat", chatId, title };
+	const trace = sideTraceOf(content.trace);
+	return {
+		kind: "chat",
+		chatId,
+		title,
+		...(trace === undefined ? {} : { trace }),
+	};
+}
+
+function traceOf(content: Fields): PanelContent | undefined {
+	const { chatId, title, turn } = content;
+	if (typeof chatId !== "string" || typeof title !== "string") return undefined;
+	return {
+		kind: "trace",
+		chatId,
+		title,
+		...(typeof turn === "string" ? { turn } : {}),
+	};
 }
 
 function pageOf(content: Fields): PanelContent | undefined {
@@ -152,6 +175,7 @@ const CONTENT_OF: Record<
 	view: viewOf,
 	chat: chatOf,
 	page: pageOf,
+	trace: traceOf,
 };
 
 function contentOf(value: unknown): PanelContent | undefined {
@@ -168,10 +192,14 @@ export function tabLabel(content: PanelContent): string {
 		: content.title;
 }
 
-const CHAT_MIN_WIDTH = 360;
+export const CHAT_MIN_WIDTH = 360;
+export const SIDE_TRACE_MIN_WIDTH = 240;
 
 export function tabMinWidth(content: PanelContent): number {
-	return content.kind === "chat" ? CHAT_MIN_WIDTH : 0;
+	if (content.kind !== "chat") return 0;
+	return content.trace?.shown === "open"
+		? CHAT_MIN_WIDTH + SIDE_TRACE_MIN_WIDTH
+		: CHAT_MIN_WIDTH;
 }
 
 export const PANEL_DRAG = "application/x-lisptc-panel";
@@ -192,6 +220,8 @@ function tabId(content: PanelContent): string {
 			return content.id === undefined
 				? `page:${content.page}`
 				: `page:${content.page}/${content.id}`;
+		case "trace":
+			return traceTab(content.chatId);
 	}
 }
 
@@ -220,32 +250,9 @@ export function readPanelDrag(
 	}
 }
 
-export function toPanelOps(value: unknown): PanelOp[] {
-	if (!Array.isArray(value)) return [];
-	return value.flatMap((item): PanelOp[] => {
-		const op = record(item);
-		if (typeof op?.tab !== "string") return [];
-		if (op.op === "close" || op.op === "focus")
-			return [{ op: op.op, tab: op.tab }];
-		const content = contentOf(op.content);
-		if (op.op !== "open" || content === undefined) return [];
-		const split =
-			op.split === "right" || op.split === "down" ? op.split : "here";
-		return [{ op: "open", tab: op.tab, split, content }];
-	});
-}
-
-export function applyPanelOps(
-	layout: PanelLayout,
-	ops: readonly PanelOp[],
-): PanelLayout {
-	return ops.reduce((current, op) => {
-		if (op.op === "close") return closeTab(current, op.tab);
-		if (op.op === "focus") return focusTab(current, op.tab);
-		return openTab(
-			current,
-			{ id: op.tab, content: op.content },
-			placed(current, op.split, op.content),
-		);
-	}, layout);
+export function sideTraceShown(
+	trace: SideTrace | undefined,
+	besideByDefault: boolean,
+): SideTrace {
+	return trace ?? { shown: besideByDefault ? "open" : "collapsed" };
 }

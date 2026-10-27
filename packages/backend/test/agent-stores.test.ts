@@ -6,7 +6,7 @@ import {
 	ConvexKnowledgeStore,
 	type KnowledgeStoreClient,
 } from "../src/knowledge-store.ts";
-import { ConvexPanelReader } from "../src/panel-store.ts";
+import { ConvexLayoutStore } from "../src/layout-store.ts";
 import {
 	ConvexPreferencesStore,
 	type PreferencesClient,
@@ -204,7 +204,7 @@ describe("the convex panel reader", () => {
 				],
 			},
 		});
-		const reader = new ConvexPanelReader(WORKSPACE, () => client);
+		const reader = new ConvexLayoutStore(WORKSPACE, () => client);
 		expect(await reader.tabs()).toEqual([
 			{
 				id: "chat:c1",
@@ -235,7 +235,7 @@ describe("the convex panel reader", () => {
 
 	it("reads no tabs before the panel was ever saved", async () => {
 		const { client } = spyClient({});
-		const reader = new ConvexPanelReader(WORKSPACE, () => client);
+		const reader = new ConvexLayoutStore(WORKSPACE, () => client);
 		expect(await reader.tabs()).toEqual([]);
 	});
 });
@@ -246,7 +246,6 @@ describe("the convex preferences store", () => {
 			[named(api.preferences.get)]: {
 				font: "mono",
 				themeUses: { borland: 3 },
-				channels: { lisp: true },
 				input: { lisp: false },
 				hidden: ["tests"],
 			},
@@ -254,7 +253,6 @@ describe("the convex preferences store", () => {
 		const store = new ConvexPreferencesStore(() => client);
 		expect(await store.read()).toEqual({
 			font: "mono",
-			channels: { lisp: true },
 			metadata: undefined,
 			input: { lisp: false },
 			hidden: ["tests"],

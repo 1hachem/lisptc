@@ -56,14 +56,14 @@ describe("what the watch stream shows", () => {
 		expect(shownMessages(watched).at(-1)).toMatchObject({ content: "hello" });
 	});
 
-	test("keeps a relayed ask where it arrived after the turn moves on", () => {
+	test("never places a relayed message above what the turn carries", () => {
 		const step: ChatMessage = { id: "s", type: "ai", content: "(+ 1 2)" };
 		const watched = watch(
 			sse("values", { messages: [human] }),
 			sse("relayed", ask),
 			sse("values", { messages: [human, step] }),
 		);
-		expect(shownMessages(watched)).toEqual([human, ask, step]);
+		expect(shownMessages(watched)).toEqual([human, step, ask]);
 	});
 
 	test("shows a relayed message once the turn carries it too", () => {
@@ -88,8 +88,8 @@ describe("what the watch stream shows", () => {
 		);
 		expect(shownMessages(watched, [human, answered])).toEqual([
 			human,
-			answered,
 			step,
+			answered,
 		]);
 	});
 

@@ -34,9 +34,25 @@ const LINES: Record<Moment, string[]> = {
 	],
 };
 
-export function pickGreeting(now: Date, roll: number = Math.random()): string {
+function pickGreeting(now: Date, roll: number = Math.random()): string {
 	const lines = LINES[momentOf(now.getHours())];
 	return lines[Math.floor(roll * lines.length) % lines.length];
+}
+
+const greeted = new Map<string, string>();
+
+export function greetingFor(key: string | undefined, now: Date): string {
+	const known = key === undefined ? undefined : greeted.get(key);
+	if (known !== undefined) return known;
+	const line = pickGreeting(now);
+	if (key !== undefined) greeted.set(key, line);
+	return line;
+}
+
+export function rememberedGreeting(
+	key: string | undefined,
+): string | undefined {
+	return key === undefined ? undefined : greeted.get(key);
 }
 
 export const GREETING_ID = "greeting";

@@ -23,6 +23,7 @@
     "@repo/components": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/evals": "workspace:*",
+    "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",

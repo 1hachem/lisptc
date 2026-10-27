@@ -18,7 +18,7 @@ import {
 	type Tab,
 	unflatten,
 	vacantPane,
-} from "./split-layout.ts";
+} from "../src/split-layout.ts";
 
 const tab = (id: string): Tab<string> => ({ id, content: id });
 

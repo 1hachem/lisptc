@@ -14,16 +14,27 @@ export interface JsonSchema {
 	examples?: unknown[];
 }
 
-export interface Tool {
-	name: string;
-	description?: string;
-	inputSchema?: JsonSchema;
-	outputSchema?: JsonSchema;
+export interface Icon {
+	src: string;
+	mimeType?: string;
+	sizes?: string[];
+	theme?: "light" | "dark";
 }
 
-interface ConnMeta {
+export interface Tool {
+	name: string;
+	title?: string;
+	description?: string;
+	annotations?: { title?: string };
+	inputSchema?: JsonSchema;
+	outputSchema?: JsonSchema;
+	icons?: Icon[];
+}
+
+export interface ConnMeta {
 	description?: string;
 	keywords?: string[];
+	icon?: string;
 }
 
 export type HttpConnConfig = ConnMeta & {
@@ -60,6 +71,7 @@ export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
 export interface ConnectResult {
 	serverId: string;
 	tools: Tool[];
+	icons?: Icon[];
 }
 
 export interface ToolCall {
