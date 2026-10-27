@@ -505,6 +505,13 @@ export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {
 	return useMemo(() => briefingOf(chat), [chat]);
 }
 
+function useStreaming(chatId: Id<"chats"> | null): boolean {
+	const { data: chat } = useQuery(
+		convexQuery(api.chats.get, chatId ? { chatId } : "skip"),
+	);
+	return chat?.status === "streaming";
+}
+
 function usePersisted(chatId: Id<"chats"> | null): Sequenced[] {
 	const { data: stored } = useQuery(
 		convexQuery(api.messages.light, chatId ? { chatId } : "skip"),
@@ -613,7 +620,7 @@ export function ChatProvider({
 			),
 		[watched, persisted],
 	);
-	const running = watched.status === "running";
+	const running = useStreaming(chatId);
 
 	const greeting = useGreeting(greetingKey);
 

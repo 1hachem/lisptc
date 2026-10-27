@@ -347,13 +347,7 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 		setBusy(true);
 		void (async () => {
 			try {
-				const result = await postUiAction(chatId, action, values);
-				if (!result.live) {
-					setFailed(true);
-					setOutput("this view is no longer live — ask again to rebuild it");
-					return;
-				}
-				const data = result.response;
+				const data = await postUiAction(chatId, action, values);
 				const next = viewKey.schema.safeParse(data.ui).data;
 				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
