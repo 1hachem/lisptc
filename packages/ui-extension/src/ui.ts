@@ -5,7 +5,7 @@ import {
 } from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
-import { driveAsync } from "@repo/interpreter/drive";
+import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
@@ -15,6 +15,7 @@ import {
 	jsonToLisp,
 	type List,
 	listToArray,
+	newLispKeyword,
 	newSym,
 	Unspecified,
 } from "@repo/interpreter/objects";
@@ -32,7 +33,10 @@ import {
 	FOLDERS,
 	type Folder,
 	fileTab,
+	noPanel,
 	type PanelOp,
+	type PanelReader,
+	type PanelTab,
 	panelOps,
 	SPLITS,
 	type Split,
@@ -44,6 +48,8 @@ export {
 	fileTab,
 	type PanelContent,
 	type PanelOp,
+	type PanelReader,
+	type PanelTab,
 	panelOps,
 	viewTab,
 } from "./panel.ts";
@@ -421,7 +427,60 @@ function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
 }
 
-function registerUi(interp: Interp, surface: UiSurface): void {
+function tabList(tab: PanelTab): List {
+	return arrayToList([
+		newLispKeyword("id"),
+		tab.id,
+		newLispKeyword("kind"),
+		newLispKeyword(tab.kind),
+		newLispKeyword("title"),
+		tab.title,
+		newLispKeyword("shown"),
+		tab.shown || null,
+		newLispKeyword("focused"),
+		tab.focused || null,
+	]);
+}
+
+class PanelLedger {
+	private readonly pending = new Map<string, PanelTab | null>();
+
+	constructor(private readonly reader: PanelReader) {}
+
+	opened(tab: PanelTab): void {
+		this.pending.delete(tab.id);
+		this.pending.set(tab.id, tab);
+	}
+
+	closed(id: string): void {
+		this.pending.set(id, null);
+	}
+
+	sent(): void {
+		this.pending.clear();
+	}
+
+	*tabs(): Eval<PanelTab[]> {
+		const saved = yield* settled(this.reader.tabs());
+		const opened = [...this.pending.values()].filter(
+			(tab): tab is PanelTab => tab !== null,
+		);
+		const focus = opened.at(-1)?.id;
+		const kept = saved
+			.filter((tab) => !this.pending.has(tab.id))
+			.map((tab) => (focus === undefined ? tab : { ...tab, focused: false }));
+		return [
+			...kept,
+			...opened.map((tab) => ({ ...tab, focused: tab.id === focus })),
+		];
+	}
+}
+
+function registerUi(
+	interp: Interp,
+	surface: UiSurface,
+	panel: PanelLedger,
+): void {
 	surface.bind(interp);
 	surface.reset();
 	interp.recovery.kind({
@@ -688,6 +747,13 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		([folder, name, rest]) => {
 			const checked = folderOf(folder);
 			const tab = fileTab(checked, name);
+			panel.opened({
+				id: tab,
+				kind: "file",
+				title: name,
+				shown: true,
+				focused: true,
+			});
 			emit({
 				op: "open",
 				tab,
@@ -708,6 +774,13 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			const tab = viewTab(title);
+			panel.opened({
+				id: tab,
+				kind: "view",
+				title,
+				shown: true,
+				focused: true,
+			});
 			emit({
 				op: "open",
 				tab,
@@ -718,15 +791,18 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/close",
 		1,
 		"(ui/close tab)",
-		"Close a panel tab by the id `ui/open-file` or `ui/open-view` returned. A split left empty folds into its neighbour.",
+		"Close a panel tab by the id `ui/open-file`, `ui/open-view` or `ui/tabs` gave. A split left empty folds into its neighbour. Returns t if the tab was open, nil if it was not.",
 		z.tuple([zString]),
-		([tab]) => {
+		function* ([tab]): Eval {
+			const tabs = yield* panel.tabs();
+			if (!tabs.some((open) => open.id === tab)) return null;
+			panel.closed(tab);
 			emit({ op: "close", tab });
-			return Unspecified;
+			return true;
 		},
 	);
 
@@ -739,6 +815,18 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		([tab]) => {
 			emit({ op: "focus", tab });
 			return Unspecified;
+		},
+	);
+
+	interp.defGen(
+		"ui/tabs",
+		0,
+		"(ui/tabs)",
+		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
+		z.tuple([]),
+		function* (): Eval {
+			const tabs = yield* panel.tabs();
+			return arrayToList(tabs.map(tabList));
 		},
 	);
 
@@ -828,6 +916,7 @@ function renderView(surface: UiSurface, view: UiElement): string {
 
 export interface UiHost {
 	prompt: PromptSource;
+	panel?: PanelReader;
 }
 
 export interface UiOptions {
@@ -841,26 +930,33 @@ export function uiExtension(
 	options: UiOptions = {},
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
-	return Object.assign((interp: Interp): void => registerUi(interp, surface), {
-		surface,
-		prompt: host.prompt(),
-		session(hooks: SessionHooks): void {
-			hooks.invoke.use(async (ctx) => {
-				await surface.invoke(ctx.action, ctx.values);
-			});
-			hooks.annotate.use((buffer, into, next) => {
-				const view = buffer.collect(rendered).at(-1);
-				const panel = buffer.collect(panelOps);
-				const viewed =
-					view === undefined ? into : annotate(into, viewKey, viewOf(view));
-				return next(
-					buffer,
-					panel.length === 0 ? viewed : annotating(viewed, "output", { panel }),
+	const panel = new PanelLedger(host.panel ?? noPanel);
+	return Object.assign(
+		(interp: Interp): void => registerUi(interp, surface, panel),
+		{
+			surface,
+			prompt: host.prompt(),
+			session(hooks: SessionHooks): void {
+				hooks.invoke.use(async (ctx) => {
+					await surface.invoke(ctx.action, ctx.values);
+				});
+				hooks.annotate.use((buffer, into, next) => {
+					panel.sent();
+					const view = buffer.collect(rendered).at(-1);
+					const ops = buffer.collect(panelOps);
+					const viewed =
+						view === undefined ? into : annotate(into, viewKey, viewOf(view));
+					return next(
+						buffer,
+						ops.length === 0
+							? viewed
+							: annotating(viewed, "output", { panel: ops }),
+					);
+				});
+				hooks.message.use(
+					(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
 				);
-			});
-			hooks.message.use(
-				(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
-			);
+			},
 		},
-	});
+	);
 }
