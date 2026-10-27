@@ -1,3 +1,4 @@
+import { LispHashTable, LispVector } from "./collections.ts";
 import type { Doc } from "./docs.ts";
 import { EvalException } from "./errors.ts";
 import { Arg, BuiltInFunc, Closure, Lambda, Macro } from "./func.ts";
@@ -88,6 +89,12 @@ class Writer {
 	private object(x: object): Json {
 		if (x instanceof Cell)
 			return { cell: [this.value(x.car), this.value(x.cdr)] };
+		if (x instanceof LispVector)
+			return { vector: x.items.map((e) => this.value(e)) };
+		if (x instanceof LispHashTable)
+			return {
+				hash: x.pairs().map(([k, v]) => [this.value(k), this.value(v)]),
+			};
 		if (Array.isArray(x)) return { frame: Array.from(x, (e) => this.value(e)) };
 		if (x instanceof Closure || x instanceof Lambda || x instanceof Macro)
 			return {
@@ -218,6 +225,8 @@ class ImageReader {
 			if (!isRecord(json)) throw new ImageError(`bad image object ${id}`);
 			if ("cell" in json) this.values[id] = new Cell(null, null);
 			else if ("promise" in json) this.values[id] = new LispPromise();
+			else if ("vector" in json) this.values[id] = new LispVector([]);
+			else if ("hash" in json) this.values[id] = new LispHashTable();
 			else if ("frame" in json)
 				this.values[id] = new Array((json.frame as Json[]).length);
 		});
@@ -249,6 +258,12 @@ class ImageReader {
 						state === "rejected" ? (outcome as string) : INTERRUPTED,
 					);
 				}
+			} else if (target instanceof LispVector) {
+				for (const e of record.vector as Json[])
+					target.items.push(this.value(e));
+			} else if (target instanceof LispHashTable) {
+				for (const [k, v] of record.hash as [Json, Json][])
+					target.set(this.value(k), this.value(v));
 			} else if (Array.isArray(target) && "frame" in record) {
 				(record.frame as Json[]).forEach((e, i) => {
 					target[i] = this.value(e);

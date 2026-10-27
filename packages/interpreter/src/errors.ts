@@ -65,6 +65,14 @@ export class LoopSignal {
 	constructor(readonly value: unknown) {}
 }
 
+export class ThrowSignal {
+	constructor(
+		readonly kind: unknown,
+		readonly tag: unknown,
+		readonly value: unknown,
+	) {}
+}
+
 export class StepHold {
 	constructor(readonly reason: string) {}
 }
