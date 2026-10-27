@@ -40,7 +40,6 @@ import {
 	messageText,
 	parentSourceOf,
 	type StepMeta,
-	toolActivity,
 	toolAnswers,
 	toolAsks,
 	toolFailed,
@@ -503,10 +502,7 @@ function StepCall({
 }) {
 	const label = entries.some((entry) => entry.kind === "intent")
 		? undefined
-		: (doing ??
-			toolActivity(result)
-				.map((entry) => entry.label)
-				.join(", "));
+		: doing;
 	return (
 		<div className="flex min-w-0 flex-col gap-2 empty:hidden">
 			{label && (

@@ -567,14 +567,13 @@ describe("what a turn is doing", () => {
 		]);
 	});
 
-	it("names the calls a step made on its row, and keeps their timeline under it", async () => {
+	it("names the calls a step made once, in their timeline", async () => {
 		session.messages = ACTING;
 		session.isLoading = true;
 		const host = await mount(<ChatView />);
 
-		expect(host.querySelector("[data-step-call]")?.textContent).toContain(
-			"linear · Get issue",
-		);
+		expect(host.querySelector("[data-step-call]")).toBeNull();
+		expect(host.textContent?.split("linear · Get issue").length).toBe(2);
 		expect(
 			[...host.querySelectorAll("[data-timeline]")].map((li) =>
 				li.getAttribute("data-timeline"),
