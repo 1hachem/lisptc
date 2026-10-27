@@ -24,6 +24,7 @@ import {
 } from "./agent-repl.ts";
 import { ConvexImageStore } from "./image-store.ts";
 import type { Owner, ServerClient } from "./server-client.ts";
+import type { DesktopBridge } from "./desktop-bridge.ts";
 
 export type RecordLineage = FunctionReturnType<
 	typeof internal.threads.record
@@ -109,6 +110,7 @@ export interface ThreadHostOptions {
 	readonly server: ServerClient;
 	readonly actAs: (owner: Owner) => WorkspaceClient;
 	readonly threads?: () => Threads;
+	readonly bridge?: DesktopBridge;
 }
 
 const asChat = (threadId: string) => threadId as Id<"chats">;
@@ -288,7 +290,7 @@ export class ThreadHost {
 		own: boolean,
 	): Promise<AgentRepl> {
 		const { workspaceId, ownerId, profile } = await this.record(chatId);
-		const { actAs, threads } = this.options;
+		const { actAs, threads, bridge } = this.options;
 		const owner = actAs({ userId: ownerId, workspaceId });
 		const supervisor =
 			own && threads !== undefined
@@ -311,6 +313,9 @@ export class ThreadHost {
 				...(profile.subAgent === undefined ? {} : { subAgent: true }),
 				...(own ? { chatId } : {}),
 				...(supervisor === undefined ? {} : { supervisor }),
+				...(bridge === undefined
+					? {}
+					: { desktop: { owner: ownerId, bridge } }),
 			}),
 			images,
 		});

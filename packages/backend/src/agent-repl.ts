@@ -53,6 +53,7 @@ import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 import { ConvexSourceFolder } from "./source-folder.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
+import { BridgedHost, type DesktopBridge } from "./desktop-bridge.ts";
 
 export type WorkspaceClient = Pick<
 	ConvexHttpClient,
@@ -88,12 +89,16 @@ export interface ThreadScope {
 	readonly bounds?: readonly string[];
 	readonly roster?: readonly string[];
 	readonly subAgent?: boolean;
+	readonly desktop?: {
+		readonly owner: Id<"users">;
+		readonly bridge: DesktopBridge;
+	};
 }
 
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, supervisor, bounds, roster, subAgent }: ThreadScope = {},
+	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -165,7 +170,10 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
-				host: new DockerHost(),
+				host:
+					desktop === undefined
+						? new DockerHost()
+						: new BridgedHost(desktop.owner, desktop.bridge, new DockerHost()),
 			}),
 			policy: permissions.rules,
 		}),
