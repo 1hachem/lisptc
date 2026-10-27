@@ -8,6 +8,8 @@ import {
 	joinMessages,
 	nodeToJson,
 	type PanelOp,
+	type PanelStore,
+	type PanelTab,
 	rendered,
 	sent,
 	type UiNode,
@@ -17,6 +19,34 @@ import {
 	viewTab,
 } from "../src/ui.ts";
 import { uiHostFor } from "../src/ui-host.ts";
+
+function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
+	let tabs = [...saved];
+	const ops: PanelOp[] = [];
+	const without = (id: string) => tabs.filter((tab) => tab.id !== id);
+	const panel: PanelStore = {
+		apply(applied) {
+			ops.push(...applied);
+			for (const op of applied) {
+				if (op.op === "close") tabs = without(op.tab);
+				if (op.op === "open")
+					tabs = [
+						...without(op.tab).map((tab) => ({ ...tab, focused: false })),
+						{
+							id: op.tab,
+							kind: op.content.kind,
+							title:
+								op.content.kind === "view" ? op.content.title : op.content.name,
+							shown: true,
+							focused: true,
+						},
+					];
+			}
+		},
+		tabs: () => tabs,
+	};
+	return { panel, ops };
+}
 
 function collector(interp: Interp) {
 	let view: UiNode | undefined;
@@ -48,10 +78,8 @@ function fresh(): {
 	ops: PanelOp[];
 } {
 	const surface = new UiSurface();
-	const ops: PanelOp[] = [];
-	const host = uiHostFor({
-		panel: { apply: (applied) => void ops.push(...applied) },
-	});
+	const { panel, ops } = panelOf([]);
+	const host = uiHostFor({ panel });
 	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 	runSync(interp, prelude);
 	return { interp, surface, ui: collector(interp), ops };
@@ -356,6 +384,16 @@ describe("actions", () => {
 		});
 	});
 
+	it("forgets the handlers behind a view's controls", async () => {
+		const { surface, interp } = render(`
+			(setq view (ui/stack (ui/button "a" (lambda () 1)) (ui/checkbox :name "b" :on-change (lambda (v) v))))
+			(ui/render view)
+		`);
+		expect(str(runSync(interp, "(ui/forget view)"))).toBe("2");
+		await expect(surface.invoke("a1", {})).rejects.toThrow(/no such ui action/);
+		expect(str(runSync(interp, "(ui/forget view)"))).toBe("0");
+	});
+
 	it("reports an id it does not know rather than doing nothing", async () => {
 		const { surface } = render('(ui/render (ui/text "hi"))');
 		await expect(surface.invoke("a99", {})).rejects.toThrow(
@@ -547,12 +585,68 @@ describe("the panel beside the chat", () => {
 		);
 	});
 
+	const saved: PanelTab[] = [
+		{
+			id: "file:knowledge/notes.md",
+			kind: "file",
+			title: "notes.md",
+			shown: true,
+			focused: true,
+		},
+		{
+			id: "view:counts",
+			kind: "view",
+			title: "counts",
+			shown: false,
+			focused: false,
+		},
+	];
+
+	function onPanel(tabs: PanelTab[]) {
+		const { panel, ops } = panelOf(tabs);
+		const interp = new Interp({
+			extensions: [uiExtension(uiHostFor({ panel }))],
+		});
+		runSync(interp, prelude);
+		return { ops, ev: (code: string) => str(runSync(interp, code)) };
+	}
+
+	it("lists the tabs the panel reader reports", () => {
+		expect(onPanel(saved).ev("(ui/tabs)")).toBe(
+			'((:id "file:knowledge/notes.md" :kind :file :title "notes.md" :shown t :focused t) (:id "view:counts" :kind :view :title "counts" :shown nil :focused nil))',
+		);
+	});
+
+	it("lists the tabs this step opened and closed", () => {
+		const { ev } = onPanel(saved);
+		ev('(ui/open-view "plan" (ui/text "x")) (ui/close "view:counts")');
+		expect(ev("(ui/tabs)")).toBe(
+			'((:id "file:knowledge/notes.md" :kind :file :title "notes.md" :shown t :focused nil) (:id "view:plan" :kind :view :title "plan" :shown t :focused t))',
+		);
+	});
+
+	it("closes an open tab and says whether there was one", () => {
+		const { ev, ops } = onPanel(saved);
+		expect(ev('(ui/close "view:counts")')).toBe("t");
+		expect(ev('(ui/close "view:counts")')).toBe("nil");
+		expect(ev('(ui/close "view:gone")')).toBe("nil");
+		expect(ops).toEqual([{ op: "close", tab: "view:counts" }]);
+	});
+
+	it("lists no tabs without a panel", () => {
+		const { interp } = fresh();
+		expect(str(runSync(interp, "(ui/tabs)"))).toBe("nil");
+	});
+
 	it("closes and focuses tabs by id", () => {
-		const { ops } = opened('(ui/focus "view:counts") (ui/close "view:counts")');
-		expect(ops).toEqual([
+		const { ops, result } = opened(
+			'(ui/open-view "counts" (ui/text "1")) (ui/focus "view:counts") (ui/close "view:counts")',
+		);
+		expect(ops.slice(1)).toEqual([
 			{ op: "focus", tab: "view:counts" },
 			{ op: "close", tab: "view:counts" },
 		]);
+		expect(str(result)).toBe("t");
 	});
 
 	it("puts nothing under the message when it opens a tab", () => {

@@ -25,7 +25,7 @@ import { uiHostFor } from "@repo/ui-extension/host";
 export function modelFacing(
 	compactor?: Compactor,
 	scope?: string,
-	panel: PanelStore = { apply: () => {} },
+	panel: PanelStore = { apply: () => {}, tabs: () => [] },
 ): InterpExtension[] {
 	return [
 		secretsExtension(secretsHost),

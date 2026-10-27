@@ -60,6 +60,18 @@ describe("a step that opens panel tabs", () => {
 		const ops: PanelOp[] = [];
 		const panel = {
 			apply: async (applied: readonly PanelOp[]) => void ops.push(...applied),
+			tabs: () =>
+				ops.some((op) => op.op === "open")
+					? [
+							{
+								id: "file:knowledge/q3.pdf",
+								kind: "file",
+								title: "q3.pdf",
+								shown: true,
+								focused: true,
+							},
+						]
+					: [],
 		};
 		const out = await memoryRepl(
 			modelFacing(undefined, undefined, panel),
@@ -83,6 +95,7 @@ describe("a step that opens panel tabs", () => {
 			apply: async () => {
 				throw new Error("layout too large");
 			},
+			tabs: () => [],
 		};
 		const out = await memoryRepl(
 			modelFacing(undefined, undefined, panel),

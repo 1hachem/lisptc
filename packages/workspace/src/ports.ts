@@ -25,6 +25,12 @@ export interface ChatPage {
 	more: boolean;
 }
 
+export interface ChatQuery {
+	search?: string;
+	limit: number;
+	archived?: boolean;
+}
+
 export interface ChatLine {
 	role: string;
 	text: string;
@@ -36,9 +42,10 @@ export interface WorkspaceStore {
 	choose(model: string): Awaitable<void>;
 	pickIcon(icon: string): Awaitable<void>;
 	pickTheme(theme: string): Awaitable<void>;
-	chats(query: { search?: string; limit: number }): Awaitable<ChatPage>;
+	chats(query: ChatQuery): Awaitable<ChatPage>;
 	retitle(chatId: string, title: string): Awaitable<void>;
 	archive(chatId: string): Awaitable<void>;
+	unarchive(chatId: string): Awaitable<void>;
 	transcript(chatId: string): Awaitable<ChatLine[]>;
 }
 
@@ -83,18 +90,19 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
 		this.held = { ...this.held, theme };
 	}
 
-	chats({ search, limit }: { search?: string; limit: number }): ChatPage {
-		const live = this.chatsHeld.filter(
+	chats({ search, limit, archived = false }: ChatQuery): ChatPage {
+		const shown = this.chatsHeld.filter(
 			(chat) =>
-				!chat.archived && (search === undefined || chat.title.includes(search)),
+				(chat.archived ?? false) === archived &&
+				(search === undefined || chat.title.includes(search)),
 		);
 		return {
-			chats: live.slice(0, limit).map(({ id, title, active }) => ({
+			chats: shown.slice(0, limit).map(({ id, title, active }) => ({
 				id,
 				title,
 				active,
 			})),
-			more: live.length > limit,
+			more: shown.length > limit,
 		};
 	}
 
@@ -104,6 +112,10 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
 
 	archive(chatId: string): void {
 		this.chat(chatId).archived = true;
+	}
+
+	unarchive(chatId: string): void {
+		this.chat(chatId).archived = false;
 	}
 
 	transcript(chatId: string): ChatLine[] {

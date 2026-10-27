@@ -206,18 +206,20 @@ export function registerWorkspace(interp: Interp, host: WorkspaceHost): void {
 	interp.defGen(
 		"chats",
 		-1,
-		'(chats [:search "…"] [:limit n])',
-		"Return the workspace's chats, most recently active first, as a list of (:id id :title title). With :search, the chats whose title matches.",
+		'(chats [:search "…"] [:limit n] [:archived t])',
+		"Return the workspace's chats, most recently active first, as a list of (:id id :title title). With :search, the chats whose title matches. With :archived t, the archived chats instead, most recently archived first.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
-			const options = plistOptions(rest, ["search", "limit"]);
+			const options = plistOptions(rest, ["search", "limit", "archived"]);
 			const search = options.get("search");
 			if (search !== undefined && typeof search !== "string")
 				throw new EvalException("search must be a string", search);
+			const archived = options.get("archived");
 			const page = yield* settled(
 				store.chats({
 					search,
 					limit: count("limit", options.get("limit"), DEFAULT_CHATS),
+					archived: archived !== undefined && archived !== null,
 				}),
 			);
 			return arrayToList(page.chats.map(chatList));
@@ -262,6 +264,18 @@ export function registerWorkspace(interp: Interp, host: WorkspaceHost): void {
 			if (id === host.chatId)
 				throw new EvalException("cannot archive the chat you are in", id);
 			yield* settled(store.archive(id));
+			return true;
+		},
+	);
+
+	interp.defGen(
+		"chat/unarchive",
+		1,
+		"(chat/unarchive id)",
+		"Bring an archived chat back to the sidebar. Its id comes from (chats :archived t).",
+		z.tuple([zString]),
+		function* ([id]): Eval {
+			yield* settled(store.unarchive(id));
 			return true;
 		},
 	);

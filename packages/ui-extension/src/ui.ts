@@ -15,6 +15,7 @@ import {
 	jsonToLisp,
 	type List,
 	listToArray,
+	newLispKeyword,
 	newSym,
 	Unspecified,
 } from "@repo/interpreter/objects";
@@ -30,6 +31,7 @@ import {
 	fileTab,
 	type PanelOp,
 	type PanelStore,
+	type PanelTab,
 	SPLITS,
 	type Split,
 	viewTab,
@@ -41,6 +43,7 @@ export {
 	type PanelContent,
 	type PanelOp,
 	type PanelStore,
+	type PanelTab,
 	viewTab,
 } from "./panel.ts";
 export type { UiNode, UiValue } from "./view.ts";
@@ -130,6 +133,13 @@ export class UiSurface {
 		];
 		this.handlers?.set(handlers.slice(-MAX_HANDLERS));
 		return id;
+	}
+
+	drop(ids: readonly string[]): number {
+		const held = this.handlers?.get() ?? [];
+		const kept = held.filter(([id]) => !ids.includes(id));
+		this.handlers?.set(kept);
+		return held.length - kept.length;
 	}
 
 	private handler(id: string): unknown {
@@ -336,6 +346,13 @@ function actionOption(
 	return surface.action(opts.get(name));
 }
 
+function actionsOf(node: UiNode): string[] {
+	const own = ACTION_PROPS.map((prop) => node.props[prop]).filter(
+		(id): id is string => typeof id === "string",
+	);
+	return [...own, ...node.children.flatMap(actionsOf)];
+}
+
 function summarize(node: UiNode): { elements: number; actions: number } {
 	let elements = 1;
 	let actions = ACTION_PROPS.filter(
@@ -401,6 +418,21 @@ function splitOf(opts: Map<string, unknown>): Split {
 
 function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
+}
+
+function tabList(tab: PanelTab): List {
+	return arrayToList([
+		newLispKeyword("id"),
+		tab.id,
+		newLispKeyword("kind"),
+		newLispKeyword(tab.kind),
+		newLispKeyword("title"),
+		tab.title,
+		newLispKeyword("shown"),
+		tab.shown || null,
+		newLispKeyword("focused"),
+		tab.focused || null,
+	]);
 }
 
 function registerUi(
@@ -710,11 +742,13 @@ function registerUi(
 		"ui/close",
 		1,
 		"(ui/close tab)",
-		"Close a panel tab by the id `ui/open-file` or `ui/open-view` returned. A split left empty folds into its neighbour.",
+		"Close a panel tab by the id `ui/open-file`, `ui/open-view` or `ui/tabs` gave. A split left empty folds into its neighbour. Returns t if the tab was open, nil if it was not.",
 		z.tuple([zString]),
 		function* ([tab]): Eval {
+			const tabs = yield* settled(panel.tabs());
+			if (!tabs.some((open) => open.id === tab)) return null;
 			yield* emit({ op: "close", tab });
-			return Unspecified;
+			return true;
 		},
 	);
 
@@ -727,6 +761,18 @@ function registerUi(
 		function* ([tab]): Eval {
 			yield* emit({ op: "focus", tab });
 			return Unspecified;
+		},
+	);
+
+	interp.defGen(
+		"ui/tabs",
+		0,
+		"(ui/tabs)",
+		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
+		z.tuple([]),
+		function* (): Eval {
+			const tabs = yield* settled(panel.tabs());
+			return arrayToList(tabs.map(tabList));
 		},
 	);
 
@@ -755,6 +801,19 @@ function registerUi(
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			return renderView(surface, view);
+		},
+	);
+
+	interp.def(
+		"ui/forget",
+		1,
+		"(ui/forget view)",
+		"Drop the handlers behind every control in `view`, so clicking them runs nothing any more. Use it on a view you replaced or closed. Returns how many were dropped.",
+		z.tuple([zAny]),
+		([view]) => {
+			if (!(view instanceof UiElement))
+				throw new EvalException("ui element expected", view);
+			return BigInt(surface.drop(actionsOf(view)));
 		},
 	);
 

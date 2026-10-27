@@ -20,6 +20,7 @@ export type PanelOp =
 
 export interface PanelStore {
 	apply(ops: readonly PanelOp[]): Awaitable<void>;
+	tabs(): Awaitable<PanelTab[]>;
 }
 
 export function fileTab(folder: Folder, name: string): string {
@@ -28,4 +29,12 @@ export function fileTab(folder: Folder, name: string): string {
 
 export function viewTab(title: string): string {
 	return `view:${title}`;
+}
+
+export interface PanelTab {
+	id: string;
+	kind: string;
+	title: string;
+	shown: boolean;
+	focused: boolean;
 }

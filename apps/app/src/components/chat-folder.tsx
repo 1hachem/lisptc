@@ -1,4 +1,5 @@
 import { convexQuery } from "@convex-dev/react-query";
+import { Archive01Icon } from "@hugeicons/core-free-icons";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { TreeFilter, TreeFolder, TreeMore } from "@repo/components";
@@ -58,6 +59,46 @@ export function ChatFolder({
 				{(chat) => <SessionRow key={chat._id} chat={chat} />}
 			</Listing>
 			{page?.more && (
+				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />
+			)}
+			<ArchivedFolder workspaceId={workspaceId} enabled={folder.open} />
+		</TreeFolder>
+	);
+}
+
+function ArchivedFolder({
+	workspaceId,
+	enabled,
+}: {
+	workspaceId: Id<"workspaces">;
+	enabled: boolean;
+}) {
+	const [open, setOpen] = useState(false);
+	const [limit, setLimit] = useState(CHAT_PAGE);
+	const { data: page } = useQuery({
+		...convexQuery(api.chats.list, {
+			workspaceId,
+			archived: true,
+			limit: open ? limit : 1,
+		}),
+		placeholderData: (previous) => previous,
+		enabled,
+	});
+
+	if (!page?.chats.length) return null;
+	return (
+		<TreeFolder
+			name="archived"
+			icon={Archive01Icon}
+			depth={1}
+			open={open}
+			onToggle={() => setOpen((shown) => !shown)}
+		>
+			{open &&
+				page.chats.map((chat) => (
+					<SessionRow key={chat._id} chat={chat} depth={2} />
+				))}
+			{open && page.more && (
 				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />
 			)}
 		</TreeFolder>

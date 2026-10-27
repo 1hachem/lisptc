@@ -430,6 +430,30 @@ and do not count.
 One commit holds one concern. Unrelated changes in the tree go in commits of
 their own.
 
+## Pull requests
+
+PR description is for whoever tests the change, not for diff reviewer. Keep it
+very short: one line per bullet, no paragraphs, no tables. Bot blocks already
+in body, like `<!-- preview -->`, stay at top untouched. Body holds these
+sections, this order:
+
+- `## Changes`: what PR does and why. Few sentences.
+- `## Blast radius`: what else change reaches. Every workspace touched beyond
+  scope, every caller of changed signature, every prompt, port, slot or chain
+  altered, every stored shape changed. Name each, say how affected. Nothing
+  outside scope reached? Say so in one line.
+- `## New forms`: every form added or changed, one entry each. Form with
+  signature, owning extension, what it does in one line. No form added? Say so
+  in one line.
+- `## Test prompts`: numbered list of prompts to paste to agent as is. Each in
+  own fenced code block, so one click copies it. At least one per new form, plus
+  one per place in blast radius. Each prompt asks for something change makes
+  possible, not "test X". Under each, one line: what passing answer shows.
+
+Keep description true. Push adds, renames or removes form, or widens blast
+radius? Agent edits description with `gh pr edit` same turn, without being
+asked.
+
 ## Issues
 
 Work found along the way and left out of the current change is written up as a
