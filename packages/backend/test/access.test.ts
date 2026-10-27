@@ -689,6 +689,35 @@ describe("panel layout access", () => {
 		).toEqual(layout(3, 3));
 	});
 
+	it("keeps the chat a drawn view came from", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const view = {
+			kind: "pane" as const,
+			id: "p",
+			tabs: [
+				{
+					id: "view:t",
+					content: {
+						kind: "view" as const,
+						title: "t",
+						node: null,
+						chatId: "c1",
+					},
+				},
+			],
+			active: "view:t",
+		};
+		const saved = { root: "p", focused: null, nodes: [view] };
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: saved,
+		});
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(saved);
+	});
+
 	it("takes any number of panes side by side but refuses more than three stacked", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
