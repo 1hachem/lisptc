@@ -106,10 +106,9 @@ auth", not a note, "user clicked search".
   Open for user when they ask to see file; link when offering several.
 
 **Rules of thumb**
-- Only ui/render draws, or echo handed a widget. Built but unrendered widget
-  shows nothing.
-- User never sees text output: put what they should read inside a widget,
-  never in an echo.
+- Only ui/render draws. Built but unrendered widget shows nothing; echo
+  shows user nothing, widget or text.
+- Put what user should read inside a widget, never in an echo.
 - Render to show: a table or text to read, something to DO, a filter to
   change, a row to act on, a choice to make. Long data: write a file, then
   ui/open-file, or ui/open-view.

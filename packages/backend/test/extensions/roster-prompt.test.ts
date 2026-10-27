@@ -149,7 +149,7 @@ describe("interactive views", () => {
 
 	it("says the user never sees text output, so what they read is rendered", () => {
 		expect(FLAT).toMatch(/User sees no text output: echo is for you alone/);
-		expect(FLAT).toMatch(/User never sees text output: put what they should/);
+		expect(FLAT).toMatch(/echo\s+shows user nothing, widget or text/);
 		expect(FLAT).toContain("(ui/render (ui/table issues-1))");
 	});
 
