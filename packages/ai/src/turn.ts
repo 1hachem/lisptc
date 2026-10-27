@@ -326,6 +326,7 @@ interface Answered {
 async function* announce(
 	turn: Turn,
 	answered: Answered,
+	said: string = answered.code,
 ): AsyncGenerator<TurnEvent> {
 	const { repl, ran } = turn;
 	const { stepId, startedAt, code, written, reply } = answered;
@@ -338,7 +339,11 @@ async function* announce(
 		...(written ? { written } : {}),
 		meta: stepMeta(startedAt, reply.usage, ran),
 	};
-	record(turn, { role: "assistant", content: code });
+	record(turn, { role: "assistant", content: said });
+}
+
+function editedLine({ code, written }: Answered): string {
+	return written === undefined ? "" : `edited: ${code}\n`;
 }
 
 async function* rejectStep(
@@ -395,7 +400,7 @@ async function* evaluateStep(
 ): AsyncGenerator<TurnEvent, StepVerdict> {
 	const { repl, maxSteps } = turn;
 	const { code, stepId } = answered;
-	yield* announce(turn, answered);
+	yield* announce(turn, answered, answered.written?.text);
 
 	const evalStartedAt = Date.now();
 	const {
@@ -441,10 +446,11 @@ async function* evaluateStep(
 		...riding,
 		...(held ? { held: true as const } : {}),
 	};
+	const told = editedLine(answered) + output;
 	record(
 		turn,
-		{ role: "tool", content: replResultContent(output, error), ...riding },
-		{ role: "tool", content: output },
+		{ role: "tool", content: replResultContent(told, error), ...riding },
+		{ role: "tool", content: told },
 	);
 	if (verdict === "halt") return verdict;
 	return capped ? "capped" : verdict;

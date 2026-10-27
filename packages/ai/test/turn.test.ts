@@ -527,6 +527,34 @@ describe("the agent turn", () => {
 		expect(ran[0]).toBe("(+ 2 2)");
 	});
 
+	test("the model reads back what it wrote, and the repair it ran", async () => {
+		script = [[{ text: "(close-parens)" }], [{ text: "done." }]];
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) =>
+					code === "(close-parens)"
+						? {
+								code: "(+ 1 2)",
+								because: "edited the code the check stopped",
+								from: "(+ 1 2",
+							}
+						: next(interp, code),
+				);
+			}),
+		]);
+
+		await drain(ask, { repl });
+
+		const [assistant, tool] = seen[1].messages.slice(-2);
+		expect(assistant).toMatchObject({
+			role: "assistant",
+			content: "(close-parens)",
+		});
+		expect(JSON.parse(String(tool.content)).output).toMatch(
+			/^edited: \(\+ 1 2\)\n/,
+		);
+	});
+
 	test("a rejected step never runs and the model reads why", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 		const ran: string[] = [];
