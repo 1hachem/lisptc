@@ -148,6 +148,7 @@ export const CODECS: ReadonlyMap<string, Codec> = new Map<string, Codec>([
 			write: (_name, value) => printForm(value),
 		},
 	],
+	["svg", text("image/svg+xml")],
 	["txt", PLAIN],
 	["xml", text("application/xml")],
 	["yaml", text("application/yaml")],
