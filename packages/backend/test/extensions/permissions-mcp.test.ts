@@ -62,6 +62,36 @@ describe("permissions over a loaded MCP server", () => {
 		expect(client.calls).toEqual([]);
 	});
 
+	it("stops listing a loaded tool the repl hides afterwards", async () => {
+		const { repl } = replWith("(permission/allow permission/server)");
+		await repl.eval(LOAD);
+		await repl.eval("(permission/server fx (hide echo))");
+		expect(await printed(repl, '(echo (list-tools "fx"))')).not.toContain(
+			"fx/echo",
+		);
+	});
+
+	it("lists a tool again once the rule hiding it is deleted", async () => {
+		const { repl } = replWith(
+			"(permission/allow permission/delete)\n(permission/server fx (hide echo))\n",
+		);
+		await repl.eval(LOAD);
+		expect(await printed(repl, '(echo (list-tools "fx"))')).not.toContain(
+			"fx/echo",
+		);
+		await repl.eval("(permission/delete (permission/server fx (hide echo)))");
+		expect(await printed(repl, '(echo (list-tools "fx"))')).toContain(
+			"fx/echo",
+		);
+	});
+
+	it("stops showing a server the repl hides after it loaded", async () => {
+		const { repl } = replWith("(permission/allow permission/hide-server)");
+		await repl.eval(LOAD);
+		await repl.eval("(permission/hide-server fx)");
+		expect(await printed(repl, "(echo (list-mcps))")).not.toContain("fx");
+	});
+
 	it("applies a server change from the repl the moment the user approves it", async () => {
 		const { repl, client } = replWith("");
 		await repl.eval(LOAD);
