@@ -23,7 +23,12 @@ import {
 } from "../lib/agent-status.ts";
 import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
-import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
+import {
+	CHANNELS,
+	type ChannelId,
+	EVERY_CHANNEL,
+	type Shown,
+} from "../lib/channels.ts";
 import {
 	type ChatMessage,
 	isParentMessage,
@@ -88,33 +93,31 @@ const Traced = createContext(false);
 const channel = (id: string) =>
 	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
 
-const ParentSource = createContext<string | undefined>(undefined);
-
-function ChannelLabel({
+function Marked({
 	id,
-	label: named,
-	tight = false,
+	tone,
+	children,
 }: {
-	id: string;
-	label?: string;
-	tight?: boolean;
+	id: ChannelId;
+	tone?: string;
+	children: React.ReactNode;
 }) {
-	const { icon, text, ...rest } = channel(id);
-	const label = named ?? rest.label;
+	const traced = useContext(Traced);
+	if (!traced) return children;
+	const { icon, label, text } = channel(id);
 	return (
-		<div
-			className={`${tight ? "" : "mt-2 "}mb-1 flex items-center gap-1.5 ${text}`}
-		>
+		<div data-channel={id} className="flex min-w-0 gap-2">
 			<HugeiconsIcon
 				icon={icon}
-				aria-hidden
-				className="size-icon-sm flex-none"
+				aria-label={label}
+				className={`size-icon-sm mt-[3px] flex-none ${tone ?? text}`}
 			/>
-			<span className="flex-none text-[11px] tracking-[0.1em]">{label}</span>
-			<span aria-hidden className="h-px flex-1 bg-dim/20" />
+			<div className="min-w-0 flex-1">{children}</div>
 		</div>
 	);
 }
+
+const ParentSource = createContext<string | undefined>(undefined);
 
 function foldOf(text: string, fold: { lines: number; chars: number }) {
 	const head = text.split("\n").slice(0, fold.lines).join("\n");
@@ -248,16 +251,15 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 		.join("\n");
 	const ui = toolUi(message);
 	const model = toolModelOutput(message).output;
-	const failure = toolFailure(message);
 	const attachments = shown.attachments ? attachedTo(message) : [];
 	return {
 		output,
-		failure,
+		failure: toolFailure(message),
+		failed: toolFailed(message),
 		ui: shown.ui ? ui : undefined,
 		attachments,
 		model,
 		drawsOutput: shown.output && output !== "",
-		drawsError: shown.errors && failure !== "",
 		drawsModel: shown.model && model !== "",
 	};
 }
@@ -265,58 +267,29 @@ function toolChannels(message: ChatMessage, shown: Shown) {
 type ToolChannels = ReturnType<typeof toolChannels>;
 
 function drawnCount(channels: ToolChannels): number {
-	const { ui, attachments, drawsOutput, drawsError, drawsModel } = channels;
+	const { ui, attachments, drawsOutput, drawsModel } = channels;
 	return [
 		ui !== undefined,
 		attachments.length > 0,
 		drawsOutput,
-		drawsError,
 		drawsModel,
 	].filter(Boolean).length;
-}
-
-function Channel({
-	id,
-	labelled,
-	children,
-}: {
-	id: string;
-	labelled: boolean;
-	children: React.ReactNode;
-}) {
-	return (
-		<>
-			{labelled && <ChannelLabel id={id} />}
-			{children}
-		</>
-	);
 }
 
 function ToolResult({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
 	const traced = useContext(Traced);
 	const channels = toolChannels(message, shown);
-	const drawn = drawnCount(channels);
-	if (drawn === 0) return null;
-	const {
-		output,
-		failure,
-		ui,
-		attachments,
-		model,
-		drawsOutput,
-		drawsError,
-		drawsModel,
-	} = channels;
-	const labelled = traced || drawn > 1;
+	if (drawnCount(channels) === 0) return null;
+	const { output, failed, ui, attachments, model, drawsOutput, drawsModel } =
+		channels;
 	return (
 		<div
-			className={`min-w-0 break-words border-l pl-3 ${
-				drawsError ? "border-red/60" : "border-dim/40"
-			}`}
+			data-step-failed={failed || undefined}
+			className="flex min-w-0 flex-col gap-2 break-words"
 		>
 			{ui !== undefined && (
-				<Channel id="ui" labelled={labelled}>
+				<Marked id="ui">
 					{traced ? (
 						<ChannelText
 							code
@@ -326,27 +299,26 @@ function ToolResult({ message }: { message: ChatMessage }) {
 					) : (
 						<GenerativeUI node={ui} />
 					)}
-				</Channel>
+				</Marked>
 			)}
 			{attachments.length > 0 && (
-				<Channel id="attachments" labelled={labelled}>
+				<Marked id="attachments">
 					<AttachedFiles files={attachments} />
-				</Channel>
+				</Marked>
 			)}
 			{drawsOutput && (
-				<Channel id="output" labelled={labelled}>
+				<Marked id="output">
 					<ChannelText code text={output} tone={channel("output").text} />
-				</Channel>
-			)}
-			{drawsError && (
-				<Channel id="errors" labelled={labelled}>
-					<ChannelText code text={failure} tone={channel("errors").text} />
-				</Channel>
+				</Marked>
 			)}
 			{drawsModel && (
-				<Channel id="model" labelled={labelled}>
-					<ChannelText text={model} tone={channel("model").text} />
-				</Channel>
+				<Marked id="model" tone={failed ? "text-red" : undefined}>
+					<ChannelText
+						code={failed}
+						text={model}
+						tone={failed ? "text-red" : channel("model").text}
+					/>
+				</Marked>
 			)}
 		</div>
 	);
@@ -368,10 +340,9 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
 		<>
 			<ToolResult message={message} />
 			{asked !== "" && (
-				<div className="min-w-0 border-yellow/50 border-l pl-3">
-					<ChannelLabel id="asks" />
+				<Marked id="asks">
 					<ChannelText text={asked} tone="text-dim" />
-				</div>
+				</Marked>
 			)}
 		</>
 	);
@@ -384,12 +355,9 @@ export function SystemLine({ message }: { message: ChatMessage }) {
 	if (!shown.system) return null;
 	const { text } = channel("system");
 	return (
-		<div className="min-w-0 break-words">
-			<ChannelLabel id="system" />
-			<div className="border-dim/40 border-l pl-3">
-				<ChannelText text={messageText(message)} tone={text} />
-			</div>
-		</div>
+		<Marked id="system">
+			<ChannelText text={messageText(message)} tone={text} />
+		</Marked>
 	);
 }
 
@@ -444,16 +412,9 @@ function AgentMessage({
 		);
 	}
 	return (
-		<div className="min-w-0 break-words">
-			<ChannelLabel
-				id="agents"
-				label={sender.parent ? sender.name : `sub-agent ${sender.name}`}
-				tight
-			/>
-			<div className="border-purple/40 border-l pl-3">
-				<ChannelText text={messageText(message)} tone="text-fg" />
-			</div>
-		</div>
+		<Marked id="agents">
+			<ChannelText text={messageText(message)} tone="text-fg" />
+		</Marked>
 	);
 }
 
@@ -478,10 +439,9 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 		<div className="min-w-0 break-words text-fg">
 			{reasoning && (
 				<div className="mb-2">
-					<ChannelLabel id="thinking" />
-					<div className="border-blue/40 border-l pl-3">
+					<Marked id="thinking">
 						<ChannelText text={reasoning} tone="text-dim italic" />
-					</div>
+					</Marked>
 				</div>
 			)}
 			{isUserMessage(message) ? (
@@ -523,18 +483,11 @@ function RanOutput({ message }: { message: ChatMessage }) {
 	const { output, failure } = toolChannels(message, EVERY_CHANNEL);
 	if (output === "" && failure === "") return null;
 	return (
-		<div
-			data-step-ran
-			className={`min-w-0 break-words border-l pl-3 ${
-				failure !== "" ? "border-red/60" : "border-dim/40"
-			}`}
-		>
+		<div data-step-ran className="flex min-w-0 flex-col gap-2 break-words">
 			{output !== "" && (
 				<ChannelText code text={output} tone={channel("output").text} />
 			)}
-			{failure !== "" && (
-				<ChannelText code text={failure} tone={channel("errors").text} />
-			)}
+			{failure !== "" && <ChannelText code text={failure} tone="text-red" />}
 		</div>
 	);
 }
@@ -583,7 +536,7 @@ function StepThinking({ thinking }: { thinking: string }) {
 			data-step-thinking
 			aria-expanded={open}
 			onClick={() => setOpen((shown) => !shown)}
-			className="block w-full min-w-0 border-blue/40 border-l pl-3 text-left text-[12.5px] text-dim leading-[1.5] hover:text-fg"
+			className="block w-full min-w-0 text-left text-[12.5px] text-dim leading-[1.5] hover:text-fg"
 		>
 			{open ? (
 				<span className="block whitespace-pre-wrap break-words">

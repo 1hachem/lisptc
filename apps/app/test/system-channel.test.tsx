@@ -144,11 +144,18 @@ describe("the system channel", () => {
 
 	it("draws what the system told the agent in the trace, and never as the user's words", async () => {
 		const host = await mount(<TraceLines messages={session.messages} />);
+		for (const row of host.querySelectorAll<HTMLButtonElement>(
+			"[data-trace-message] > button",
+		))
+			await act(async () => row.click());
 
 		expect(host.textContent).toContain(NOTE);
-		const userLines = [...host.querySelectorAll("[data-user-line]")].map(
-			(line) => line.textContent,
-		);
-		expect(userLines).toEqual(["write a"]);
+		expect(
+			host.querySelector('[data-trace-message="system"]')?.textContent,
+		).toContain(NOTE);
+		const userLines = [
+			...host.querySelectorAll('[data-trace-message="you"]'),
+		].map((line) => line.textContent);
+		expect(userLines).toEqual(["▾›write a"]);
 	});
 });

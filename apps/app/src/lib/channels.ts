@@ -1,6 +1,5 @@
 import {
 	AiChat02Icon,
-	Alert02Icon,
 	Attachment01Icon,
 	Brain02Icon,
 	BulbIcon,
@@ -19,7 +18,6 @@ export type ChannelId =
 	| "thinking"
 	| "memory"
 	| "asks"
-	| "errors"
 	| "model"
 	| "system"
 	| "agents";
@@ -74,13 +72,6 @@ export const CHANNELS: Channel[] = [
 		label: "asks",
 		hint: "what a step asked of you: an approval, a sign-in",
 		text: "text-yellow",
-	},
-	{
-		id: "errors",
-		icon: Alert02Icon,
-		label: "errors",
-		hint: "the error a failed step raised",
-		text: "text-red",
 	},
 	{
 		id: "model",

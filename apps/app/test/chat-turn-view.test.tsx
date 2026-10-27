@@ -379,6 +379,95 @@ describe("the trace", () => {
 		expect(text).toContain("MODEL-SAW");
 	});
 
+	it("marks every block a trace draws with its channel's icon, and the chat with none", async () => {
+		const host = await mount(<TraceLines messages={MESSAGES} />);
+		for (const header of host.querySelectorAll<HTMLButtonElement>(
+			"[data-step-header]",
+		))
+			await act(async () => header.click());
+		const marked = [...host.querySelectorAll("[data-channel]")].map((block) => [
+			block.getAttribute("data-channel"),
+			block.querySelector(":scope > svg")?.getAttribute("aria-label"),
+		]);
+
+		expect(marked).toEqual(
+			expect.arrayContaining([
+				["ui", "ui"],
+				["output", "output"],
+				["model", "model"],
+			]),
+		);
+
+		session.messages = MESSAGES;
+		const chat = await mount(<ChatView />);
+
+		expect(chat.querySelector("[data-channel]")).toBeNull();
+	});
+
+	it("folds a user message and a system event to one line, unfolded in place into one message", async () => {
+		const asked = `first line\nsecond line ${"word ".repeat(80)}`;
+		const host = await mount(
+			<TraceLines
+				messages={[
+					{ id: "h1", type: "human", content: asked },
+					{ id: "s1", type: "system", content: "the user stopped the run" },
+				]}
+			/>,
+		);
+		const row = (kind: string) =>
+			host.querySelector<HTMLButtonElement>(
+				`[data-trace-message="${kind}"] > button`,
+			);
+
+		for (const kind of ["you", "system"]) {
+			expect(row(kind)?.getAttribute("aria-expanded")).toBe("false");
+			expect(row(kind)?.querySelector(".truncate")?.textContent).not.toContain(
+				"\n",
+			);
+			expect(row(kind)?.nextElementSibling).toBeNull();
+		}
+
+		await act(async () => row("you")?.click());
+
+		expect(row("you")?.getAttribute("aria-expanded")).toBe("true");
+		expect(row("you")?.textContent).toContain("first line\nsecond line");
+		expect(row("you")?.textContent?.split("first line").length).toBe(2);
+		expect(row("you")?.nextElementSibling).toBeNull();
+		expect(row("system")?.querySelector(".truncate")).not.toBeNull();
+	});
+
+	it("has no errors channel, and reddens what the model saw of a failed step", async () => {
+		const host = await mount(
+			<TraceLines
+				messages={[
+					{ id: "h1", type: "human", content: "go" },
+					{ id: "a1", type: "ai", content: "(car 1)" },
+					{
+						id: "t1",
+						type: "tool",
+						content: '{"source":"lisp-repl","output":"MODEL-SAW-BOOM"}',
+						additional_kwargs: { failed: true },
+					},
+				]}
+			/>,
+		);
+		for (const header of host.querySelectorAll<HTMLButtonElement>(
+			"[data-step-header]",
+		))
+			await act(async () => header.click());
+		const toggles = [...host.querySelectorAll("button[aria-pressed]")].map(
+			(button) => button.textContent,
+		);
+		const failed = host.querySelector("[data-step-failed]");
+
+		expect(toggles).not.toContain("errors");
+		expect(failed?.textContent).toContain("MODEL-SAW-BOOM");
+		expect(
+			failed?.querySelector('[data-channel="model"] > div > .text-red')
+				?.textContent,
+		).toContain("MODEL-SAW-BOOM");
+	});
+
 	it("shows every form a step ran as its raw source, not only its name", async () => {
 		const source =
 			'(setq scout (spawn "scout" :prompt "Summarise what a task needs."))\n(setq critic (spawn "critic" :prompt "Name the biggest risk."))';

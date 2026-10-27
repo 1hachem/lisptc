@@ -2,11 +2,14 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { attachedTo } from "../lib/attached-files.ts";
 import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
 import {
 	type ChatMessage,
+	isParentMessage,
 	isSystemMessage,
 	isToolMessage,
+	messageText,
 	stepMeta,
 } from "../lib/chat.tsx";
 import { useModelPicker } from "../lib/model-picker.tsx";
@@ -20,10 +23,10 @@ import {
 } from "../lib/trace-steps.ts";
 import { formatElapsed } from "../lib/turn-timeline.ts";
 import { useUI } from "../lib/ui.tsx";
+import { AttachedFiles } from "./attached-files.tsx";
 import {
 	ChannelsShown,
 	ChatLine,
-	SystemLine,
 	ToolMessage,
 	useChannels,
 } from "./chat-view.tsx";
@@ -192,6 +195,63 @@ function TracedMessage({
 	);
 }
 
+function MessageEntry({
+	message,
+	flashing,
+}: {
+	message: ChatMessage;
+	flashing: string | undefined;
+}) {
+	const shown = useChannels();
+	const [open, setOpen] = useState(false);
+	const parent = isParentMessage(message);
+	const system = isSystemMessage(message);
+	if (parent ? !shown.agents : system && !shown.system) return null;
+	const kind = parent ? "agent" : system ? "system" : "you";
+	const marked = CHANNELS.find((c) => c.id === (parent ? "agents" : "system"));
+	const text = messageText(message);
+	const files = open && shown.attachments ? attachedTo(message) : [];
+	return (
+		<TracedMessage message={message} flashing={flashing}>
+			<div data-trace-message={kind} className="flex min-w-0 flex-col gap-2">
+				<button
+					type="button"
+					aria-expanded={open}
+					onClick={() => setOpen((was) => !was)}
+					className={`flex w-full min-w-0 gap-2 text-left text-[11.5px] text-dim hover:text-fg ${
+						open ? "items-start" : "items-center"
+					}`}
+				>
+					{system && marked ? (
+						<HugeiconsIcon
+							icon={marked.icon}
+							aria-label={kind}
+							className={`size-icon-sm flex-none ${marked.text}`}
+						/>
+					) : (
+						<>
+							<span aria-hidden className="w-2 flex-none">
+								{open ? "▾" : "▸"}
+							</span>
+							<span aria-hidden className="flex-none select-none">
+								›
+							</span>
+						</>
+					)}
+					<span
+						className={`min-w-0 flex-1 text-fg ${
+							open ? "whitespace-pre-wrap break-words" : "truncate"
+						}`}
+					>
+						{open ? text.trim() : text.replace(/\s+/g, " ").trim()}
+					</span>
+				</button>
+				{files.length > 0 && <AttachedFiles files={files} />}
+			</div>
+		</TracedMessage>
+	);
+}
+
 function ChildTrace({ child }: { child: TraceChild }) {
 	const [open, setOpen] = useState(false);
 	return (
@@ -212,7 +272,7 @@ function ChildTrace({ child }: { child: TraceChild }) {
 				<span className="min-w-0 truncate text-fg">{child.label}</span>
 			</button>
 			{open && (
-				<div className="min-w-0 border-dim/20 border-l pl-3">
+				<div className="min-w-0 pl-3">
 					<NestedTrace chatId={child.chatId} />
 				</div>
 			)}
@@ -243,17 +303,11 @@ function TraceEntries({
 				if (entry.kind === "message") {
 					const { message, at } = entry;
 					return (
-						<TracedMessage
+						<MessageEntry
 							key={message.id ?? at}
 							message={message}
 							flashing={flashing}
-						>
-							{isSystemMessage(message) ? (
-								<SystemLine message={message} />
-							) : (
-								<TraceLine message={message} />
-							)}
-						</TracedMessage>
+						/>
 					);
 				}
 				if (!Object.values(shown).some(Boolean)) return null;
