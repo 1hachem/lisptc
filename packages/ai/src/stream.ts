@@ -156,6 +156,7 @@ export interface TurnStreamOptions {
 	) => Promise<void> | void;
 	quiet?: boolean;
 	onOutcome?: (outcome: TurnOutcome) => void;
+	onOpen?: (insert: (message: WireMessage) => boolean) => void;
 }
 
 export type TurnRun = (
@@ -184,6 +185,7 @@ class TurnWire {
 	private provisional: WireMessage | undefined;
 	private flushed: number;
 	private recorded: Promise<void> = Promise.resolve();
+	private sealed = false;
 
 	constructor(
 		input: ChatInput,
@@ -220,7 +222,16 @@ class TurnWire {
 			.catch((error) => console.error("[ai] a step was not recorded:", error));
 	}
 
+	insert(message: WireMessage): boolean {
+		if (this.sealed) return false;
+		this.wire.push(message);
+		this.flush();
+		this.snapshot();
+		return true;
+	}
+
 	async unrecorded(): Promise<WireMessage[]> {
+		this.sealed = true;
 		this.flush();
 		await this.recorded;
 		return this.wire.slice(this.flushed);
@@ -413,7 +424,7 @@ export function streamTurn(
 	run: TurnRun,
 	options: TurnStreamOptions = {},
 ): Response {
-	const { onStep, onTurn, signal, quiet, onOutcome } = options;
+	const { onStep, onTurn, signal, quiet, onOutcome, onOpen } = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
 	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
@@ -432,6 +443,7 @@ export function streamTurn(
 				}
 			};
 			const turn = new TurnWire(input, write, onStep);
+			onOpen?.((message) => turn.insert(message));
 
 			try {
 				turn.snapshot();

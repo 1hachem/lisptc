@@ -304,8 +304,7 @@ export class Threads {
 			content: `agent ${nameOf(lineage)} is waiting on you`,
 			additional_kwargs: { ...held.output, thread, holding },
 		};
-		await this.host.ports.transcript.append(root, [message]);
-		this.get(root).relay(message);
+		await this.get(root).place(message);
 	}
 
 	wait(job: string, signal?: AbortSignal): Promise<TurnOutcome> {

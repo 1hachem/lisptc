@@ -316,7 +316,11 @@ describe("a thread's watchers", () => {
 				text: "decided here",
 			})
 		).ended;
-		thread.relay({ id: "ask", type: "tool", content: "agent r is waiting" });
+		await thread.place({
+			id: "ask",
+			type: "tool",
+			content: "agent r is waiting",
+		});
 		const text = await watched.until((seen) =>
 			seen.includes("agent r is waiting"),
 		);
@@ -326,6 +330,30 @@ describe("a thread's watchers", () => {
 		);
 		expect(text).toMatch(/event: relayed\ndata: .*"id":"ask"/);
 		expect(text).not.toMatch(/event: relayed\ndata: .*"id":"e2"/);
+	});
+
+	test("carry a message placed mid-turn in the turn itself, in order", async () => {
+		const world = new World();
+		const thread = world.thread();
+		const watched = new Watched(thread.watch());
+		model.script = ["(+ 1 2)", "three."];
+		const gate = gated();
+		const posted = await thread.post(user("a", "what is 1 + 2?"));
+		await gate.entered;
+		await thread.place({ id: "ask", type: "tool", content: "r is waiting" });
+		gate.open();
+		await posted.ended;
+		const text = await watched.until(settledTwice);
+
+		const ids = world.stored.map((message) => message.id);
+		expect(ids.filter((id) => id === "ask")).toHaveLength(1);
+		const ask = ids.indexOf("ask");
+		const step = world.stored.findIndex(
+			(message) => message.type === "ai" && message.content === "(+ 1 2)",
+		);
+		expect(ask).toBeGreaterThan(0);
+		expect(step).toBeGreaterThan(ask);
+		expect(text).not.toMatch(/event: relayed\ndata: .*"id":"ask"/);
 	});
 
 	test("are let go when their signal aborts", async () => {

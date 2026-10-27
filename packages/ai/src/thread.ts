@@ -134,6 +134,7 @@ export class Thread {
 	private readonly tracked = new Map<string, Tracked>();
 	private readonly watchers = new Watchers();
 	private halting: AbortController | undefined;
+	private inserting: ((message: WireMessage) => boolean) | undefined;
 
 	constructor(
 		readonly id: string,
@@ -176,7 +177,13 @@ export class Thread {
 		return stopped || dropped.length > 0;
 	}
 
-	relay(message: WireMessage): void {
+	async place(message: WireMessage): Promise<void> {
+		if (this.inserting?.(message) === true) return;
+		await this.ports.transcript.append(this.id, [message]);
+		this.relay(message);
+	}
+
+	private relay(message: WireMessage): void {
 		this.watchers.publish({ type: "relayed", message });
 	}
 
@@ -321,9 +328,13 @@ export class Thread {
 					);
 				},
 				onOutcome: finished,
+				onOpen: (insert) => {
+					this.inserting = insert;
+				},
 			},
 		);
 		await this.pump(response);
+		this.inserting = undefined;
 		const settled = await outcome;
 		const ended: TurnOutcome =
 			halting.signal.aborted && failed === undefined && "stopped" in settled
