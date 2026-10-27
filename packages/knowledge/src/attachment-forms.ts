@@ -11,11 +11,13 @@ import { fetchedUrl, fileName, nameFromUrl } from "./names.ts";
 import type { Downloaded, KnowledgeHost } from "./ports.ts";
 
 const KNOWLEDGE_KEEP = "knowledge/keep";
+const KNOWLEDGE_UNKEEP = "knowledge/unkeep";
 const ATTACHMENTS_FETCH = "attachments/fetch";
 const ATTACHMENTS_DELETE = "attachments/delete";
 
 export const ATTACHMENT_ASKS = [
 	KNOWLEDGE_KEEP,
+	KNOWLEDGE_UNKEEP,
 	ATTACHMENTS_FETCH,
 	ATTACHMENTS_DELETE,
 ] as const;
@@ -133,6 +135,19 @@ export function registerAttachments(
 		function* ([name]): Eval {
 			const checked = fileName(name);
 			yield* settled(store.keep(checked));
+			return checked;
+		},
+	);
+
+	interp.defGen(
+		KNOWLEDGE_UNKEEP,
+		1,
+		'(knowledge/unkeep "name")',
+		"Move a file from the knowledge folder back into attachments, where it expires again like any attachment. Undoes `knowledge/keep`. The user approves it first. Returns the name.",
+		z.tuple([zString]),
+		function* ([name]): Eval {
+			const checked = fileName(name);
+			yield* settled(store.unkeep(checked));
 			return checked;
 		},
 	);

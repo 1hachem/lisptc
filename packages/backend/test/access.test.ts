@@ -407,6 +407,49 @@ describe("chat access", () => {
 		});
 		expect(listed.chats.map((c) => c._id)).toEqual([kept]);
 	});
+
+	it("lists an archived chat apart and restores it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const kept = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "kept",
+		});
+		const gone = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "gone",
+		});
+		await alice.as.mutation(api.chats.archive, { chatId: gone });
+		const archived = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			archived: true,
+		});
+		expect(archived.chats.map((c) => c._id)).toEqual([gone]);
+		await alice.as.mutation(api.chats.unarchive, { chatId: gone });
+		const listed = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+		});
+		expect(listed.chats.map((c) => c._id).sort()).toEqual([gone, kept].sort());
+		const left = await alice.as.query(api.chats.list, {
+			workspaceId: alice.workspace,
+			archived: true,
+		});
+		expect(left.chats).toEqual([]);
+	});
+
+	it("refuses to restore a chat of another user", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "mine",
+		});
+		await alice.as.mutation(api.chats.archive, { chatId });
+		await expect(
+			bob.as.mutation(api.chats.unarchive, { chatId }),
+		).rejects.toThrow();
+	});
 });
 
 describe("messages", () => {
@@ -644,6 +687,35 @@ describe("panel layout access", () => {
 		expect(
 			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
 		).toEqual(layout(3, 3));
+	});
+
+	it("keeps the chat a drawn view came from", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const view = {
+			kind: "pane" as const,
+			id: "p",
+			tabs: [
+				{
+					id: "view:t",
+					content: {
+						kind: "view" as const,
+						title: "t",
+						node: null,
+						chatId: "c1",
+					},
+				},
+			],
+			active: "view:t",
+		};
+		const saved = { root: "p", focused: null, nodes: [view] };
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: saved,
+		});
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(saved);
 	});
 
 	it("takes any number of panes side by side but refuses more than three stacked", async () => {

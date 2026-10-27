@@ -17,6 +17,7 @@ export interface KnowledgeStore {
 	): Awaitable<string>;
 	remove(folder: StoreFolder, name: string): Awaitable<void>;
 	keep(name: string): Awaitable<void>;
+	unkeep(name: string): Awaitable<void>;
 	binned(): Awaitable<BinnedFile[]>;
 	restore(name: string): Awaitable<BinnedFile>;
 	erase(name: string): Awaitable<void>;

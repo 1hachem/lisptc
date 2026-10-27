@@ -3,6 +3,7 @@ import { defaultThemeId, themes } from "@repo/ui/themes";
 import type {
 	ChatLine,
 	ChatPage,
+	ChatQuery,
 	Settings,
 	WorkspaceStore,
 } from "@repo/workspace-extension/ports";
@@ -83,7 +84,7 @@ export class ConvexWorkspaceStore implements WorkspaceStore {
 		});
 	}
 
-	async chats(query: { search?: string; limit: number }): Promise<ChatPage> {
+	async chats(query: ChatQuery): Promise<ChatPage> {
 		const page = await this.connect().query(api.chats.list, {
 			workspaceId: this.workspaceId,
 			...query,
@@ -107,6 +108,12 @@ export class ConvexWorkspaceStore implements WorkspaceStore {
 
 	async archive(chatId: string): Promise<void> {
 		await this.connect().mutation(api.chats.archive, {
+			chatId: chatId as Id<"chats">,
+		});
+	}
+
+	async unarchive(chatId: string): Promise<void> {
+		await this.connect().mutation(api.chats.unarchive, {
 			chatId: chatId as Id<"chats">,
 		});
 	}

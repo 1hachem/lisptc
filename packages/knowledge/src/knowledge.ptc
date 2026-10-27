@@ -37,6 +37,8 @@ attachment moves to bin after a week.
 - (attachments/read "name") reads attachment, same rules as knowledge/read.
 - (knowledge/keep "name") moves attachment into knowledge, kept for good. User
   approves it. Keep what user wants to reuse later; leave rest to expire.
+- (knowledge/unkeep "name") moves it back to attachments, expiring again. User
+  approves it.
 - (attachments/write "name" value) puts file in attachments. String stored as
   text; (:base64 "…" :type "image/png") stored as bytes, like image from tool.
   Returns stored name; gains number when name taken.
