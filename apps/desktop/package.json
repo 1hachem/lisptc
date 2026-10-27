@@ -1,0 +1,67 @@
+{
+  "name": "@lisptc/desktop",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/main.cjs",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/main.cjs",
+    "dev": "pnpm build && electron .",
+    "dist": "pnpm build && electron-builder",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "@repo/env": "workspace:*",
+    "@repo/tsconfigs": "workspace:*",
+    "@types/node": "^22.0.0",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  },
+  "build": {
+    "appId": "io.lisptc.desktop",
+    "productName": "lisptc",
+    "files": [
+      "dist/**"
+    ],
+    "protocols": [
+      {
+        "name": "lisptc",
+        "schemes": [
+          "lisptc"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "1hachem",
+        "repo": "lisptc"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
+  }
+}
