@@ -52,6 +52,7 @@ class World implements TranscriptStore {
 	overlapped = false;
 	onAppend: (messages: WireMessage[]) => void = () => {};
 	broken = false;
+	opening: Promise<void> | undefined;
 	setup: TurnSetup = { runsForms: true };
 
 	async read(): Promise<ChatMessageInput[]> {
@@ -68,7 +69,8 @@ class World implements TranscriptStore {
 	thread(): Thread {
 		return new Thread("t1", {
 			mailbox: new MemoryMailbox(),
-			repl: () => {
+			repl: async () => {
+				await this.opening;
 				if (this.broken) throw new Error("no repl here");
 				return testRepl();
 			},
@@ -314,7 +316,11 @@ describe("a thread's watchers", () => {
 				text: "decided here",
 			})
 		).ended;
-		thread.relay({ id: "ask", type: "tool", content: "agent r is waiting" });
+		await thread.place({
+			id: "ask",
+			type: "tool",
+			content: "agent r is waiting",
+		});
 		const text = await watched.until((seen) =>
 			seen.includes("agent r is waiting"),
 		);
@@ -324,6 +330,30 @@ describe("a thread's watchers", () => {
 		);
 		expect(text).toMatch(/event: relayed\ndata: .*"id":"ask"/);
 		expect(text).not.toMatch(/event: relayed\ndata: .*"id":"e2"/);
+	});
+
+	test("carry a message placed mid-turn in the turn itself, in order", async () => {
+		const world = new World();
+		const thread = world.thread();
+		const watched = new Watched(thread.watch());
+		model.script = ["(+ 1 2)", "three."];
+		const gate = gated();
+		const posted = await thread.post(user("a", "what is 1 + 2?"));
+		await gate.entered;
+		await thread.place({ id: "ask", type: "tool", content: "r is waiting" });
+		gate.open();
+		await posted.ended;
+		const text = await watched.until(settledTwice);
+
+		const ids = world.stored.map((message) => message.id);
+		expect(ids.filter((id) => id === "ask")).toHaveLength(1);
+		const ask = ids.indexOf("ask");
+		const step = world.stored.findIndex(
+			(message) => message.type === "ai" && message.content === "(+ 1 2)",
+		);
+		expect(ask).toBeGreaterThan(0);
+		expect(step).toBeGreaterThan(ask);
+		expect(text).not.toMatch(/event: relayed\ndata: .*"id":"ask"/);
 	});
 
 	test("are let go when their signal aborts", async () => {
@@ -350,6 +380,24 @@ describe("stopping a thread", () => {
 		expect(await posted.ended).toEqual(halted);
 		expect(thread.stop(halted)).toBe(false);
 		expect(world.endings).toEqual([{ stopped: true }]);
+	});
+
+	test("stops a turn still opening its repl, before the model is called", async () => {
+		const world = new World();
+		let open: () => void = () => {};
+		world.opening = new Promise((done) => {
+			open = done;
+		});
+		const thread = world.thread();
+		const halted = { stopped: "halted" };
+		const posted = await thread.post(user("a", "hello"));
+		await vi.waitFor(() => expect(world.turns).toEqual(["start"]));
+		expect(await thread.cancel(halted)).toBe(true);
+		open();
+		expect(await posted.ended).toEqual(halted);
+		expect(model.calls).toEqual([]);
+		expect(world.endings).toEqual([{ stopped: true }]);
+		expect(thread.stop(halted)).toBe(false);
 	});
 
 	test("settles a turn that finished as neither stopped nor failed", async () => {

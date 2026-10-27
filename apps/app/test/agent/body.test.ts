@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import { body } from "../../server/agent/body.ts";
-import { post, serve } from "../helpers.ts";
+import { postJson, serve } from "../helpers.ts";
 
 const schema = z.object({ chatId: z.string().min(1), count: z.number() });
 
@@ -17,7 +17,7 @@ const echo = {
 
 describe("a request body checked at the edge", () => {
 	test("reaches the handler parsed when it matches the schema", async () => {
-		const response = await post(echo, {
+		const response = await postJson(echo, {
 			chatId: "c1",
 			count: 2,
 			extra: "dropped",
@@ -28,7 +28,7 @@ describe("a request body checked at the edge", () => {
 
 	test("is refused with the schema's errors before the handler runs", async () => {
 		const before = reached;
-		const response = await post(echo, { chatId: "", count: "two" });
+		const response = await postJson(echo, { chatId: "", count: "two" });
 		expect(response.status).toBe(400);
 		const { error } = (await response.json()) as {
 			error: { properties?: Record<string, unknown> };

@@ -22,6 +22,7 @@ export function PanelLink({
 	title,
 	label,
 	onDragStart,
+	onClick,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
@@ -30,6 +31,7 @@ export function PanelLink({
 	title?: string;
 	label?: string;
 	onDragStart?: (event: DragEvent) => void;
+	onClick?: () => void;
 	children: ReactNode;
 }) {
 	return (
@@ -41,6 +43,7 @@ export function PanelLink({
 			aria-label={label}
 			onDragStart={onDragStart}
 			onClick={(event) => {
+				onClick?.();
 				if (!opensInPlace(event)) return;
 				event.preventDefault();
 				requestPanel(content);

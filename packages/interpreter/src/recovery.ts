@@ -1,3 +1,4 @@
+import { messageOf } from "./errors.ts";
 import type { ForeignValue } from "./types.ts";
 
 export interface ValueKind {
@@ -28,10 +29,6 @@ export interface RecoveryFailure {
 }
 
 export class RecoveryError extends Error {}
-
-function reasonOf(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
 
 export class Recovery {
 	private readonly kinds = new Map<string, ValueKind>();
@@ -82,7 +79,7 @@ export class Recovery {
 				phase.run();
 			} catch (error) {
 				throw new RecoveryError(
-					`${phase.name} refused the save: ${reasonOf(error)}`,
+					`${phase.name} refused the save: ${messageOf(error)}`,
 				);
 			}
 	}
@@ -93,7 +90,7 @@ export class Recovery {
 			try {
 				phase.run();
 			} catch (error) {
-				failed.push({ name: phase.name, reason: reasonOf(error) });
+				failed.push({ name: phase.name, reason: messageOf(error) });
 			}
 		return failed;
 	}

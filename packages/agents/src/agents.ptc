@@ -30,8 +30,9 @@ result, evidence, what not checked.
 Named agent, kept chat across sends, order always:
 1. (agents) lists saved names. (agent-definition "researcher") reads one.
    Saved one fits? Spawn it by name. Never save second agent for same job.
-2. None fits? Spawn temporary one with :prompt. Nothing saved. Starts on prompt
-   at once; reply comes as <system-event source="agent:scratch">.
+2. None fits? Spawn temporary one with :prompt. Nothing saved. :prompt is first
+   task, run at once, not persona: say what to do and what to reply. Reply
+   comes as <system-event source="agent:scratch">.
 3. Temporary one did job well, same job will come again? (agent-keep "scratch")
    saves it. Else let it go.
 
@@ -40,7 +41,7 @@ Named agent, kept chat across sends, order always:
   (send :to "researcher" "find X" :max-steps 10) ; returns "researcher" at once
   (agent-state "researcher")             ; last send: :idle :pending :held :done :failed :cancelled :lost
   (agent-wait "researcher")              ; wait on last send, return reply
-  (agent-cancel "researcher")            ; stop it and all under it
+  (agent-cancel "researcher")            ; stop it, its last send queued or running, and all under it
   (agent-keep "scratch")                 ; save temporary agent as sub-agents/scratch.ptc
   (agent-forget "scratch")               ; delete sub-agents/scratch.ptc; t, or nil if none
   (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)

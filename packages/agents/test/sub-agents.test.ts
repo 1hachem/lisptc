@@ -1,3 +1,5 @@
+import { activityKey } from "@repo/interpreter/annotations";
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
 	extract,
 	type Fragment,
@@ -8,7 +10,11 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { newSessionHooks } from "@repo/interpreter/session";
+import {
+	newSessionHooks,
+	noAnnotations,
+	openSession,
+} from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import { describe, expect, test } from "vitest";
 import {
@@ -32,6 +38,7 @@ import type {
 	Message,
 	Outcome,
 	Seen,
+	Sent,
 	Spawn,
 } from "../src/ports.ts";
 
@@ -41,12 +48,15 @@ class FakeThreads implements AgentThreads {
 	readonly cancelled: string[] = [];
 	readonly children = new Map<string, Interp>();
 
-	async spawn(spawn: Spawn): Promise<void> {
+	async spawn(spawn: Spawn): Promise<string> {
 		this.spawned.push(spawn);
+		return `child-${this.spawned.length}`;
 	}
 
-	async send(agent: string, message: Message): Promise<void> {
+	async send(agent: string, message: Message): Promise<Sent> {
 		this.sent.push({ agent, message });
+		const at = this.spawned.findIndex((s) => s.definition.name === agent);
+		return { job: `job-${this.sent.length}`, chat: `child-${at + 1}` };
 	}
 
 	private last(agent: string): Message | undefined {
@@ -602,6 +612,56 @@ describe("agent-keep", () => {
 		expect(
 			readDefinition(after.folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
 		).toEqual({ name: "scratch", prompt: "dig" });
+	});
+});
+
+describe("a spawn or a send", () => {
+	test("is reported as activity naming the chat the agent runs in", async () => {
+		const { interp, extension, run } = world();
+		const buffer = bufferTransport();
+		const detach = interp.channels.pipe(buffer);
+		try {
+			await run('(spawn "scout" :prompt "look") (send :to "scout" "go")');
+		} finally {
+			detach();
+		}
+		const into = openSession([extension]).annotate.run(
+			(_b, into) => into,
+			buffer,
+			noAnnotations(),
+		);
+
+		expect(
+			activityKey.schema.safeParse(into.output[activityKey.name]).data,
+		).toEqual([
+			{
+				kind: "agent",
+				icon: "agent",
+				label: "scout",
+				detail: "spawned",
+				state: "done",
+				id: "agent-child-1",
+				chat: "child-1",
+			},
+			{
+				kind: "agent",
+				icon: "agent",
+				label: "scout",
+				detail: "look",
+				state: "done",
+				id: "job-1",
+				chat: "child-1",
+			},
+			{
+				kind: "agent",
+				icon: "agent",
+				label: "scout",
+				detail: "go",
+				state: "done",
+				id: "job-2",
+				chat: "child-1",
+			},
+		]);
 	});
 });
 

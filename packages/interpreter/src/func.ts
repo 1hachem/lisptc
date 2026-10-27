@@ -4,6 +4,7 @@ import {
 	cdrCell,
 	EvalException,
 	LoopSignal,
+	messageOf,
 	StepHold,
 	ThrowSignal,
 } from "./errors.ts";
@@ -260,11 +261,7 @@ export class BuiltInFunc extends Func {
 			)
 				throw ex;
 			throw this.named(
-				new EvalException(
-					`${this.callName} failed`,
-					ex instanceof Error ? ex.message : String(ex),
-					false,
-				),
+				new EvalException(`${this.callName} failed`, messageOf(ex), false),
 			);
 		}
 	}

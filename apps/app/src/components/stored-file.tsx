@@ -93,10 +93,31 @@ const FILLS: ReadonlySet<KnowledgeViewer> = new Set([
 	"pdf",
 	"video",
 	"stl",
+	"svg",
+	"html",
 	"download",
 ]);
 
 const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
+	svg: (text) => (
+		<MediaFrame>
+			<img
+				src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`}
+				alt=""
+				className="max-h-full max-w-full object-contain"
+			/>
+		</MediaFrame>
+	),
+	html: (text) => (
+		<MediaFrame>
+			<iframe
+				srcDoc={text}
+				sandbox=""
+				title="html preview"
+				className="h-full w-full border-0 bg-white"
+			/>
+		</MediaFrame>
+	),
 	markdown: (text) => <Markdown>{text}</Markdown>,
 	json: (text) => <JsonView text={text} />,
 	text: (text) => (

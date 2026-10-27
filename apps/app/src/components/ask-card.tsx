@@ -2,7 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import {
 	Cancel01Icon,
 	CheckmarkCircle02Icon,
-	SecurityCheckIcon,
+	LockKeyIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
@@ -201,12 +201,12 @@ export function AskCard({
 		<Confirmation
 			approval={approval}
 			state={open ? "approval-requested" : "approval-responded"}
-			className="mt-2 gap-1.5 overflow-hidden border-yellow/50 px-3 py-2"
+			className="mt-2 gap-1.5 border-yellow/50 px-3 py-2"
 		>
 			<ConfirmationTitle className="min-w-0 wrap-anywhere">
 				<span className="flex min-w-0 items-center gap-2 text-yellow">
-					<HugeiconsIcon icon={SecurityCheckIcon} size={14} />
-					<span className="truncate font-mono">{ask.title}</span>
+					<HugeiconsIcon icon={LockKeyIcon} size={14} />
+					<span className="min-w-0 truncate font-mono">{ask.title}</span>
 				</span>
 				{ask.detail && (
 					<span className="block whitespace-pre-wrap font-mono text-dim text-xs">
@@ -214,7 +214,7 @@ export function AskCard({
 					</span>
 				)}
 				<ConfirmationRequest>
-					<span className="block text-dim">
+					<span className="block break-words text-dim">
 						{linked
 							? "Finish in the tab that opened; this carries on when you are back."
 							: ask.prompt}
@@ -239,7 +239,7 @@ export function AskCard({
 				{ask.choices.map((choice) => (
 					<ConfirmationAction
 						key={choice.label}
-						className="h-7 px-2.5"
+						className="h-auto min-h-7 min-w-0 max-w-full shrink whitespace-normal wrap-anywhere px-2.5 text-left"
 						variant={choice.primary ? "default" : "outline"}
 						disabled={mutation.isPending}
 						onClick={() => choose(choice)}

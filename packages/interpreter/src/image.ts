@@ -1,6 +1,6 @@
 import { LispHashTable, LispVector } from "./collections.ts";
 import type { Doc } from "./docs.ts";
-import { EvalException } from "./errors.ts";
+import { EvalException, messageOf } from "./errors.ts";
 import { Arg, BuiltInFunc, Closure, Lambda, Macro } from "./func.ts";
 import type { Interp } from "./lisp.ts";
 import {
@@ -112,7 +112,7 @@ class Writer {
 					state: x.state,
 					outcome:
 						x.state === "rejected"
-							? reasonOf(x.outcome)
+							? messageOf(x.outcome)
 							: this.value(x.outcome),
 					...(x.state === "pending" && x.recipe !== undefined
 						? {
@@ -143,10 +143,6 @@ class Writer {
 				);
 		}
 	}
-}
-
-function reasonOf(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 export const INTERRUPTED = "interrupted by restore";

@@ -1,4 +1,4 @@
-import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import {
 	type ModelChoice,
@@ -12,8 +12,13 @@ import {
 	PROVIDER_NAMES,
 	type ProviderName,
 } from "@repo/shared/providers";
-import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useMemo,
+	useState,
+} from "react";
 import { useWorkspace } from "./workspace.tsx";
 
 const LOGOS: Record<ProviderName, string | undefined> = {
@@ -41,8 +46,20 @@ export function ModelPickerProvider({
 	children: React.ReactNode;
 }) {
 	const { workspace } = useWorkspace();
-	const queryClient = useQueryClient();
-	const setModel = useConvexMutation(api.workspaces.setModel);
+	const mutation = useConvexMutation(api.workspaces.setModel);
+	const setModel = useMemo(
+		() =>
+			mutation.withOptimisticUpdate((store, { workspaceId, model }) => {
+				const workspaces = store.getQuery(api.workspaces.list, {});
+				if (workspaces === undefined) return;
+				store.setQuery(
+					api.workspaces.list,
+					{},
+					workspaces.map((w) => (w._id === workspaceId ? { ...w, model } : w)),
+				);
+			}),
+		[mutation],
+	);
 	const [open, setOpen] = useState(false);
 	const choice = workspace?.model ?? DEFAULT_CHOICE;
 	const openModelPicker = useCallback(() => setOpen(true), []);
@@ -53,12 +70,9 @@ export function ModelPickerProvider({
 			{workspace && (
 				<WorkspaceModelDialog
 					onOpenChange={setOpen}
-					onSelect={async (model) => {
+					onSelect={(model) => {
 						if (!isCatalogued(model)) throw new Error("model not offered");
-						await setModel({ workspaceId: workspace._id, model });
-						await queryClient.invalidateQueries(
-							convexQuery(api.workspaces.list, {}),
-						);
+						void setModel({ workspaceId: workspace._id, model });
 					}}
 					open={open}
 					providers={providers}

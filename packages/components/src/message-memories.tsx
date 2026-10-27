@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FiredMemory } from "./memories.ts";
 
 const TRIGGER_COLORS: Record<string, string> = {
@@ -51,8 +51,19 @@ function Dot({ on, stack }: { on?: string; stack?: Stack }) {
 	);
 }
 
-export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
-	const [open, setOpen] = useState(false);
+export function MessageMemories({
+	memories,
+	onOpen,
+	focused = false,
+}: {
+	memories: FiredMemory[];
+	onOpen?: () => void;
+	focused?: boolean;
+}) {
+	const [open, setOpen] = useState(focused);
+	useEffect(() => {
+		if (focused) setOpen(true);
+	}, [focused]);
 
 	if (memories.length === 0) return null;
 
@@ -65,11 +76,11 @@ export function MessageMemories({ memories }: { memories: FiredMemory[] }) {
 		<div className="mt-1 select-none text-[11px] leading-[1.7]">
 			<button
 				type="button"
-				onClick={() => setOpen(!open)}
+				onClick={() => (onOpen ? onOpen() : setOpen(!open))}
 				title={label}
 				className="group inline-flex items-center gap-1.5 text-dim transition-colors hover:text-fg"
 			>
-				<span className="inline-flex items-center [perspective:24px] [transform-style:preserve-3d]">
+				<span className="inline-flex items-center">
 					{stacked.map((memory, index) => (
 						<Dot
 							key={memory.key}

@@ -428,7 +428,7 @@ describe("a thread's budget", () => {
 		expect(world.heard("grand", "approve")).toBe(true);
 		expect(world.heard("root", "approve")).toBe(false);
 		const held = (world.stored.get("grand") ?? []).find(
-			(m) => m.id === asked()?.additional_kwargs?.asked,
+			(m) => m.id === asked()?.additional_kwargs?.holding,
 		);
 		expect(held?.additional_kwargs).toMatchObject({
 			waiting: ["approve it"],

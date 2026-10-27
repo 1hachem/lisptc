@@ -16,6 +16,7 @@ import {
 	type ConnConfig,
 	type ConnectResult,
 	type HttpConnConfig,
+	type Icon,
 	type McpClient,
 	type McpHost,
 	type OAuthStore,
@@ -132,6 +133,40 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		return { provider, authUrl: authUrl.href, captured };
 	}
 
+	async function connectAuthorized(
+		client: Client,
+		name: string,
+		url: string,
+		scopes: readonly string[] | undefined,
+		signal?: AbortSignal,
+	): Promise<void> {
+		const scope = scopes?.length ? scopes.join(" ") : undefined;
+		const { provider, authUrl, captured } = await ensureAuthorized(url, scope);
+		if (authUrl) throw new AuthorizationRequired(name, authUrl, captured);
+		const transport = new StreamableHTTPClientTransport(new URL(url), {
+			authProvider: provider,
+		});
+		try {
+			await client.connect(transport, { signal });
+		} catch (e) {
+			if (!(e instanceof UnauthorizedError)) throw e;
+			await provider.invalidateCredentials("tokens");
+			const retry = await ensureAuthorized(url, scope);
+			throw new AuthorizationRequired(
+				name,
+				retry.authUrl ?? url,
+				retry.captured,
+			);
+		}
+	}
+
+	function plainTransport(conf: ConnConfig, handle: ServerHandle | undefined) {
+		if (!handle) return stdioTransport(conf);
+		return new StreamableHTTPClientTransport(new URL(handle.url), {
+			requestInit: handle.headers ? { headers: handle.headers } : undefined,
+		});
+	}
+
 	async function openClient(
 		client: Client,
 		conf: ConnConfig,
@@ -139,39 +174,15 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	): Promise<ConnectResult> {
 		const http = "url" in conf ? conf : undefined;
 		const handle: ServerHandle | undefined = await ports.host.ensure(conf);
-		if (handle && http?.oauth) {
-			const scope = http.scopes?.length ? http.scopes.join(" ") : undefined;
-			const { provider, authUrl, captured } = await ensureAuthorized(
+		if (handle && http?.oauth)
+			await connectAuthorized(
+				client,
+				conf.name,
 				handle.url,
-				scope,
+				http.scopes,
+				signal,
 			);
-			if (authUrl)
-				throw new AuthorizationRequired(conf.name, authUrl, captured);
-			const transport = new StreamableHTTPClientTransport(new URL(handle.url), {
-				authProvider: provider,
-			});
-			try {
-				await client.connect(transport, { signal });
-			} catch (e) {
-				if (!(e instanceof UnauthorizedError)) throw e;
-				await provider.invalidateCredentials("tokens");
-				const retry = await ensureAuthorized(handle.url, scope);
-				throw new AuthorizationRequired(
-					conf.name,
-					retry.authUrl ?? handle.url,
-					retry.captured,
-				);
-			}
-		} else {
-			const transport = handle
-				? new StreamableHTTPClientTransport(new URL(handle.url), {
-						requestInit: handle.headers
-							? { headers: handle.headers }
-							: undefined,
-					})
-				: stdioTransport(conf);
-			await client.connect(transport, { signal });
-		}
+		else await client.connect(plainTransport(conf, handle), { signal });
 		const { tools } = await client.listTools(undefined, { signal });
 		if (tools.length === 0) {
 			await client.close().catch(() => {});
@@ -179,7 +190,12 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		}
 		const serverId = randomUUID();
 		clients.set(serverId, { client, name: conf.name });
-		return { serverId, tools: tools as Tool[] };
+		const icons = client.getServerVersion()?.icons as Icon[] | undefined;
+		return {
+			serverId,
+			tools: tools as Tool[],
+			...(icons?.length ? { icons } : {}),
+		};
 	}
 
 	return {

@@ -1,0 +1,127 @@
+import { formsIn } from "@repo/syntax";
+import {
+	type ChatMessage,
+	isSystemMessage,
+	isToolMessage,
+	isUserMessage,
+	messageProse,
+	messageText,
+	stepMeta,
+	toolActivity,
+	toolFailed,
+	toolIntent,
+} from "./chat.tsx";
+
+const SNIPPET = 60;
+
+export interface TraceChild {
+	chatId: string;
+	label: string;
+}
+
+export interface TraceStep {
+	id: string;
+	number: number;
+	messages: ChatMessage[];
+	children: TraceChild[];
+	title: string;
+	failed: boolean;
+	durationMs?: number;
+}
+
+export type TraceEntry =
+	| { kind: "message"; message: ChatMessage; at: number }
+	| { kind: "step"; step: TraceStep };
+
+function snippet(text: string): string {
+	const line = text.trim().split("\n")[0] ?? "";
+	return line.length > SNIPPET ? `${line.slice(0, SNIPPET)}…` : line;
+}
+
+function doingOf(messages: readonly ChatMessage[]): string | undefined {
+	const declared = messages
+		.filter(isToolMessage)
+		.map((m) => toolIntent(m)?.doing?.trim())
+		.filter((doing): doing is string => doing !== undefined && doing !== "");
+	return declared.at(-1);
+}
+
+function titleOf(messages: readonly ChatMessage[]): string {
+	const doing = doingOf(messages);
+	if (doing !== undefined) return snippet(doing);
+	const lead = messages.find((m) => !isToolMessage(m));
+	if (lead === undefined) return "tool result";
+	const { prose } = formsIn(
+		messageText(lead),
+		messageProse(lead).map((s) => s.span),
+	);
+	return snippet(prose) || "step";
+}
+
+function durationOf(messages: readonly ChatMessage[]): number | undefined {
+	const timed = messages
+		.map((m) => stepMeta(m)?.durationMs)
+		.filter((ms): ms is number => ms !== undefined);
+	return timed.length === 0 ? undefined : timed.reduce((a, b) => a + b, 0);
+}
+
+function childrenOf(messages: readonly ChatMessage[]): TraceChild[] {
+	const children = new Map<string, TraceChild>();
+	for (const message of messages)
+		if (isToolMessage(message))
+			for (const { chat, label } of toolActivity(message))
+				if (chat !== undefined && !children.has(chat))
+					children.set(chat, { chatId: chat, label });
+	return [...children.values()];
+}
+
+function stepOf(messages: ChatMessage[], number: number): TraceStep {
+	return {
+		id: messages[0]?.id ?? `step:${number}`,
+		number,
+		messages,
+		children: childrenOf(messages),
+		title: titleOf(messages),
+		failed: messages.some((m) => isToolMessage(m) && toolFailed(m)),
+		durationMs: durationOf(messages),
+	};
+}
+
+export function traceEntries(messages: readonly ChatMessage[]): TraceEntry[] {
+	const entries: TraceEntry[] = [];
+	let open: ChatMessage[] | undefined;
+	let steps = 0;
+	const close = () => {
+		if (open === undefined) return;
+		steps += 1;
+		entries.push({ kind: "step", step: stepOf(open, steps) });
+		open = undefined;
+	};
+	for (const [at, message] of messages.entries()) {
+		if (isUserMessage(message) || isSystemMessage(message)) {
+			close();
+			entries.push({ kind: "message", message, at });
+		} else if (isToolMessage(message) && open !== undefined) {
+			open.push(message);
+		} else {
+			close();
+			open = [message];
+		}
+	}
+	close();
+	return entries;
+}
+
+export function stepHolding(
+	entries: readonly TraceEntry[],
+	message: string | undefined,
+): string | undefined {
+	if (message === undefined) return undefined;
+	for (const entry of entries)
+		if (
+			entry.kind === "step" &&
+			entry.step.messages.some((m) => m.id === message)
+		)
+			return entry.step.id;
+	return undefined;
+}

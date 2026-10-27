@@ -8,8 +8,8 @@ import {
 	joinMessages,
 	nodeToJson,
 	type PanelOp,
+	type PanelStore,
 	type PanelTab,
-	panelOps,
 	rendered,
 	sent,
 	type UiNode,
@@ -18,7 +18,35 @@ import {
 	uiExtension,
 	viewTab,
 } from "../src/ui.ts";
-import { uiHost } from "../src/ui-host.ts";
+import { uiHostFor } from "../src/ui-host.ts";
+
+function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
+	let tabs = [...saved];
+	const ops: PanelOp[] = [];
+	const without = (id: string) => tabs.filter((tab) => tab.id !== id);
+	const panel: PanelStore = {
+		apply(applied) {
+			ops.push(...applied);
+			for (const op of applied) {
+				if (op.op === "close") tabs = without(op.tab);
+				if (op.op === "open")
+					tabs = [
+						...without(op.tab).map((tab) => ({ ...tab, focused: false })),
+						{
+							id: op.tab,
+							kind: op.content.kind,
+							title:
+								op.content.kind === "view" ? op.content.title : op.content.name,
+							shown: true,
+							focused: true,
+						},
+					];
+			}
+		},
+		tabs: () => tabs,
+	};
+	return { panel, ops };
+}
 
 function collector(interp: Interp) {
 	let view: UiNode | undefined;
@@ -47,11 +75,14 @@ function fresh(): {
 	interp: Interp;
 	surface: UiSurface;
 	ui: ReturnType<typeof collector>;
+	ops: PanelOp[];
 } {
 	const surface = new UiSurface();
-	const interp = new Interp({ extensions: [uiExtension(uiHost, { surface })] });
+	const { panel, ops } = panelOf([]);
+	const host = uiHostFor({ panel });
+	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 	runSync(interp, prelude);
-	return { interp, surface, ui: collector(interp) };
+	return { interp, surface, ui: collector(interp), ops };
 }
 
 function render(code: string): {
@@ -492,11 +523,7 @@ describe("handing a turn back to the agent", () => {
 
 describe("the panel beside the chat", () => {
 	function opened(code: string) {
-		const { interp } = fresh();
-		const ops: PanelOp[] = [];
-		panelOps.on(interp.channels, (op) => {
-			ops.push(op);
-		});
+		const { interp, ops } = fresh();
 		const result = runSync(interp, code);
 		return { ops, result };
 	}
@@ -576,14 +603,11 @@ describe("the panel beside the chat", () => {
 	];
 
 	function onPanel(tabs: PanelTab[]) {
+		const { panel, ops } = panelOf(tabs);
 		const interp = new Interp({
-			extensions: [uiExtension({ ...uiHost, panel: { tabs: () => tabs } })],
+			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
 		runSync(interp, prelude);
-		const ops: PanelOp[] = [];
-		panelOps.on(interp.channels, (op) => {
-			ops.push(op);
-		});
 		return { ops, ev: (code: string) => str(runSync(interp, code)) };
 	}
 
@@ -593,7 +617,7 @@ describe("the panel beside the chat", () => {
 		);
 	});
 
-	it("counts the tabs this step opened and closed before the panel saves them", () => {
+	it("lists the tabs this step opened and closed", () => {
 		const { ev } = onPanel(saved);
 		ev('(ui/open-view "plan" (ui/text "x")) (ui/close "view:counts")');
 		expect(ev("(ui/tabs)")).toBe(

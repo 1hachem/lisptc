@@ -1,6 +1,6 @@
 import type { Envelope, PostOptions } from "@repo/ai";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { type Method, post as send } from "../helpers.ts";
+import { type Method, postJson as send } from "../helpers.ts";
 
 const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 const NOTE = 'I approved (fs/write "a"). Carry on.';

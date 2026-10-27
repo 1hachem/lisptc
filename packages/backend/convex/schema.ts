@@ -46,46 +46,60 @@ export const workspaceIcon = v.union(
 	...WORKSPACE_ICONS.map((icon) => v.literal(icon)),
 );
 
+export const panelContent = v.union(
+	v.object({
+		kind: v.literal("file"),
+		folder: v.union(v.literal("attachments"), v.literal("knowledge")),
+		name: v.string(),
+	}),
+	v.object({
+		kind: v.literal("source"),
+		folder: v.string(),
+		name: v.string(),
+	}),
+	v.object({
+		kind: v.literal("view"),
+		title: v.string(),
+		node: v.any(),
+		chatId: v.optional(v.string()),
+	}),
+	v.object({
+		kind: v.literal("chat"),
+		chatId: v.union(v.string(), v.null()),
+		title: v.string(),
+		trace: v.optional(
+			v.object({
+				shown: v.union(v.literal("open"), v.literal("collapsed")),
+				turn: v.optional(v.string()),
+			}),
+		),
+	}),
+	v.object({
+		kind: v.literal("trace"),
+		chatId: v.string(),
+		title: v.string(),
+		turn: v.optional(v.string()),
+	}),
+	v.object({
+		kind: v.literal("page"),
+		page: v.union(
+			v.literal("memory"),
+			v.literal("permission"),
+			v.literal("readme"),
+			v.literal("settings"),
+			v.literal("preferences"),
+			v.literal("account"),
+			v.literal("bin"),
+		),
+		id: v.optional(v.string()),
+		title: v.string(),
+	}),
+);
+
 const panelTab = v.object({
 	id: v.string(),
 	fixed: v.optional(v.boolean()),
-	content: v.union(
-		v.object({
-			kind: v.literal("file"),
-			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
-			name: v.string(),
-		}),
-		v.object({
-			kind: v.literal("source"),
-			folder: v.string(),
-			name: v.string(),
-		}),
-		v.object({
-			kind: v.literal("view"),
-			title: v.string(),
-			node: v.any(),
-			chatId: v.optional(v.string()),
-		}),
-		v.object({
-			kind: v.literal("chat"),
-			chatId: v.union(v.string(), v.null()),
-			title: v.string(),
-		}),
-		v.object({
-			kind: v.literal("page"),
-			page: v.union(
-				v.literal("memory"),
-				v.literal("permission"),
-				v.literal("readme"),
-				v.literal("settings"),
-				v.literal("preferences"),
-				v.literal("account"),
-				v.literal("bin"),
-			),
-			id: v.optional(v.string()),
-			title: v.string(),
-		}),
-	),
+	content: panelContent,
 });
 
 export const panelLayout = v.object({
@@ -122,7 +136,6 @@ export default defineSchema({
 		userId: v.id("users"),
 		font: v.optional(v.string()),
 		themeUses: v.optional(v.record(v.string(), v.number())),
-		channels: v.optional(v.record(v.string(), v.boolean())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
 		input: v.optional(v.record(v.string(), v.boolean())),
 		sidebar: v.optional(v.array(v.string())),
@@ -131,6 +144,8 @@ export default defineSchema({
 		statusBarHidden: v.optional(v.array(v.string())),
 		motion: v.optional(v.string()),
 		panelMotion: v.optional(v.boolean()),
+		traceBesideChat: v.optional(v.boolean()),
+		traceLink: v.optional(v.boolean()),
 	}).index("by_user", ["userId"]),
 
 	workspaces: defineTable({
@@ -152,6 +167,7 @@ export default defineSchema({
 		archivedAt: v.optional(v.number()),
 		status: v.optional(chatStatus),
 		streamingSince: v.optional(v.number()),
+		lastStartedAt: v.optional(v.number()),
 		failure: v.optional(v.string()),
 		replId: v.optional(v.id("repls")),
 		parentChatId: v.optional(v.id("chats")),

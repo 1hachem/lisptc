@@ -89,3 +89,7 @@ export function cdrCell(x: Cell): List {
 	else if (k === null) return null;
 	else throw new EvalException("proper list expected", x);
 }
+
+export function messageOf(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
