@@ -83,10 +83,16 @@ describe("child threads", () => {
 		expect(onOpen).toHaveBeenCalledWith(THREADS[1]);
 	});
 
+	it("offers no way to delete a child", () => {
+		const host = mount(THREADS);
+		expect(control(host, "clear")).toBeNull();
+		expect(control(host, "clear-all")).toBeNull();
+	});
+
 	it("shows the latest children and expands to the earlier ones", () => {
 		const host = mount([
 			...THREADS,
-			{ _id: "d", title: "" },
+			{ _id: "d", title: "", lastStartedAt: 1 },
 			{ _id: "e", title: "tester", status: "streaming" },
 		]);
 		expect(rows(host).map((b) => b.dataset.state)).toEqual([
@@ -150,7 +156,7 @@ describe("child threads", () => {
 
 	it("checks only a child that finished, and marks a stopped or failed one apart", () => {
 		const host = mount([
-			{ _id: "d", title: "done" },
+			{ _id: "d", title: "done", lastStartedAt: 1 },
 			{ _id: "s", title: "halted", status: "stopped" },
 			{ _id: "e", title: "broke", status: "errored", failure: "boom" },
 		]);
@@ -161,6 +167,17 @@ describe("child threads", () => {
 		]);
 		const icons = rows(host).map((b) => b.querySelector("svg")?.innerHTML);
 		expect(new Set(icons).size).toBe(3);
+	});
+
+	it("marks a child that never ran a turn as idle, apart from a finished one", () => {
+		const host = mount([
+			{ _id: "i", title: "spawned" },
+			{ _id: "d", title: "done", lastStartedAt: 1 },
+		]);
+		expect(rows(host).map((b) => b.dataset.state)).toEqual(["idle", "done"]);
+		const icons = rows(host).map((b) => b.querySelector("svg")?.innerHTML);
+		expect(new Set(icons).size).toBe(2);
+		expect(control(host, "stop")).toBeNull();
 	});
 
 	it("offers no stop at all once everything settled", () => {

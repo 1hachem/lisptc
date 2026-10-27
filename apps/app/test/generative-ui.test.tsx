@@ -13,7 +13,7 @@ vi.mock("../src/lib/chat.tsx", () => ({
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/ui-action.ts", () => ({
-	postUiAction: vi.fn(async () => ({ live: true, response: {} })),
+	postUiAction: vi.fn(async () => ({})),
 }));
 
 const view = (

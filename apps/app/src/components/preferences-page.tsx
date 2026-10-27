@@ -1,16 +1,22 @@
 import { useAppearance } from "../lib/appearance.tsx";
 import { preferencesSource } from "../lib/files.ts";
-import { usePanelMotion } from "../lib/preferences.ts";
+import {
+	usePanelMotion,
+	useTraceBesideChat,
+	useTraceLink,
+} from "../lib/preferences.ts";
 import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import { useUI } from "../lib/ui.tsx";
 import { FileView } from "./file-view.tsx";
 
 export function PreferencesPage() {
 	const { font, openFontPicker } = useAppearance();
-	const { shown, metaShown, inputOn } = useUI();
+	const { metaShown, inputOn } = useUI();
 	const { order, hidden } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
 	const { panelMotion } = usePanelMotion();
+	const { traceBesideChat } = useTraceBesideChat();
+	const { traceLink } = useTraceLink();
 
 	return (
 		<FileView
@@ -18,13 +24,14 @@ export function PreferencesPage() {
 				path: "preferences.ptc",
 				source: preferencesSource({
 					font: font.id,
-					channels: shown,
 					metadata: metaShown,
 					input: inputOn,
 					sidebar: order,
 					hidden,
 					motion,
 					panelMotion,
+					traceBesideChat,
+					traceLink,
 				}),
 			}}
 			actions={

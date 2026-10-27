@@ -6,9 +6,12 @@ import type { Envelope } from "../src/mailbox.ts";
 import { replResultContent } from "../src/repl.ts";
 import type { ChatInput } from "../src/stream.ts";
 import {
+	asking,
 	type ChatStreamOptions,
+	concluding,
 	extension,
 	hearing,
+	printing,
 	receiving,
 	reporting,
 	riding,
@@ -49,6 +52,9 @@ interface WireMessage {
 		ui?: unknown;
 		display?: string;
 		riding?: string;
+		quiet?: boolean;
+		asked?: string[];
+		closed?: string[];
 		meta?: {
 			at?: string;
 			durationMs?: number;
@@ -95,10 +101,110 @@ describe("chat stream", () => {
 		return streamChat(input, { repl: testRepl(), ...options });
 	}
 
+	async function recorded(
+		input: ChatInput,
+		options: Partial<ChatStreamOptions> = {},
+	): Promise<WireMessage[]> {
+		const made: WireMessage[] = [];
+		let revised: ReadonlyMap<number, WireMessage> = new Map();
+		await stream(input, {
+			...options,
+			onStep: (produced) => {
+				made.push(...produced);
+			},
+			onTurn: (rest, touched) => {
+				made.push(...rest);
+				revised = touched;
+			},
+		}).text();
+		const all = [...((input.messages ?? []) as WireMessage[]), ...made];
+		for (const [at, message] of revised) all[at] = message;
+		return all;
+	}
+
 	beforeEach(() => {
 		turn = 0;
 		down = false;
 		sent.length = 0;
+	});
+
+	test("a step's value it never echoed reaches no snapshot the person is sent", async () => {
+		const body = await stream({
+			messages: [{ type: "human", content: "what is 1 + 2?" }],
+		}).text();
+
+		const steps = records(body)
+			.filter((r) => r.event === "values")
+			.flatMap((r) => (r.data as { messages: WireMessage[] }).messages)
+			.filter((m) => m.type === "tool");
+		expect(steps.length).toBeGreaterThan(0);
+		for (const step of steps) {
+			expect(step.content).toBe("");
+			expect(step.additional_kwargs?.display).toBeUndefined();
+		}
+	});
+
+	test("what a step printed reaches the record and the model, and no snapshot the person is sent", async () => {
+		const ask = { messages: [{ type: "human", content: "what is 1 + 2?" }] };
+		const options = { repl: testRepl([printing("PRINTED-LINE\n")]) };
+		const body = await stream(ask, options).text();
+
+		expect(body).not.toContain("PRINTED-LINE");
+		expect(sent[1].some((m) => m.content.includes("PRINTED-LINE"))).toBe(true);
+
+		turn = 0;
+		const persisted = await recorded(ask, options);
+		expect(persisted[2].content).toContain("PRINTED-LINE");
+		expect(persisted[2].additional_kwargs?.display).toBe("PRINTED-LINE\n");
+	});
+
+	test("a step that ends the turn reaches the person and the record, and never the model", async () => {
+		const ask = { messages: [{ type: "human", content: "what is 1 + 2?" }] };
+		const persisted = await recorded(ask, {
+			repl: testRepl([asking("Pick")]),
+		});
+
+		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "tool"]);
+		expect(persisted[2].additional_kwargs).toMatchObject({
+			asked: ["Pick"],
+			quiet: true,
+		});
+
+		sent.length = 0;
+		const messages = await finalMessages(
+			stream({
+				messages: [...persisted, { type: "human", content: "A" }],
+			}),
+		);
+		expect(messages[2].additional_kwargs?.asked).toEqual(["Pick"]);
+		expect(sent[0].some((m) => m.content.includes("tool_result"))).toBe(false);
+	});
+
+	test("what the turn leaves as it settles lands on its last step, flushed or not", async () => {
+		const ask = { messages: [{ type: "human", content: "what is 1 + 2?" }] };
+		const options = { repl: testRepl([concluding("wrapped")]) };
+		const persisted = await recorded(ask, options);
+
+		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "tool", "ai"]);
+		expect(persisted[2].additional_kwargs?.closed).toEqual(["wrapped"]);
+
+		turn = 0;
+		const messages = await finalMessages(stream(ask, options));
+		expect(messages[2].additional_kwargs?.closed).toEqual(["wrapped"]);
+	});
+
+	test("what the turn leaves as it settles is kept out of the model's sight when no step ran", async () => {
+		turn = 1;
+		const persisted = await recorded(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ repl: testRepl([concluding("wrapped")]) },
+		);
+
+		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "tool"]);
+		expect(persisted[2]).toMatchObject({
+			content: "",
+			additional_kwargs: { closed: ["wrapped"], quiet: true },
+		});
 	});
 
 	test("reports why a turn failed, and nothing when it did not", async () => {
@@ -163,11 +269,9 @@ describe("chat stream", () => {
 	});
 
 	test("every model call reports what it cost, and only its own", async () => {
-		const messages = await finalMessages(
-			stream({
-				messages: [{ type: "human", content: "what is 1 + 2?" }],
-			}),
-		);
+		const messages = await recorded({
+			messages: [{ type: "human", content: "what is 1 + 2?" }],
+		});
 
 		const assistant = messages.filter((m) => m.type === "ai");
 		expect(assistant.map((m) => m.content)).toEqual(["(+ 1 2)", "three."]);
@@ -216,9 +320,8 @@ describe("chat stream", () => {
 		);
 	});
 
-	test("carries what a turn attached to a message into the next turn", async () => {
-		const carried = {
-			reasoning_content: "thinking out loud",
+	test("carries what a turn attached to a message into the next turn, its thinking included", async () => {
+		const shown = {
 			ui: { tag: "text", props: { text: "a widget" }, children: [] },
 			display: "for the person",
 		};
@@ -226,14 +329,27 @@ describe("chat stream", () => {
 			stream({
 				messages: [
 					{ type: "human", content: "what is 1 + 2?" },
-					{ type: "ai", content: "(+ 1 2)", additional_kwargs: carried },
+					{
+						type: "ai",
+						content: "(+ 1 2)",
+						additional_kwargs: {
+							...shown,
+							reasoning_content: "thinking out loud",
+						},
+					},
 					{ type: "human", content: "and again?" },
 				],
 			}),
 		);
 
-		const earlier = messages.find((m) => m.content === "(+ 1 2)");
-		expect(earlier?.additional_kwargs).toMatchObject(carried);
+		expect(messages[1]).toMatchObject({
+			type: "ai",
+			content: "(+ 1 2)",
+			additional_kwargs: shown,
+		});
+		expect(messages[1].additional_kwargs?.reasoning_content).toBe(
+			"thinking out loud",
+		);
 	});
 
 	test("every model call names the model that was billed for it", async () => {
@@ -290,17 +406,18 @@ describe("chat stream", () => {
 				},
 			},
 		).text();
-		const seen = records(text);
-		const firstDelta = seen.findIndex((r) => r.event === "messages");
-		const early = seen
-			.slice(0, firstDelta)
+		const snapshots = records(text)
 			.filter((r) => r.event === "values")
-			.at(-1)?.data as { messages: WireMessage[] };
+			.map((r) => (r.data as { messages: WireMessage[] }).messages);
+		const answered = snapshots.findIndex((m) =>
+			m.some((message) => message.type === "ai"),
+		);
+		const early = { messages: snapshots[answered - 1] };
 
 		expect(early.messages[0].additional_kwargs?.meta?.heard?.[0]).toBe(
 			"a memory fired",
 		);
-		const final = (seen.at(-1)?.data as { messages: WireMessage[] }).messages;
+		const final = snapshots.at(-1) ?? [];
 		expect(
 			final.find((m) => m.type === "ai")?.additional_kwargs?.meta?.heard,
 		).toBeUndefined();
@@ -406,9 +523,10 @@ describe("chat stream", () => {
 		);
 
 		const delta = seen.find((r) => r.event === "messages")?.data as unknown[];
-		expect(delta).toHaveLength(2);
-		expect(delta[1]).toEqual({});
-		expect(delta[0]).toMatchObject({ type: "ai", content: "(+ 1 2)" });
+		expect(delta).toEqual([
+			{ type: "ai", id: expect.any(String), content: "(+ 1 2)" },
+			{},
+		]);
 
 		const snapshot = seen.at(-1)?.data as { messages: WireMessage[] };
 		expect(snapshot.messages.map((m) => m.type)).toEqual([
@@ -417,24 +535,94 @@ describe("chat stream", () => {
 			"tool",
 			"ai",
 		]);
+		expect(snapshot.messages.slice(1).map((m) => m.content)).toEqual([
+			"(+ 1 2)",
+			"",
+			"three.",
+		]);
+		const tool = snapshot.messages.find((m) => m.type === "tool");
+		expect(tool?.additional_kwargs?.results).toBeUndefined();
+	});
+
+	test("every finished step is recorded once, with only what it added", async () => {
+		const steps: WireMessage[][] = [];
+		let rest: WireMessage[] = [];
+		await stream(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{
+				onStep: (produced) => {
+					steps.push(produced);
+				},
+				onTurn: (unrecorded) => {
+					rest = unrecorded;
+				},
+			},
+		).text();
+
+		expect(steps.map((step) => step.map((m) => m.type))).toEqual([
+			["ai", "tool"],
+			["ai"],
+		]);
+		expect(steps[0][0].content).toBe("(+ 1 2)");
+		expect(steps[0][1].additional_kwargs?.results).toEqual(["3"]);
+		expect(rest).toEqual([]);
+	});
+
+	test("a step is recorded before the next one is handed over", async () => {
+		const order: string[] = [];
+		await stream(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{
+				onStep: async (produced) => {
+					order.push(`start ${produced.length}`);
+					await new Promise((resolve) => setTimeout(resolve, 5));
+					order.push(`end ${produced.length}`);
+				},
+				onTurn: () => {
+					order.push("turn");
+				},
+			},
+		).text();
+
+		expect(order).toEqual(["start 2", "end 2", "start 1", "end 1", "turn"]);
+	});
+
+	test("a failed turn has recorded every step it finished", async () => {
+		const steps: WireMessage[][] = [];
+		let failure: string | undefined;
+		const response = stream(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{
+				repl: testRepl([
+					extension((hooks) =>
+						hooks.evalStep.use((ctx, next) => {
+							down = true;
+							return next(ctx);
+						}),
+					),
+				]),
+				onStep: (produced) => {
+					steps.push(produced);
+				},
+				onTurn: (_rest, _revised, failed) => {
+					failure = failed;
+				},
+			},
+		);
+		await response.text();
+
+		expect(failure).toContain("down");
+		expect(steps.flat().map((m) => m.type)).toEqual(["ai", "tool"]);
 	});
 
 	test("what a step emits rides its result, and the model reads it the same after a reload", async () => {
-		let produced: WireMessage[] = [];
-		const first = await finalMessages(
-			stream(
-				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
-				{
-					repl: testRepl([emitting("k: the note\n")]),
-					onTurn: (made) => {
-						produced = made;
-					},
-				},
-			),
+		const first = await recorded(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ repl: testRepl([emitting("k: the note\n")]) },
 		);
 		const live = sent[1].find((m) => m.content.includes("tool_result"));
 
-		const stored = produced.find((m) => m.type === "tool");
+		const stored = first.find((m) => m.type === "tool");
 		expect(stored?.additional_kwargs?.riding).toBe("k: the note\n");
 		expect(stored?.content).not.toContain("k: the note");
 		expect(live?.content).toContain("k: the note");
@@ -472,6 +660,7 @@ describe("chat stream", () => {
 			expect.objectContaining({ type: "human", content: "what is (+ 1 2)" }),
 			expect.objectContaining({
 				type: "tool",
+				content: "",
 				additional_kwargs: { display: "3", results: ["3"] },
 			}),
 		]);

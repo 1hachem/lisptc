@@ -25,6 +25,23 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+	closePane,
+	closeTab,
+	type Direction,
+	type Drop,
+	dropTab,
+	type Edge,
+	flip,
+	focusTab,
+	joinPane,
+	moveTab,
+	type Node,
+	type Pane,
+	resizeSplit,
+	type SplitLayout,
+	type Tab,
+} from "@repo/shared/split-layout";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -51,23 +68,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
-import {
-	closePane,
-	closeTab,
-	type Direction,
-	type Drop,
-	dropTab,
-	type Edge,
-	flip,
-	focusTab,
-	joinPane,
-	moveTab,
-	type Node,
-	type Pane,
-	resizeSplit,
-	type SplitLayout,
-	type Tab,
-} from "./split-layout.ts";
 
 const DRAG_AFTER_PX = 4;
 const ZOOMS_IN =

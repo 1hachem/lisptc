@@ -13,7 +13,9 @@
     "./lisp-tokens": "./src/lisp-tokens.ts",
     "./messages": "./src/messages.ts",
     "./providers": "./src/providers.ts",
-    "./search": "./src/search.ts"
+    "./search": "./src/search.ts",
+    "./split-layout": "./src/split-layout.ts",
+    "./panel-layout": "./src/panel-layout.ts"
   },
   "engines": {
     "node": ">=22.6.0"

@@ -259,10 +259,10 @@ export class Threads {
 		const surfaced = (await this.host.ports.transcript.read(root)).find(
 			(message) => message.id === ask,
 		);
-		const { thread, asked } = envelopeOf(surfaced?.additional_kwargs);
+		const { thread, holding } = envelopeOf(surfaced?.additional_kwargs);
 		if (thread === undefined || thread === root) return { thread: root };
 		if (!(await this.ancestors(thread)).includes(root)) return undefined;
-		return asked === undefined ? { thread } : { thread, asked };
+		return holding === undefined ? { thread } : { thread, asked: holding };
 	}
 
 	private async followUp(target: string, envelope: Envelope): Promise<void> {
@@ -295,17 +295,16 @@ export class Threads {
 	private async surface(
 		thread: string,
 		root: string,
-		{ held, message: asked }: Extract<TurnOutcome, { held: unknown }>,
+		{ held, message: holding }: Extract<TurnOutcome, { held: unknown }>,
 	): Promise<void> {
 		const lineage = await this.lineage(thread);
 		const message: WireMessage = {
 			id: crypto.randomUUID(),
 			type: "tool",
 			content: `agent ${nameOf(lineage)} is waiting on you`,
-			additional_kwargs: { ...held.output, thread, asked },
+			additional_kwargs: { ...held.output, thread, holding },
 		};
-		await this.host.ports.transcript.append(root, [message]);
-		this.get(root).relay(message);
+		await this.get(root).place(message);
 	}
 
 	wait(job: string, signal?: AbortSignal): Promise<TurnOutcome> {

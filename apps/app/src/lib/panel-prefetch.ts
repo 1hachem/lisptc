@@ -1,7 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { type FlatLayout, unflatten } from "@repo/components";
+import { type FlatLayout, unflatten } from "@repo/shared/split-layout";
 import type { QueryClient } from "@tanstack/react-query";
 import { knowledgeViewer, readsText, storedTextQuery } from "./file-viewer.ts";
 import { type PanelContent, type PanelLayout, shownTabs } from "./panel-ops.ts";
@@ -57,7 +57,11 @@ function prefetch(
 	workspaceId: Id<"workspaces">,
 	content: PanelContent,
 ): Promise<unknown> {
-	if (content.kind === "chat" || content.kind === "view")
+	if (
+		content.kind === "chat" ||
+		content.kind === "view" ||
+		content.kind === "trace"
+	)
 		return prefetchTranscript(queryClient, content.chatId);
 	if (content.kind === "file")
 		return prefetchFile(queryClient, workspaceId, content);

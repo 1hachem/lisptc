@@ -22,22 +22,16 @@ import {
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 import {
 	FOLDERS,
 	type Folder,
 	fileTab,
-	noPanel,
 	type PanelOp,
-	type PanelReader,
+	type PanelStore,
 	type PanelTab,
-	panelOps,
 	SPLITS,
 	type Split,
 	viewTab,
@@ -48,9 +42,8 @@ export {
 	fileTab,
 	type PanelContent,
 	type PanelOp,
-	type PanelReader,
+	type PanelStore,
 	type PanelTab,
-	panelOps,
 	viewTab,
 } from "./panel.ts";
 export type { UiNode, UiValue } from "./view.ts";
@@ -442,44 +435,10 @@ function tabList(tab: PanelTab): List {
 	]);
 }
 
-class PanelLedger {
-	private readonly pending = new Map<string, PanelTab | null>();
-
-	constructor(private readonly reader: PanelReader) {}
-
-	opened(tab: PanelTab): void {
-		this.pending.delete(tab.id);
-		this.pending.set(tab.id, tab);
-	}
-
-	closed(id: string): void {
-		this.pending.set(id, null);
-	}
-
-	sent(): void {
-		this.pending.clear();
-	}
-
-	*tabs(): Eval<PanelTab[]> {
-		const saved = yield* settled(this.reader.tabs());
-		const opened = [...this.pending.values()].filter(
-			(tab): tab is PanelTab => tab !== null,
-		);
-		const focus = opened.at(-1)?.id;
-		const kept = saved
-			.filter((tab) => !this.pending.has(tab.id))
-			.map((tab) => (focus === undefined ? tab : { ...tab, focused: false }));
-		return [
-			...kept,
-			...opened.map((tab) => ({ ...tab, focused: tab.id === focus })),
-		];
-	}
-}
-
 function registerUi(
 	interp: Interp,
 	surface: UiSurface,
-	panel: PanelLedger,
+	panel: PanelStore,
 ): void {
 	surface.bind(interp);
 	surface.reset();
@@ -736,25 +695,20 @@ function registerUi(
 			new UiElement("file-link", { text, folder: folderOf(folder), name }),
 	);
 
-	const emit = (op: PanelOp) => panelOps.emit(interp.channels, { user: op });
+	function* emit(op: PanelOp): Eval<void> {
+		yield* settled(panel.apply([op]));
+	}
 
-	interp.def(
+	interp.defGen(
 		"ui/open-file",
 		-3,
 		'(ui/open-file folder name [:split "right"])',
 		`Open a stored file's preview in a tab of the panel beside the chat. \`folder\` is one of ${FOLDERS.join(" ")}; list it first, since a name that is not there opens a tab that says so. \`:split\` is one of ${SPLITS.join(" ")}: here adds the tab to the focused split, right and down open a new split beside it. A file already open is focused instead. Returns the tab id.`,
 		z.tuple([zString, zString, zList]),
-		([folder, name, rest]) => {
+		function* ([folder, name, rest]): Eval {
 			const checked = folderOf(folder);
 			const tab = fileTab(checked, name);
-			panel.opened({
-				id: tab,
-				kind: "file",
-				title: name,
-				shown: true,
-				focused: true,
-			});
-			emit({
+			yield* emit({
 				op: "open",
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
@@ -764,24 +718,17 @@ function registerUi(
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/open-view",
 		-3,
 		'(ui/open-view title view [:split "right"])',
 		`Open a widget in a tab of the panel beside the chat, titled \`title\`, instead of under your message. Its controls run in this REPL like any other view's. Opening the same title again replaces that tab. \`:split\` is as for \`ui/open-file\`. Returns the tab id.`,
 		z.tuple([zString, zAny, zList]),
-		([title, view, rest]) => {
+		function* ([title, view, rest]): Eval {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			const tab = viewTab(title);
-			panel.opened({
-				id: tab,
-				kind: "view",
-				title,
-				shown: true,
-				focused: true,
-			});
-			emit({
+			yield* emit({
 				op: "open",
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
@@ -798,22 +745,21 @@ function registerUi(
 		"Close a panel tab by the id `ui/open-file`, `ui/open-view` or `ui/tabs` gave. A split left empty folds into its neighbour. Returns t if the tab was open, nil if it was not.",
 		z.tuple([zString]),
 		function* ([tab]): Eval {
-			const tabs = yield* panel.tabs();
+			const tabs = yield* settled(panel.tabs());
 			if (!tabs.some((open) => open.id === tab)) return null;
-			panel.closed(tab);
-			emit({ op: "close", tab });
+			yield* emit({ op: "close", tab });
 			return true;
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/focus",
 		1,
 		"(ui/focus tab)",
 		"Bring a panel tab to the front by the id `ui/open-file` or `ui/open-view` returned.",
 		z.tuple([zString]),
-		([tab]) => {
-			emit({ op: "focus", tab });
+		function* ([tab]): Eval {
+			yield* emit({ op: "focus", tab });
 			return Unspecified;
 		},
 	);
@@ -825,7 +771,7 @@ function registerUi(
 		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
 		z.tuple([]),
 		function* (): Eval {
-			const tabs = yield* panel.tabs();
+			const tabs = yield* settled(panel.tabs());
 			return arrayToList(tabs.map(tabList));
 		},
 	);
@@ -916,7 +862,7 @@ function renderView(surface: UiSurface, view: UiElement): string {
 
 export interface UiHost {
 	prompt: PromptSource;
-	panel?: PanelReader;
+	panel: PanelStore;
 }
 
 export interface UiOptions {
@@ -930,9 +876,8 @@ export function uiExtension(
 	options: UiOptions = {},
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
-	const panel = new PanelLedger(host.panel ?? noPanel);
 	return Object.assign(
-		(interp: Interp): void => registerUi(interp, surface, panel),
+		(interp: Interp): void => registerUi(interp, surface, host.panel),
 		{
 			surface,
 			prompt: host.prompt(),
@@ -941,16 +886,10 @@ export function uiExtension(
 					await surface.invoke(ctx.action, ctx.values);
 				});
 				hooks.annotate.use((buffer, into, next) => {
-					panel.sent();
 					const view = buffer.collect(rendered).at(-1);
-					const ops = buffer.collect(panelOps);
-					const viewed =
-						view === undefined ? into : annotate(into, viewKey, viewOf(view));
 					return next(
 						buffer,
-						ops.length === 0
-							? viewed
-							: annotating(viewed, "output", { panel: ops }),
+						view === undefined ? into : annotate(into, viewKey, viewOf(view)),
 					);
 				});
 				hooks.message.use(

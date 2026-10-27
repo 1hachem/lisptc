@@ -23,7 +23,9 @@ against.
 boundaries, so a highlighter, a language server and the prose classifier all
 read the same definition. `src/lisp-form-fixtures.ts` holds the fixtures they
 are tested against. `src/messages.ts` and `src/providers.ts` hold the role and
-provider vocabularies.
+provider vocabularies. `src/split-layout.ts` and `src/panel-layout.ts` hold the
+panel layout and the rule that places an op in it, so the app that draws the
+layout and the backend that applies the agent's ops place a tab the same way.
 
 ## Rules
 

@@ -2,6 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import {
 	AlertCircleIcon,
 	CheckmarkCircle02Icon,
+	CircleDashedIcon,
 	GitBranchIcon,
 	HelpCircleIcon,
 	Loading03Icon,
@@ -19,10 +20,17 @@ export interface ChildThread {
 	_id: string;
 	title: string;
 	status?: "streaming" | "waiting" | "errored" | "stopped";
+	lastStartedAt?: number;
 	failure?: string;
 }
 
-type ThreadState = "running" | "waiting" | "errored" | "stopped" | "done";
+type ThreadState =
+	| "idle"
+	| "running"
+	| "waiting"
+	| "errored"
+	| "stopped"
+	| "done";
 
 const STATE_OF: Record<NonNullable<ChildThread["status"]>, ThreadState> = {
 	streaming: "running",
@@ -32,6 +40,7 @@ const STATE_OF: Record<NonNullable<ChildThread["status"]>, ThreadState> = {
 };
 
 const ICON_OF: Record<ThreadState, IconSvgElement> = {
+	idle: CircleDashedIcon,
 	running: Loading03Icon,
 	waiting: HelpCircleIcon,
 	errored: AlertCircleIcon,
@@ -40,6 +49,7 @@ const ICON_OF: Record<ThreadState, IconSvgElement> = {
 };
 
 const TONE_OF: Record<ThreadState, string> = {
+	idle: "text-dim",
 	running: "text-fg",
 	waiting: "text-fg",
 	errored: "text-destructive",
@@ -48,7 +58,8 @@ const TONE_OF: Record<ThreadState, string> = {
 };
 
 function threadState(thread: ChildThread): ThreadState {
-	return thread.status === undefined ? "done" : STATE_OF[thread.status];
+	if (thread.status !== undefined) return STATE_OF[thread.status];
+	return thread.lastStartedAt === undefined ? "idle" : "done";
 }
 
 const LATEST = 3;

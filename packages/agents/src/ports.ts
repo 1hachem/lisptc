@@ -44,9 +44,14 @@ export interface Seen {
 	readonly outcome?: Outcome;
 }
 
+export interface Sent {
+	readonly job: string;
+	readonly chat: string;
+}
+
 export interface AgentThreads {
-	spawn(spawn: Spawn): Promise<void>;
-	send(agent: string, message: Message): Promise<void>;
+	spawn(spawn: Spawn): Promise<string>;
+	send(agent: string, message: Message): Promise<Sent>;
 	wait(agent: string, signal: AbortSignal): Promise<Outcome>;
 	state(agent: string): Awaitable<Seen>;
 	cancel(agent: string): Awaitable<boolean>;

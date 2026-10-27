@@ -14,6 +14,7 @@ export const PROMPT_ROOTS = [
 	rootOf(require.resolve("@repo/agents-extension")),
 	rootOf(require.resolve("@repo/compaction-extension")),
 	rootOf(require.resolve("@repo/diagnostics-extension")),
+	rootOf(require.resolve("@repo/intent-extension")),
 	rootOf(require.resolve("@repo/introspection-extension")),
 	rootOf(require.resolve("@repo/knowledge-extension")),
 	rootOf(require.resolve("@repo/llm-extension/llm-extension")),

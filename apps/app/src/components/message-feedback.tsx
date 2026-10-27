@@ -26,7 +26,6 @@ export function MessageFeedback({
 					message_index: index,
 				})
 			}
-			className="absolute top-0 left-full ml-3"
 			onRate={(thumb) => say({ face: FACE[thumb] })}
 		/>
 	);

@@ -1,4 +1,5 @@
 import { topic } from "@repo/interpreter/channels";
+import { effect } from "@repo/interpreter/effects";
 import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
@@ -7,7 +8,7 @@ import {
 	type InterpExtension,
 	type SessionHooks,
 } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
+import { note, output } from "@repo/interpreter/topics";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import type { Repls } from "../src/repl-store.ts";
@@ -181,11 +182,58 @@ export function streamChat(
 	input: ChatInput,
 	options: ChatStreamOptions,
 ): Response {
-	const { onTurn, quiet, onOutcome, signal, ...turn } = options;
+	const { onStep, onTurn, quiet, onOutcome, signal, ...turn } = options;
 	return streamTurn(
 		input,
 		(transcript, received, aborted) =>
 			runAgentTurn(transcript, { ...turn, signal: aborted, received }),
-		{ signal, onTurn, quiet, onOutcome },
+		{ signal, onStep, onTurn, quiet, onOutcome },
+	);
+}
+
+const asked = topic<string>("asked");
+
+export function asking(question: string): InterpExtension {
+	return extension((hooks) => {
+		hooks.evalStep.use((ctx, next) => {
+			asked.emit(ctx.interp.channels, { user: question });
+			effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+			return next(ctx);
+		});
+		hooks.annotate.use((buffer, into, next) => {
+			const seen = buffer.collect(asked);
+			return next(
+				buffer,
+				seen.length === 0 ? into : annotating(into, "output", { asked: seen }),
+			);
+		});
+	});
+}
+
+const closing = topic<string>("closing");
+
+export function concluding(text: string): InterpExtension {
+	return extension((hooks) => {
+		hooks.beforeSettle.use(function* (ctx, more, next) {
+			const decided = yield* next(ctx, more);
+			if (!decided) closing.emit(ctx.interp.channels, { user: text });
+			return decided;
+		});
+		hooks.annotate.use((buffer, into, next) => {
+			const seen = buffer.collect(closing);
+			return next(
+				buffer,
+				seen.length === 0 ? into : annotating(into, "output", { closed: seen }),
+			);
+		});
+	});
+}
+
+export function printing(text: string): InterpExtension {
+	return extension((hooks) =>
+		hooks.evalStep.use((ctx, next) => {
+			output.emit(ctx.interp.channels, { user: text, model: text });
+			return next(ctx);
+		}),
 	);
 }

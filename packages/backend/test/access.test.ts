@@ -344,6 +344,9 @@ describe("chat access", () => {
 		await expect(
 			alice.as.query(api.messages.transcript, { chatId }),
 		).rejects.toThrow();
+		await expect(
+			alice.as.query(api.messages.light, { chatId }),
+		).rejects.toThrow();
 	});
 
 	it("refuses appending to another user's chat", async () => {
@@ -479,6 +482,38 @@ describe("messages", () => {
 			[2, "tool", "three"],
 		]);
 		expect(transcript[2].kwargs).toEqual({ ui: { kind: "text" } });
+	});
+
+	it("reads a light transcript with only what the person sees", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId,
+			messages: [
+				{ type: "human", content: "one" },
+				{
+					type: "ai",
+					content: "(+ 1 2)",
+					kwargs: { reasoning_content: "hm", meta: { steps: 1 } },
+				},
+				{
+					type: "tool",
+					content: "three",
+					kwargs: { results: ["3"], display: "3", ui: { kind: "text" } },
+				},
+				{ type: "ai", content: "done" },
+			],
+		});
+		const light = await alice.as.query(api.messages.light, { chatId });
+		expect(light.map((m) => [m.seq, m.type, m.content, m.kwargs])).toEqual([
+			[0, "human", "one", undefined],
+			[1, "ai", "(+ 1 2)", { reasoning_content: "hm", meta: { steps: 1 } }],
+			[2, "tool", "", { ui: { kind: "text" } }],
+			[3, "ai", "done", undefined],
+		]);
 	});
 
 	it("keeps the wire id an appended message was sent with", async () => {
@@ -668,6 +703,78 @@ describe("panel layout access", () => {
 		).rejects.toThrow();
 	});
 
+	it("applies the agent's panel ops to the stored layout, for the owner alone", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chat = {
+			op: "open" as const,
+			tab: "chat:c1",
+			split: "here" as const,
+			content: { kind: "chat" as const, chatId: "c1", title: "chat" },
+		};
+		const file = {
+			op: "open" as const,
+			tab: "file:knowledge/a.md",
+			split: "here" as const,
+			content: tab("a.md").content,
+		};
+		await bob.as.mutation(api.layouts.apply, {
+			workspaceId: bob.workspace,
+			ops: [chat, file],
+		});
+		const stored = await bob.as.query(api.layouts.get, {
+			workspaceId: bob.workspace,
+		});
+		const panes = stored?.nodes.filter((node) => node.kind === "pane") ?? [];
+		expect(panes.map((pane) => pane.active)).toEqual([
+			"chat:c1",
+			"file:knowledge/a.md",
+		]);
+		await bob.as.mutation(api.layouts.apply, {
+			workspaceId: bob.workspace,
+			ops: [{ op: "close", tab: "file:knowledge/a.md" }],
+		});
+		expect(
+			(
+				await bob.as.query(api.layouts.get, { workspaceId: bob.workspace })
+			)?.nodes.flatMap((node) =>
+				node.kind === "pane" ? node.tabs.map((t) => t.id) : [],
+			),
+		).toEqual(["chat:c1"]);
+		await expect(
+			alice.as.mutation(api.layouts.apply, {
+				workspaceId: bob.workspace,
+				ops: [{ op: "focus", tab: "chat:c1" }],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses panel ops that would grow the layout past its size", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.layouts.apply, {
+				workspaceId: alice.workspace,
+				ops: [
+					{
+						op: "open",
+						tab: "view:big",
+						split: "here",
+						content: {
+							kind: "view",
+							title: "big",
+							node: "x".repeat(300_000),
+						},
+					},
+				],
+			}),
+		).rejects.toThrow(/LAYOUT_TOO_LARGE/);
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toBeNull();
+	});
+
 	it("holds one layout per workspace, replaced on save, and none before the first", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -687,6 +794,96 @@ describe("panel layout access", () => {
 		expect(
 			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
 		).toEqual(layout(3, 3));
+	});
+
+	it("keeps a trace tab beside the chat it traces", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const traced = {
+			root: "p",
+			focused: "p",
+			nodes: [
+				{
+					kind: "pane" as const,
+					id: "p",
+					tabs: [
+						{
+							id: "trace:c1",
+							content: {
+								kind: "trace" as const,
+								chatId: "c1",
+								title: "trace",
+								turn: "h1",
+							},
+						},
+					],
+					active: "trace:c1",
+				},
+			],
+		};
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: traced,
+		});
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(traced);
+	});
+
+	it("keeps a view the agent opened below the chat, tied to the chat that drew it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const viewed = {
+			root: "s",
+			focused: "v",
+			nodes: [
+				{
+					kind: "split" as const,
+					id: "s",
+					direction: "column" as const,
+					children: ["p", "v"],
+					sizes: [60, 40],
+				},
+				{
+					kind: "pane" as const,
+					id: "p",
+					tabs: [
+						{
+							id: "chat:c1",
+							content: {
+								kind: "chat" as const,
+								title: "issues",
+								chatId: "c1",
+							},
+						},
+					],
+					active: "chat:c1",
+				},
+				{
+					kind: "pane" as const,
+					id: "v",
+					tabs: [
+						{
+							id: "view:My Linear Issues",
+							content: {
+								kind: "view" as const,
+								title: "My Linear Issues",
+								node: { tag: "card", props: {}, children: [] },
+								chatId: "c1",
+							},
+						},
+					],
+					active: "view:My Linear Issues",
+				},
+			],
+		};
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: alice.workspace,
+			layout: viewed,
+		});
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toEqual(viewed);
 	});
 
 	it("keeps the chat a drawn view came from", async () => {
@@ -1019,6 +1216,8 @@ describe("oauth record access", () => {
 const DEFAULTS = {
 	...DEFAULT_TOGGLES,
 	panelMotion: true,
+	traceBesideChat: false,
+	traceLink: true,
 };
 
 describe("preferences access", () => {
@@ -1040,10 +1239,10 @@ describe("preferences access", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { motion: "lift", channels: { lisp: true } },
+			preferences: { motion: "lift", input: { lisp: true } },
 		});
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { font: "mono", channels: { lisp: false } },
+			preferences: { font: "mono", input: { lisp: false } },
 		});
 		await alice.as.mutation(api.preferences.put, {
 			preferences: { metadata: { tokens: true } },
@@ -1051,18 +1250,18 @@ describe("preferences access", () => {
 		expect(await alice.as.query(api.preferences.get, {})).toEqual({
 			motion: "lift",
 			font: "mono",
-			channels: { ...DEFAULT_TOGGLES.channels, lisp: false },
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
-			input: DEFAULT_TOGGLES.input,
+			input: { ...DEFAULT_TOGGLES.input, lisp: false },
 			panelMotion: true,
+			traceBesideChat: false,
+			traceLink: true,
 		});
 		const rows = await t.run((ctx) => ctx.db.query("preferences").collect());
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({
-			channels: { lisp: false },
+			input: { lisp: false },
 			metadata: { tokens: true },
 		});
-		expect(rows[0].input).toBeUndefined();
 	});
 
 	it("refuses preferences past the size limit", async () => {
@@ -1314,6 +1513,35 @@ describe("chat listing", () => {
 				id: "w1",
 				kwargs: { asks: { answered: { a1: { accepted: true, label: "ok" } } } },
 			});
+			expect(await status()).toBeUndefined();
+		});
+
+		it("waits on an open question until the user answers it", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			const question = {
+				type: "tool" as const,
+				content: "",
+				id: "q1",
+				kwargs: {
+					question: {
+						id: "q1",
+						prompt: "Which board?",
+						choices: ["Sales", "Support"],
+						multi: false,
+					},
+				},
+			};
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [question],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [{ type: "human", content: "Sales" }],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
 			expect(await status()).toBeUndefined();
 		});
 
@@ -1596,6 +1824,22 @@ describe("a child chat", () => {
 		await expect(
 			bob.as.query(api.chats.children, { chatId: first }),
 		).rejects.toThrow();
+	});
+
+	it("tells a child that never ran a turn from one that finished", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const child = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const [spawned] = await alice.as.query(api.chats.children, { chatId });
+		expect(spawned?.lastStartedAt).toBeUndefined();
+		await t.mutation(internal.threads.start, { chatId: child });
+		await t.mutation(internal.threads.settle, { chatId: child });
+		const [finished] = await alice.as.query(api.chats.children, { chatId });
+		expect(finished?.status).toBeUndefined();
+		expect(finished?.lastStartedAt).toEqual(expect.any(Number));
 	});
 
 	it("is reachable by its root's owner and nobody else", async () => {
