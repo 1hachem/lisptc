@@ -3,11 +3,10 @@ import { arrayToList, Cell } from "@repo/interpreter/objects";
 
 export interface Handle {
 	readonly name: string;
-	readonly child: string;
 	readonly unsaved?: string;
 }
 
-function itemsOf(x: unknown): unknown[] {
+export function itemsOf(x: unknown): unknown[] {
 	const items: unknown[] = [];
 	for (let at = x; at instanceof Cell; at = at.cdr) items.push(at.car);
 	return items;
@@ -16,19 +15,15 @@ function itemsOf(x: unknown): unknown[] {
 export const handlesCodec: StateCodec<readonly Handle[]> = {
 	toLisp: (handles) =>
 		arrayToList(
-			handles.map(({ name, child, unsaved }) =>
-				arrayToList(
-					unsaved === undefined ? [name, child] : [name, child, unsaved],
-				),
+			handles.map(({ name, unsaved }) =>
+				arrayToList(unsaved === undefined ? [name] : [name, unsaved]),
 			),
 		),
 	fromLisp: (x) =>
 		itemsOf(x).flatMap((item) => {
-			const [name, child, unsaved] = itemsOf(item);
-			if (typeof name !== "string" || typeof child !== "string") return [];
-			return typeof unsaved === "string"
-				? [{ name, child, unsaved }]
-				: [{ name, child }];
+			const [name, unsaved] = itemsOf(item);
+			if (typeof name !== "string") return [];
+			return typeof unsaved === "string" ? [{ name, unsaved }] : [{ name }];
 		}),
 };
 
@@ -39,18 +34,17 @@ export class Handles {
 		return this.held.get().find((entry) => entry.name === name);
 	}
 
-	child(name: string): string | undefined {
-		return this.of(name)?.child;
-	}
-
 	names(): string[] {
 		return this.held.get().map((entry) => entry.name);
 	}
 
 	adopt(handle: Handle): void {
-		this.held.set([
-			...this.held.get().filter((entry) => entry.name !== handle.name),
-			handle,
-		]);
+		this.held.set([...this.held.get(), handle]);
+	}
+
+	saved(name: string): void {
+		this.held.set(
+			this.held.get().map((entry) => (entry.name === name ? { name } : entry)),
+		);
 	}
 }

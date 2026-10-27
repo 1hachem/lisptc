@@ -1,5 +1,6 @@
 import type { Threads } from "@repo/ai";
-import type { Image } from "@repo/interpreter/image";
+import { extract, type Image, snapshot } from "@repo/interpreter/image";
+import { Interp, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import type { ChildRecord, Supervisor } from "../../src/agent-repl.ts";
@@ -7,29 +8,39 @@ import { SupervisedAgents } from "../../src/agent-threads.ts";
 
 const PARENT = "parent-1" as Id<"chats">;
 const CHILD = "child-1" as Id<"chats">;
+const STORED = "child-0" as Id<"chats">;
 
 function world() {
 	const seen = {
 		limits: [] as unknown[],
+		titles: [] as string[],
 		records: [] as { agent: ChildRecord; image?: Image }[],
 		copied: [] as [string, string][],
 		asked: [] as unknown[][],
 		cancelled: [] as string[],
+		imaged: [] as [string, string][],
+		looked: [] as string[],
+		jobs: new Map<string, string>(),
+		stored: undefined as Image | undefined,
 	};
 	const threads = {
 		spawn: async (
 			parent: string,
+			title: string,
 			create: () => Promise<string>,
 			limits?: unknown,
 		) => {
 			expect(parent).toBe(PARENT);
+			seen.titles.push(title);
 			seen.limits.push(limits);
 			return await create();
 		},
 		ask: async (...args: unknown[]) => {
 			seen.asked.push(args);
+			seen.jobs.set(args[0] as string, "job-1");
 			return "job-1";
 		},
+		latest: (thread: string) => seen.jobs.get(thread),
 		wait: async (job: string) =>
 			job === "job-1"
 				? { answer: "found it" }
@@ -52,14 +63,25 @@ function world() {
 		copyTranscript: async (from, to) => {
 			seen.copied.push([from, to]);
 		},
+		child: async (parent, name) => {
+			expect(parent).toBe(PARENT);
+			seen.looked.push(name);
+			return name === "earlier" ? STORED : undefined;
+		},
+		image: async (parent, child) => {
+			seen.imaged.push([parent, child]);
+			return child === CHILD ? seen.stored : undefined;
+		},
 	};
 	return { seen, agents: new SupervisedAgents(supervisor, PARENT) };
 }
 
+const fresh = { seed: { from: "fresh" }, chat: { from: "fresh" } } as const;
+
 describe("the agent threads adapter", () => {
-	it("spawns a child record under the parent with its budget as limits", async () => {
+	it("spawns a child record under the parent, titled by its name, with its budget as limits", async () => {
 		const { seen, agents } = world();
-		const child = await agents.spawn({
+		await agents.spawn({
 			definition: {
 				name: "lead",
 				prompt: "lead",
@@ -67,10 +89,8 @@ describe("the agent threads adapter", () => {
 				roster: ["scout"],
 				budget: 12,
 			},
-			seed: { from: "fresh" },
-			chat: { from: "fresh" },
+			...fresh,
 		});
-		expect(child).toBe(CHILD);
 		expect(seen.records).toEqual([
 			{
 				agent: {
@@ -82,6 +102,7 @@ describe("the agent threads adapter", () => {
 				},
 			},
 		]);
+		expect(seen.titles).toEqual(["lead"]);
 		expect(seen.limits).toEqual([{ steps: 12 }]);
 		expect(seen.copied).toEqual([]);
 	});
@@ -98,38 +119,63 @@ describe("the agent threads adapter", () => {
 		expect(seen.copied).toEqual([[PARENT, CHILD]]);
 	});
 
-	it("sends an event to the child that replies to the parent", async () => {
+	it("sends to the child by its name, from the parent by name, never an id", async () => {
 		const { seen, agents } = world();
-		expect(await agents.send(CHILD, { text: "dig", maxSteps: 4 })).toBe(
-			"job-1",
-		);
+		await agents.spawn({ definition: { name: "r", prompt: "p" }, ...fresh });
+		await agents.send("r", { text: "dig", maxSteps: 4 });
 		expect(seen.asked).toEqual([
 			[
 				CHILD,
 				{
 					kind: "event",
 					id: expect.any(String),
-					source: `agent:${PARENT}`,
+					source: "agent:parent",
 					text: "dig",
 				},
 				{ replyTo: PARENT, maxSteps: 4 },
 			],
 		]);
+		expect(seen.looked).toEqual([]);
 	});
 
-	it("reads waits, states and cancels off the supervisor", async () => {
-		const { seen, agents } = world();
+	it("waits on and reads the state of the last job sent to a name", async () => {
+		const { agents } = world();
+		await agents.spawn({ definition: { name: "r", prompt: "p" }, ...fresh });
 		const signal = new AbortController().signal;
-		expect(await agents.wait("job-1", signal)).toEqual({ reply: "found it" });
-		expect(await agents.wait("job-2", signal)).toEqual({
-			failure: "lost in a restart",
+		expect(await agents.state("r")).toEqual({ state: "idle" });
+		expect(await agents.wait("r", signal)).toEqual({
+			failure: "that agent was sent nothing since the runtime started",
 		});
-		expect(agents.state("job-1")).toEqual({
+		await agents.send("r", { text: "dig", maxSteps: 4 });
+		expect(await agents.wait("r", signal)).toEqual({ reply: "found it" });
+		expect(await agents.state("r")).toEqual({
 			state: "done",
 			outcome: { reply: "found it" },
 		});
-		expect(agents.state(CHILD)).toEqual({ state: "pending" });
-		expect(await agents.cancel(CHILD)).toBe(true);
-		expect(seen.cancelled).toEqual([CHILD]);
+	});
+
+	it("finds a child spawned before a restart by its name in the store", async () => {
+		const { seen, agents } = world();
+		expect(await agents.cancel("earlier")).toBe(true);
+		expect(seen.cancelled).toEqual([STORED]);
+		expect(seen.looked).toEqual(["earlier"]);
+		await expect(agents.cancel("nobody")).rejects.toThrow(
+			"no agent named nobody",
+		);
+	});
+
+	it("reads one global out of the named child's stored image, as the parent's child", async () => {
+		const { seen, agents } = world();
+		await agents.spawn({ definition: { name: "r", prompt: "p" }, ...fresh });
+		const child = new Interp();
+		runSync(child, "(setq rows (list 1 2) other 3)");
+		seen.stored = snapshot(child);
+		expect(await agents.read("r", "rows")).toEqual(
+			extract(seen.stored, "rows"),
+		);
+		expect(seen.imaged).toEqual([[PARENT, CHILD]]);
+		await expect(agents.read("earlier", "rows")).rejects.toThrow(
+			"has run nothing yet",
+		);
 	});
 });

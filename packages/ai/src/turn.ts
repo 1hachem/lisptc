@@ -455,8 +455,8 @@ export async function* runAgentTurn(
 			drained = step.verdict !== "capped" && (yield* settleIfDone(turn, step));
 			if (step.verdict === "continue" || drained) continue;
 			outcome = step.verdict;
-			if (outcome === "halt") answer = step.code;
-			yield ending(step.verdict, step.code, turn.steps);
+			if (outcome === "halt") answer = repl.answer(step.code);
+			yield ending(step.verdict, answer, turn.steps);
 			break;
 		}
 	} catch (err) {

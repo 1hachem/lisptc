@@ -114,6 +114,31 @@ export const repl = internalMutation({
 		await openRepl(ctx, await threadChat(ctx, chatId)),
 });
 
+export const childRepl = internalQuery({
+	args: { chatId: v.id("chats"), parent: v.id("chats") },
+	returns: v.union(v.id("repls"), v.null()),
+	handler: async (ctx, { chatId, parent }) => {
+		const chat = await threadChat(ctx, chatId);
+		if (chat.parentChatId !== parent)
+			throw new ConvexError({ code: "NOT_FOUND" });
+		return chat.replId ?? null;
+	},
+});
+
+export const childNamed = internalQuery({
+	args: { parent: v.id("chats"), name: v.string() },
+	returns: v.union(v.id("chats"), v.null()),
+	handler: async (ctx, { parent, name }) => {
+		const children = ctx.db
+			.query("chats")
+			.withIndex("by_parent", (q) => q.eq("parentChatId", parent))
+			.order("desc");
+		for await (const child of children)
+			if (child.title === name) return child._id;
+		return null;
+	},
+});
+
 export const spawn = internalMutation({
 	args: { chatId: v.id("chats"), agent: subAgent },
 	returns: v.id("chats"),

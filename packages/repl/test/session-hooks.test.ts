@@ -324,6 +324,22 @@ describe("an extension hooking the turn", () => {
 		expect(r.response(" (car x) ", (t) => t.trim())).toBe("(CAR X)");
 	});
 
+	it("hands the final answer over as written unless a hook adds to it", () => {
+		const plain = new AgentRepl({ extensions: [] });
+		const signed = new AgentRepl({
+			extensions: [
+				extension((hooks) =>
+					hooks.answer.use((interp, code, next) =>
+						next(interp, `${code}\n-- signed`),
+					),
+				),
+			],
+		});
+
+		expect(plain.answer("done")).toBe("done");
+		expect(signed.answer("done")).toBe("done\n-- signed");
+	});
+
 	it("keeps the loop's verdict on a step unless a hook overrides it", () => {
 		const plain = new AgentRepl({ extensions: [] });
 		const stubborn = new AgentRepl({

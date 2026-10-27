@@ -58,6 +58,13 @@ re-authorizes from scratch. Use to sign out, or force fresh consent after
 (acme/list_widgets :query "blue") . (doc 'acme/list_widgets) prints full
   signature, every argument, which required. Read before guessing a keyword,
   and again when a call is rejected.
+- Tool call waits 120 seconds, then fails "acme/x timed out". Slow tool
+  (crawl, scrape, build, render, big export, long query)? Add :mcp/timeout
+  with seconds, above 0, max 900, beside tool's own keywords:
+(acme/crawl_site :url "https://..." :mcp/timeout 600) . :mcp/timeout is
+  yours, never sent to server. Set it up front when tool name or args say
+  slow. Call timed out? Retry once with larger :mcp/timeout, not same call
+  again; still too slow, split work into smaller calls.
 - Result arrives as Lisp data: JSON object as alist with string keys, array as
   list. Read with assoc, cdr, mapcar, nth; no parsing. JSON sent as text
   parsed too, so report names its keys. Only non-JSON string needs

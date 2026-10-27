@@ -59,7 +59,22 @@ class World {
 								...messages,
 							]);
 						},
-						annotate: async () => {},
+						annotate: async (id, message, kwargs) => {
+							this.stored.set(
+								id,
+								(this.stored.get(id) ?? []).map((m) =>
+									m.id === message
+										? {
+												...m,
+												additional_kwargs: {
+													...m.additional_kwargs,
+													...kwargs,
+												},
+											}
+										: m,
+								),
+							);
+						},
 					},
 					status: { start: async () => {}, settle: async () => {} },
 					setup: async () => ({ runsForms: true }),
@@ -202,10 +217,44 @@ describe("threads", () => {
 		family(world);
 		const threads = world.threads({ maxDepth: 2 });
 		const create = vi.fn(async () => "new");
-		await expect(threads.spawn("grand", create)).rejects.toThrow(/too deep/);
+		await expect(threads.spawn("grand", "g2", create)).rejects.toThrow(
+			"too deep to spawn another agent",
+		);
 		expect(create).not.toHaveBeenCalled();
-		expect(await threads.spawn("child", create)).toBe("new");
+		expect(await threads.spawn("child", "c2", create)).toBe("new");
 		expect(await threads.ancestors("new")).toEqual(["child", "root"]);
+	});
+
+	test("name a reply from a child it spawned by the child's name, never its id", async () => {
+		const world = new World();
+		const threads = world.threads();
+		const child = await threads.spawn("root", "delegate-1", async () => "c9");
+		await threads.ask(child, user("start"), { replyTo: "root" });
+		await vi.waitFor(() =>
+			expect(world.heard("root", "agent:delegate-1")).toBe(true),
+		);
+		expect(world.heard("root", "agent:c9")).toBe(false);
+	});
+
+	test("know the last job asked of a thread, and none of one never asked", async () => {
+		const world = new World();
+		family(world);
+		const threads = world.threads();
+		await threads.ask("child", user("one"), { replyTo: "root" });
+		const second = await threads.ask("child", user("two"), {
+			replyTo: "root",
+		});
+		expect(threads.latest("child")).toBe(second);
+		expect(threads.latest("grand")).toBeUndefined();
+	});
+
+	test("name a reply from a child whose lineage is unknown without its id", async () => {
+		const world = new World();
+		const threads = world.threads();
+		await threads.ask("c9", user("start"), { replyTo: "root" });
+		await vi.waitFor(() =>
+			expect(world.heard("root", "agent:unnamed")).toBe(true),
+		);
 	});
 
 	test("cancel a thread's turn and every descendant's, with what waits for them", async () => {
@@ -378,6 +427,13 @@ describe("a thread's budget", () => {
 		expect(await finished).toEqual({ answer: "done." });
 		expect(world.heard("grand", "approve")).toBe(true);
 		expect(world.heard("root", "approve")).toBe(false);
+		const held = (world.stored.get("grand") ?? []).find(
+			(m) => m.id === asked()?.additional_kwargs?.asked,
+		);
+		expect(held?.additional_kwargs).toMatchObject({
+			waiting: ["approve it"],
+			decided: ["approve"],
+		});
 	});
 
 	test("refuse an answer stamped with a thread outside the caller's tree", async () => {

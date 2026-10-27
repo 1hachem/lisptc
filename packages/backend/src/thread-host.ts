@@ -252,6 +252,31 @@ export class ThreadHost {
 		});
 	}
 
+	async child(
+		parent: Id<"chats">,
+		name: string,
+	): Promise<Id<"chats"> | undefined> {
+		return (
+			(await this.options.server.query(internal.threads.childNamed, {
+				parent,
+				name,
+			})) ?? undefined
+		);
+	}
+
+	async image(
+		parent: Id<"chats">,
+		child: Id<"chats">,
+	): Promise<Image | undefined> {
+		const { server } = this.options;
+		const replId = await server.query(internal.threads.childRepl, {
+			chatId: child,
+			parent,
+		});
+		if (replId === null) return undefined;
+		return (await new ConvexImageStore(replId, server).latest())?.image;
+	}
+
 	async fork(threadId: Id<"chats">, image: Image): Promise<AgentRepl> {
 		const images = new MemoryImageStore();
 		await images.save(image);
@@ -285,6 +310,10 @@ export class ThreadHost {
 							this.spawn(parent, agent, image),
 						copyTranscript: (from: Id<"chats">, to: Id<"chats">) =>
 							this.copyTranscript(from, to),
+						child: (parent: Id<"chats">, name: string) =>
+							this.child(parent, name),
+						image: (parent: Id<"chats">, child: Id<"chats">) =>
+							this.image(parent, child),
 					}
 				: undefined;
 		const repl = new AgentRepl({

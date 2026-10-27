@@ -1,5 +1,5 @@
-import { agentsExtension } from "@repo/agents-extension";
-import { agentsHostFor } from "@repo/agents-extension/host";
+import { agentsExtension, subAgentExtension } from "@repo/agents-extension";
+import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
 import type { Threads } from "@repo/ai";
 import { backgroundExtension } from "@repo/background-extension";
 import { backgroundHostFor, timerSleep } from "@repo/background-extension/host";
@@ -78,6 +78,8 @@ export interface Supervisor {
 		image?: Image,
 	): Promise<Id<"chats">>;
 	copyTranscript(from: Id<"chats">, to: Id<"chats">): Promise<void>;
+	child(parent: Id<"chats">, name: string): Promise<Id<"chats"> | undefined>;
+	image(parent: Id<"chats">, child: Id<"chats">): Promise<Image | undefined>;
 }
 
 export interface ThreadScope {
@@ -143,9 +145,10 @@ export async function workspaceExtensions(
 		}),
 	);
 	const ui = uiExtension(uiHost);
+	const exports = subAgentExtension(subAgentHost());
 	const rootOnly: InterpExtension[] = subAgent
 		? [agents, workspace, preferences, ui]
-		: [];
+		: [exports];
 	return [
 		permissions,
 		secretsExtension({
@@ -165,6 +168,7 @@ export async function workspaceExtensions(
 		),
 		introspectionExtension(introspectionHost),
 		agents,
+		exports,
 		mcpExtension({
 			...mcpHostFor({
 				scope: workspaceId,
