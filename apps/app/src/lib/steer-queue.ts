@@ -21,12 +21,10 @@ export function useSteerQueue({
 	chatId,
 	landed,
 	streaming,
-	resend,
 }: {
 	chatId: string | null;
 	landed: { id?: string }[];
 	streaming: boolean;
-	resend: (text: string) => void;
 }) {
 	const [queued, setQueued] = useState<QueuedMessage[]>([]);
 
@@ -44,11 +42,9 @@ export function useSteerQueue({
 		if (queued.length === 0) return;
 		const seen = new Set(landed.map((m) => m.id));
 		const waiting = queued.filter((q) => !seen.has(q.id));
-		if (!streaming && waiting.length > 0) {
-			setQueued([]);
-			resend(waiting.map((q) => q.text).join("\n\n"));
-		} else if (waiting.length !== queued.length) setQueued(waiting);
-	}, [queued, landed, streaming, resend]);
+		if (!streaming) setQueued([]);
+		else if (waiting.length !== queued.length) setQueued(waiting);
+	}, [queued, landed, streaming]);
 
 	const withdraw = useCallback(
 		(id: string) => {

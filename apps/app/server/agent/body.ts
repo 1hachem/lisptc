@@ -14,3 +14,19 @@ export function body<T extends z.ZodType>(schema: T) {
 		},
 	);
 }
+
+export function params<T extends z.ZodType>(schema: T) {
+	return createMiddleware({ type: "request" }).server(
+		async ({ request, pathname, next }) => {
+			const parsed = schema.safeParse(
+				Object.fromEntries(new URL(request.url).searchParams),
+			);
+			if (!parsed.success) {
+				const error = z.treeifyError(parsed.error);
+				console.warn(`rejected ${request.method} ${pathname}:`, error);
+				return Response.json({ error }, { status: 400 });
+			}
+			return next({ context: { body: parsed.data } });
+		},
+	);
+}

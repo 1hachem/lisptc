@@ -7,10 +7,10 @@ import { str } from "@repo/interpreter/print";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import { agentsExtension } from "../src/agents.ts";
-import { agentsHost } from "../src/agents-host.ts";
+import { agentsHostFor } from "../src/agents-host.ts";
 
 function run(code: string) {
-	const interp = new Interp({ extensions: [agentsExtension(agentsHost)] });
+	const interp = new Interp({ extensions: [agentsExtension(agentsHostFor())] });
 	runSync(interp, prelude);
 	interp.def("hold", 0, "(hold)", "", z.tuple([]), () => {
 		throw new StepHold("waiting on the user");
