@@ -21,12 +21,13 @@ import { proseHost } from "@repo/prose-extension/host";
 import { AgentRepl, MemoryRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
-import { uiExtension } from "@repo/ui-extension";
-import { uiHost } from "@repo/ui-extension/host";
+import { type PanelStore, uiExtension } from "@repo/ui-extension";
+import { uiHostFor } from "@repo/ui-extension/host";
 
 export function modelFacing(
 	compactor?: Compactor,
 	scope?: string,
+	panel: PanelStore = { apply: () => {}, tabs: () => [] },
 ): InterpExtension[] {
 	return [
 		secretsExtension(secretsHost),
@@ -34,7 +35,7 @@ export function modelFacing(
 		compactionExtension(compactionHost, { compactor }),
 		memoryExtension(memoryHostFor(scope)),
 		proseExtension(proseHost),
-		uiExtension(uiHost),
+		uiExtension(uiHostFor({ panel })),
 	];
 }
 

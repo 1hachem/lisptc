@@ -5,9 +5,10 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
+import type { Question } from "@repo/interpreter/annotations";
 import type { SymbolTable } from "@repo/language-service";
 import { cn } from "@repo/ui";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
 	type FileTransfer,
 	type SubmitMessage,
@@ -28,6 +29,7 @@ import { InputAction, InputShell } from "./input-shell.tsx";
 import { LispAssistPlugin } from "./lisp-assist.tsx";
 import { LispHighlightPlugin, LispTokenNode } from "./lisp-highlight.ts";
 import { type Mentionable, MentionMenuPlugin } from "./mention-menu.tsx";
+import { QuestionPicker, useOpenQuestion } from "./question-picker.tsx";
 
 export interface Streaming {
 	active: boolean;
@@ -50,6 +52,7 @@ export interface ChatInputProps {
 	files?: FileTransfer;
 	assist?: Assist;
 	on?: Partial<Record<InputHelper, boolean>>;
+	question?: Question;
 }
 
 const NO_SYMBOLS: SymbolTable = new Map();
@@ -165,6 +168,20 @@ function noticeOf(over: boolean, notice: string | null) {
 }
 
 export function ChatInput(props: ChatInputProps) {
+	const { open, dismiss, typed } = useOpenQuestion(
+		props.question,
+		props.streaming?.active === true,
+	);
+	if (open)
+		return (
+			<QuestionPicker
+				key={open.id}
+				question={open}
+				disabled={props.disabled}
+				onAnswer={(text) => void props.onSubmit(text, [])}
+				onDismiss={dismiss}
+			/>
+		);
 	return (
 		<LexicalComposer
 			initialConfig={{
@@ -177,8 +194,15 @@ export function ChatInput(props: ChatInputProps) {
 			}}
 		>
 			<Editor {...props} />
+			{typed && <FocusOnMount />}
 		</LexicalComposer>
 	);
+}
+
+function FocusOnMount() {
+	const [editor] = useLexicalComposerContext();
+	useEffect(() => editor.focus(), [editor]);
+	return null;
 }
 
 function useComposer({

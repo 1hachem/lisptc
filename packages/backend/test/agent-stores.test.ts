@@ -6,6 +6,7 @@ import {
 	ConvexKnowledgeStore,
 	type KnowledgeStoreClient,
 } from "../src/knowledge-store.ts";
+import { ConvexLayoutStore } from "../src/layout-store.ts";
 import {
 	ConvexPreferencesStore,
 	type PreferencesClient,
@@ -156,13 +157,95 @@ describe("the convex knowledge store", () => {
 	});
 });
 
+describe("the convex panel reader", () => {
+	it("reads each pane's tabs, marking the shown and the focused one", async () => {
+		const { client, sent } = spyClient({
+			[named(api.layouts.get)]: {
+				root: "s",
+				focused: "p2",
+				nodes: [
+					{
+						kind: "split",
+						id: "s",
+						direction: "row",
+						children: ["p1", "p2"],
+						sizes: [50, 50],
+					},
+					{
+						kind: "pane",
+						id: "p1",
+						active: "chat:c1",
+						tabs: [
+							{
+								id: "chat:c1",
+								content: { kind: "chat", chatId: "c1", title: "fix login" },
+							},
+						],
+					},
+					{
+						kind: "pane",
+						id: "p2",
+						active: "view:counts",
+						tabs: [
+							{
+								id: "file:knowledge/notes.md",
+								content: {
+									kind: "file",
+									folder: "knowledge",
+									name: "notes.md",
+								},
+							},
+							{
+								id: "view:counts",
+								content: { kind: "view", title: "counts", node: null },
+							},
+						],
+					},
+				],
+			},
+		});
+		const reader = new ConvexLayoutStore(WORKSPACE, () => client);
+		expect(await reader.tabs()).toEqual([
+			{
+				id: "chat:c1",
+				kind: "chat",
+				title: "fix login",
+				shown: true,
+				focused: false,
+			},
+			{
+				id: "file:knowledge/notes.md",
+				kind: "file",
+				title: "notes.md",
+				shown: false,
+				focused: false,
+			},
+			{
+				id: "view:counts",
+				kind: "view",
+				title: "counts",
+				shown: true,
+				focused: true,
+			},
+		]);
+		expect(sent).toEqual([
+			[named(api.layouts.get), { workspaceId: WORKSPACE }],
+		]);
+	});
+
+	it("reads no tabs before the panel was ever saved", async () => {
+		const { client } = spyClient({});
+		const reader = new ConvexLayoutStore(WORKSPACE, () => client);
+		expect(await reader.tabs()).toEqual([]);
+	});
+});
+
 describe("the convex preferences store", () => {
 	it("reads what the app stored, leaving the app's own bookkeeping out", async () => {
 		const { client } = spyClient({
 			[named(api.preferences.get)]: {
 				font: "mono",
 				themeUses: { borland: 3 },
-				channels: { lisp: true },
 				input: { lisp: false },
 				hidden: ["tests"],
 			},
@@ -170,7 +253,6 @@ describe("the convex preferences store", () => {
 		const store = new ConvexPreferencesStore(() => client);
 		expect(await store.read()).toEqual({
 			font: "mono",
-			channels: { lisp: true },
 			metadata: undefined,
 			input: { lisp: false },
 			hidden: ["tests"],

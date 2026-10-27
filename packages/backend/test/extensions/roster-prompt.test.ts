@@ -1,3 +1,5 @@
+import { intentExtension } from "@repo/intent-extension";
+import { intentHost } from "@repo/intent-extension/host";
 import { Interp } from "@repo/interpreter/lisp";
 import { TRIGGER_KINDS } from "@repo/memory-extension/ports";
 import { describe, expect, it } from "vitest";
@@ -145,10 +147,15 @@ describe("interactive views", () => {
 		expect(FLAT).toMatch(/No submit, no model turn/);
 	});
 
-	it("draws the line between echoing and rendering", () => {
-		expect(FLAT).toMatch(
-			/Echo when answer is to read; render when it is to use/,
-		);
+	it("says the user never sees text output, so what they read is rendered", () => {
+		expect(FLAT).toMatch(/User sees no text output: echo is for you alone/);
+		expect(FLAT).toMatch(/echo\s+shows user nothing, widget or text/);
+		expect(FLAT).toContain("(ui/render (ui/table issues-1))");
+	});
+
+	it("names the forms that open a file or a view beside the chat", () => {
+		expect(PROMPT).toMatch(names("ui/open-file"));
+		expect(PROMPT).toMatch(names("ui/open-view"));
 	});
 
 	it("says a handler can hand the turn back with ui/send", () => {
@@ -163,5 +170,29 @@ describe("interactive views", () => {
 	it("names every tone the renderer can colour, and no others", () => {
 		expect(FLAT).toMatch(/"ok", "warn", "bad", "info" or "muted"/);
 		expect(FLAT).toMatch(/do not invent one/);
+	});
+});
+
+describe("what reaches the user", () => {
+	const FLAT = new Interp({
+		extensions: [...modelFacing(), intentExtension(intentHost)],
+	})
+		.systemPrompt()
+		.replace(/\s+/g, " ");
+
+	it("lists what the user sees, intent forms included", () => {
+		expect(FLAT).toMatch(/User sees no code, no results, no text output/);
+		for (const form of [
+			"intent/doing",
+			"intent/todo",
+			"intent/check",
+			"intent/progress",
+			"intent/ask",
+		])
+			expect(FLAT).toMatch(names(form));
+	});
+
+	it("asks a closed choice with intent/ask rather than in prose", () => {
+		expect(FLAT).toMatch(/Closed choice for user: intent\/ask/);
 	});
 });

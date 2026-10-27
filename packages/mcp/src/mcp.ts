@@ -1,3 +1,8 @@
+import {
+	type ActivityEntry,
+	type ActivityImage,
+	recordActivity,
+} from "@repo/interpreter/annotations";
 import { isNumeric } from "@repo/interpreter/arith";
 import { type Ask, asking } from "@repo/interpreter/asks";
 import type { Progress } from "@repo/interpreter/async";
@@ -6,6 +11,7 @@ import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import { settled } from "@repo/interpreter/drive";
 import {
 	EvalException,
+	messageOf,
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
@@ -27,7 +33,7 @@ import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
-import type { PromptSource } from "@repo/shared/host";
+import type { Clock, PromptSource } from "@repo/shared/host";
 import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import {
@@ -35,6 +41,7 @@ import {
 	type ConnConfig,
 	type ConnectResult,
 	type HttpConnConfig,
+	type Icon,
 	type JsonSchema,
 	type McpClient,
 	type McpMount,
@@ -58,6 +65,64 @@ const TIMEOUT_OPTION = "mcp/timeout";
 const AUTHORIZE_ACTION = "mcp/authorize";
 
 const authorizationAsked = topic<Ask>("mcp-authorization");
+
+const toolActivity = topic<ActivityEntry>("mcp-activity");
+
+const DETAIL_MAX = 120;
+
+function toolLabel(server: string, tool: Tool): string {
+	return `${server} · ${tool.title ?? tool.annotations?.title ?? tool.name}`;
+}
+
+function toolDetail(description: string | undefined): string | undefined {
+	const line = firstLine(description).trim();
+	const sentence = line.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? line;
+	if (sentence === "") return undefined;
+	return sentence.length <= DETAIL_MAX
+		? sentence
+		: `${sentence.slice(0, DETAIL_MAX - 1).trimEnd()}…`;
+}
+
+const DATA_ICON_MAX = 8 * 1024;
+
+function safeIcon(icon: Icon): boolean {
+	if (icon.src.startsWith("https://")) return true;
+	return icon.src.startsWith("data:image/") && icon.src.length <= DATA_ICON_MAX;
+}
+
+function activityImage(
+	...sources: (readonly Icon[] | undefined)[]
+): ActivityImage[] | undefined {
+	for (const icons of sources) {
+		const safe = (icons ?? []).filter(safeIcon);
+		if (safe.length > 0)
+			return safe.map(({ src, theme }) =>
+				theme === undefined ? { src } : { src, theme },
+			);
+	}
+	return undefined;
+}
+
+function iconOf(
+	...sources: (readonly Icon[] | undefined)[]
+): ActivityImage[] | "tool" {
+	return activityImage(...sources) ?? "tool";
+}
+
+function manifestIcons(conf: ConnConfig): Icon[] | undefined {
+	return conf.icon === undefined ? undefined : [{ src: conf.icon }];
+}
+
+function reportActivity(hooks: SessionHooks): void {
+	hooks.annotate.use((buffer, into, next) =>
+		next(buffer, recordActivity(into, buffer.collect(toolActivity))),
+	);
+}
+
+const callSeqCodec: StateCodec<number> = {
+	toLisp: (n) => BigInt(n),
+	fromLisp: (x) => Number(x),
+};
 
 const authorizationAnswered = topic<{
 	id: string;
@@ -162,6 +227,7 @@ interface ServerEntry {
 	readonly state: "loaded" | "dormant" | "failed";
 	readonly reason?: string;
 	readonly tools: readonly Tool[];
+	readonly icons?: readonly Icon[];
 	readonly args: List;
 }
 
@@ -195,6 +261,7 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 							state: entry.state,
 							reason: entry.reason ?? null,
 							tools: JSON.stringify(entry.tools),
+							icons: JSON.stringify(entry.icons ?? []),
 						}),
 					),
 			),
@@ -202,12 +269,16 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 	fromLisp: (list) =>
 		listToArray(list as List).map((alist) => {
 			const reason = field(alist, "reason");
+			const icons = field(alist, "icons");
 			return {
 				name: field(alist, "name") as string,
 				serverId: field(alist, "server-id") as string,
 				state: field(alist, "state") as ServerEntry["state"],
 				reason: typeof reason === "string" ? reason : undefined,
 				tools: JSON.parse(field(alist, "tools") as string) as Tool[],
+				...(typeof icons === "string"
+					? { icons: JSON.parse(icons) as Icon[] }
+					: {}),
 				args: field(alist, "args") as List,
 			};
 		}),
@@ -230,6 +301,7 @@ export interface McpExtensionHost {
 	toolkit: ToolkitRegistry;
 	search: SearchEngine;
 	prompt: PromptSource;
+	clock: Clock;
 	policy?: McpPolicy;
 	registry?: McpRegistry;
 }
@@ -492,10 +564,12 @@ interface Wiring {
 	readonly servers: Servers;
 	readonly policy: McpPolicy;
 	readonly reconnect: (entry: ServerEntry) => Promise<unknown>;
+	readonly calls: State<number>;
+	readonly clock: Clock;
 }
 
 function callTool(
-	{ client, servers }: Wiring,
+	{ interp, client, servers, calls, clock }: Wiring,
 	ref: ToolRef,
 	f: unknown[],
 ): Promise<unknown> {
@@ -515,6 +589,26 @@ function callTool(
 	const { [TIMEOUT_OPTION]: timeout, ...args } = plistToJson(f[0] as List);
 	const timeoutMs = timeoutOf(name, timeout);
 	validate(tool, args);
+	const n = calls.get() + 1;
+	calls.set(n);
+	const detail = toolDetail(tool.description);
+	const icon = iconOf(tool.icons, entry.icons);
+	const startedAt = clock.now();
+	const report = (state: ActivityEntry["state"], error?: unknown): void =>
+		toolActivity.emit(interp.channels, {
+			user: {
+				kind: "mcp",
+				icon,
+				label: toolLabel(ref.server, tool),
+				...(detail === undefined ? {} : { detail }),
+				state,
+				...(error === undefined ? {} : { error: messageOf(error) }),
+				id: `mcp-${n}`,
+				startedAt,
+				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
+			},
+		});
+	report("started");
 	return withTimeout(
 		client.callTool({
 			serverId: entry.serverId,
@@ -524,7 +618,16 @@ function callTool(
 		}),
 		timeoutMs,
 		name,
-	).then(jsonToLisp);
+	).then(
+		(value) => {
+			report("done");
+			return jsonToLisp(value);
+		},
+		(error: unknown) => {
+			report("failed", error);
+			throw error;
+		},
+	);
 }
 
 function timeoutOf(name: string, given: unknown): number {
@@ -598,6 +701,7 @@ function installServer(
 		serverId: res.serverId,
 		state: "loaded",
 		tools: defineTools(wiring, name, res.tools),
+		...(res.icons === undefined ? {} : { icons: res.icons }),
 		args,
 	};
 	putEntry(wiring.servers, entry);
@@ -691,6 +795,7 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 			prompt: host.prompt(),
 			session: (hooks: SessionHooks): void => {
 				answerAuthorization(hooks);
+				reportActivity(hooks);
 				reconcileEachTurn(hooks, reconcilers);
 			},
 		},
@@ -699,11 +804,14 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 
 export function registerMcp(
 	interp: Interp,
-	host: Pick<McpExtensionHost, "client" | "toolkit" | "search" | "policy"> & {
+	host: Pick<
+		McpExtensionHost,
+		"client" | "toolkit" | "search" | "policy" | "clock"
+	> & {
 		registry: McpRegistry;
 	},
 ): Reconcile {
-	const { client, toolkit, search, registry } = host;
+	const { client, toolkit, search, clock, registry } = host;
 	const policy = host.policy ?? openPolicy;
 
 	const servers = interp.state(
@@ -724,6 +832,12 @@ export function registerMcp(
 			})),
 	};
 	const loading = new Set<LispPromise>();
+	const loads = interp.state(
+		"mcp/loads",
+		callSeqCodec,
+		0,
+		"The number of the last MCP server load, which numbers the activity the user sees.",
+	);
 	const shown = (): Map<string, ConnConfig> =>
 		new Map(
 			toolkit
@@ -759,7 +873,12 @@ export function registerMcp(
 					void client.disconnect(res.serverId).catch(() => {});
 					throw error;
 				}
-				return installServer(wiring, conf.name, res, args);
+				return installServer(
+					wiring,
+					conf.name,
+					{ ...res, icons: res.icons ?? manifestIcons(conf) },
+					args,
+				);
 			},
 			(error: unknown) => {
 				throw holdForAuthorization(interp, error);
@@ -768,14 +887,45 @@ export function registerMcp(
 	}
 
 	function startLoad(args: List): LispPromise {
-		admitServer(policy, connConfigFromArgs(args, shown()).name);
+		const conf = connConfigFromArgs(args, shown());
+		const { name } = conf;
+		admitServer(policy, name);
+		const n = loads.get() + 1;
+		loads.set(n);
+		const startedAt = clock.now();
+		const report = (state: ActivityEntry["state"], error?: unknown): void =>
+			toolActivity.emit(interp.channels, {
+				user: {
+					kind: "mcp",
+					icon: iconOf(
+						state === "done" ? entryOf(servers, name)?.icons : undefined,
+						manifestIcons(conf),
+					),
+					label: `load-mcp · ${name}`,
+					state,
+					...(error === undefined ? {} : { error: messageOf(error) }),
+					id: `mcp-load-${n}`,
+					startedAt,
+					...(state === "started" ? {} : { ms: clock.now() - startedAt }),
+				},
+			});
+		report("started");
 		const promise = interp.async.start(
 			(signal, progress) => connect(args, signal, progress),
 			{ kind: "load-mcp", args: [args] },
 		);
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
-		void interp.async.promiseOf(promise).then(forget, forget);
+		void interp.async.promiseOf(promise).then(
+			() => {
+				forget();
+				report("done");
+			},
+			(error: unknown) => {
+				forget();
+				report("failed", error);
+			},
+		);
 		return promise;
 	}
 
@@ -791,7 +941,7 @@ export function registerMcp(
 						? {
 								...e,
 								state: "failed",
-								reason: `reconnect failed: ${error instanceof Error ? error.message : String(error)}`,
+								reason: `reconnect failed: ${messageOf(error)}`,
 							}
 						: e,
 				),
@@ -809,7 +959,21 @@ export function registerMcp(
 		return done;
 	}
 
-	const wiring: Wiring = { interp, client, servers, policy, reconnect };
+	const calls = interp.state(
+		"mcp/calls",
+		callSeqCodec,
+		0,
+		"The number of the last MCP tool call, which numbers the activity the user sees.",
+	);
+	const wiring: Wiring = {
+		interp,
+		client,
+		servers,
+		policy,
+		reconnect,
+		calls,
+		clock,
+	};
 
 	interp.def(
 		"load-mcp",
@@ -1274,11 +1438,7 @@ function toolArgs(tool: Tool): DocArg[] {
 	}));
 }
 
-function argumentLine(
-	key: string,
-	spec: JsonSchema,
-	required: boolean,
-): string {
+function argLine(key: string, spec: JsonSchema, required: boolean): string {
 	const req = required ? " (required)" : "";
 	const desc = spec.description ? ` — ${spec.description}` : "";
 	const allowed = spec.enum?.length
@@ -1294,15 +1454,12 @@ function argumentLine(
 	return `  ${key}${schemaType(spec)}${req}${allowed}${dflt}${example}${desc}`;
 }
 
-function examplesBlock(
-	title: string,
-	examples: unknown[] | undefined,
-): string[] {
+function examplesSection(title: string, examples?: unknown[]): string[] {
 	if (!examples?.length) return [];
 	return ["", title, ...examples.map((ex) => `  ${JSON.stringify(ex)}`)];
 }
 
-function returnsBlock(out: JsonSchema | undefined): string[] {
+function returnsSection(out?: JsonSchema): string[] {
 	if (!out) return [];
 	const outType = schemaType(out);
 	const returns =
@@ -1312,7 +1469,7 @@ function returnsBlock(out: JsonSchema | undefined): string[] {
 					`Returns: ${outType}${out.description ? ` — ${out.description}` : ""}`.trim(),
 				]
 			: [];
-	return [...returns, ...examplesBlock("Example outputs:", out.examples)];
+	return [...returns, ...examplesSection("Example outputs:", out.examples)];
 }
 
 function toolDocBody(tool: Tool): string {
@@ -1323,9 +1480,11 @@ function toolDocBody(tool: Tool): string {
 		if (lines.length) lines.push("");
 		lines.push("Arguments:");
 		for (const [key, spec] of entries)
-			lines.push(argumentLine(key, spec, required.has(key)));
+			lines.push(argLine(key, spec, required.has(key)));
 	}
-	lines.push(...examplesBlock("Example inputs:", tool.inputSchema?.examples));
-	lines.push(...returnsBlock(tool.outputSchema));
+	lines.push(
+		...examplesSection("Example inputs:", tool.inputSchema?.examples),
+		...returnsSection(tool.outputSchema),
+	);
 	return lines.join("\n");
 }

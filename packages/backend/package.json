@@ -44,6 +44,7 @@
     "@repo/ai": "workspace:*",
     "@repo/compaction-extension": "workspace:*",
     "@repo/diagnostics-extension": "workspace:*",
+    "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
     "@repo/knowledge-extension": "workspace:*",

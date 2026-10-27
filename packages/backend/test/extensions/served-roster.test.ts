@@ -40,6 +40,7 @@ describe("the agent the app serves", () => {
 			"knowledge/write",
 			"knowledge/delete",
 			"knowledge/keep",
+			"knowledge/unkeep",
 			"attachments/fetch",
 			"attachments/delete",
 			"bin/restore",

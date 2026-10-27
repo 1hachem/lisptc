@@ -1,9 +1,10 @@
+import type { PanelOp } from "@repo/shared/panel-layout";
 import { useEffect } from "react";
-import { type PanelContent, type PanelOp, panelTab } from "./panel-ops.ts";
+import { type PanelContent, panelTab } from "./panel-ops.ts";
 
-const listeners = new Set<(ops: readonly PanelOp[]) => void>();
+const listeners = new Set<(ops: readonly PanelOp<PanelContent>[]) => void>();
 
-function requestPanelOps(ops: readonly PanelOp[]): void {
+function requestPanelOps(ops: readonly PanelOp<PanelContent>[]): void {
 	for (const listen of listeners) listen(ops);
 }
 
@@ -17,7 +18,9 @@ export function requestPanelClosed(content: PanelContent): void {
 	requestPanelOps([{ op: "close", tab: panelTab(content).id }]);
 }
 
-export function usePanelRequests(apply: (ops: readonly PanelOp[]) => void) {
+export function usePanelRequests(
+	apply: (ops: readonly PanelOp<PanelContent>[]) => void,
+) {
 	useEffect(() => {
 		listeners.add(apply);
 		return () => {

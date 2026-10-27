@@ -1,15 +1,19 @@
-import { allTabs, emptyLayout } from "@repo/components";
+import { applyPanelOps } from "@repo/shared/panel-layout";
+import { allTabs, emptyLayout } from "@repo/shared/split-layout";
 import { describe, expect, it } from "vitest";
 import {
-	applyPanelOps,
+	CHAT_MIN_WIDTH,
 	leadChat,
 	NEW_CHAT,
 	PANEL_DRAG,
 	type PanelContent,
 	readPanelDrag,
+	SIDE_TRACE_MIN_WIDTH,
 	STARTING_LAYOUT,
+	sideTraceShown,
 	startPanelDrag,
-	toPanelOps,
+	tabMinWidth,
+	traceOpen,
 } from "../src/lib/panel-ops.ts";
 
 const report: PanelContent = {
@@ -45,43 +49,9 @@ describe("dragging a file into the panel", () => {
 	});
 });
 
-describe("the panel lane off the wire", () => {
-	it("keeps the ops it can place and drops the rest", () => {
-		expect(
-			toPanelOps([
-				{
-					op: "open",
-					tab: "file:knowledge/q3.pdf",
-					split: "right",
-					content: report,
-				},
-				{
-					op: "open",
-					tab: "x",
-					content: { kind: "file", folder: "bin", name: "x" },
-				},
-				{ op: "close", tab: "file:knowledge/q3.pdf" },
-				{ op: "explode", tab: "x" },
-				"nonsense",
-			]),
-		).toEqual([
-			{
-				op: "open",
-				tab: "file:knowledge/q3.pdf",
-				split: "right",
-				content: report,
-			},
-			{ op: "close", tab: "file:knowledge/q3.pdf" },
-		]);
-	});
-
-	it("reads nothing from a lane that is not a list", () => {
-		expect(toPanelOps(undefined)).toEqual([]);
-		expect(toPanelOps({ op: "open" })).toEqual([]);
-	});
-
+describe("the panel ops", () => {
 	it("opens to the side the step asked for and closes by tab id", () => {
-		const opened = applyPanelOps(emptyLayout(), [
+		const opened = applyPanelOps(emptyLayout<PanelContent>(), [
 			{ op: "open", tab: "a", split: "here", content: report },
 			{
 				op: "open",
@@ -107,7 +77,7 @@ describe("chats in the layout", () => {
 	});
 
 	it("opens a file beside a focused chat, never over it", () => {
-		const layout = applyPanelOps(emptyLayout(), [
+		const layout = applyPanelOps(emptyLayout<PanelContent>(), [
 			{ op: "open", tab: "chat:c1", split: "here", content: chat },
 			{ op: "open", tab: "a", split: "here", content: report },
 		]);
@@ -117,7 +87,7 @@ describe("chats in the layout", () => {
 	});
 
 	it("leads with the focused chat, else the first chat on show", () => {
-		const layout = applyPanelOps(emptyLayout(), [
+		const layout = applyPanelOps(emptyLayout<PanelContent>(), [
 			{ op: "open", tab: "chat:c1", split: "here", content: chat },
 			{ op: "open", tab: "a", split: "here", content: report },
 		]);
@@ -125,23 +95,80 @@ describe("chats in the layout", () => {
 		const closed = applyPanelOps(layout, [{ op: "close", tab: "chat:c1" }]);
 		expect(leadChat(closed)).toBeUndefined();
 	});
+});
 
-	it("keeps the chat a drawn view came from", () => {
-		expect(
-			toPanelOps([
-				{
-					op: "open",
-					tab: "view:t",
-					content: { kind: "view", title: "t", node: null, chatId: "c1" },
-				},
-			]),
-		).toEqual([
+describe("a chat's trace", () => {
+	it("opens to the right of its chat, once, and moves to the turn asked for", () => {
+		const chat = applyPanelOps(STARTING_LAYOUT, [
 			{
 				op: "open",
-				tab: "view:t",
+				tab: "chat:c1",
 				split: "here",
-				content: { kind: "view", title: "t", node: null, chatId: "c1" },
+				content: { kind: "chat", chatId: "c1", title: "chat" },
 			},
 		]);
+		const traced = applyPanelOps(chat, [traceOpen("c1", "h1")]);
+		const again = applyPanelOps(traced, [traceOpen("c1", "h2")]);
+		const traces = allTabs(again).filter((t) => t.content.kind === "trace");
+
+		expect(allTabs(traced).map((t) => t.id)).toContain("trace:c1");
+		expect(traces).toEqual([
+			{
+				id: "trace:c1",
+				content: { kind: "trace", chatId: "c1", title: "trace", turn: "h2" },
+			},
+		]);
+		expect(again.root?.kind).toBe("split");
+	});
+
+	it("survives a drag as the same tab", () => {
+		const data = transfer();
+		startPanelDrag(data, { kind: "trace", chatId: "c1", title: "trace" });
+
+		expect(readPanelDrag(data)).toEqual({
+			id: "trace:c1",
+			content: { kind: "trace", chatId: "c1", title: "trace" },
+		});
+	});
+});
+
+describe("the trace beside the chat", () => {
+	const chat: PanelContent = { kind: "chat", chatId: "c1", title: "chat" };
+
+	it("is collapsed until opened, or open when the preference asks for it", () => {
+		expect(sideTraceShown(undefined, false)).toEqual({ shown: "collapsed" });
+		expect(sideTraceShown(undefined, true)).toEqual({ shown: "open" });
+		expect(sideTraceShown({ shown: "collapsed" }, true)).toEqual({
+			shown: "collapsed",
+		});
+	});
+
+	it("travels with the chat tab, turn included", () => {
+		const data = transfer();
+		const traced: PanelContent = {
+			...chat,
+			trace: { shown: "open", turn: "h1" },
+		};
+		startPanelDrag(data, traced);
+		expect(readPanelDrag(data)?.content).toEqual(traced);
+	});
+
+	it("drops a trace state it cannot read", () => {
+		const data = transfer();
+		data.setData(
+			PANEL_DRAG,
+			JSON.stringify({ ...chat, trace: { shown: "x" } }),
+		);
+		expect(readPanelDrag(data)?.content).toEqual(chat);
+	});
+
+	it("widens the chat tab's floor while open", () => {
+		expect(tabMinWidth(chat)).toBe(CHAT_MIN_WIDTH);
+		expect(tabMinWidth({ ...chat, trace: { shown: "collapsed" } })).toBe(
+			CHAT_MIN_WIDTH,
+		);
+		expect(tabMinWidth({ ...chat, trace: { shown: "open" } })).toBe(
+			CHAT_MIN_WIDTH + SIDE_TRACE_MIN_WIDTH,
+		);
 	});
 });

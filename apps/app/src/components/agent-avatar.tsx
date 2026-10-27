@@ -104,11 +104,21 @@ function usePokeGestures(
 	};
 }
 
-export function AgentAvatar({ size = 28 }: { size?: number }) {
+export function AgentAvatar({
+	size = 28,
+	quiet = false,
+}: {
+	size?: number;
+	quiet?: boolean;
+}) {
 	const { mood, state, label, face, muttering, say, settle } = useAgent();
 	const reduced = usePrefersReducedMotion();
+	const react = useCallback(
+		({ line, face }: Utterance) => say(quiet ? { face } : { line, face }),
+		[say, quiet],
+	);
 	const { poke, hover, unhover } = usePokeGestures(
-		say,
+		react,
 		muttering?.line,
 		mood === "thinking" || mood === "busy",
 	);

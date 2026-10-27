@@ -27,6 +27,7 @@ const chat = v.object({
 	archivedAt: v.optional(v.number()),
 	status: v.optional(chatStatus),
 	streamingSince: v.optional(v.number()),
+	lastStartedAt: v.optional(v.number()),
 	failure: v.optional(v.string()),
 	replId: v.optional(v.id("repls")),
 	parentChatId: v.optional(v.id("chats")),
@@ -38,40 +39,70 @@ export const list = query({
 		workspaceId: v.id("workspaces"),
 		search: v.optional(v.string()),
 		limit: v.optional(v.number()),
+		archived: v.optional(v.boolean()),
 	},
 	returns: v.object({ chats: v.array(chat), more: v.boolean() }),
-	handler: async (ctx, { workspaceId, search, limit }) => {
+	handler: async (ctx, { workspaceId, search, limit, archived }) => {
 		await requireWorkspace(ctx, workspaceId);
 		const wanted = Math.min(Math.max(1, Math.floor(limit ?? PAGE)), MAX_CHATS);
 		const term = search?.trim();
-		const rows = term
-			? await ctx.db
-					.query("chats")
-					.withSearchIndex("search_title", (q) =>
-						q
-							.search("title", term)
-							.eq("workspaceId", workspaceId)
-							.eq("archivedAt", undefined)
-							.eq("parentChatId", undefined),
-					)
-					.take(wanted + 1)
-			: await ctx.db
-					.query("chats")
-					.withIndex("by_workspace_live_activity", (q) =>
-						q
-							.eq("workspaceId", workspaceId)
-							.eq("archivedAt", undefined)
-							.eq("parentChatId", undefined)
-							.gte("lastMessageAt", 0),
-					)
-					.order("desc")
-					.take(wanted + 1);
+		const rows = archived
+			? await archivedChats(ctx, workspaceId, term, wanted + 1)
+			: term
+				? await ctx.db
+						.query("chats")
+						.withSearchIndex("search_title", (q) =>
+							q
+								.search("title", term)
+								.eq("workspaceId", workspaceId)
+								.eq("archivedAt", undefined)
+								.eq("parentChatId", undefined),
+						)
+						.take(wanted + 1)
+				: await ctx.db
+						.query("chats")
+						.withIndex("by_workspace_live_activity", (q) =>
+							q
+								.eq("workspaceId", workspaceId)
+								.eq("archivedAt", undefined)
+								.eq("parentChatId", undefined)
+								.gte("lastMessageAt", 0),
+						)
+						.order("desc")
+						.take(wanted + 1);
 		return {
 			chats: rows.slice(0, wanted),
 			more: rows.length > wanted,
 		};
 	},
 });
+
+async function archivedChats(
+	ctx: QueryCtx,
+	workspaceId: Id<"workspaces">,
+	term: string | undefined,
+	take: number,
+): Promise<Doc<"chats">[]> {
+	if (term)
+		return await ctx.db
+			.query("chats")
+			.withSearchIndex("search_title", (q) =>
+				q
+					.search("title", term)
+					.eq("workspaceId", workspaceId)
+					.eq("parentChatId", undefined),
+			)
+			.filter((q) => q.neq(q.field("archivedAt"), undefined))
+			.take(take);
+	return await ctx.db
+		.query("chats")
+		.withIndex("by_workspace_live_activity", (q) =>
+			q.eq("workspaceId", workspaceId).gte("archivedAt", 0),
+		)
+		.order("desc")
+		.filter((q) => q.eq(q.field("parentChatId"), undefined))
+		.take(take);
+}
 
 export const get = query({
 	args: { chatId: v.id("chats") },
@@ -87,6 +118,7 @@ export const children = query({
 			workspaceId: v.id("workspaces"),
 			title: v.string(),
 			status: v.optional(chatStatus),
+			lastStartedAt: v.optional(v.number()),
 			failure: v.optional(v.string()),
 		}),
 	),
@@ -96,13 +128,16 @@ export const children = query({
 			.query("chats")
 			.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
 			.take(MAX_CHATS);
-		return rows.map(({ _id, workspaceId, title, status, failure }) => ({
-			_id,
-			workspaceId,
-			title,
-			status,
-			failure,
-		}));
+		return rows.map(
+			({ _id, workspaceId, title, status, lastStartedAt, failure }) => ({
+				_id,
+				workspaceId,
+				title,
+				status,
+				lastStartedAt,
+				failure,
+			}),
+		);
 	},
 });
 
@@ -192,6 +227,7 @@ export async function startChat(
 	await ctx.db.patch(chatId, {
 		status: "streaming",
 		streamingSince: since,
+		lastStartedAt: since,
 		failure: undefined,
 	});
 	await ctx.scheduler.runAfter(STREAMING_LEASE_MS, internal.chats.expire, {
@@ -281,6 +317,16 @@ export const archive = mutation({
 	handler: async (ctx, { chatId }) => {
 		await requireChat(ctx, chatId);
 		await ctx.db.patch(chatId, { archivedAt: Date.now() });
+		return null;
+	},
+});
+
+export const unarchive = mutation({
+	args: { chatId: v.id("chats") },
+	returns: v.null(),
+	handler: async (ctx, { chatId }) => {
+		await requireChat(ctx, chatId);
+		await ctx.db.patch(chatId, { archivedAt: undefined });
 		return null;
 	},
 });

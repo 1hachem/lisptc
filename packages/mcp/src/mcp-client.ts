@@ -17,6 +17,7 @@ import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
+	type Icon,
 	type McpClient,
 	type McpHost,
 	type OAuthClients,
@@ -175,6 +176,38 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		return { provider, authUrl: authUrl.href, captured };
 	}
 
+	async function connectAuthorized(
+		client: Client,
+		conf: OAuthConnConfig,
+		url: string,
+		signal?: AbortSignal,
+	): Promise<void> {
+		const { provider, authUrl, captured } = await ensureAuthorized(conf, url);
+		if (authUrl) throw new AuthorizationRequired(conf.name, authUrl, captured);
+		const transport = new StreamableHTTPClientTransport(new URL(url), {
+			authProvider: provider,
+		});
+		try {
+			await client.connect(transport, { signal });
+		} catch (e) {
+			if (!(e instanceof UnauthorizedError)) throw e;
+			await provider.invalidateCredentials("tokens");
+			const retry = await ensureAuthorized(conf, url);
+			throw new AuthorizationRequired(
+				conf.name,
+				retry.authUrl ?? url,
+				retry.captured,
+			);
+		}
+	}
+
+	function plainTransport(conf: ConnConfig, handle: ServerHandle | undefined) {
+		if (!handle) return stdioTransport(conf, ports.stateHome, ports.scope);
+		return new StreamableHTTPClientTransport(new URL(handle.url), {
+			requestInit: handle.headers ? { headers: handle.headers } : undefined,
+		});
+	}
+
 	async function openClient(
 		client: Client,
 		conf: ConnConfig,
@@ -185,38 +218,9 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			conf,
 			watch,
 		);
-		if (handle && signsIn(conf)) {
-			const { provider, authUrl, captured } = await ensureAuthorized(
-				conf,
-				handle.url,
-			);
-			if (authUrl)
-				throw new AuthorizationRequired(conf.name, authUrl, captured);
-			const transport = new StreamableHTTPClientTransport(new URL(handle.url), {
-				authProvider: provider,
-			});
-			try {
-				await client.connect(transport, { signal });
-			} catch (e) {
-				if (!(e instanceof UnauthorizedError)) throw e;
-				await provider.invalidateCredentials("tokens");
-				const retry = await ensureAuthorized(conf, handle.url);
-				throw new AuthorizationRequired(
-					conf.name,
-					retry.authUrl ?? handle.url,
-					retry.captured,
-				);
-			}
-		} else {
-			const transport = handle
-				? new StreamableHTTPClientTransport(new URL(handle.url), {
-						requestInit: handle.headers
-							? { headers: handle.headers }
-							: undefined,
-					})
-				: stdioTransport(conf, ports.stateHome, ports.scope);
-			await client.connect(transport, { signal });
-		}
+		if (handle && signsIn(conf))
+			await connectAuthorized(client, conf, handle.url, signal);
+		else await client.connect(plainTransport(conf, handle), { signal });
 		const { tools } = await client.listTools(undefined, { signal });
 		if (tools.length === 0) {
 			await client.close().catch(() => {});
@@ -224,7 +228,12 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		}
 		const serverId = randomUUID();
 		clients.set(serverId, { client, name: conf.name });
-		return { serverId, tools: tools as Tool[] };
+		const icons = client.getServerVersion()?.icons as Icon[] | undefined;
+		return {
+			serverId,
+			tools: tools as Tool[],
+			...(icons?.length ? { icons } : {}),
+		};
 	}
 
 	return {

@@ -137,6 +137,46 @@ describe("attachments", () => {
 		).toBe("NO_SUCH_FILE");
 	});
 
+	it("unkeeps a knowledge file back into attachments with the same blob", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
+			workspaceId,
+			name: "notes.md",
+			storageId: await uploaded(t, "# notes", "text/markdown"),
+			contentType: "text/markdown",
+		});
+		expect(
+			await alice.as.mutation(api.files.unkeep, {
+				workspaceId,
+				name: "notes.md",
+			}),
+		).toBeNull();
+		expect(
+			await alice.as.query(api.files.list, {
+				folder: "knowledge",
+				workspaceId,
+			}),
+		).toEqual([]);
+		expect(
+			(
+				await alice.as.query(api.files.list, {
+					folder: "attachments",
+					workspaceId,
+				})
+			).map((file) => file.name),
+		).toEqual(["notes.md"]);
+		expect(await blobs(t)).toHaveLength(1);
+		expect(
+			await alice.as.mutation(api.files.unkeep, {
+				workspaceId,
+				name: "notes.md",
+			}),
+		).toBe("NO_SUCH_FILE");
+	});
+
 	it("refuses to keep over a knowledge file of the same name", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

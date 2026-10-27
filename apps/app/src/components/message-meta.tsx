@@ -1,3 +1,5 @@
+import { Route01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { Fragment } from "react";
 import type { StepMeta } from "../lib/chat.tsx";
 import type { MetaField } from "../lib/meta-fields.ts";
@@ -83,19 +85,24 @@ export function MessageMeta({
 	meta,
 	show,
 	onPickModel,
+	onTrace,
 }: {
-	meta: StepMeta;
+	meta: StepMeta | undefined;
 	show?: Partial<Record<MetaField, boolean>>;
 	onPickModel?: () => void;
+	onTrace?: () => void;
 }) {
 	const fields = show ? { ...META_FIELDS, ...show } : META_FIELDS;
 	const parts = SEGMENTS.filter((s) => fields[s.field])
-		.map((s) => ({ field: s.field, text: s.render(meta) }))
+		.map((s) => ({
+			field: s.field,
+			text: meta === undefined ? null : s.render(meta),
+		}))
 		.filter(
 			(part): part is { field: MetaField; text: string } => part.text !== null,
 		);
 
-	if (parts.length === 0) return null;
+	if (parts.length === 0 && onTrace === undefined) return null;
 
 	return (
 		<div className="mt-1 select-none text-[11px] text-dim leading-[1.7]">
@@ -116,6 +123,23 @@ export function MessageMeta({
 					)}
 				</Fragment>
 			))}
+			{onTrace && (
+				<>
+					{parts.length > 0 && " · "}
+					<button
+						type="button"
+						data-show-in-trace
+						onClick={onTrace}
+						className="inline-flex items-center gap-1 align-middle underline-offset-2 hover:text-fg hover:underline"
+					>
+						<HugeiconsIcon
+							icon={Route01Icon}
+							className="size-icon-sm flex-none"
+						/>
+						show in trace
+					</button>
+				</>
+			)}
 		</div>
 	);
 }

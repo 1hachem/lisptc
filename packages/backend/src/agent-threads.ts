@@ -4,6 +4,7 @@ import {
 	type Outcome,
 	PARENT_NAME,
 	type Seen,
+	type Sent,
 	type Spawn,
 } from "@repo/agents-extension/ports";
 import type { TurnOutcome } from "@repo/ai";
@@ -29,7 +30,7 @@ export class SupervisedAgents implements AgentThreads {
 		private readonly parent: Id<"chats">,
 	) {}
 
-	async spawn({ definition, seed, chat }: Spawn): Promise<void> {
+	async spawn({ definition, seed, chat }: Spawn): Promise<string> {
 		const { name, prompt, permissions, roster, budget } = definition;
 		const record = {
 			name,
@@ -48,11 +49,13 @@ export class SupervisedAgents implements AgentThreads {
 		this.children.set(name, child);
 		if (chat.from === "fork")
 			await this.supervisor.copyTranscript(this.parent, child);
+		return child;
 	}
 
-	async send(agent: string, { text, maxSteps }: Message): Promise<void> {
-		await this.supervisor.threads.ask(
-			await this.child(agent),
+	async send(agent: string, { text, maxSteps }: Message): Promise<Sent> {
+		const chat = await this.child(agent);
+		const job = await this.supervisor.threads.ask(
+			chat,
 			{
 				kind: "event",
 				id: crypto.randomUUID(),
@@ -61,6 +64,7 @@ export class SupervisedAgents implements AgentThreads {
 			},
 			{ replyTo: this.parent, maxSteps },
 		);
+		return { job, chat };
 	}
 
 	async wait(agent: string, signal: AbortSignal): Promise<Outcome> {
@@ -80,7 +84,11 @@ export class SupervisedAgents implements AgentThreads {
 	}
 
 	async cancel(agent: string): Promise<boolean> {
-		return await this.supervisor.threads.cancel(await this.child(agent));
+		const { threads } = this.supervisor;
+		const job = await this.latest(agent);
+		const withdrawn = job !== undefined && (await threads.cancel(job));
+		const halted = await threads.cancel(await this.child(agent));
+		return withdrawn || halted;
 	}
 
 	async read(agent: string, global: string): Promise<Fragment> {

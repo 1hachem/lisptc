@@ -5,7 +5,7 @@ import {
 } from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
-import { driveAsync } from "@repo/interpreter/drive";
+import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
@@ -15,17 +15,14 @@ import {
 	jsonToLisp,
 	type List,
 	listToArray,
+	newLispKeyword,
 	newSym,
 	Unspecified,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 import {
@@ -33,7 +30,8 @@ import {
 	type Folder,
 	fileTab,
 	type PanelOp,
-	panelOps,
+	type PanelStore,
+	type PanelTab,
 	SPLITS,
 	type Split,
 	viewTab,
@@ -44,7 +42,8 @@ export {
 	fileTab,
 	type PanelContent,
 	type PanelOp,
-	panelOps,
+	type PanelStore,
+	type PanelTab,
 	viewTab,
 } from "./panel.ts";
 export type { UiNode, UiValue } from "./view.ts";
@@ -134,6 +133,13 @@ export class UiSurface {
 		];
 		this.handlers?.set(handlers.slice(-MAX_HANDLERS));
 		return id;
+	}
+
+	drop(ids: readonly string[]): number {
+		const held = this.handlers?.get() ?? [];
+		const kept = held.filter(([id]) => !ids.includes(id));
+		this.handlers?.set(kept);
+		return held.length - kept.length;
 	}
 
 	private handler(id: string): unknown {
@@ -340,6 +346,13 @@ function actionOption(
 	return surface.action(opts.get(name));
 }
 
+function actionsOf(node: UiNode): string[] {
+	const own = ACTION_PROPS.map((prop) => node.props[prop]).filter(
+		(id): id is string => typeof id === "string",
+	);
+	return [...own, ...node.children.flatMap(actionsOf)];
+}
+
 function summarize(node: UiNode): { elements: number; actions: number } {
 	let elements = 1;
 	let actions = ACTION_PROPS.filter(
@@ -407,7 +420,26 @@ function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
 }
 
-function registerUi(interp: Interp, surface: UiSurface): void {
+function tabList(tab: PanelTab): List {
+	return arrayToList([
+		newLispKeyword("id"),
+		tab.id,
+		newLispKeyword("kind"),
+		newLispKeyword(tab.kind),
+		newLispKeyword("title"),
+		tab.title,
+		newLispKeyword("shown"),
+		tab.shown || null,
+		newLispKeyword("focused"),
+		tab.focused || null,
+	]);
+}
+
+function registerUi(
+	interp: Interp,
+	surface: UiSurface,
+	panel: PanelStore,
+): void {
 	surface.bind(interp);
 	surface.reset();
 	interp.recovery.kind({
@@ -663,18 +695,20 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 			new UiElement("file-link", { text, folder: folderOf(folder), name }),
 	);
 
-	const emit = (op: PanelOp) => panelOps.emit(interp.channels, { user: op });
+	function* emit(op: PanelOp): Eval<void> {
+		yield* settled(panel.apply([op]));
+	}
 
-	interp.def(
+	interp.defGen(
 		"ui/open-file",
 		-3,
 		'(ui/open-file folder name [:split "right"])',
 		`Open a stored file's preview in a tab of the panel beside the chat. \`folder\` is one of ${FOLDERS.join(" ")}; list it first, since a name that is not there opens a tab that says so. \`:split\` is one of ${SPLITS.join(" ")}: here adds the tab to the focused split, right and down open a new split beside it. A file already open is focused instead. Returns the tab id.`,
 		z.tuple([zString, zString, zList]),
-		([folder, name, rest]) => {
+		function* ([folder, name, rest]): Eval {
 			const checked = folderOf(folder);
 			const tab = fileTab(checked, name);
-			emit({
+			yield* emit({
 				op: "open",
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
@@ -684,17 +718,17 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/open-view",
 		-3,
 		'(ui/open-view title view [:split "right"])',
 		`Open a widget in a tab of the panel beside the chat, titled \`title\`, instead of under your message. Its controls run in this REPL like any other view's. Opening the same title again replaces that tab. \`:split\` is as for \`ui/open-file\`. Returns the tab id.`,
 		z.tuple([zString, zAny, zList]),
-		([title, view, rest]) => {
+		function* ([title, view, rest]): Eval {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			const tab = viewTab(title);
-			emit({
+			yield* emit({
 				op: "open",
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
@@ -704,27 +738,41 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/close",
 		1,
 		"(ui/close tab)",
-		"Close a panel tab by the id `ui/open-file` or `ui/open-view` returned. A split left empty folds into its neighbour.",
+		"Close a panel tab by the id `ui/open-file`, `ui/open-view` or `ui/tabs` gave. A split left empty folds into its neighbour. Returns t if the tab was open, nil if it was not.",
 		z.tuple([zString]),
-		([tab]) => {
-			emit({ op: "close", tab });
-			return Unspecified;
+		function* ([tab]): Eval {
+			const tabs = yield* settled(panel.tabs());
+			if (!tabs.some((open) => open.id === tab)) return null;
+			yield* emit({ op: "close", tab });
+			return true;
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/focus",
 		1,
 		"(ui/focus tab)",
 		"Bring a panel tab to the front by the id `ui/open-file` or `ui/open-view` returned.",
 		z.tuple([zString]),
-		([tab]) => {
-			emit({ op: "focus", tab });
+		function* ([tab]): Eval {
+			yield* emit({ op: "focus", tab });
 			return Unspecified;
+		},
+	);
+
+	interp.defGen(
+		"ui/tabs",
+		0,
+		"(ui/tabs)",
+		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
+		z.tuple([]),
+		function* (): Eval {
+			const tabs = yield* settled(panel.tabs());
+			return arrayToList(tabs.map(tabList));
 		},
 	);
 
@@ -753,6 +801,19 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			return renderView(surface, view);
+		},
+	);
+
+	interp.def(
+		"ui/forget",
+		1,
+		"(ui/forget view)",
+		"Drop the handlers behind every control in `view`, so clicking them runs nothing any more. Use it on a view you replaced or closed. Returns how many were dropped.",
+		z.tuple([zAny]),
+		([view]) => {
+			if (!(view instanceof UiElement))
+				throw new EvalException("ui element expected", view);
+			return BigInt(surface.drop(actionsOf(view)));
 		},
 	);
 
@@ -801,6 +862,7 @@ function renderView(surface: UiSurface, view: UiElement): string {
 
 export interface UiHost {
 	prompt: PromptSource;
+	panel: PanelStore;
 }
 
 export interface UiOptions {
@@ -814,26 +876,26 @@ export function uiExtension(
 	options: UiOptions = {},
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
-	return Object.assign((interp: Interp): void => registerUi(interp, surface), {
-		surface,
-		prompt: host.prompt(),
-		session(hooks: SessionHooks): void {
-			hooks.invoke.use(async (ctx) => {
-				await surface.invoke(ctx.action, ctx.values);
-			});
-			hooks.annotate.use((buffer, into, next) => {
-				const view = buffer.collect(rendered).at(-1);
-				const panel = buffer.collect(panelOps);
-				const viewed =
-					view === undefined ? into : annotate(into, viewKey, viewOf(view));
-				return next(
-					buffer,
-					panel.length === 0 ? viewed : annotating(viewed, "output", { panel }),
+	return Object.assign(
+		(interp: Interp): void => registerUi(interp, surface, host.panel),
+		{
+			surface,
+			prompt: host.prompt(),
+			session(hooks: SessionHooks): void {
+				hooks.invoke.use(async (ctx) => {
+					await surface.invoke(ctx.action, ctx.values);
+				});
+				hooks.annotate.use((buffer, into, next) => {
+					const view = buffer.collect(rendered).at(-1);
+					return next(
+						buffer,
+						view === undefined ? into : annotate(into, viewKey, viewOf(view)),
+					);
+				});
+				hooks.message.use(
+					(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
 				);
-			});
-			hooks.message.use(
-				(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
-			);
+			},
 		},
-	});
+	);
 }

@@ -140,6 +140,18 @@ describe("chats", () => {
 		).toBeUndefined();
 	});
 
+	it("lists archived chats apart and brings one back", async () => {
+		const { ev, store } = await world("c1");
+		await ev('(chat/archive "c2")');
+		expect(await ev("(chats :archived t)")).toBe(
+			'((:id "c2" :title "plan q4"))',
+		);
+		expect(await ev('(chat/unarchive "c2")')).toBe("t");
+		expect(await ev("(chats)")).toContain("c2");
+		expect(await ev("(chats :archived t)")).toBe("nil");
+		expect(store.chatsHeld.find((c) => c.id === "c2")?.archived).toBe(false);
+	});
+
 	it("reads the last messages of another chat", async () => {
 		const { ev } = await world();
 		expect(await ev('(chat/read "c3" :last 2)')).toBe(

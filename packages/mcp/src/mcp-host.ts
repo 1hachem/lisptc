@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { mcpEnv } from "@repo/env/mcp";
 import { oauthEnv } from "@repo/env/oauth";
+import { systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { DockerHost, dockerAnswers } from "./docker-host.ts";
 import { clusterServes, KubernetesHost } from "./kubernetes-host.ts";
@@ -111,6 +112,7 @@ export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 			host instanceof LocalProcessHost ? localToolkit() : bundledToolkit(),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
+		clock: systemClock,
 	};
 }
 

@@ -24,6 +24,8 @@ import {
 	ChatInput,
 	type ChatInputProps,
 } from "../src/components/chat-input.tsx";
+import { openQuestion } from "../src/lib/question.ts";
+import { sidewaysLeaks } from "./helpers.ts";
 
 vi.mock("../src/lib/commands.ts", () => ({
 	commands: [{ name: "/clear", desc: "start a fresh session" }],
@@ -750,5 +752,159 @@ describe("the chat input", () => {
 		press(field, { key: "Tab" });
 		await settled();
 		expect(textOf(field)).toBe("(list-length )");
+	});
+});
+
+const PICK_ONE = {
+	id: "q1",
+	prompt: "which colour?",
+	choices: ["red", "green", "blue"],
+	multi: false,
+};
+
+const PICK_MANY = { ...PICK_ONE, id: "q2", multi: true };
+
+function renderAsking(
+	onSubmit: ChatInputProps["onSubmit"],
+	question: typeof PICK_ONE | undefined,
+) {
+	act(() => root.render(<ChatInput onSubmit={onSubmit} question={question} />));
+}
+
+function button(label: string): HTMLButtonElement {
+	const found = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+		(element) => element.textContent?.includes(label),
+	);
+	if (!found) throw new Error(`no ${label} button`);
+	return found;
+}
+
+function click(element: HTMLElement) {
+	act(() => element.click());
+}
+
+function key(name: string) {
+	press(document.body, { key: name });
+}
+
+function editorShown(): boolean {
+	return host.querySelector("[contenteditable]") !== null;
+}
+
+describe("the chat input with a question open", () => {
+	it("shows the prompt and its choices in place of the editor", () => {
+		renderAsking(vi.fn(), PICK_ONE);
+		expect(editorShown()).toBe(false);
+		expect(host.textContent).toContain("which colour?");
+		expect(button("green")).toBeDefined();
+	});
+
+	it("answers a single choice on click", () => {
+		const onSubmit = vi.fn();
+		renderAsking(onSubmit, PICK_ONE);
+		click(button("green"));
+		expect(onSubmit).toHaveBeenCalledWith("green", []);
+	});
+
+	it("answers a single choice by its number", () => {
+		const onSubmit = vi.fn();
+		renderAsking(onSubmit, PICK_ONE);
+		key("3");
+		expect(onSubmit).toHaveBeenCalledWith("blue", []);
+	});
+
+	it("ignores a number past the choices", () => {
+		const onSubmit = vi.fn();
+		renderAsking(onSubmit, PICK_ONE);
+		key("4");
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	it("sends the checked choices of a multi question in list order", () => {
+		const onSubmit = vi.fn();
+		renderAsking(onSubmit, PICK_MANY);
+		const send = button("send");
+		expect(send.disabled).toBe(true);
+		click(button("blue"));
+		click(button("red"));
+		expect(button("blue").getAttribute("aria-pressed")).toBe("true");
+		expect(onSubmit).not.toHaveBeenCalled();
+		click(button("send"));
+		expect(onSubmit).toHaveBeenCalledWith("red, blue", []);
+	});
+
+	it("toggles multi choices by number and sends on Enter", () => {
+		const onSubmit = vi.fn();
+		renderAsking(onSubmit, PICK_MANY);
+		key("Enter");
+		expect(onSubmit).not.toHaveBeenCalled();
+		key("1");
+		key("2");
+		key("1");
+		key("Enter");
+		expect(onSubmit).toHaveBeenCalledWith("green", []);
+	});
+
+	it("restores the editor to type a free answer", () => {
+		const onSubmit = vi.fn();
+		renderAsking(onSubmit, PICK_ONE);
+		click(button("type instead"));
+		expect(editorShown()).toBe(true);
+		const field = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!field) throw new Error("no editor");
+		type(field, "purple");
+		enter(field, false);
+		expect(onSubmit).toHaveBeenCalledWith("purple", []);
+	});
+
+	it("restores the editor on Escape", () => {
+		renderAsking(vi.fn(), PICK_ONE);
+		key("Escape");
+		expect(editorShown()).toBe(true);
+	});
+
+	it("opens the picker again for the next question", () => {
+		renderAsking(vi.fn(), PICK_ONE);
+		key("Escape");
+		renderAsking(vi.fn(), PICK_MANY);
+		expect(editorShown()).toBe(false);
+	});
+
+	it("keeps the editor while the agent is streaming", () => {
+		act(() =>
+			root.render(
+				<ChatInput
+					onSubmit={vi.fn()}
+					question={PICK_ONE}
+					streaming={{ active: true, onStop: vi.fn() }}
+				/>,
+			),
+		);
+		expect(editorShown()).toBe(true);
+	});
+
+	it("keeps the editor once a human message answers the question", () => {
+		const asked = { type: "tool", additional_kwargs: { question: PICK_ONE } };
+		renderAsking(
+			vi.fn(),
+			openQuestion([asked, { type: "ai" }, { type: "human" }]),
+		);
+		expect(editorShown()).toBe(true);
+		renderAsking(vi.fn(), openQuestion([asked]));
+		expect(editorShown()).toBe(false);
+	});
+});
+
+describe("a question with long choices", () => {
+	it("wraps and truncates inside the input, never pushing the chat sideways", () => {
+		const long = "x".repeat(400);
+		renderAsking(vi.fn(), {
+			id: "q9",
+			prompt: `pick ${long}`,
+			choices: [long, `${long}-two`, "short"],
+			multi: true,
+		});
+
+		expect(sidewaysLeaks(host)).toEqual([]);
 	});
 });

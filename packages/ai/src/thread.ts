@@ -134,6 +134,7 @@ export class Thread {
 	private readonly tracked = new Map<string, Tracked>();
 	private readonly watchers = new Watchers();
 	private halting: AbortController | undefined;
+	private inserting: ((message: WireMessage) => boolean) | undefined;
 
 	constructor(
 		readonly id: string,
@@ -176,7 +177,13 @@ export class Thread {
 		return stopped || dropped.length > 0;
 	}
 
-	relay(message: WireMessage): void {
+	async place(message: WireMessage): Promise<void> {
+		if (this.inserting?.(message) === true) return;
+		await this.ports.transcript.append(this.id, [message]);
+		this.relay(message);
+	}
+
+	private relay(message: WireMessage): void {
 		this.watchers.publish({ type: "relayed", message });
 	}
 
@@ -223,6 +230,8 @@ export class Thread {
 			for (const taken of consumed) this.release(taken, outcome);
 		};
 		this.held = false;
+		const halting = new AbortController();
+		this.halting = halting;
 		this.watchers.begin();
 		this.watchers.publish({ type: "status", status: "running" });
 		this.taken(opening);
@@ -245,14 +254,20 @@ export class Thread {
 				status: "errored",
 				failure: errorText(error),
 			});
+			if (this.halting === halting) this.halting = undefined;
 			endAll({ stopped: `failed: ${errorText(error)}` });
+			return;
+		}
+		if (halting.signal.aborted) {
+			await ports.status.settle(id, { stopped: true });
+			if (this.halting === halting) this.halting = undefined;
+			this.watchers.publish({ type: "status", status: "idle" });
+			endAll(halting.signal.reason);
 			return;
 		}
 		const { setup, history, quiet, repl } = prepared;
 		const deadline = deadlineOf(setup.deadlineMs, left.deadline);
-		const halting = new AbortController();
 		const overspent = new AbortController();
-		this.halting = halting;
 		const signal = AbortSignal.any(
 			[halting.signal, overspent.signal, budget.signal, deadline].filter(
 				(s): s is AbortSignal => s !== undefined,
@@ -292,6 +307,7 @@ export class Thread {
 			{
 				signal,
 				quiet,
+				onStep: (produced) => ports.transcript.append(id, produced),
 				onTurn: (produced, revised, failure) => {
 					failed =
 						failure ??
@@ -312,9 +328,13 @@ export class Thread {
 					);
 				},
 				onOutcome: finished,
+				onOpen: (insert) => {
+					this.inserting = insert;
+				},
 			},
 		);
 		await this.pump(response);
+		this.inserting = undefined;
 		const settled = await outcome;
 		const ended: TurnOutcome =
 			halting.signal.aborted && failed === undefined && "stopped" in settled
@@ -362,7 +382,7 @@ export class Thread {
 		const { id, ports } = this;
 		try {
 			for (const [at, message] of revised) {
-				const stored = history[at]?.id;
+				const stored = at < history.length ? history[at].id : message.id;
 				if (stored === undefined || message.additional_kwargs === undefined)
 					continue;
 				await ports.transcript.annotate(id, stored, message.additional_kwargs);

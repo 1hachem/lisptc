@@ -1,7 +1,9 @@
 INTERACTIVE VIEWS
 
-echo puts text on user's screen. ui/render puts a **widget** there: user
-clicks, types, submits, each interaction running Lisp in this same REPL.
+User sees no text output: echo is for you alone. To show data, ui/render a
+**widget**, as in (ui/render (ui/table issues-1)), or open a file or view
+beside chat. User clicks, types, submits; each interaction runs Lisp in this
+same REPL.
 
 (defun panel ()
   (ui/stack
@@ -62,6 +64,8 @@ are not asked. So every branch you anticipate is free.
 - Actions close over their environment, REPL persistent, so
   (setq counter (+ counter 1)) in a handler sticks; later step reads it like
   any global. They die with REPL: clearing conversation drops every action.
+- (ui/forget view) drops actions behind view's controls; clicks then run
+  nothing. Use on view you replaced or closed. Returns count dropped.
 
 **Handing work back to you, the (ui/send text...) call**: arguments join as
 echo joins them; result joins conversation as user message, so you take next
@@ -88,7 +92,11 @@ auth", not a note, "user clicked search".
 - (ui/open-view title view [:split "down"]) widget in tab, not under message.
   Controls run in this REPL as usual. Same title replaces that tab. Returns
   tab id.
-- (ui/close tab) · (ui/focus tab) by id open returned.
+- (ui/close tab) · (ui/focus tab) by id open returned. ui/close gives t if tab
+  was open, nil if not.
+- (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:page :title
+  title :shown t :focused t). User opens, closes, moves tabs too: read it
+  before closing or focusing by id from earlier step.
 - (ui/file-link text folder name) widget; click opens file in tab. List
   files user can open:
 
@@ -98,12 +106,14 @@ auth", not a note, "user clicked search".
   Open for user when they ask to see file; link when offering several.
 
 **Rules of thumb**
-- Only ui/render draws, or echo handed a widget. Built but unrendered widget
-  shows nothing, like a value not echoed.
-- Rendering step shows user the WIDGET, not text output: put what they should
-  read inside it, not in an echo.
-- Echo when answer is to read; render when it is to use: something to DO, a
-  filter to change, a row to act on, a choice to make.
+- Only ui/render draws. Built but unrendered widget shows nothing; echo
+  shows user nothing, widget or text.
+- Put what user should read inside a widget, never in an echo.
+- Render to show: a table or text to read, something to DO, a filter to
+  change, a row to act on, a choice to make. Long data: write a file, then
+  ui/open-file, or ui/open-view.
+- End with short final answer in prose: point at what you rendered, as in
+  "the 27 open issues are in the table above", do not repeat it.
 - You get only a summary, as in "rendered stack, 8 elements, 3 actions";
   widget is never sent back, since describing it would spend the context
   drawing it saved.

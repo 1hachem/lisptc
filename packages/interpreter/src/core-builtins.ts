@@ -23,6 +23,7 @@ import {
 } from "./docs.ts";
 import type { Eval } from "./drive.ts";
 import { EvalException, LoopSignal } from "./errors.ts";
+import { BuiltInFunc } from "./func.ts";
 import {
 	Cell,
 	EndOfFile,
@@ -61,6 +62,8 @@ export interface Definer extends DocSource {
 	): void;
 	defineGlobal(sym: Sym, value: unknown, doc?: Doc): void;
 	getGlobal(sym: Sym): unknown;
+	undefineGlobal(sym: Sym): void;
+	ownerOf(sym: Sym): string | undefined;
 	globalEntries(): IterableIterator<[Sym, unknown]>;
 	setDoc(name: string, doc: Doc): void;
 	setSource(name: string, form: unknown): void;
@@ -334,6 +337,28 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		([name, form]) => {
 			if (name instanceof Sym) interp.setSource(name.name, form);
 			return name;
+		},
+	);
+	interp.def(
+		"makunbound",
+		1,
+		"(makunbound 'name)",
+		"Remove the global `name` with its documentation and source, undoing `setq`, `defun` or `defmacro` at top level. Return t if it was bound, nil otherwise. A builtin and a read-only global stay.",
+		z.tuple([zSym]),
+		([sym]) => {
+			const owner = interp.ownerOf(sym);
+			if (owner !== undefined)
+				throw new EvalException(
+					`read-only global owned by ${owner}`,
+					sym,
+					false,
+				);
+			const value = interp.getGlobal(sym);
+			if (value === undefined) return null;
+			if (value instanceof BuiltInFunc)
+				throw new EvalException("a builtin cannot be unbound", sym, false);
+			interp.undefineGlobal(sym);
+			return true;
 		},
 	);
 

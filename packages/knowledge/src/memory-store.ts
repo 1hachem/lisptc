@@ -84,6 +84,15 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
 		this.held.attachments.delete(name);
 	}
 
+	unkeep(name: string): void {
+		const kept = this.held.knowledge.get(name);
+		if (kept === undefined) throw new Error(`no file ${name} in knowledge`);
+		if (this.held.attachments.has(name))
+			throw new Error(`attachments already hold ${name}`);
+		this.held.attachments.set(name, kept);
+		this.held.knowledge.delete(name);
+	}
+
 	binned(): BinnedFile[] {
 		return [...this.binHeld]
 			.sort(([, a], [, b]) => b.binnedAt - a.binnedAt)

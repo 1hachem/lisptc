@@ -1,5 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
+import type { Question } from "@repo/interpreter/annotations";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { attachingFiles } from "../lib/attached-files.ts";
@@ -16,9 +17,11 @@ import type { Mentionable } from "./mention-menu.tsx";
 export function ChatComposer({
 	about,
 	blocked,
+	question,
 }: {
 	about?: OpenFile;
 	blocked?: string;
+	question?: Question;
 }) {
 	const runCommand = useCommandRunner();
 	const { inputOn } = useUI();
@@ -68,12 +71,13 @@ export function ChatComposer({
 	const toAttachments = useAttachmentUpload(workspaceId);
 	const submit = useCallback(
 		(text: string, attached: string[]) => {
-			const annotations = attachingFiles(attached);
+			const files = attachingFiles(attached);
+			const annotations = question ? { ...files, answers: question.id } : files;
 			return about
 				? sendAbout(about, text, annotations)
 				: send(text, annotations);
 		},
-		[about, send, sendAbout],
+		[about, question, send, sendAbout],
 	);
 	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
@@ -86,6 +90,7 @@ export function ChatComposer({
 			assist={{ mentions, history, onCommand: runCommand, symbols }}
 			streaming={{ active: isLoading, onStop: stop }}
 			on={inputOn}
+			question={question}
 		/>
 	);
 }

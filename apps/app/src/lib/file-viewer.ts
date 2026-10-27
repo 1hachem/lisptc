@@ -9,8 +9,6 @@ const TEXT_EXTENSIONS = new Set([
 	"yml",
 	"toml",
 	"xml",
-	"html",
-	"htm",
 	"css",
 	"js",
 	"mjs",
@@ -33,17 +31,28 @@ export type KnowledgeViewer =
 	| "video"
 	| "audio"
 	| "stl"
+	| "svg"
+	| "html"
 	| "markdown"
 	| "json"
 	| "text"
 	| "download";
 
-export type TextViewer = Extract<KnowledgeViewer, "markdown" | "json" | "text">;
+export type TextViewer = Extract<
+	KnowledgeViewer,
+	"svg" | "html" | "markdown" | "json" | "text"
+>;
 
 export function readsText(
 	viewer: KnowledgeViewer | undefined,
 ): viewer is TextViewer {
-	return viewer === "markdown" || viewer === "json" || viewer === "text";
+	return (
+		viewer === "svg" ||
+		viewer === "html" ||
+		viewer === "markdown" ||
+		viewer === "json" ||
+		viewer === "text"
+	);
 }
 
 export interface StoredText {
@@ -58,7 +67,10 @@ export function knowledgeViewer(
 	const extension = extensionOf(name);
 	const type = contentType ?? "";
 	if (extension === "dwg" || type === "image/vnd.dwg") return "download";
+	if (extension === "svg" || type === "image/svg+xml") return "svg";
 	if (type.startsWith("image/")) return "image";
+	if (type === "text/html" || extension === "html" || extension === "htm")
+		return "html";
 	if (type === "application/pdf" || extension === "pdf") return "pdf";
 	if (type.startsWith("video/")) return "video";
 	if (type.startsWith("audio/")) return "audio";

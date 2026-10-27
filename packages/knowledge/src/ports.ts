@@ -1,5 +1,5 @@
 import type { StoreFolder } from "@repo/shared/files";
-import type { Awaitable, PromptSource } from "@repo/shared/host";
+import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 
 export interface BinnedFile {
 	name: string;
@@ -17,6 +17,7 @@ export interface KnowledgeStore {
 	): Awaitable<string>;
 	remove(folder: StoreFolder, name: string): Awaitable<void>;
 	keep(name: string): Awaitable<void>;
+	unkeep(name: string): Awaitable<void>;
 	binned(): Awaitable<BinnedFile[]>;
 	restore(name: string): Awaitable<BinnedFile>;
 	erase(name: string): Awaitable<void>;
@@ -40,4 +41,5 @@ export interface KnowledgeHost {
 	downloader: Downloader;
 	pdf: PdfReader;
 	prompt: PromptSource;
+	clock: Clock;
 }

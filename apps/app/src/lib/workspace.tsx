@@ -14,7 +14,7 @@ const PICKED_KEY = "lisptc.workspace";
 
 export type Workspace = Doc<"workspaces">;
 
-interface WorkspaceSelection {
+export interface WorkspaceSelection {
 	workspaces: Workspace[];
 	workspace: Workspace | null;
 }

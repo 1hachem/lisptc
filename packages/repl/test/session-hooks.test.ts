@@ -375,8 +375,15 @@ describe("an extension hooking the turn", () => {
 	it("settles as the loop asked when nobody hooks it", async () => {
 		const r = new AgentRepl({ extensions: [] });
 
-		expect(await r.beforeSettle(false)).toEqual({ more: false, emitted: "" });
-		expect(await r.beforeSettle(true)).toEqual({ more: true, emitted: "" });
+		expect(await r.beforeSettle(false)).toEqual({
+			more: false,
+			emitted: "",
+			annotations: { step: {}, output: {} },
+		});
+		expect(await r.beforeSettle(true)).toMatchObject({
+			more: true,
+			emitted: "",
+		});
 	});
 
 	it("asks for one more step, and says why", async () => {
@@ -392,9 +399,36 @@ describe("an extension hooking the turn", () => {
 			],
 		});
 
-		expect(await r.beforeSettle(false)).toEqual({
+		expect(await r.beforeSettle(false)).toMatchObject({
 			more: true,
 			emitted: "check your answer",
+		});
+	});
+
+	it("hands over what it annotated as the turn settles", async () => {
+		const closing = topic<string>("closing");
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.beforeSettle.use(function* (ctx, more, next) {
+						closing.emit(ctx.interp.channels, { user: "wrapped" });
+						return yield* next(ctx, more);
+					});
+					hooks.annotate.use((buffer, into, next) =>
+						next(
+							buffer,
+							annotating(into, "output", { closed: buffer.collect(closing) }),
+						),
+					);
+				}),
+			],
+		});
+
+		expect((await r.beforeSettle(false)).annotations.output).toEqual({
+			closed: ["wrapped"],
+		});
+		expect((await r.evalOutput("(+ 1 2)")).annotations.output).toEqual({
+			closed: [],
 		});
 	});
 

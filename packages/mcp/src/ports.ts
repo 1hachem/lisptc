@@ -14,16 +14,27 @@ export interface JsonSchema {
 	examples?: unknown[];
 }
 
+export interface Icon {
+	src: string;
+	mimeType?: string;
+	sizes?: string[];
+	theme?: "light" | "dark";
+}
+
 export interface Tool {
 	name: string;
+	title?: string;
 	description?: string;
+	annotations?: { title?: string };
 	inputSchema?: JsonSchema;
 	outputSchema?: JsonSchema;
+	icons?: Icon[];
 }
 
 export interface ConnMeta {
 	description?: string;
 	keywords?: string[];
+	icon?: string;
 }
 
 export interface ResourceAmounts {
@@ -119,6 +130,7 @@ export type OAuthConnConfig = HttpConnConfig | ContainerConnConfig;
 export interface ConnectResult {
 	serverId: string;
 	tools: Tool[];
+	icons?: Icon[];
 }
 
 export interface ToolCall {

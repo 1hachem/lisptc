@@ -57,6 +57,60 @@ export const viewKey = annotationKey({
 	schema: viewNode,
 });
 
+const todo = z.object({ label: z.string(), done: z.boolean() });
+
+export type Todo = z.infer<typeof todo>;
+
+const progress = z
+	.object({
+		done: z.number().int().min(0),
+		total: z.number().int().positive(),
+		label: z.string().optional(),
+	})
+	.refine((p) => p.done <= p.total, "done exceeds total");
+
+export type Progress = z.infer<typeof progress>;
+
+const intentStep = z.object({
+	text: z.string(),
+	startedAt: z.number(),
+	ms: z.number().optional(),
+	state: z.enum(["running", "done", "failed"]),
+	error: z.string().optional(),
+});
+
+export type IntentStep = z.infer<typeof intentStep>;
+
+const intent = z.object({
+	doing: z.string().optional(),
+	todos: z.array(todo).optional(),
+	progress: progress.optional(),
+	log: z.array(intentStep).optional(),
+});
+
+export type Intent = z.infer<typeof intent>;
+
+export const intentKey = annotationKey({
+	name: "intent",
+	lane: "output",
+	schema: intent,
+});
+
+const question = z.object({
+	id: z.string(),
+	prompt: z.string(),
+	choices: z.array(z.string()).min(1),
+	multi: z.boolean(),
+});
+
+export type Question = z.infer<typeof question>;
+
+export const questionKey = annotationKey({
+	name: "question",
+	lane: "output",
+	schema: question,
+});
+
 const firedMemory = z.object({
 	key: z.string().min(1),
 	body: z.string(),
@@ -70,3 +124,61 @@ export const memoriesKey = annotationKey({
 	lane: "step",
 	schema: z.array(firedMemory).min(1),
 });
+
+export const activityIcons = [
+	"tool",
+	"model",
+	"agent",
+	"read",
+	"write",
+] as const;
+
+export type ActivityIcon = (typeof activityIcons)[number];
+
+const activityImage = z.object({
+	src: z.string(),
+	theme: z.enum(["light", "dark"]).optional(),
+});
+
+export type ActivityImage = z.infer<typeof activityImage>;
+
+const activityEntry = z.object({
+	kind: z.string(),
+	icon: z
+		.union([z.enum(activityIcons), z.array(activityImage).min(1)])
+		.optional(),
+	label: z.string(),
+	detail: z.string().optional(),
+	state: z.enum(["started", "done", "failed"]),
+	error: z.string().optional(),
+	id: z.string(),
+	startedAt: z.number().optional(),
+	ms: z.number().optional(),
+	chat: z.string().optional(),
+});
+
+export type ActivityEntry = z.infer<typeof activityEntry>;
+
+export type Activity = ActivityEntry[];
+
+export const activityKey = annotationKey({
+	name: "activity",
+	lane: "output",
+	schema: z.array(activityEntry).min(1),
+});
+
+export function recordActivity(
+	into: StepAnnotations,
+	entries: readonly ActivityEntry[],
+): StepAnnotations {
+	if (entries.length === 0) return into;
+	const merged = [
+		...(readAnnotation(into[activityKey.lane], activityKey) ?? []),
+	];
+	for (const entry of entries) {
+		const at = merged.findIndex((e) => e.id === entry.id);
+		if (at === -1) merged.push(entry);
+		else merged[at] = { ...merged[at], ...entry };
+	}
+	return annotate(into, activityKey, merged);
+}
