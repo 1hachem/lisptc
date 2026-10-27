@@ -1,7 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MessageMemories } from "@repo/components";
 import type { Progress } from "@repo/interpreter/annotations";
-import type { Skipped } from "@repo/shared/lisp-forms";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import {
@@ -24,8 +23,8 @@ import {
 import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import {
-	CHANNELS,
 	type ChannelId,
+	channelOf,
 	EVERY_CHANNEL,
 	type Shown,
 } from "../lib/channels.ts";
@@ -90,9 +89,6 @@ const PAGE_LINES = 200;
 
 const Traced = createContext(false);
 
-const channel = (id: string) =>
-	CHANNELS.find((c) => c.id === id) ?? CHANNELS[0];
-
 function Marked({
 	id,
 	tone,
@@ -102,9 +98,7 @@ function Marked({
 	tone?: string;
 	children: React.ReactNode;
 }) {
-	const traced = useContext(Traced);
-	if (!traced) return children;
-	const { icon, label, text } = channel(id);
+	const { icon, label, text } = channelOf(id);
 	return (
 		<div data-channel={id} className="flex min-w-0 gap-2">
 			<HugeiconsIcon
@@ -205,38 +199,18 @@ function ChannelText({
 	);
 }
 
-function AssistantText({
-	text,
-	skipped,
-}: {
-	text: string;
-	skipped: Skipped[];
-}) {
-	const traced = useContext(Traced);
-	const spans = useMemo(() => skipped.map((s) => s.span), [skipped]);
-	const { prose } = useMemo(() => formsIn(text, spans), [text, spans]);
-	if (traced) return <ChannelBody text={text} code />;
-	return (
-		<SkippedProse text={text} spans={spans}>
-			{prose && <Markdown>{prose}</Markdown>}
-		</SkippedProse>
-	);
-}
-
 const ShownChannels = createContext<Shown | null>(null);
 
 export function ChannelsShown({
 	shown,
-	traced = false,
 	children,
 }: {
 	shown: Shown;
-	traced?: boolean;
 	children: ReactNode;
 }) {
 	return (
 		<ShownChannels.Provider value={shown}>
-			<Traced.Provider value={traced}>{children}</Traced.Provider>
+			<Traced.Provider value>{children}</Traced.Provider>
 		</ShownChannels.Provider>
 	);
 }
@@ -245,44 +219,22 @@ export function useChannels(): Shown {
 	return useContext(ShownChannels) ?? EVERY_CHANNEL;
 }
 
-function toolChannels(message: ChatMessage, shown: Shown) {
-	const output = [toolResult(message).output, ...toolResults(message)]
+function toolOutput(message: ChatMessage): string {
+	return [toolResult(message).output, ...toolResults(message)]
 		.filter((part) => part !== "")
 		.join("\n");
-	const ui = toolUi(message);
-	const model = toolModelOutput(message).output;
-	const attachments = shown.attachments ? attachedTo(message) : [];
-	return {
-		output,
-		failure: toolFailure(message),
-		failed: toolFailed(message),
-		ui: shown.ui ? ui : undefined,
-		attachments,
-		model,
-		drawsOutput: shown.output && output !== "",
-		drawsModel: shown.model && model !== "",
-	};
-}
-
-type ToolChannels = ReturnType<typeof toolChannels>;
-
-function drawnCount(channels: ToolChannels): number {
-	const { ui, attachments, drawsOutput, drawsModel } = channels;
-	return [
-		ui !== undefined,
-		attachments.length > 0,
-		drawsOutput,
-		drawsModel,
-	].filter(Boolean).length;
 }
 
 function ToolResult({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
-	const traced = useContext(Traced);
-	const channels = toolChannels(message, shown);
-	if (drawnCount(channels) === 0) return null;
-	const { output, failed, ui, attachments, model, drawsOutput, drawsModel } =
-		channels;
+	const output = shown.output ? toolOutput(message) : "";
+	const model = shown.model ? toolModelOutput(message).output : "";
+	const ui = shown.ui ? toolUi(message) : undefined;
+	const attachments = shown.attachments ? attachedTo(message) : [];
+	if (ui === undefined && attachments.length === 0 && !output && !model)
+		return null;
+	const failed = toolFailed(message);
+	const modelTone = failed ? "text-red" : channelOf("model").text;
 	return (
 		<div
 			data-step-failed={failed || undefined}
@@ -290,15 +242,11 @@ function ToolResult({ message }: { message: ChatMessage }) {
 		>
 			{ui !== undefined && (
 				<Marked id="ui">
-					{traced ? (
-						<ChannelText
-							code
-							text={JSON.stringify(ui, null, 2)}
-							tone={channel("ui").text}
-						/>
-					) : (
-						<GenerativeUI node={ui} />
-					)}
+					<ChannelText
+						code
+						text={JSON.stringify(ui, null, 2)}
+						tone={channelOf("ui").text}
+					/>
 				</Marked>
 			)}
 			{attachments.length > 0 && (
@@ -306,18 +254,14 @@ function ToolResult({ message }: { message: ChatMessage }) {
 					<AttachedFiles files={attachments} />
 				</Marked>
 			)}
-			{drawsOutput && (
+			{output && (
 				<Marked id="output">
-					<ChannelText code text={output} tone={channel("output").text} />
+					<ChannelText code text={output} tone={channelOf("output").text} />
 				</Marked>
 			)}
-			{drawsModel && (
-				<Marked id="model" tone={failed ? "text-red" : undefined}>
-					<ChannelText
-						code={failed}
-						text={model}
-						tone={failed ? "text-red" : channel("model").text}
-					/>
+			{model && (
+				<Marked id="model" tone={modelTone}>
+					<ChannelText code={failed} text={model} tone={modelTone} />
 				</Marked>
 			)}
 		</div>
@@ -357,10 +301,9 @@ function AgentMessage({
 }) {
 	const chatId = useChatSession((state) => state.chatId);
 	const sender = useAgentSender(message, chatId, useContext(ParentSource));
-	const traced = useContext(Traced);
-	if (sender.cleared && !traced) return null;
-	if (!traced && !sender.parent) {
-		const { icon, text } = channel("agents");
+	if (sender.cleared) return null;
+	const { icon, text } = channelOf("agents");
+	if (!sender.parent)
 		return (
 			<button
 				type="button"
@@ -380,28 +323,19 @@ function AgentMessage({
 				</span>
 			</button>
 		);
-	}
-	if (!traced) {
-		const { icon, text } = channel("agents");
-		return (
-			<UserLine
-				text={messageText(message)}
-				title="parent agent"
-				tone={text}
-				mark={
-					<HugeiconsIcon
-						icon={icon}
-						aria-label="parent agent"
-						className="size-icon-sm mt-[3px] flex-none"
-					/>
-				}
-			/>
-		);
-	}
 	return (
-		<Marked id="agents">
-			<ChannelText text={messageText(message)} tone="text-fg" />
-		</Marked>
+		<UserLine
+			text={messageText(message)}
+			title="parent agent"
+			tone={text}
+			mark={
+				<HugeiconsIcon
+					icon={icon}
+					aria-label="parent agent"
+					className="size-icon-sm mt-[3px] flex-none"
+				/>
+			}
+		/>
 	);
 }
 
@@ -434,10 +368,7 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 			{isUserMessage(message) ? (
 				<UserMessage message={message} />
 			) : (
-				<AssistantText
-					text={messageText(message)}
-					skipped={messageProse(message)}
-				/>
+				<ChannelBody text={messageText(message)} code />
 			)}
 		</div>
 	);
@@ -467,12 +398,13 @@ function ScrollToLatest() {
 }
 
 function RanOutput({ message }: { message: ChatMessage }) {
-	const { output, failure } = toolChannels(message, EVERY_CHANNEL);
+	const output = toolOutput(message);
+	const failure = toolFailure(message);
 	if (output === "" && failure === "") return null;
 	return (
 		<div data-step-ran className="flex min-w-0 flex-col gap-2 break-words">
 			{output !== "" && (
-				<ChannelText code text={output} tone={channel("output").text} />
+				<ChannelText code text={output} tone={channelOf("output").text} />
 			)}
 			{failure !== "" && <ChannelText code text={failure} tone="text-red" />}
 		</div>

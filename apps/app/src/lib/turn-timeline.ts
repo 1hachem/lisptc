@@ -31,7 +31,7 @@ function activityEntry(entry: ActivityEntry): TimelineEntry {
 		label: entry.label,
 		detail: entry.detail,
 		state: ACTIVITY_STATE[entry.state],
-		...(entry.error === undefined ? {} : { error: entry.error }),
+		error: entry.error,
 		ms: entry.ms,
 		children: [],
 	};
@@ -70,7 +70,7 @@ export function turnTimeline(
 			id: `intent:${at}`,
 			kind: "intent",
 			label: line.text,
-			...(line.error === undefined ? {} : { error: line.error }),
+			error: line.error,
 			...settledLine(line, at === log.length - 1, live),
 			startedAt: line.startedAt,
 			children: [],

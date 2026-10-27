@@ -1,9 +1,20 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	type ComponentProps,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { attachedTo } from "../lib/attached-files.ts";
-import { CHANNELS, EVERY_CHANNEL, type Shown } from "../lib/channels.ts";
+import {
+	CHANNELS,
+	channelOf,
+	EVERY_CHANNEL,
+	type Shown,
+} from "../lib/channels.ts";
 import {
 	type ChatMessage,
 	isParentMessage,
@@ -136,6 +147,34 @@ function useOpenSteps(entries: readonly TraceEntry[], target?: string) {
 	return { isOpen, toggle };
 }
 
+function TraceRow({
+	open,
+	chevron = true,
+	align = "items-center",
+	children,
+	...button
+}: {
+	open: boolean;
+	chevron?: boolean;
+	align?: "items-center" | "items-start";
+} & ComponentProps<"button">) {
+	return (
+		<button
+			type="button"
+			aria-expanded={open}
+			className={`flex w-full min-w-0 gap-2 text-left text-[11.5px] text-dim hover:text-fg ${align}`}
+			{...button}
+		>
+			{chevron && (
+				<span aria-hidden className="w-2 flex-none">
+					{open ? "▾" : "▸"}
+				</span>
+			)}
+			{children}
+		</button>
+	);
+}
+
 function StepHeader({
 	step,
 	open,
@@ -146,16 +185,7 @@ function StepHeader({
 	toggle: () => void;
 }) {
 	return (
-		<button
-			type="button"
-			aria-expanded={open}
-			data-step-header
-			onClick={toggle}
-			className="flex w-full min-w-0 items-center gap-2 text-left text-[11.5px] text-dim hover:text-fg"
-		>
-			<span aria-hidden className="w-2 flex-none">
-				{open ? "▾" : "▸"}
-			</span>
+		<TraceRow open={open} data-step-header onClick={toggle}>
 			<span className="flex-none">step {step.number}</span>
 			<span className="min-w-0 flex-1 truncate text-fg">{step.title}</span>
 			<span
@@ -168,7 +198,7 @@ function StepHeader({
 					{formatElapsed(step.durationMs)}
 				</span>
 			)}
-		</button>
+		</TraceRow>
 	);
 }
 
@@ -208,35 +238,28 @@ function MessageEntry({
 	const system = isSystemMessage(message);
 	if (parent ? !shown.agents : system && !shown.system) return null;
 	const kind = parent ? "agent" : system ? "system" : "you";
-	const marked = CHANNELS.find((c) => c.id === (parent ? "agents" : "system"));
+	const marked = channelOf(parent ? "agents" : "system");
 	const text = messageText(message);
 	const files = open && shown.attachments ? attachedTo(message) : [];
 	return (
 		<TracedMessage message={message} flashing={flashing}>
 			<div data-trace-message={kind} className="flex min-w-0 flex-col gap-2">
-				<button
-					type="button"
-					aria-expanded={open}
+				<TraceRow
+					open={open}
+					chevron={!system}
+					align={open ? "items-start" : "items-center"}
 					onClick={() => setOpen((was) => !was)}
-					className={`flex w-full min-w-0 gap-2 text-left text-[11.5px] text-dim hover:text-fg ${
-						open ? "items-start" : "items-center"
-					}`}
 				>
-					{system && marked ? (
+					{system ? (
 						<HugeiconsIcon
 							icon={marked.icon}
 							aria-label={kind}
 							className={`size-icon-sm flex-none ${marked.text}`}
 						/>
 					) : (
-						<>
-							<span aria-hidden className="w-2 flex-none">
-								{open ? "▾" : "▸"}
-							</span>
-							<span aria-hidden className="flex-none select-none">
-								›
-							</span>
-						</>
+						<span aria-hidden className="flex-none select-none">
+							›
+						</span>
 					)}
 					<span
 						className={`min-w-0 flex-1 text-fg ${
@@ -245,7 +268,7 @@ function MessageEntry({
 					>
 						{open ? text.trim() : text.replace(/\s+/g, " ").trim()}
 					</span>
-				</button>
+				</TraceRow>
 				{files.length > 0 && <AttachedFiles files={files} />}
 			</div>
 		</TracedMessage>
@@ -259,18 +282,10 @@ function ChildTrace({ child }: { child: TraceChild }) {
 			data-child-trace={child.chatId}
 			className="flex min-w-0 flex-col gap-2"
 		>
-			<button
-				type="button"
-				aria-expanded={open}
-				onClick={() => setOpen((was) => !was)}
-				className="flex w-full min-w-0 items-center gap-2 text-left text-[11.5px] text-dim hover:text-fg"
-			>
-				<span aria-hidden className="w-2 flex-none">
-					{open ? "▾" : "▸"}
-				</span>
+			<TraceRow open={open} onClick={() => setOpen((was) => !was)}>
 				<span className="flex-none">agent</span>
 				<span className="min-w-0 truncate text-fg">{child.label}</span>
-			</button>
+			</TraceRow>
 			{open && (
 				<div className="min-w-0 pl-3">
 					<NestedTrace chatId={child.chatId} />
@@ -361,7 +376,7 @@ export function TraceLines({
 	const toggle = (id: keyof Shown) =>
 		setShown((was) => ({ ...was, [id]: !was[id] }));
 	return (
-		<ChannelsShown shown={shown} traced>
+		<ChannelsShown shown={shown}>
 			<div className="flex h-full min-h-0 flex-col">
 				<ChannelToggles shown={shown} toggle={toggle} />
 				<div

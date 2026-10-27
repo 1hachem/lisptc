@@ -96,6 +96,15 @@ export const CHANNELS: Channel[] = [
 	},
 ];
 
+const BY_ID = Object.fromEntries(CHANNELS.map((c) => [c.id, c])) as Record<
+	ChannelId,
+	Channel
+>;
+
+export function channelOf(id: ChannelId): Channel {
+	return BY_ID[id];
+}
+
 export type Shown = Record<ChannelId, boolean>;
 
 export const EVERY_CHANNEL = Object.fromEntries(
