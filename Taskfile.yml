@@ -15,6 +15,14 @@ tasks:
     desc: prints this help
     cmd: task -l
 
+  desktop:
+    desc: open the desktop app on the deployed app, or on URL=<origin>
+    vars:
+      URL: '{{.URL | default "https://lisptc.taild4910a.ts.net/"}}'
+    cmds:
+      - pnpm --filter @lisptc/desktop exec node node_modules/electron/install.js
+      - LISPTC_DESKTOP_URL={{.URL}} pnpm --filter @lisptc/desktop dev
+
   mcp:browser:build:
     desc: build the browser MCP image the playwright toolkit entry runs
     vars:
