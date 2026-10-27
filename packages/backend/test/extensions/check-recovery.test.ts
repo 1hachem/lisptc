@@ -1,3 +1,5 @@
+import { compactionExtension } from "@repo/compaction-extension";
+import { compactionHost } from "@repo/compaction-extension/host";
 import { conversationExtension } from "@repo/conversation-extension";
 import { conversationHost } from "@repo/conversation-extension/host";
 import { lintExtension } from "@repo/lint-extension";
@@ -10,6 +12,7 @@ import { agentRepl } from "./helpers.ts";
 
 function checked() {
 	return agentRepl([
+		compactionExtension(compactionHost),
 		proseExtension(proseHost),
 		conversationExtension(conversationHost),
 		recoveryExtension(recoveryHost),
@@ -157,5 +160,25 @@ describe("a step the check stops, repaired by an edit", () => {
 		expect(await checked().admit("that went badly :(")).toEqual({
 			code: "that went badly :(",
 		});
+	});
+});
+
+describe("a definition repaired by an edit", () => {
+	it("prints the name it defined once the repaired step runs", async () => {
+		const repl = checked();
+		await repl.turnStart();
+		const code = "(defun probe (x) (+ x 1)";
+		const stopped = await repl.admit(code);
+		expect(stopped.rejected).toContain("unexpected end of input");
+		repl.recorded({ role: "assistant", content: code });
+		repl.recorded({
+			role: "tool",
+			content: stopped.rejected ?? "",
+			...(stopped.problems ? { problems: stopped.problems } : {}),
+		});
+		await repl.beginStep();
+		const repaired = await repl.admit("(close-parens)");
+		expect(repaired.code).toBe("(defun probe (x) (+ x 1))");
+		expect((await repl.evalOutput(repaired.code)).model).toContain("probe");
 	});
 });
