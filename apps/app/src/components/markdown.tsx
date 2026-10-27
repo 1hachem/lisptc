@@ -65,17 +65,20 @@ function componentsFor(lisp: boolean) {
 			"my-1 whitespace-pre-wrap break-words bg-transparent p-0 font-[inherit] text-[length:inherit]",
 		),
 		table: ({ children, ...props }: TagProps) => (
-			<div className="my-2 min-w-0">
-				<table {...props} className="w-full border-collapse text-left">
+			<div className="my-2 min-w-0 overflow-x-auto">
+				<table
+					{...props}
+					className="w-max min-w-full border-collapse text-left"
+				>
 					{children}
 				</table>
 			</div>
 		),
 		thead: tag("thead", "border-bg2 border-b text-dim"),
-		th: tag("th", "px-2 py-1 font-semibold wrap-anywhere", lisp),
+		th: tag("th", "max-w-80 px-2 py-1 font-semibold wrap-anywhere", lisp),
 		td: tag(
 			"td",
-			"border-bg2/50 border-t px-2 py-1 align-top wrap-anywhere",
+			"max-w-80 border-bg2/50 border-t px-2 py-1 align-top wrap-anywhere",
 			lisp,
 		),
 		hr: tag("hr", "my-2 border-bg2 border-t"),
