@@ -16,6 +16,7 @@ import { keyName } from "@repo/interpreter/plist";
 import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { output } from "@repo/interpreter/topics";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
 import { AGENT_FOLDER, writeDefinition } from "./definition.ts";
@@ -26,7 +27,7 @@ import {
 	exportsCodec,
 	listed,
 } from "./exports.ts";
-import { Handles, handlesCodec } from "./handles.ts";
+import { type Handle, Handles, handlesCodec } from "./handles.ts";
 import { AgentLibrary } from "./library.ts";
 import { DELEGATE_PREFIX, delegateName, isDelegateName } from "./names.ts";
 import type {
@@ -300,9 +301,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			const name = nameOf("defagent", values[0]);
 			const definition = definitionFrom("defagent", name, options);
 			await library.save(name, writeDefinition(definition));
-			const spawned = handles.of(name);
-			if (spawned?.unsaved !== undefined)
-				handles.adopt({ name, child: spawned.child });
+			handles.saved(name);
 			return name;
 		};
 	}
@@ -345,6 +344,15 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		`Return the names of the agent definitions saved in ${AGENT_FOLDER}/.`,
 		z.tuple([]),
 		async () => arrayToList(await library.names()),
+	);
+
+	interp.def(
+		"spawned",
+		0,
+		"(spawned)",
+		"Return the names of the agents this session spawned or delegated, saved or temporary, finished or not. send, agent-wait, agent-state, agent-take and agent-cancel take these names. (agents) lists saved definitions only.",
+		z.tuple([]),
+		() => arrayToList(handles.names()),
 	);
 
 	interp.def(
@@ -393,10 +401,13 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 				return name;
 			}
 			handles.adopt({ name, child, unsaved: writeDefinition(definition) });
-			await port.send(child, {
-				text: definition.prompt,
-				maxSteps: DEFAULT_MAX_STEPS,
-			});
+			handles.sent(
+				name,
+				await port.send(child, {
+					text: definition.prompt,
+					maxSteps: DEFAULT_MAX_STEPS,
+				}),
+			);
 			return name;
 		},
 	);
@@ -422,7 +433,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 					name,
 				);
 			await library.save(name, handle.unsaved);
-			handles.adopt({ name, child: handle.child });
+			handles.saved(name);
 			return name;
 		},
 	);
@@ -443,7 +454,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"send",
 		-1,
 		'(send :to "name" "message" [:max-steps n])',
-		"Hand a message to a spawned sub-agent and return its job id at once; keep working. Unless you agent-wait on it, its reply comes back later as a system event from agent:name, waking you if your turn ended.",
+		"Hand a message to a spawned sub-agent and return its name at once; keep working. Unless you agent-wait on it, its reply comes back later as a system event from agent:name, waking you if your turn ended.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("send", rest, ["to", "max-steps"]);
@@ -461,7 +472,10 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 					"send: no running agent by that name; spawn it first",
 					name,
 				);
-			return await threads("send").send(child, { text, maxSteps });
+			return handles.sent(
+				name,
+				await threads("send").send(child, { text, maxSteps }),
+			);
 		},
 	);
 
@@ -476,7 +490,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"delegate",
 		-1,
 		'(delegate "brief" [:max-steps n] [:repl :fresh|:fork])',
-		"Hand self-contained work to a new temporary sub-agent with a fresh chat and return its job id at once; keep working. Its reply comes back later as a system event from agent:delegate-n, or agent-wait the job. The brief carries all it needs: goal, inputs, what done means. Nothing is saved and it cannot be kept.",
+		"Hand self-contained work to a new temporary sub-agent with a fresh chat, print its name, and return the name at once; keep working. Its reply comes back later as a system event from agent:delegate-n, or agent-wait that name. The brief carries all it needs: goal, inputs, what done means. Nothing is saved and it cannot be kept.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("delegate", rest, [
@@ -496,22 +510,44 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 				chat: { from: "fresh" },
 			});
 			handles.adopt({ name, child });
-			return await port.send(child, { text, maxSteps });
+			handles.sent(name, await port.send(child, { text, maxSteps }));
+			output.emit(interp.channels, {
+				user: `delegated to ${name}\n`,
+				model: `delegated to ${name}\n`,
+			});
+			return name;
 		},
 	);
+
+	function handleOf(form: string, target: unknown): Handle {
+		const name = nameOf(form, target);
+		const handle = handles.of(name);
+		if (handle === undefined)
+			throw new EvalException(
+				`${form}: no agent spawned by that name; (spawned) lists them`,
+				name,
+			);
+		return handle;
+	}
 
 	interp.def(
 		"agent-wait",
 		1,
-		'(agent-wait "job")',
-		"Wait in this step for a job to finish and return what the agent replied. A job you wait on sends no system event later. A failed, cancelled or lost job raises an error.",
+		'(agent-wait "name")',
+		"Wait in this step for the last message sent to that agent to finish and return what it replied. A message you wait on sends no system event later. A failed, cancelled or lost one raises an error, and so does an agent sent nothing yet.",
 		z.tuple([zString]),
-		async ([job]) => {
+		async ([target]) => {
+			const { name, job } = handleOf("agent-wait", target);
+			if (job === undefined)
+				throw new EvalException(
+					"agent-wait: that agent was sent nothing yet",
+					name,
+				);
 			const port = threads("agent-wait");
 			const waiting = interp.async.start((signal) => port.wait(job, signal));
 			const outcome = (await interp.async.promiseOf(waiting)) as Outcome;
 			if ("reply" in outcome) return outcome.reply;
-			throw new EvalException(`job ${job}`, outcome.failure, false);
+			throw new EvalException(name, outcome.failure, false);
 		},
 	);
 
@@ -529,14 +565,11 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		TAKE,
 		2,
 		`(${TAKE} "name" 'value)`,
-		`Copy a value a spawned agent exported into this session and return it; bind it where you want. Its reply lists what it exports. A function comes with its captured variables, and calls the globals it names by name here.`,
+		`Copy a value a spawned or delegated agent exported into this session and return it; bind it where you want. Its reply lists what it exports. A function comes with its captured variables, and calls the globals it names by name here.`,
 		z.tuple([zString, z.unknown()]),
 		async ([target, value]) => {
-			const name = nameOf(TAKE, target);
+			const { name, child } = handleOf(TAKE, target);
 			const wanted = symbolName(TAKE, value);
-			const child = handles.child(name);
-			if (child === undefined)
-				throw new EvalException(`${TAKE}: no agent spawned by that name`, name);
 			const offered = exportsCodec.fromLisp(await read(child, EXPORTS_GLOBAL));
 			if (!offered.some((entry) => entry.name === wanted))
 				throw new EvalException(
@@ -550,22 +583,25 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 	interp.def(
 		"agent-state",
 		1,
-		'(agent-state "job")',
-		"Return where a job stands: :pending, :held, :done, :failed, :cancelled or :lost. A job the runtime lost to a restart reads :lost.",
+		'(agent-state "name")',
+		"Return where the last message sent to that agent stands: :pending, :held, :done, :failed, :cancelled or :lost, or :idle when it was sent nothing yet. One the runtime lost to a restart reads :lost.",
 		z.tuple([zString]),
-		async ([job]) =>
-			newLispKeyword((await threads("agent-state").state(job)).state),
+		async ([target]) => {
+			const { job } = handleOf("agent-state", target);
+			if (job === undefined) return newLispKeyword("idle");
+			return newLispKeyword((await threads("agent-state").state(job)).state);
+		},
 	);
 
 	interp.def(
 		"agent-cancel",
 		1,
-		'(agent-cancel "job-or-name")',
-		"Cancel a job that has not finished, or given a spawned agent's name, stop that agent and every agent under it. Return t when something was cancelled, nil otherwise.",
+		'(agent-cancel "name")',
+		"Stop that agent and every agent under it. Return t when something was cancelled, nil otherwise.",
 		z.tuple([zString]),
 		async ([target]) => {
-			const id = handles.child(target) ?? target;
-			return (await threads("agent-cancel").cancel(id)) ? true : null;
+			const { child } = handleOf("agent-cancel", target);
+			return (await threads("agent-cancel").cancel(child)) ? true : null;
 		},
 	);
 }
