@@ -18,20 +18,26 @@ function bearer(header: string | null): string {
 	return header.slice(7).trim();
 }
 
+export async function verifyToken(token: string): Promise<Session | null> {
+	const verified = await jwtVerify(token, jwks, {
+		issuer: webEnv.CONVEX_SITE_URL,
+		audience: "convex",
+	}).catch(() => null);
+	if (verified === null || typeof verified.payload.sub !== "string")
+		return null;
+	return { token, subject: verified.payload.sub };
+}
+
 const session = createMiddleware({ type: "request" }).server(
 	async ({ request, next }) => {
 		const token = bearer(request.headers.get("authorization"));
 		if (token === "") {
 			throw new HttpError(401, "missing bearer token");
 		}
-		const verified = await jwtVerify(token, jwks, {
-			issuer: webEnv.CONVEX_SITE_URL,
-			audience: "convex",
-		}).catch(() => null);
-		if (verified === null || typeof verified.payload.sub !== "string") {
+		const current = await verifyToken(token);
+		if (current === null) {
 			throw new HttpError(401, "invalid bearer token");
 		}
-		const current: Session = { token, subject: verified.payload.sub };
 		return next({ context: { session: current } });
 	},
 );

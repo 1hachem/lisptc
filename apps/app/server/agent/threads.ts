@@ -9,6 +9,7 @@ import {
 import type { Id } from "@repo/backend/dataModel";
 import { MAX_SPAWN_DEPTH } from "@repo/backend/limits";
 import { ThreadHost } from "@repo/backend/thread-host";
+import { desktops } from "../desktop/registry.ts";
 import { convexActingAs, convexAsServer } from "./convex.ts";
 
 export interface Identity {
@@ -20,6 +21,7 @@ const host: ThreadHost = new ThreadHost({
 	server: convexAsServer,
 	actAs: convexActingAs,
 	threads: () => threads,
+	bridge: desktops,
 });
 
 const telemetry = new Map<string, Identity>();
