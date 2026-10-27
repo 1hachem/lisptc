@@ -64,6 +64,7 @@ export type StdioConnConfig = ConnMeta & {
 	command: string;
 	args?: string[];
 	env?: Record<string, string>;
+	local?: boolean;
 };
 
 export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
@@ -105,9 +106,15 @@ export class AuthorizationRequired extends Error {
 	}
 }
 
+export type HandleFetch = (
+	url: string | URL,
+	init?: RequestInit,
+) => Promise<Response>;
+
 export interface ServerHandle {
 	url: string;
 	headers?: Record<string, string>;
+	fetch?: HandleFetch;
 }
 
 export type ServerState = "running" | "stopped" | "unknown";

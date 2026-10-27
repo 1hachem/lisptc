@@ -439,7 +439,8 @@ function connConfigFromArgs(
 		const env = opts.has("env")
 			? (lispToJson(opts.get("env")) as Record<string, string>)
 			: undefined;
-		return { name, command, args: cmdArgs, env };
+		const local = opts.has("local") && opts.get("local") !== null;
+		return { name, command, args: cmdArgs, env, ...(local ? { local } : {}) };
 	}
 	return lookupPredefined(predefined, name);
 }

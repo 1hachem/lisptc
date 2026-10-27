@@ -37,6 +37,12 @@ describe("the prompt the extension carries", () => {
 		);
 	});
 
+	it("teaches :local runs a command server on the user's machine", () => {
+		expect(PROMPT).toMatch(
+			/Add :local t to run it on user's own machine, through their desktop app/,
+		);
+	});
+
 	it("teaches the <server>/<tool> keyword calling convention", () => {
 		expect(PROMPT).toMatch(
 			/global named <server>\/<tool>, called with keyword args/,

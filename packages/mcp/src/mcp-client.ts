@@ -164,6 +164,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		if (!handle) return stdioTransport(conf);
 		return new StreamableHTTPClientTransport(new URL(handle.url), {
 			requestInit: handle.headers ? { headers: handle.headers } : undefined,
+			...(handle.fetch ? { fetch: handle.fetch } : {}),
 		});
 	}
 

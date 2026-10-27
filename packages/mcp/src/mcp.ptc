@@ -17,6 +17,8 @@ MCP SERVERS
 - Ad-hoc servers, awaited same way:
   - Remote: (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
 - Local stdio: (load-mcp :name "acme" :command "npx" :args '("-y" "acme-mcp-server"))
+  - Add :local t to run it on user's own machine, through their desktop app.
+    Only when user asks for their machine. Fails if desktop app not open.
 - OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
 - Several concurrently:
 (await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) . Settled,
