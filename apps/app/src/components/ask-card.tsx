@@ -2,7 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import {
 	Cancel01Icon,
 	CheckmarkCircle02Icon,
-	SecurityCheckIcon,
+	LockKeyIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
@@ -205,7 +205,7 @@ export function AskCard({
 		>
 			<ConfirmationTitle className="min-w-0 wrap-anywhere">
 				<span className="flex min-w-0 items-center gap-2 text-yellow">
-					<HugeiconsIcon icon={SecurityCheckIcon} size={14} />
+					<HugeiconsIcon icon={LockKeyIcon} size={14} />
 					<span className="min-w-0 truncate font-mono">{ask.title}</span>
 				</span>
 				{ask.detail && (
