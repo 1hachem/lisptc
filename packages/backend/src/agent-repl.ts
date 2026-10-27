@@ -1,9 +1,11 @@
-import { agentsExtension } from "@repo/agents-extension";
-import { agentsHost } from "@repo/agents-extension/host";
+import { agentsExtension, subAgentExtension } from "@repo/agents-extension";
+import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
+import type { Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
+import type { Image } from "@repo/interpreter/image";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
@@ -24,7 +26,6 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
-import { AgentRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
@@ -35,11 +36,12 @@ import { uiHost } from "@repo/ui-extension/host";
 import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
-import { api } from "../convex/_generated/api.js";
+import type { Infer } from "convex/values";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
-import { ConvexImageStore } from "./image-store.ts";
+import type { subAgent } from "../convex/schema.js";
+import { SupervisedAgents } from "./agent-threads.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
@@ -47,7 +49,7 @@ import { ConvexPanelReader } from "./panel-store.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
-import type { ServerClient } from "./server-client.ts";
+import { ConvexSourceFolder } from "./source-folder.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
 export type WorkspaceClient = Pick<
@@ -64,10 +66,32 @@ const themeChoices = themes.map((theme) => ({
 	scheme: theme.scheme,
 }));
 
+export type ChildRecord = Infer<typeof subAgent>;
+
+export interface Supervisor {
+	readonly threads: Threads;
+	spawn(
+		parent: Id<"chats">,
+		agent: ChildRecord,
+		image?: Image,
+	): Promise<Id<"chats">>;
+	copyTranscript(from: Id<"chats">, to: Id<"chats">): Promise<void>;
+	child(parent: Id<"chats">, name: string): Promise<Id<"chats"> | undefined>;
+	image(parent: Id<"chats">, child: Id<"chats">): Promise<Image | undefined>;
+}
+
+export interface ThreadScope {
+	readonly chatId?: Id<"chats">;
+	readonly supervisor?: Supervisor;
+	readonly bounds?: readonly string[];
+	readonly roster?: readonly string[];
+	readonly subAgent?: boolean;
+}
+
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	chatId?: Id<"chats">,
+	{ chatId, supervisor, bounds, roster, subAgent }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -89,12 +113,43 @@ export async function workspaceExtensions(
 			maxDownloadBytes: MAX_KNOWLEDGE_BYTES,
 		}),
 	);
+	const agents = agentsExtension(
+		agentsHostFor({
+			folder: new ConvexSourceFolder(connect),
+			workspace: workspaceId,
+			...(roster === undefined ? {} : { roster }),
+			...(supervisor === undefined || chatId === undefined
+				? {}
+				: { threads: new SupervisedAgents(supervisor, chatId) }),
+		}),
+	);
 	const permissions = permissionsExtension(
 		permissionsHostFor({
 			store: await ConvexPermissionsStore.open(workspaceId, connect),
-			asks: [...memory.asks, ...workspace.asks, ...knowledge.asks],
+			asks: [
+				...memory.asks,
+				...workspace.asks,
+				...knowledge.asks,
+				...agents.asks,
+			],
+			...(bounds === undefined ? {} : { bounds }),
 		}),
 	);
+	const preferences = preferencesExtension(
+		preferencesHostFor({
+			store: new ConvexPreferencesStore(connect),
+			fonts,
+			motions,
+		}),
+	);
+	const ui = uiExtension({
+		...uiHost,
+		panel: new ConvexPanelReader(workspaceId, connect),
+	});
+	const exports = subAgentExtension(subAgentHost());
+	const rootOnly: InterpExtension[] = subAgent
+		? [agents, workspace, preferences, ui]
+		: [exports];
 	return [
 		permissions,
 		secretsExtension({
@@ -103,7 +158,8 @@ export async function workspaceExtensions(
 		}),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
-		agentsExtension(agentsHost),
+		agents,
+		exports,
 		mcpExtension({
 			...mcpHostFor({
 				scope: workspaceId,
@@ -117,36 +173,9 @@ export async function workspaceExtensions(
 		memory,
 		workspace,
 		knowledge,
-		preferencesExtension(
-			preferencesHostFor({
-				store: new ConvexPreferencesStore(connect),
-				fonts,
-				motions,
-			}),
-		),
+		preferences,
 		proseExtension(proseHost),
-		uiExtension({
-			...uiHost,
-			panel: new ConvexPanelReader(workspaceId, connect),
-		}),
+		ui,
 		diagnosticsExtension(diagnosticsHost),
-	];
-}
-
-export function chatRepls(
-	connect: Connect,
-	server: ServerClient,
-): (chatId: Id<"chats">) => Promise<AgentRepl> {
-	return async (chatId) => {
-		const { workspaceId } = await connect().query(api.chats.get, { chatId });
-		const replId = await connect().mutation(api.repls.open, { chatId });
-		const repl = new AgentRepl({
-			extensions: await workspaceExtensions(workspaceId, connect, chatId),
-			images: new ConvexImageStore(replId, server),
-		});
-		await repl.resume().catch((ex) => {
-			console.error(`[backend] chat ${chatId} resumed fresh:`, ex);
-		});
-		return repl;
-	};
+	].filter((extension) => !rootOnly.includes(extension));
 }

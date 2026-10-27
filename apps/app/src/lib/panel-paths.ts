@@ -3,9 +3,12 @@ import {
 	NEW_CHAT,
 	type Page,
 	type PanelContent,
+	sourcePanel,
 } from "./panel-ops.ts";
 
 const FOLDERS: readonly Folder[] = ["knowledge", "attachments"];
+
+const SOURCE_FOLDERS: readonly string[] = ["sub-agents"];
 
 const KEYED = {
 	memory: "memories",
@@ -35,6 +38,7 @@ export function panelPath(content: PanelContent): string | undefined {
 		case "chat":
 			return content.chatId === null ? "" : `chat/${content.chatId}`;
 		case "file":
+		case "source":
 			return `${content.folder}/${content.name}`;
 		case "page":
 			return keyed(content.page)
@@ -63,6 +67,7 @@ export function panelAt(path: string): PanelContent | undefined {
 	if (head === "chat") return { kind: "chat", chatId: rest, title: "chat" };
 	const folder = FOLDERS.find((f) => f === head);
 	if (folder !== undefined) return { kind: "file", folder, name: rest };
+	if (SOURCE_FOLDERS.includes(head)) return sourcePanel(head, rest);
 	const page = (Object.keys(KEYED) as KeyedPage[]).find(
 		(p) => KEYED[p] === head,
 	);

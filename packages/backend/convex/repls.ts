@@ -24,7 +24,7 @@ async function chunksOf(
 	return rows.map((row) => row.data);
 }
 
-async function openRepl(
+export async function openRepl(
 	ctx: MutationCtx,
 	chat: Doc<"chats">,
 ): Promise<Id<"repls">> {
