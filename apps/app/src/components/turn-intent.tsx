@@ -1,16 +1,24 @@
 import {
 	AiBrain01Icon,
+	Atom02Icon,
 	Cancel01Icon,
 	CheckmarkCircle02Icon,
+	CodeIcon,
 	FileEditIcon,
 	FileViewIcon,
-	Loading03Icon,
+	FirstBracketIcon,
+	FlowIcon,
+	FunctionIcon,
+	GitForkIcon,
 	PlugSocketIcon,
+	SigmaIcon,
 	SquareIcon,
+	TerminalIcon,
 	UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { ActivityIcon, Progress } from "@repo/interpreter/annotations";
+import { useEffect, useState } from "react";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 
 export function ProgressBar({ progress }: { progress: Progress }) {
@@ -40,7 +48,7 @@ export function ProgressBar({ progress }: { progress: Progress }) {
 }
 
 const STATE_MARK = {
-	running: { icon: Loading03Icon, tone: "animate-spin text-dim" },
+	running: { icon: FirstBracketIcon, tone: "text-dim" },
 	done: { icon: CheckmarkCircle02Icon, tone: "text-green" },
 	failed: { icon: Cancel01Icon, tone: "text-red" },
 } as const;
@@ -55,6 +63,29 @@ const ACTIVITY_ICON: Record<ActivityIcon, IconSvgElement> = {
 	write: FileEditIcon,
 };
 
+const RUNNING_GLYPHS: IconSvgElement[] = [
+	FirstBracketIcon,
+	FunctionIcon,
+	SigmaIcon,
+	TerminalIcon,
+	CodeIcon,
+	GitForkIcon,
+	FlowIcon,
+	Atom02Icon,
+];
+
+const GLYPH_BEAT_MS = 110;
+
+function useGlyphBeat(active: boolean) {
+	const [beat, setBeat] = useState(0);
+	useEffect(() => {
+		if (!active) return;
+		const timer = setInterval(() => setBeat((b) => b + 1), GLYPH_BEAT_MS);
+		return () => clearInterval(timer);
+	}, [active]);
+	return RUNNING_GLYPHS[beat % RUNNING_GLYPHS.length];
+}
+
 function markOf(entry: TimelineEntry, live: boolean) {
 	if (entry.kind === "intent") return undefined;
 	if (entry.state === "running" && !live) return STALLED_MARK;
@@ -65,6 +96,8 @@ function markOf(entry: TimelineEntry, live: boolean) {
 
 function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 	const mark = markOf(entry, live);
+	const cycling = mark === STATE_MARK.running;
+	const glyph = useGlyphBeat(cycling);
 	return (
 		<li
 			data-timeline={entry.state}
@@ -78,7 +111,7 @@ function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 			<div title={entry.detail} className="flex min-w-0 items-center gap-2">
 				{mark && (
 					<HugeiconsIcon
-						icon={mark.icon}
+						icon={cycling ? glyph : mark.icon}
 						aria-label={entry.state}
 						className={`absolute left-0 size-icon flex-none ${mark.tone}`}
 					/>

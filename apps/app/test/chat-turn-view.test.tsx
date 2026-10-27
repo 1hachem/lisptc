@@ -777,16 +777,20 @@ describe("the turn timeline", () => {
 		expect(host.textContent).not.toContain("steps");
 	});
 
-	it("spins on the running call while the turn is live", async () => {
+	it("cycles glyphs on the running call while the turn is live", async () => {
 		const host = await mount(
 			<CallTimeline
 				entries={turnTimeline(undefined, [timed("a", 100, "started")], true)}
 				live
 			/>,
 		);
-		const running = host.querySelector('[data-timeline="running"] svg');
+		const glyph = () =>
+			host.querySelector('[data-timeline="running"] svg')?.innerHTML;
+		const first = glyph();
 
-		expect(running?.getAttribute("class")).toContain("animate-spin");
+		await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+
+		expect(glyph()).not.toEqual(first);
 	});
 
 	it("prints the whole error under a failed line and a failed call", async () => {
