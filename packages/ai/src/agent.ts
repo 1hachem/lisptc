@@ -17,6 +17,7 @@ export interface AgentConfig {
 	provider?: ProviderName;
 	model?: string;
 	system?: string;
+	instructions?: string;
 	trace?: TraceContext;
 }
 
