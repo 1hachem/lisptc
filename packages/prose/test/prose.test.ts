@@ -228,6 +228,14 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			);
 		});
 
+		it("reads a head ending in a comma as prose, whatever follows it", () => {
+			const { value, skipped } = tolerantly(
+				'(lisp-check, "unexpected end of input")',
+			);
+			expect(value).toBe("#<unspecified>");
+			expect(skipped[0]).toMatch(/"lisp-check," is not defined/);
+		});
+
 		it("leaves a phrase headed by something bound as code", () => {
 			expect(() => tolerantly("(list one, two, three, four)")).toThrow(
 				/void variable/,

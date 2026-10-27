@@ -47,6 +47,7 @@ function proseReason(interp: Interp, form: unknown): string | undefined {
 				: "the parenthesized text looks like prose";
 	if (!(head instanceof Sym))
 		return isLiteral(head) ? `${str(head)} is not a function` : undefined;
+	if (head.name.endsWith(",")) return `"${head.name}" is not defined`;
 	if (marksCode(form)) return undefined;
 	if (isNamespaced(head.name) && !hasWord(form)) return undefined;
 	return `"${head.name}" is not defined`;
