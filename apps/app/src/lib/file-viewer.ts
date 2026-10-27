@@ -1,9 +1,10 @@
+import { queryOptions } from "@tanstack/react-query";
+
 const TEXT_EXTENSIONS = new Set([
 	"txt",
 	"log",
 	"csv",
 	"tsv",
-	"json",
 	"yaml",
 	"yml",
 	"toml",
@@ -33,15 +34,16 @@ export type KnowledgeViewer =
 	| "audio"
 	| "stl"
 	| "markdown"
+	| "json"
 	| "text"
 	| "download";
 
-export type TextViewer = Extract<KnowledgeViewer, "markdown" | "text">;
+export type TextViewer = Extract<KnowledgeViewer, "markdown" | "json" | "text">;
 
 export function readsText(
 	viewer: KnowledgeViewer | undefined,
 ): viewer is TextViewer {
-	return viewer === "markdown" || viewer === "text";
+	return viewer === "markdown" || viewer === "json" || viewer === "text";
 }
 
 export interface StoredText {
@@ -68,10 +70,25 @@ export function knowledgeViewer(
 	)
 		return "markdown";
 	if (
-		type.startsWith("text/") ||
 		type === "application/json" ||
-		TEXT_EXTENSIONS.has(extension)
+		type.endsWith("+json") ||
+		extension === "json"
 	)
-		return "text";
+		return "json";
+	if (type.startsWith("text/") || TEXT_EXTENSIONS.has(extension)) return "text";
 	return "download";
+}
+
+async function fetchText(url: string): Promise<string> {
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`fetch failed (${response.status})`);
+	return await response.text();
+}
+
+export function storedTextQuery(url: string) {
+	return queryOptions({
+		queryKey: ["knowledge-text", url],
+		queryFn: () => fetchText(url),
+		staleTime: Number.POSITIVE_INFINITY,
+	});
 }
