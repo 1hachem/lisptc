@@ -34,6 +34,8 @@ function session(
 			for (const entry of entries) hooks.recorded.run(() => {}, interp, entry);
 		},
 		entries: () => hooks.filled(conversationSlot)?.entries(interp),
+		replace: (entries: readonly ConversationEntry[]) =>
+			hooks.filled(conversationSlot)?.replace(interp, entries),
 	};
 }
 
@@ -105,5 +107,20 @@ describe("the conversation in the image", () => {
 		expect(after.entries()).toEqual(said);
 		expect(after.read("(car user-messages)")).toBe('"add one and two"');
 		expect(() => after.read("(setq conversation nil)")).toThrow(/read-only/);
+	});
+
+	it("is replaced whole by its owner and stays sealed", () => {
+		const s = session();
+		s.record(...said);
+		const kept = said.slice(0, 2);
+		s.replace(kept);
+		expect(s.entries()).toEqual(kept);
+		expect(s.read("user-messages")).toBe('("add one and two")');
+		expect(s.read("assistant-messages")).toBe('("(echo (+ 1 2))")');
+		s.replace([]);
+		for (const name of GLOBALS) expect(s.read(name)).toBe("nil");
+		expect(() => s.read("(setq conversation nil)")).toThrow(/read-only/);
+		s.record(said[0]);
+		expect(s.entries()).toEqual([said[0]]);
 	});
 });

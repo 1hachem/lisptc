@@ -109,6 +109,26 @@ function recorded(interp: Interp, entry: ConversationEntry): void {
 		append(interp, ASSISTANT_MESSAGES, entry.content);
 }
 
+function replace(interp: Interp, entries: readonly ConversationEntry[]): void {
+	interp.defineGlobal(CONVERSATION, arrayToList(entries.map(encode)));
+	interp.defineGlobal(
+		USER_MESSAGES,
+		arrayToList(
+			entries.flatMap(({ role, content }) =>
+				role === "user" ? [content] : [],
+			),
+		),
+	);
+	interp.defineGlobal(
+		ASSISTANT_MESSAGES,
+		arrayToList(
+			entries.flatMap(({ role, content }) =>
+				role === "assistant" ? [content] : [],
+			),
+		),
+	);
+}
+
 function install(interp: Interp): void {
 	for (const [sym, doc] of DOCS) {
 		interp.defineGlobal(sym, null, { signature: sym.name, doc });
@@ -120,7 +140,7 @@ export function conversationExtension(host: ConversationHost): InterpExtension {
 	return Object.assign(install, {
 		prompt: host.prompt(),
 		session(hooks: SessionHooks): void {
-			hooks.fill(conversationSlot, { entries });
+			hooks.fill(conversationSlot, { entries, replace });
 			hooks.recorded.use((interp, entry, next) => {
 				recorded(interp, entry);
 				next(interp, entry);

@@ -72,6 +72,7 @@ async function opening(f: Fixture): Promise<string> {
 			hooks.fill(conversationSlot, {
 				entries: () =>
 					f.said.map((content) => ({ role: "user" as const, content })),
+				replace: () => {},
 			});
 		},
 	});

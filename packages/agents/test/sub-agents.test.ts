@@ -233,7 +233,7 @@ describe("spawn", () => {
 		await run('(spawn "s" :prompt "p" :repl :fork :chat :fork)');
 		const [spawned] = threads.spawned;
 		expect(spawned?.seed.from).toBe("fork");
-		expect(spawned?.chat).toEqual({ from: "fork" });
+		expect(spawned?.chat).toEqual({ from: "fork", entries: [] });
 		expect(JSON.stringify(spawned?.seed)).toContain('"x"');
 	});
 

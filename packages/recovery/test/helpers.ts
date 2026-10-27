@@ -51,7 +51,11 @@ export function world({ conversation = true } = {}): World {
 	runSync(interp, prelude);
 	const hooks = openSession(extensions);
 	let entries: ConversationEntry[] = [];
-	if (conversation) hooks.fill(conversationSlot, { entries: () => entries });
+	if (conversation)
+		hooks.fill(conversationSlot, {
+			entries: () => entries,
+			replace: () => {},
+		});
 	return {
 		interp,
 		admit: (code) =>

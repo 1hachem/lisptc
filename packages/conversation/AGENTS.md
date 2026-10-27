@@ -18,9 +18,10 @@ govern this package.
 
 The `conversation` global in the image is the only copy of the conversation.
 The extension keeps none in JS and no store: each change is applied straight to
-that global, and the image carries it across turns. Nothing above an extension
-sets it, and another extension reads it through `conversationSlot`, never
-through a global looked up by name.
+that global, and the image carries it across turns. Another extension reads it
+through `conversationSlot`, never through a global looked up by name. Only a
+composition root replaces it whole, through the same slot, to seed a sub-agent
+with the chat it was spawned with.
 
 It learns what was said only through the `recorded` chain. The turn is what
 reports each entry there; never derive the conversation from another hook.

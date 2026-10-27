@@ -8,7 +8,10 @@ import { conversationHost } from "@repo/conversation-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { Image } from "@repo/interpreter/image";
-import type { InterpExtension } from "@repo/interpreter/session";
+import type {
+	ConversationEntry,
+	InterpExtension,
+} from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
 import { knowledgeExtension } from "@repo/knowledge-extension";
@@ -72,12 +75,17 @@ const themeChoices = themes.map((theme) => ({
 
 export type ChildRecord = Infer<typeof subAgent>;
 
+export interface ChildSeed {
+	readonly image?: Image;
+	readonly conversation: readonly ConversationEntry[];
+}
+
 export interface Supervisor {
 	readonly threads: Threads;
 	spawn(
 		parent: Id<"chats">,
 		agent: ChildRecord,
-		image?: Image,
+		seed: ChildSeed,
 	): Promise<Id<"chats">>;
 	copyTranscript(from: Id<"chats">, to: Id<"chats">): Promise<void>;
 	child(parent: Id<"chats">, name: string): Promise<Id<"chats"> | undefined>;
