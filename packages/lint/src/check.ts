@@ -125,6 +125,6 @@ export function rejection(problems: readonly Problem[]): string {
 	return [
 		"not run: checked before running and found mistakes.",
 		...problems.map((p) => `line ${p.line}: ${p.message}`),
-		"fix them, then send the step again.",
+		"fix them before it runs.",
 	].join("\n");
 }
