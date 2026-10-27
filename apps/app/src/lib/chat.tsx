@@ -38,7 +38,7 @@ import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { type Sequenced, timelineOf } from "./timeline.ts";
 import { isFreshChat } from "./turns.ts";
-import { shownMessages, useWatch } from "./watch.ts";
+import { shownMessages, useWatch, type Watched } from "./watch.ts";
 
 export interface ChatMessage {
 	id?: string;
@@ -505,6 +505,25 @@ export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {
 	return useMemo(() => briefingOf(chat), [chat]);
 }
 
+function useTranscript(chatId: Id<"chats"> | null) {
+	const watched = useWatch(chatId);
+	const persisted = usePersisted(chatId);
+	const streamed = useMemo(
+		() =>
+			shownMessages(
+				watched,
+				persisted.map(({ message }) => message),
+			),
+		[watched, persisted],
+	);
+	const running = useStreaming(chatId);
+	return { watched, persisted, streamed, running };
+}
+
+function watchedFailure(watched: Watched): string | undefined {
+	return watched.status === "errored" ? watched.failure : undefined;
+}
+
 function useStreaming(chatId: Id<"chats"> | null): boolean {
 	const { data: chat } = useQuery(
 		convexQuery(api.chats.get, chatId ? { chatId } : "skip"),
@@ -610,17 +629,7 @@ export function ChatProvider({
 	const announce = useRef(onOpened);
 	announce.current = onOpened;
 	const drafted = useDrafted(workspaceId, chatId);
-	const watched = useWatch(chatId);
-	const persisted = usePersisted(chatId);
-	const streamed = useMemo(
-		() =>
-			shownMessages(
-				watched,
-				persisted.map(({ message }) => message),
-			),
-		[watched, persisted],
-	);
-	const running = useStreaming(chatId);
+	const { watched, persisted, streamed, running } = useTranscript(chatId);
 
 	const greeting = useGreeting(greetingKey);
 
@@ -671,11 +680,7 @@ export function ChatProvider({
 			chatId,
 			draftChatId: chatId === null ? drafted : null,
 			workspaceId,
-			error: errorFor(
-				chatId,
-				watched.status === "errored" ? watched.failure : undefined,
-				failure,
-			),
+			error: errorFor(chatId, watchedFailure(watched), failure),
 			send,
 			sendAbout,
 			stop,
