@@ -14,7 +14,13 @@ import type {
 	Ruling,
 	ServerAccess,
 } from "./ports.ts";
-import { type PermissionRules, parseRules, RULE_FORMS } from "./rules.ts";
+import {
+	type PermissionRules,
+	parseRules,
+	RULE_FORMS,
+	SERVER_STRENGTH,
+	STRENGTH,
+} from "./rules.ts";
 
 const MAX_ARGS_CHARS = 400;
 
@@ -54,12 +60,24 @@ export class PermissionRefusal extends EvalException {
 	}
 }
 
+function strongest(rulings: readonly Ruling[]): Ruling | undefined {
+	let winner: Ruling | undefined;
+	for (const ruling of rulings)
+		if (
+			winner === undefined ||
+			STRENGTH[ruling.verdict] > STRENGTH[winner.verdict]
+		)
+			winner = ruling;
+	return winner;
+}
+
 export class SessionRules {
 	private readonly asks: ReadonlySet<string>;
 
 	constructor(
 		private held: PermissionRules,
 		asks: readonly string[] = [],
+		private readonly bounds: readonly PermissionRules[] = [],
 	) {
 		this.asks = new Set(asks);
 	}
@@ -73,6 +91,37 @@ export class SessionRules {
 	}
 
 	decide(name: string): Ruling {
+		return (
+			strongest([
+				this.heldDecides(name),
+				...this.bounds.map((bound) => bound.decide(name)),
+			]) ?? { verdict: "allow" }
+		);
+	}
+
+	named(name: string): Ruling | undefined {
+		return strongest(
+			[this.held, ...this.bounds].flatMap((rules) => rules.named(name) ?? []),
+		);
+	}
+
+	server(name: string): ServerAccess {
+		let access = this.held.server(name);
+		for (const bound of this.bounds) {
+			const tighter = bound.server(name);
+			if (SERVER_STRENGTH[tighter.access] > SERVER_STRENGTH[access.access])
+				access = tighter;
+		}
+		return access;
+	}
+
+	tool(server: string, tool: string): boolean {
+		return [this.held, ...this.bounds].every((rules) =>
+			rules.tool(server, tool),
+		);
+	}
+
+	private heldDecides(name: string): Ruling {
 		const ruling = this.held.decide(name);
 		if (
 			ruling.verdict !== "allow" ||
@@ -81,14 +130,6 @@ export class SessionRules {
 		)
 			return ruling;
 		return { verdict: "ask" };
-	}
-
-	server(name: string): ServerAccess {
-		return this.held.server(name);
-	}
-
-	tool(server: string, tool: string): boolean {
-		return this.held.tool(server, tool);
 	}
 }
 
@@ -99,7 +140,11 @@ export interface PermissionsExtension extends InterpExtension {
 export function permissionsExtension(
 	host: PermissionsHost,
 ): PermissionsExtension {
-	const rules = new SessionRules(parseRules(host.store.source()), host.asks);
+	const rules = new SessionRules(
+		parseRules(host.store.source()),
+		host.asks,
+		(host.bounds ?? []).map(parseRules),
+	);
 	let armed = 0;
 	let issued = 0;
 
@@ -237,7 +282,7 @@ export function permissionsExtension(
 		const operation = form.car instanceof Sym ? form.car.name : str(form.car);
 		return {
 			operation,
-			...(rules.current.named(operation) ?? { verdict: "ask" }),
+			...(rules.named(operation) ?? { verdict: "ask" }),
 		};
 	}
 
