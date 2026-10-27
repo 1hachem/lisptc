@@ -156,6 +156,6 @@ describe("the system channel", () => {
 		const userLines = [
 			...host.querySelectorAll('[data-trace-message="you"]'),
 		].map((line) => line.textContent);
-		expect(userLines).toEqual(["▾›write a"]);
+		expect(userLines).toEqual(["›write a"]);
 	});
 });

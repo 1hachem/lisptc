@@ -3,6 +3,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
 import {
 	type ComponentProps,
+	type RefObject,
 	useEffect,
 	useMemo,
 	useRef,
@@ -225,6 +226,23 @@ function TracedMessage({
 	);
 }
 
+function useClipped(line: RefObject<HTMLElement | null>, text: string) {
+	const [clipped, setClipped] = useState(false);
+	useEffect(() => {
+		const at = line.current;
+		if (at === null || text === "") {
+			setClipped(false);
+			return;
+		}
+		const measure = () => setClipped(at.scrollWidth > at.clientWidth);
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(at);
+		return () => observer.disconnect();
+	}, [line, text]);
+	return clipped;
+}
+
 function MessageEntry({
 	message,
 	flashing,
@@ -234,20 +252,27 @@ function MessageEntry({
 }) {
 	const shown = useChannels();
 	const [open, setOpen] = useState(false);
+	const line = useRef<HTMLSpanElement>(null);
+	const text = messageText(message);
+	const clipped = useClipped(line, text);
 	const parent = isParentMessage(message);
 	const system = isSystemMessage(message);
 	if (parent ? !shown.agents : system && !shown.system) return null;
 	const kind = parent ? "agent" : system ? "system" : "you";
 	const marked = channelOf(parent ? "agents" : "system");
-	const text = messageText(message);
-	const files = open && shown.attachments ? attachedTo(message) : [];
+	const attached = shown.attachments ? attachedTo(message) : [];
+	const foldable =
+		open || clipped || text.trim().includes("\n") || attached.length > 0;
+	const files = open ? attached : [];
 	return (
 		<TracedMessage message={message} flashing={flashing}>
 			<div data-trace-message={kind} className="flex min-w-0 flex-col gap-2">
 				<TraceRow
 					open={open}
-					chevron={!system}
+					chevron={!system && foldable}
 					align={open ? "items-start" : "items-center"}
+					disabled={!foldable}
+					aria-expanded={foldable ? open : undefined}
 					onClick={() => setOpen((was) => !was)}
 				>
 					{system ? (
@@ -262,6 +287,7 @@ function MessageEntry({
 						</span>
 					)}
 					<span
+						ref={line}
 						className={`min-w-0 flex-1 text-fg ${
 							open ? "whitespace-pre-wrap break-words" : "truncate"
 						}`}

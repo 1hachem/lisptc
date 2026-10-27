@@ -410,7 +410,11 @@ describe("the trace", () => {
 			<TraceLines
 				messages={[
 					{ id: "h1", type: "human", content: asked },
-					{ id: "s1", type: "system", content: "the user stopped the run" },
+					{
+						id: "s1",
+						type: "system",
+						content: "the user stopped the run\nat step 2",
+					},
 				]}
 			/>,
 		);
@@ -434,6 +438,19 @@ describe("the trace", () => {
 		expect(row("you")?.textContent?.split("first line").length).toBe(2);
 		expect(row("you")?.nextElementSibling).toBeNull();
 		expect(row("system")?.querySelector(".truncate")).not.toBeNull();
+	});
+
+	it("offers no unfold for a short one-line prompt", async () => {
+		const host = await mount(
+			<TraceLines messages={[{ id: "h1", type: "human", content: "hi" }]} />,
+		);
+		const row = host.querySelector<HTMLButtonElement>(
+			'[data-trace-message="you"] > button',
+		);
+
+		expect(row?.disabled).toBe(true);
+		expect(row?.hasAttribute("aria-expanded")).toBe(false);
+		expect(row?.textContent).not.toContain("▸");
 	});
 
 	it("has no errors channel, and reddens what the model saw of a failed step", async () => {
