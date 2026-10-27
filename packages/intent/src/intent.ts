@@ -109,7 +109,7 @@ function closeRunning(
 					...step,
 					state,
 					ms: Math.max(0, now - step.startedAt),
-					...(error === undefined ? {} : { error }),
+					error,
 				}
 			: step,
 	);
