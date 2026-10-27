@@ -102,6 +102,7 @@
         # Use the Nix browsers instead of downloaded ones; skip host-dep validation.
         PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
         PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
+        ELECTRON_OVERRIDE_DIST_PATH = "${unstable.electron}/bin";
 
         shellHook = ''
           export PLAYWRIGHT_MCP_EXECUTABLE="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"

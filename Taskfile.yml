@@ -20,7 +20,6 @@ tasks:
     vars:
       URL: '{{.URL | default "https://lisptc.taild4910a.ts.net/"}}'
     cmds:
-      - pnpm --filter @lisptc/desktop exec node node_modules/electron/install.js
       - LISPTC_DESKTOP_URL={{.URL}} pnpm --filter @lisptc/desktop dev
 
   mcp:browser:build:
