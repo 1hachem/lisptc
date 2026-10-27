@@ -8,10 +8,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { AgentProvider } from "./agent.tsx";
-import { type ChatStore, ChatStoreProvider, useChatStore } from "./chat.tsx";
-import { ForkPickerProvider } from "./fork-picker.tsx";
-import { requestPanel } from "./panel-requests.ts";
+import { type ChatStore, useChatStore } from "./chat.tsx";
 
 interface Held {
 	store: ChatStore;
@@ -44,20 +41,4 @@ export function ClaimLead() {
 		return () => claim((held) => (held?.store === store ? null : held));
 	}, [claim, store]);
 	return null;
-}
-
-export function OnLeadChat({ children }: { children: ReactNode }) {
-	const store = useContext(LeadChatContext)?.held?.store;
-	if (store === undefined) return null;
-	return (
-		<ChatStoreProvider store={store}>
-			<ForkPickerProvider
-				onForked={(forked) =>
-					requestPanel({ kind: "chat", chatId: forked, title: "fork" })
-				}
-			>
-				<AgentProvider>{children}</AgentProvider>
-			</ForkPickerProvider>
-		</ChatStoreProvider>
-	);
 }
