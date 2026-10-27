@@ -1,6 +1,10 @@
 import { annotate, memoriesKey } from "@repo/interpreter/annotations";
 import { quotient } from "@repo/interpreter/arith";
 import { type Channels, topic } from "@repo/interpreter/channels";
+import {
+	type Conversation,
+	conversationSlot,
+} from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import {
@@ -14,7 +18,6 @@ import {
 	Cell,
 	type List,
 	listToArray,
-	newSym,
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
@@ -116,12 +119,6 @@ function someSubform(form: unknown, test: (s: unknown) => boolean): boolean {
 	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr)
 		if (someSubform(rest.car, test)) return true;
 	return false;
-}
-
-function userMessages(interp: Interp): string[] {
-	const said = interp.getGlobal(newSym("user-messages"));
-	if (!(said instanceof Cell)) return [];
-	return listToArray(said).filter((m): m is string => typeof m === "string");
 }
 
 interface MemoryEvent {
@@ -272,8 +269,7 @@ export class MemoryBank {
 		return this.step.get().open.includes(key);
 	}
 
-	*hear(interp: Interp): Eval<FiredMemory[]> {
-		const said = userMessages(interp);
+	*hear(interp: Interp, said: readonly string[]): Eval<FiredMemory[]> {
 		if (said.length === this.heard) return [];
 		this.heard = said.length;
 		const last = said[said.length - 1];
@@ -287,8 +283,8 @@ export class MemoryBank {
 		return this.step.get().surfaced.slice(before);
 	}
 
-	*start(interp: Interp): Eval<FiredMemory[]> {
-		if (this.heard !== 0 || userMessages(interp).length !== 1) return [];
+	*start(interp: Interp, said: readonly string[]): Eval<FiredMemory[]> {
+		if (this.heard !== 0 || said.length !== 1) return [];
 		this.change({ stepping: true });
 		yield* this.sweep();
 		yield* this.dispatch({ kind: "start" }, interp);
@@ -481,13 +477,20 @@ function startText(memories: FiredMemory[]): string {
 
 export const memorySlot = slot<MemoryBank>("memory");
 
+function userMessages(conversation: Conversation | undefined): string[] {
+	return (conversation?.entries() ?? [])
+		.filter((entry) => entry.role === "user")
+		.map((entry) => entry.content);
+}
+
 function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
 		hooks.beginStep.use(function* (ctx, next) {
-			const started = yield* bank.start(ctx.interp);
+			const said = userMessages(hooks.filled(conversationSlot));
+			const started = yield* bank.start(ctx.interp, said);
 			if (started.length > 0) ctx.emit(startText(started));
-			const heard = yield* bank.hear(ctx.interp);
+			const heard = yield* bank.hear(ctx.interp, said);
 			if (heard.length > 0) ctx.emit(heardText(heard));
 			yield* next(ctx);
 		});

@@ -1,18 +1,17 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { conversationSlot } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import {
-	arrayToList,
-	Cell,
-	listToArray,
-	newSym,
-} from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { type InterpExtension, openSession } from "@repo/interpreter/session";
+import {
+	type InterpExtension,
+	openSession,
+	type SessionHooks,
+} from "@repo/interpreter/session";
 import type { Clock } from "@repo/shared/host";
 import { describe, expect, it } from "vitest";
 import {
@@ -40,6 +39,7 @@ function drive<T>(gen: Eval<T>): Promise<T> {
 interface Fixture {
 	interp: Interp;
 	bank: MemoryBank;
+	said: string[];
 	step(code: string): Promise<string>;
 }
 
@@ -51,11 +51,13 @@ function fixture(
 		extensions: [memoryExtension(memoryHost, { bank }), ...extras],
 	});
 	runSync(interp, prelude);
+	const userSaid: string[] = [];
 	return {
 		interp,
 		bank,
+		said: userSaid,
 		async step(code: string): Promise<string> {
-			const fired = await drive(bank.hear(interp));
+			const fired = await drive(bank.hear(interp, userSaid));
 			const heard = fired.map((m) => `${m.key}: ${m.body}\n`).join("");
 			const before = await drive(bank.beginStep(code, interp));
 			await runAsync(interp, code);
@@ -65,7 +67,18 @@ function fixture(
 }
 
 async function opening(f: Fixture): Promise<string> {
-	const hooks = openSession([memoryExtension(memoryHost, { bank: f.bank })]);
+	const said: InterpExtension = Object.assign(() => {}, {
+		session(hooks: SessionHooks): void {
+			hooks.fill(conversationSlot, {
+				entries: () =>
+					f.said.map((content) => ({ role: "user" as const, content })),
+			});
+		},
+	});
+	const hooks = openSession([
+		said,
+		memoryExtension(memoryHost, { bank: f.bank }),
+	]);
 	let emitted = "";
 	await drive(
 		hooks.beginStep.run(() => settled(undefined), {
@@ -83,9 +96,7 @@ async function ev(f: Fixture, code: string): Promise<string> {
 }
 
 function said(f: Fixture, text: string): void {
-	const before = f.interp.getGlobal(newSym("user-messages"));
-	const all = before instanceof Cell ? listToArray(before) : [];
-	f.interp.defineGlobal(newSym("user-messages"), arrayToList([...all, text]));
+	f.said.push(text);
 }
 
 function clockAt(ms: { now: number }): Clock {
@@ -293,7 +304,7 @@ describe("triggers", () => {
 		await ev(f, `(memory/remember "h" "note" :on '(user "world go"))`);
 
 		said(f, "world go(done)");
-		expect(await drive(f.bank.hear(f.interp))).toEqual([
+		expect(await drive(f.bank.hear(f.interp, f.said))).toEqual([
 			{ key: "h", body: "note", on: "user" },
 		]);
 		expect(await drive(f.bank.beginStep("(+ 1 1)", f.interp))).toBe("");
@@ -308,7 +319,7 @@ describe("triggers", () => {
 		if (h) await f.bank.store.put(h);
 
 		said(f, "world go(done)");
-		expect(await drive(f.bank.hear(f.interp))).toEqual([
+		expect(await drive(f.bank.hear(f.interp, f.said))).toEqual([
 			{ key: "h", body: "note", on: "user" },
 			{ key: "plain", body: "linked note" },
 		]);
