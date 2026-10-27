@@ -1,8 +1,10 @@
 import { desktopEnv } from "@repo/env/desktop";
 import { app, BrowserWindow, Menu, shell } from "electron";
 import electronUpdater from "electron-updater";
+import { DesktopBridge } from "./bridge.ts";
 
 const origin = new URL(desktopEnv.LISPTC_DESKTOP_URL).origin;
+const bridge = new DesktopBridge(origin);
 
 function sameOrigin(url: string): boolean {
 	try {
@@ -50,11 +52,16 @@ const macMenu = () =>
 app.whenReady().then(() => {
 	Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null);
 	open();
+	bridge.start();
 	if (app.isPackaged)
 		void electronUpdater.autoUpdater.checkForUpdatesAndNotify();
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) open();
 	});
+});
+
+app.on("before-quit", () => {
+	void bridge.stop();
 });
 
 app.on("window-all-closed", () => {

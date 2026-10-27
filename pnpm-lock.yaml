@@ -410,6 +410,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       electron-updater:
         specifier: ^6.8.11
         version: 6.8.11
