@@ -761,7 +761,7 @@ export function registerMcp(
 						? {
 								...e,
 								state: "failed",
-								reason: `reconnect failed: ${error instanceof Error ? error.message : String(error)}`,
+								reason: `reconnect failed: ${messageOf(error)}`,
 							}
 						: e,
 				),

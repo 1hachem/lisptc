@@ -60,7 +60,7 @@ type Announce = (
 	state: ActivityEntry["state"],
 	target: { provider?: string; model?: string },
 	timing: Timing,
-	error?: string,
+	error?: unknown,
 ) => void;
 
 function announcer(interp: Interp): Announce {
@@ -71,7 +71,7 @@ function announcer(interp: Interp): Announce {
 				label: `llm · ${model ?? provider ?? "default model"}`,
 				detail: builtin,
 				state,
-				...(error === undefined ? {} : { error }),
+				...(error === undefined ? {} : { error: messageOf(error) }),
 				id,
 				...timing,
 			},
@@ -495,7 +495,7 @@ function caller(
 			},
 			(ex) => {
 				const ms = clock.now() - startedAt;
-				announce(id, builtin, "failed", req, { startedAt, ms }, messageOf(ex));
+				announce(id, builtin, "failed", req, { startedAt, ms }, ex);
 				controller.abort();
 				report(traceOf(builtin, req, ms, undefined, ex));
 				throw ex;
