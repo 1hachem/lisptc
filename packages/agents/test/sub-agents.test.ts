@@ -636,6 +636,7 @@ describe("a spawn or a send", () => {
 		).toEqual([
 			{
 				kind: "agent",
+				icon: "agent",
 				label: "scout",
 				detail: "spawned",
 				state: "done",
@@ -644,6 +645,7 @@ describe("a spawn or a send", () => {
 			},
 			{
 				kind: "agent",
+				icon: "agent",
 				label: "scout",
 				detail: "look",
 				state: "done",
@@ -652,6 +654,7 @@ describe("a spawn or a send", () => {
 			},
 			{
 				kind: "agent",
+				icon: "agent",
 				label: "scout",
 				detail: "go",
 				state: "done",

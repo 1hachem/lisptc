@@ -557,6 +557,7 @@ function callTool(
 		toolActivity.emit(interp.channels, {
 			user: {
 				kind: "mcp",
+				icon: "tool",
 				label: toolLabel(ref.server, tool),
 				...(detail === undefined ? {} : { detail }),
 				state,

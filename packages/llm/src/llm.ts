@@ -68,6 +68,7 @@ function announcer(interp: Interp): Announce {
 		modelActivity.emit(interp.channels, {
 			user: {
 				kind: "llm",
+				icon: "model",
 				label: `llm · ${model ?? provider ?? "default model"}`,
 				detail: builtin,
 				state,

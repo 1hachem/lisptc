@@ -67,6 +67,7 @@ describe("a knowledge file read or write", () => {
 		).toEqual([
 			{
 				kind: "file",
+				icon: "write",
 				label: "knowledge · write",
 				detail: "notes.md",
 				state: "done",
@@ -76,6 +77,7 @@ describe("a knowledge file read or write", () => {
 			},
 			{
 				kind: "file",
+				icon: "read",
 				label: "knowledge · read",
 				detail: "notes.md",
 				state: "done",

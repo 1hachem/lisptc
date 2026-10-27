@@ -41,6 +41,7 @@ export function* reporting<T>(
 		fileActivity.emit(interp.channels, {
 			user: {
 				kind: "file",
+				icon: verb,
 				label: `knowledge · ${verb}`,
 				detail: name,
 				state,

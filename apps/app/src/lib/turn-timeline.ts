@@ -1,5 +1,6 @@
 import type {
 	ActivityEntry,
+	ActivityIcon,
 	Intent,
 	IntentStep,
 } from "@repo/interpreter/annotations";
@@ -10,6 +11,7 @@ export type TimelineState = "running" | "done" | "failed";
 export interface TimelineEntry {
 	id: string;
 	kind: "intent" | "activity";
+	icon?: ActivityIcon;
 	label: string;
 	detail?: string;
 	state: TimelineState;
@@ -28,6 +30,7 @@ function activityEntry(entry: ActivityEntry): TimelineEntry {
 	return {
 		id: `activity:${entry.id}`,
 		kind: "activity",
+		icon: entry.icon,
 		label: entry.label,
 		detail: entry.detail,
 		state: ACTIVITY_STATE[entry.state],

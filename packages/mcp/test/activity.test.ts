@@ -97,6 +97,7 @@ describe("a tool call from lisp", () => {
 		expect(activity).toEqual([
 			{
 				kind: "mcp",
+				icon: "tool",
 				label: "acme · Web search",
 				detail: "Searches the web for a query.",
 				state: "done",
@@ -112,6 +113,7 @@ describe("a tool call from lisp", () => {
 		expect(activity).toEqual([
 			{
 				kind: "mcp",
+				icon: "tool",
 				label: "acme · explode",
 				state: "failed",
 				error: "boom",

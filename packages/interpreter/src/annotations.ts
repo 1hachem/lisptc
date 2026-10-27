@@ -125,8 +125,19 @@ export const memoriesKey = annotationKey({
 	schema: z.array(firedMemory).min(1),
 });
 
+export const activityIcons = [
+	"tool",
+	"model",
+	"agent",
+	"read",
+	"write",
+] as const;
+
+export type ActivityIcon = (typeof activityIcons)[number];
+
 const activityEntry = z.object({
 	kind: z.string(),
+	icon: z.enum(activityIcons).optional(),
 	label: z.string(),
 	detail: z.string().optional(),
 	state: z.enum(["started", "done", "failed"]),

@@ -260,7 +260,15 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 
 	function report(id: string, name: string, detail: string, chat: string) {
 		agentActivity.emit(interp.channels, {
-			user: { kind: "agent", label: name, detail, state: "done", id, chat },
+			user: {
+				kind: "agent",
+				icon: "agent",
+				label: name,
+				detail,
+				state: "done",
+				id,
+				chat,
+			},
 		});
 	}
 

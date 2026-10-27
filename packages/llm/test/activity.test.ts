@@ -58,6 +58,7 @@ describe("a model call from lisp", () => {
 		expect(activity).toEqual([
 			{
 				kind: "llm",
+				icon: "model",
 				label: "llm · gemma",
 				detail: "llm/complete",
 				state: "done",

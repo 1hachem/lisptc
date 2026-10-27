@@ -1,11 +1,16 @@
 import {
+	AiBrain01Icon,
 	Cancel01Icon,
 	CheckmarkCircle02Icon,
+	FileEditIcon,
+	FileViewIcon,
 	Loading03Icon,
+	PlugSocketIcon,
 	SquareIcon,
+	UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import type { Progress } from "@repo/interpreter/annotations";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import type { ActivityIcon, Progress } from "@repo/interpreter/annotations";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 
 export function ProgressBar({ progress }: { progress: Progress }) {
@@ -42,9 +47,19 @@ const STATE_MARK = {
 
 const STALLED_MARK = { icon: SquareIcon, tone: "text-dim" } as const;
 
+const ACTIVITY_ICON: Record<ActivityIcon, IconSvgElement> = {
+	tool: PlugSocketIcon,
+	model: AiBrain01Icon,
+	agent: UserMultipleIcon,
+	read: FileViewIcon,
+	write: FileEditIcon,
+};
+
 function markOf(entry: TimelineEntry, live: boolean) {
 	if (entry.kind === "intent") return undefined;
 	if (entry.state === "running" && !live) return STALLED_MARK;
+	if (entry.state === "done" && entry.icon !== undefined)
+		return { icon: ACTIVITY_ICON[entry.icon], tone: STATE_MARK.done.tone };
 	return STATE_MARK[entry.state];
 }
 
