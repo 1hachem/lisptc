@@ -434,11 +434,29 @@ their own.
 
 ## Pull requests
 
-A pull request that changes what the agent or the chat does carries prompts to
-test it with, under a heading of their own in its description. Each prompt sits
-in a fenced block of its own so it copies whole, followed by what a reviewer
-should see once it runs. A prompt names the exact code or message to send, so
-it reproduces without waiting for the model to make the mistake on its own.
+PR description is for whoever tests the change, not for diff reviewer. Keep it
+very short: one line per bullet, no paragraphs, no tables. Bot blocks already
+in body, like `<!-- preview -->`, stay at top untouched. Body holds these
+sections, this order:
+
+- `## Changes`: what PR does and why. Few sentences.
+- `## Blast radius`: what else change reaches. Every workspace touched beyond
+  scope, every caller of changed signature, every prompt, port, slot or chain
+  altered, every stored shape changed. Name each, say how affected. Nothing
+  outside scope reached? Say so in one line.
+- `## New forms`: every form added or changed, one entry each. Form with
+  signature, owning extension, what it does in one line. No form added? Say so
+  in one line.
+- `## Test prompts`: numbered list of prompts to paste to agent as is. Each in
+  own fenced code block, so one click copies it. At least one per new form, plus
+  one per place in blast radius. Each prompt asks for something change makes
+  possible, not "test X". Prompt names exact code or message to send, so it
+  reproduces without waiting for model to make mistake on own. Under each, one
+  line: what passing answer shows.
+
+Keep description true. Push adds, renames or removes form, or widens blast
+radius? Agent edits description with `gh pr edit` same turn, without being
+asked.
 
 ## Issues
 

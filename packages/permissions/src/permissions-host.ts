@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { replEnv } from "@repo/env/repl";
 import { systemClock } from "@repo/shared/host";
@@ -14,16 +14,23 @@ import { parseRules } from "./rules.ts";
 import { uiApprover } from "./ui-approver.ts";
 
 export class FilePermissionsStore implements PermissionsStore {
+	private read: { readonly at: number; readonly text: string } | undefined;
+
 	constructor(readonly path: string) {}
 
 	source(): string {
-		return existsSync(this.path) ? readFileSync(this.path, "utf8") : "";
+		const at = statSync(this.path, { throwIfNoEntry: false })?.mtimeMs;
+		if (at === undefined) return "";
+		if (this.read?.at !== at)
+			this.read = { at, text: readFileSync(this.path, "utf8") };
+		return this.read.text;
 	}
 
 	save(source: string): void {
 		parseRules(source);
 		mkdirSync(dirname(this.path), { recursive: true });
 		writeFileSync(this.path, source, { mode: 0o600 });
+		this.read = undefined;
 	}
 }
 

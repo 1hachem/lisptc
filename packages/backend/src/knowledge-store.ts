@@ -116,6 +116,14 @@ export class ConvexKnowledgeStore implements KnowledgeStore {
 		if (refused !== null) throw new Error(`${refused}: ${name}`);
 	}
 
+	async unkeep(name: string): Promise<void> {
+		const refused = await this.connect().mutation(api.files.unkeep, {
+			workspaceId: this.workspaceId,
+			name,
+		});
+		if (refused !== null) throw new Error(`${refused}: ${name}`);
+	}
+
 	async binned(): Promise<BinnedFile[]> {
 		const entries = await this.connect().query(api.bin.list, {
 			workspaceId: this.workspaceId,

@@ -214,6 +214,33 @@ export const keep = mutation({
 	},
 });
 
+export const unkeep = mutation({
+	args: { workspaceId: v.id("workspaces"), name: v.string() },
+	returns: v.union(
+		v.null(),
+		v.literal("NO_SUCH_FILE"),
+		v.literal("NAME_TAKEN"),
+		v.literal("TOO_MANY_FILES"),
+	),
+	handler: async (ctx, { workspaceId, name }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const kept = await held(ctx, "knowledge", workspaceId, name);
+		if (kept === null) return "NO_SUCH_FILE";
+		if ((await held(ctx, "attachments", workspaceId, name)) !== null)
+			return "NAME_TAKEN";
+		if (await isFull(ctx, "attachments", workspaceId)) return "TOO_MANY_FILES";
+		await insertInto(ctx, "attachments", {
+			workspaceId,
+			name: kept.name,
+			storageId: kept.storageId,
+			contentType: kept.contentType,
+			size: kept.size,
+		});
+		await ctx.db.delete(kept._id);
+		return null;
+	},
+});
+
 export const expire = internalMutation({
 	args: {},
 	returns: v.null(),
