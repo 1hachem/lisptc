@@ -191,15 +191,15 @@ export function AskCard({
 		<Confirmation
 			approval={approval}
 			state={open ? "approval-requested" : "approval-responded"}
-			className="mt-2 gap-1.5 border-yellow/50 px-3 py-2"
+			className="mt-2 gap-1.5 overflow-hidden border-yellow/50 px-3 py-2"
 		>
-			<ConfirmationTitle>
-				<span className="flex items-center gap-2 text-yellow">
+			<ConfirmationTitle className="min-w-0 wrap-anywhere">
+				<span className="flex min-w-0 items-center gap-2 text-yellow">
 					<HugeiconsIcon icon={SecurityCheckIcon} size={14} />
-					<span className="font-mono">{ask.title}</span>
+					<span className="truncate font-mono">{ask.title}</span>
 				</span>
 				{ask.detail && (
-					<span className="block whitespace-pre-wrap break-words font-mono text-dim text-xs">
+					<span className="block whitespace-pre-wrap font-mono text-dim text-xs">
 						{ask.detail}
 					</span>
 				)}
