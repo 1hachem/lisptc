@@ -18,7 +18,7 @@ import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
 import { type AgentConfig, streamAgent } from "./agent.ts";
 import { evalMessage } from "./eval.ts";
-import type { Steer } from "./inbox.ts";
+import type { Envelope } from "./mailbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { resolveModel } from "./provider/registry.ts";
 import {
@@ -44,7 +44,7 @@ export interface TurnOptions {
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
-	inbox?: () => Promise<Steer[]>;
+	inbox?: () => Promise<Envelope[]>;
 	runsForms?: boolean;
 	received?: Annotations;
 }
@@ -71,16 +71,29 @@ export type TurnEvent =
 			failed: boolean;
 			rejected?: true;
 			problems?: readonly Problem[];
+			held?: true;
 			results: readonly string[];
 	  }
 	| { type: "collected"; annotations: Annotations }
 	| { type: "rode"; text: string }
-	| { type: "steered"; id: string; content: string }
+	| {
+			type: "steered";
+			id: string;
+			content: string;
+			source?: string;
+			failed?: true;
+	  }
 	| { type: "evaluated"; message: ToolMessage }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
 	| { type: "silent"; steps: number }
 	| { type: "failed"; message: string; error: unknown };
+
+function withInstructions(prompt: string, config?: AgentConfig): string {
+	return config?.instructions === undefined
+		? prompt
+		: `${prompt}\n\n${config.instructions}`;
+}
 
 function lastUserPrompt(transcript: TranscriptEntry[]): string {
 	return transcript.filter(isUserPrompt).at(-1)?.content ?? "";
@@ -124,12 +137,20 @@ async function* takeSteers({
 	runsForms,
 }: Turn): AsyncGenerator<TurnEvent, number> {
 	let taken = 0;
-	for (const steer of (await inbox?.()) ?? []) {
-		const prompt: TranscriptEntry = { role: "user", content: steer.content };
-		yield { type: "steered", ...steer };
-		const evaluated = runsForms
-			? await evalMessage(repl, steer.content)
-			: undefined;
+	for (const envelope of (await inbox?.()) ?? []) {
+		if (envelope.kind === "event") {
+			const { id, source, text, failed } = envelope;
+			yield { type: "steered", id, content: text, source, failed };
+			transcript.push({ role: "user", content: text, event: { source } });
+			taken += 1;
+			continue;
+		}
+		const prompt: TranscriptEntry = { role: "user", content: envelope.text };
+		yield { type: "steered", id: envelope.id, content: envelope.text };
+		const evaluated =
+			runsForms && envelope.forms
+				? await evalMessage(repl, envelope.text)
+				: undefined;
 		if (evaluated === undefined) {
 			transcript.push(prompt);
 			taken += 1;
@@ -204,7 +225,7 @@ interface Turn {
 	readonly ran: { provider: string; model: string };
 	readonly maxSteps: number;
 	readonly signal?: AbortSignal;
-	readonly inbox?: () => Promise<Steer[]>;
+	readonly inbox?: () => Promise<Envelope[]>;
 	readonly runsForms: boolean;
 	readonly received?: Annotations;
 	readonly agent: AgentTurn;
@@ -240,7 +261,7 @@ async function* openTurn(
 	}
 
 	const { prompt: system, annotations } = await repl.system(
-		config?.system ?? systemPromptFor(repl.interp),
+		config?.system ?? withInstructions(systemPromptFor(repl.interp), config),
 	);
 	yield* collect(annotations);
 	const traced: AgentConfig = { ...config, trace };
@@ -392,6 +413,7 @@ async function* evaluateStep(
 		failed,
 		results,
 		...riding,
+		...(held ? { held: true as const } : {}),
 	};
 	transcript.push({
 		role: "tool",
@@ -523,8 +545,8 @@ export async function* runAgentTurn(
 			drained = step.verdict !== "capped" && (yield* settleIfDone(turn, step));
 			if (step.verdict === "continue" || drained) continue;
 			outcome = step.verdict;
-			if (outcome === "halt") answer = step.code;
-			yield ending(step.verdict, step.code, turn.steps);
+			if (outcome === "halt") answer = repl.answer(step.code);
+			yield ending(step.verdict, answer, turn.steps);
 			break;
 		}
 	} catch (err) {

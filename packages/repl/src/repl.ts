@@ -616,6 +616,10 @@ export class AgentRepl extends MemoryRepl {
 		return { more: decided, emitted };
 	}
 
+	answer(code: string): string {
+		return this.hooks.answer.run((_i, c) => c, this.interp, code);
+	}
+
 	settled(
 		turn: AgentTurn,
 		end: AgentEnd,

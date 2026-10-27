@@ -153,6 +153,7 @@ export interface SessionHooks {
 		[ctx: TurnContext, more: boolean],
 		Eval<boolean>
 	>;
+	readonly answer: Chain<[interp: Interp, code: string], string>;
 	readonly settled: Chain<[turn: AgentTurn, end: AgentEnd], void>;
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
@@ -182,6 +183,7 @@ export function newSessionHooks(): SessionHooks {
 		admit: new Chain(),
 		stepEnd: new Chain(),
 		beforeSettle: new Chain(),
+		answer: new Chain(),
 		settled: new Chain(),
 		evalStep: new Chain(),
 		stepOutput: new Chain(),
