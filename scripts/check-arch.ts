@@ -15,6 +15,33 @@ import { sessionDrivers } from "./check-arch/session-drivers.ts";
 import { sniffers } from "./check-arch/sniffers.ts";
 import { staticPackages } from "./check-arch/static-packages.ts";
 
+const TURN_STARTERS = [
+	{ dir: "packages/ai/src/", allowed: ["packages/ai/src/thread.ts"] },
+	{ dir: "apps/app/server/", allowed: [] as string[] },
+];
+
+const STARTS_A_TURN = /(?<!function\*?\s*)\brunAgentTurn\s*\(/;
+
+const turnStarters: Check = {
+	name: "turn started from a request",
+	rule: [
+		"A file calls runAgentTurn. A turn starts from a post, never from a",
+		"request.",
+	],
+	fix: [
+		"Post an envelope to the thread, and the thread runs the turn.",
+		"TURN_STARTERS in scripts/check-arch.ts names the one file that may",
+		"start one.",
+	],
+	run: (tree) =>
+		TURN_STARTERS.flatMap(({ dir, allowed }) =>
+			tree.sources
+				.filter((file) => file.startsWith(dir) && !allowed.includes(file))
+				.filter((file) => STARTS_A_TURN.test(tree.read(file)))
+				.map((file) => ({ file, what: "calls runAgentTurn" })),
+		),
+};
+
 const CHECKS: Check[] = [
 	manifests,
 	staticPackages,
@@ -27,6 +54,7 @@ const CHECKS: Check[] = [
 	carriers,
 	sniffers,
 	relays,
+	turnStarters,
 ];
 
 const self = relative(process.cwd(), fileURLToPath(import.meta.url));

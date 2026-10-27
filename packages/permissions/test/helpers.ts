@@ -48,6 +48,7 @@ export function session(
 	source: string,
 	approvers?: readonly Approver[],
 	asks?: readonly string[],
+	bounds?: readonly string[],
 ): Session {
 	let now = 1_000;
 	const host: PermissionsHost = {
@@ -57,6 +58,7 @@ export function session(
 		}),
 		clock: { now: () => now++ },
 		...(asks === undefined ? {} : { asks }),
+		...(bounds === undefined ? {} : { bounds }),
 	};
 	const extension = permissionsExtension(host);
 	const interp = new Interp({ extensions: [extension] });

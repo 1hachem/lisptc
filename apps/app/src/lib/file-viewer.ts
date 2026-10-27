@@ -49,18 +49,6 @@ export interface StoredText {
 	failure?: string;
 }
 
-export function sendBlocked(
-	viewer: KnowledgeViewer | undefined,
-	loaded: StoredText,
-): string | undefined {
-	if (!readsText(viewer)) return undefined;
-	if (loaded.failure !== undefined)
-		return "the file did not load, so there is nothing to ask about";
-	if (loaded.text === undefined)
-		return "the file is still loading, send once it shows";
-	return undefined;
-}
-
 export function knowledgeViewer(
 	name: string,
 	contentType: string | null,

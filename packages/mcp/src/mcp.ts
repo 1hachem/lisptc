@@ -49,6 +49,12 @@ import {
 
 const CALL_TIMEOUT_MS = 30_000;
 
+const TOOL_TIMEOUT_SECONDS = 120;
+
+const MAX_TOOL_TIMEOUT_SECONDS = 900;
+
+const TIMEOUT_OPTION = "mcp/timeout";
+
 const AUTHORIZE_ACTION = "mcp/authorize";
 
 const authorizationAsked = topic<Ask>("mcp-authorization");
@@ -486,13 +492,35 @@ function callTool(
 	const tool = entry.tools.find((t) => t.name === ref.tool);
 	if (tool === undefined)
 		throw new EvalException("MCP tool not loaded", name, false);
-	const args = plistToJson(f[0] as List);
+	const { [TIMEOUT_OPTION]: timeout, ...args } = plistToJson(f[0] as List);
+	const timeoutMs = timeoutOf(name, timeout);
 	validate(tool, args);
 	return withTimeout(
-		client.callTool({ serverId: entry.serverId, tool: tool.name, args }),
-		CALL_TIMEOUT_MS,
+		client.callTool({
+			serverId: entry.serverId,
+			tool: tool.name,
+			args,
+			timeoutMs,
+		}),
+		timeoutMs,
 		name,
 	).then(jsonToLisp);
+}
+
+function timeoutOf(name: string, given: unknown): number {
+	if (given === undefined) return TOOL_TIMEOUT_SECONDS * 1000;
+	const seconds = typeof given === "bigint" ? Number(given) : given;
+	if (
+		typeof seconds !== "number" ||
+		!(seconds > 0) ||
+		seconds > MAX_TOOL_TIMEOUT_SECONDS
+	)
+		throw new EvalException(
+			`${name}: :${TIMEOUT_OPTION} is seconds, above 0 and at most ${MAX_TOOL_TIMEOUT_SECONDS}`,
+			given,
+			false,
+		);
+	return seconds * 1000;
 }
 
 function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {

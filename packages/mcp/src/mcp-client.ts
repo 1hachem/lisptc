@@ -251,7 +251,9 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			const result = await entry.client.callTool(
 				{ name: call.tool, arguments: call.args },
 				undefined,
-				{ signal },
+				call.timeoutMs === undefined
+					? { signal }
+					: { signal, timeout: call.timeoutMs },
 			);
 			if (result.isError) {
 				const text = extractText(result.content);
