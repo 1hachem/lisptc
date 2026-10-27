@@ -2,7 +2,7 @@ import { topic } from "@repo/interpreter/channels";
 import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
-import type { ModelDelta } from "@repo/interpreter/session";
+import type { ConversationEntry, ModelDelta } from "@repo/interpreter/session";
 import {
 	annotating,
 	type InterpExtension,
@@ -504,7 +504,7 @@ describe("the agent turn", () => {
 	});
 
 	test("an admitted rewrite is the code shown and run", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "four." }]];
+		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
 		const ran: string[] = [];
 		const repl = testRepl([
 			extension((hooks) => {
@@ -568,6 +568,59 @@ describe("the agent turn", () => {
 			error: true,
 			output: "line 1: not checked",
 		});
+	});
+
+	test("every entry the conversation grows by is recorded in order", async () => {
+		script = [
+			[{ text: "(+ 1 2)" }],
+			[{ text: "(car 5)" }],
+			[{ text: "done." }],
+		];
+		const recorded: ConversationEntry[] = [];
+		let rejecting = true;
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) => {
+					if (!rejecting) return next(interp, code);
+					rejecting = false;
+					return {
+						code,
+						rejected: "line 1: not checked",
+						problems: [{ line: 1, message: "not checked" }],
+					};
+				});
+				hooks.recorded.use((interp, entry, next) => {
+					recorded.push(entry);
+					next(interp, entry);
+				});
+			}),
+		]);
+
+		await drain(
+			[
+				{ role: "assistant", content: "earlier" },
+				{ role: "user", content: "heads up", event: { source: "cron" } },
+				...ask,
+			],
+			{ repl },
+		);
+
+		expect(recorded).toEqual([
+			{ role: "system", content: "heads up" },
+			{ role: "user", content: "what is 1 + 2?" },
+			{ role: "assistant", content: "(+ 1 2)" },
+			{
+				role: "tool",
+				content: "line 1: not checked",
+				problems: [{ line: 1, message: "not checked" }],
+			},
+			{ role: "assistant", content: "(car 5)" },
+			{
+				role: "tool",
+				content: expect.stringContaining("list expected: 5"),
+			},
+			{ role: "assistant", content: "done." },
+		]);
 	});
 
 	test("a hook that rejects every step still stops at the cap", async () => {

@@ -1,6 +1,5 @@
 import {
 	type Conversation,
-	type ConversationEntry,
 	conversationSlot,
 } from "@repo/interpreter/conversation";
 import type { Doc } from "@repo/interpreter/docs";
@@ -19,6 +18,7 @@ import { Reader } from "@repo/interpreter/reader";
 import { zList } from "@repo/interpreter/schema";
 import type {
 	Admission,
+	ConversationEntry,
 	InterpExtension,
 	Problem,
 	SessionHooks,
@@ -232,7 +232,7 @@ class Edits {
 		const conversation = this.conversation();
 		return conversation === undefined
 			? undefined
-			: lastStopped(conversation.entries());
+			: lastStopped(conversation.entries(this.interp));
 	}
 
 	failed(): FailedForm[] {

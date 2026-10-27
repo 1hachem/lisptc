@@ -1,12 +1,10 @@
-import {
-	type ConversationEntry,
-	conversationSlot,
-} from "@repo/interpreter/conversation";
+import { conversationSlot } from "@repo/interpreter/conversation";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import {
 	type Admission,
+	type ConversationEntry,
 	type InterpExtension,
 	openSession,
 	type SessionHooks,

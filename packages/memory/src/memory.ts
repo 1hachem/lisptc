@@ -477,8 +477,11 @@ function startText(memories: FiredMemory[]): string {
 
 export const memorySlot = slot<MemoryBank>("memory");
 
-function userMessages(conversation: Conversation | undefined): string[] {
-	return (conversation?.entries() ?? [])
+function userMessages(
+	interp: Interp,
+	conversation: Conversation | undefined,
+): string[] {
+	return (conversation?.entries(interp) ?? [])
 		.filter((entry) => entry.role === "user")
 		.map((entry) => entry.content);
 }
@@ -487,7 +490,7 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
 		hooks.beginStep.use(function* (ctx, next) {
-			const said = userMessages(hooks.filled(conversationSlot));
+			const said = userMessages(ctx.interp, hooks.filled(conversationSlot));
 			const started = yield* bank.start(ctx.interp, said);
 			if (started.length > 0) ctx.emit(startText(started));
 			const heard = yield* bank.hear(ctx.interp, said);

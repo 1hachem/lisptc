@@ -1,12 +1,14 @@
 CONVERSATION
 
-Three read-only globals mirror live conversation, refreshed before every step:
+Three read-only globals hold this chat's conversation. Live in image, persist
+across turns, grow as each message lands:
 - `conversation` full ordered transcript. List of messages, each alist with
-  keys "role" and "content" (strings). Stopped step's tool message also has
-  "problems". Read field: (cdr (assoc "content" (car conversation))).
+  keys "role" and "content" (strings). Role is "user", "assistant", "system"
+  or "tool". Rejected step's tool message also has "problems": list of alists
+  with "line" and "message". Read field: (cdr (assoc "content" (car conversation))).
 - `user-messages` list of user's message strings.
 - `assistant-messages` list of your own earlier message strings.
 Search or pull earlier content, e.g.
 (mapcar (lambda (m) (cdr (assoc "content" m))) conversation).
-READ-ONLY: setq on them does not last, next step overwrites. To keep value,
-bind own variable with let or setq under other name.
+READ-ONLY: setq on them errors. To keep changed value, bind own variable with
+let or setq under other name.

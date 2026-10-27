@@ -4,10 +4,7 @@ import type { Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { conversationExtension } from "@repo/conversation-extension";
-import {
-	conversationHostFor,
-	unstoredConversation,
-} from "@repo/conversation-extension/host";
+import { conversationHost } from "@repo/conversation-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import type { Image } from "@repo/interpreter/image";
@@ -50,7 +47,6 @@ import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
-import { ConvexConversationStore } from "./conversation-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
@@ -180,13 +176,7 @@ export async function workspaceExtensions(
 		knowledge,
 		preferences,
 		proseExtension(proseHost),
-		conversationExtension(
-			conversationHostFor(
-				chatId === undefined
-					? unstoredConversation
-					: new ConvexConversationStore(chatId, connect),
-			),
-		),
+		conversationExtension(conversationHost),
 		recoveryExtension(recoveryHost),
 		lintExtension(),
 		ui,

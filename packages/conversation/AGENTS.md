@@ -16,19 +16,18 @@ the prompt.
 Read the host-port and seam rules in `packages/interpreter/AGENTS.md`. They
 govern this package.
 
-It is the only place the conversation is kept. Nothing above an extension sets
-it, and another extension reads it through `conversationSlot`, never through a
-global looked up by name.
+The `conversation` global in the image is the only copy of the conversation.
+The extension keeps none in JS and no store: each change is applied straight to
+that global, and the image carries it across turns. Nothing above an extension
+sets it, and another extension reads it through `conversationSlot`, never
+through a global looked up by name.
 
-A store answers for finished turns only. Never make it the source of the turn
-in progress.
+It learns what was said only through the `recorded` chain. The turn is what
+reports each entry there; never derive the conversation from another hook.
 
-One extension instance serves one session, so a root builds one per REPL.
-
-At a composition root it comes before every extension that hooks `admit`, so it
-records what they decided.
+The globals are sealed, so the agent reads them and never writes them.
 
 ## Tests
 
-`test/`. A test installs this extension and no other; its store is a stub
-written there.
+`test/`. A test installs this extension and no other, and runs `recorded`
+itself.

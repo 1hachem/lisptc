@@ -1,6 +1,5 @@
 import { conversationExtension } from "@repo/conversation-extension";
 import { conversationHost } from "@repo/conversation-extension/host";
-import type { AgentTurn } from "@repo/interpreter/session";
 import { lintExtension } from "@repo/lint-extension";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
@@ -28,18 +27,12 @@ describe("several broken forms, repaired through the conversation", () => {
 			{ line: 1, message: "pricez is not defined" },
 			{ line: 2, message: "car: expected 1 argument, got 0" },
 		]);
-		repl.stepEnd(
-			{ interp: repl.interp } as AgentTurn,
-			{
-				step: 1,
-				code,
-				output: stopped.rejected ?? "",
-				error: true,
-				failed: true,
-				latencyMs: 0,
-			},
-			"continue",
-		);
+		repl.recorded({ role: "assistant", content: code });
+		repl.recorded({
+			role: "tool",
+			content: stopped.rejected ?? "",
+			...(stopped.problems ? { problems: stopped.problems } : {}),
+		});
 		await repl.beginStep();
 		expect((await repl.evalOutput("(echo (length (failed-forms)))")).user).toBe(
 			"2\n",
@@ -65,18 +58,12 @@ describe("a form left open among other broken forms", () => {
 				message: 'unexpected end of input, this "(" is never closed',
 			},
 		]);
-		repl.stepEnd(
-			{ interp: repl.interp } as AgentTurn,
-			{
-				step: 1,
-				code,
-				output: stopped.rejected ?? "",
-				error: true,
-				failed: true,
-				latencyMs: 0,
-			},
-			"continue",
-		);
+		repl.recorded({ role: "assistant", content: code });
+		repl.recorded({
+			role: "tool",
+			content: stopped.rejected ?? "",
+			...(stopped.problems ? { problems: stopped.problems } : {}),
+		});
 		await repl.beginStep();
 		const tooFar = await repl.admit(
 			"(push-arg car '(1 2) :in (car (failed-forms)))\n(close-parens :in (nth 2 (failed-forms)))",
@@ -101,18 +88,12 @@ describe("a stopped step read back before it is repaired", () => {
 		await repl.turnStart();
 		const code = "(echo (car))";
 		const stopped = await repl.admit(code);
-		repl.stepEnd(
-			{ interp: repl.interp } as AgentTurn,
-			{
-				step: 1,
-				code,
-				output: stopped.rejected ?? "",
-				error: true,
-				failed: true,
-				latencyMs: 0,
-			},
-			"continue",
-		);
+		repl.recorded({ role: "assistant", content: code });
+		repl.recorded({
+			role: "tool",
+			content: stopped.rejected ?? "",
+			...(stopped.problems ? { problems: stopped.problems } : {}),
+		});
 		await repl.beginStep();
 		expect(
 			(await repl.admit("(echo (failed-forms))")).rejected,

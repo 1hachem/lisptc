@@ -28,6 +28,7 @@ import {
 	type AgentTurn,
 	type Annotations,
 	type Bounded,
+	type ConversationEntry,
 	type InterpExtension,
 	type ModelDelta,
 	type ModelRequest,
@@ -589,6 +590,10 @@ export class AgentRepl extends MemoryRepl {
 			this.interp,
 			code,
 		);
+	}
+
+	recorded(entry: ConversationEntry): void {
+		this.hooks.recorded.run(() => {}, this.interp, entry);
 	}
 
 	stepEnd(

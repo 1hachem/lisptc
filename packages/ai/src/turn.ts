@@ -4,6 +4,7 @@ import {
 	type AgentFailure,
 	type AgentTurn,
 	type Annotations,
+	type ConversationEntry,
 	type ModelDelta,
 	type ModelRequest,
 	type ModelUsage,
@@ -130,18 +131,36 @@ function resultEntry(message: ToolMessage): TranscriptEntry {
 	};
 }
 
-async function* takeSteers({
-	repl,
-	inbox,
-	transcript,
-	runsForms,
-}: Turn): AsyncGenerator<TurnEvent, number> {
+function said(entry: TranscriptEntry): ConversationEntry {
+	return {
+		role: entry.event === undefined ? entry.role : "system",
+		content: entry.content,
+	};
+}
+
+function record(
+	{ repl, transcript }: Turn,
+	entry: TranscriptEntry,
+	recorded: ConversationEntry = said(entry),
+): void {
+	transcript.push(entry);
+	repl.recorded(recorded);
+}
+
+function recordOpening({ repl, transcript }: Turn): void {
+	let at = transcript.length;
+	while (at > 0 && transcript[at - 1].role === "user") at--;
+	for (const entry of transcript.slice(at)) repl.recorded(said(entry));
+}
+
+async function* takeSteers(turn: Turn): AsyncGenerator<TurnEvent, number> {
+	const { repl, inbox, runsForms } = turn;
 	let taken = 0;
 	for (const envelope of (await inbox?.()) ?? []) {
 		if (envelope.kind === "event") {
 			const { id, source, text, failed } = envelope;
 			yield { type: "steered", id, content: text, source, failed };
-			transcript.push({ role: "user", content: text, event: { source } });
+			record(turn, { role: "user", content: text, event: { source } });
 			taken += 1;
 			continue;
 		}
@@ -152,13 +171,14 @@ async function* takeSteers({
 				? await evalMessage(repl, envelope.text)
 				: undefined;
 		if (evaluated === undefined) {
-			transcript.push(prompt);
+			record(turn, prompt);
 			taken += 1;
 			continue;
 		}
 		const { message, quiet } = evaluated;
 		if (!quiet) {
-			transcript.push(...withItsResult(prompt, resultEntry(message)));
+			for (const entry of withItsResult(prompt, resultEntry(message)))
+				record(turn, entry);
 			taken += 1;
 		}
 		yield { type: "evaluated", message };
@@ -245,6 +265,7 @@ async function* openTurn(
 	config: AgentConfig | undefined,
 ): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
 	const { repl, transcript, trace, signal } = turn;
+	recordOpening(turn);
 	const withheld = repl.takeProseFeedback();
 	if (withheld)
 		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
@@ -306,7 +327,7 @@ async function* announce(
 	turn: Turn,
 	answered: Answered,
 ): AsyncGenerator<TurnEvent> {
-	const { repl, transcript, ran } = turn;
+	const { repl, ran } = turn;
 	const { stepId, startedAt, code, written, reply } = answered;
 	yield {
 		type: "assistant",
@@ -317,7 +338,7 @@ async function* announce(
 		...(written ? { written } : {}),
 		meta: stepMeta(startedAt, reply.usage, ran),
 	};
-	transcript.push({ role: "assistant", content: code });
+	record(turn, { role: "assistant", content: code });
 }
 
 async function* rejectStep(
@@ -326,7 +347,7 @@ async function* rejectStep(
 	rejected: string,
 	problems: readonly Problem[],
 ): AsyncGenerator<TurnEvent, StepVerdict> {
-	const { repl, transcript, maxSteps } = turn;
+	const { repl, maxSteps } = turn;
 	yield* announce(turn, answered);
 	turn.steps += 1;
 	const step = turn.steps;
@@ -356,10 +377,15 @@ async function* rejectStep(
 		results: [],
 		...(problems.length > 0 ? { problems } : {}),
 	};
-	transcript.push({
-		role: "tool",
-		content: checkResultContent(rejected, problems),
-	});
+	record(
+		turn,
+		{ role: "tool", content: checkResultContent(rejected, problems) },
+		{
+			role: "tool",
+			content: rejected,
+			...(problems.length > 0 ? { problems } : {}),
+		},
+	);
 	return capped ? "capped" : verdict;
 }
 
@@ -367,7 +393,7 @@ async function* evaluateStep(
 	turn: Turn,
 	answered: Answered,
 ): AsyncGenerator<TurnEvent, StepVerdict> {
-	const { repl, transcript, maxSteps } = turn;
+	const { repl, maxSteps } = turn;
 	const { code, stepId } = answered;
 	yield* announce(turn, answered);
 
@@ -415,11 +441,11 @@ async function* evaluateStep(
 		...riding,
 		...(held ? { held: true as const } : {}),
 	};
-	transcript.push({
-		role: "tool",
-		content: replResultContent(output, error),
-		...riding,
-	});
+	record(
+		turn,
+		{ role: "tool", content: replResultContent(output, error), ...riding },
+		{ role: "tool", content: output },
+	);
 	if (verdict === "halt") return verdict;
 	return capped ? "capped" : verdict;
 }

@@ -1,13 +1,8 @@
-import { type Problem, slot } from "./session.ts";
-
-export interface ConversationEntry {
-	readonly role: "user" | "assistant" | "system" | "tool";
-	readonly content: string;
-	readonly problems?: readonly Problem[];
-}
+import type { Interp } from "./lisp.ts";
+import { type ConversationEntry, slot } from "./session.ts";
 
 export interface Conversation {
-	entries(): readonly ConversationEntry[];
+	entries(interp: Interp): readonly ConversationEntry[];
 }
 
 export const conversationSlot = slot<Conversation>("conversation");

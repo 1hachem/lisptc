@@ -42,6 +42,12 @@ export interface Problem {
 	readonly message: string;
 }
 
+export interface ConversationEntry {
+	readonly role: "user" | "assistant" | "system" | "tool";
+	readonly content: string;
+	readonly problems?: readonly Problem[];
+}
+
 export interface Admission {
 	readonly code: string;
 	readonly rejected?: string;
@@ -145,6 +151,7 @@ export interface SessionHooks {
 	>;
 	readonly response: Chain<[interp: Interp, text: string], string>;
 	readonly admit: Chain<[interp: Interp, code: string], Promise<Admission>>;
+	readonly recorded: Chain<[interp: Interp, entry: ConversationEntry], void>;
 	readonly stepEnd: Chain<
 		[turn: AgentTurn, step: AgentStep, verdict: StepVerdict],
 		StepVerdict
@@ -181,6 +188,7 @@ export function newSessionHooks(): SessionHooks {
 		modelCall: new Chain(),
 		response: new Chain(),
 		admit: new Chain(),
+		recorded: new Chain(),
 		stepEnd: new Chain(),
 		beforeSettle: new Chain(),
 		answer: new Chain(),

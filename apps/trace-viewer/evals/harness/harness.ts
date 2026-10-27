@@ -1,9 +1,6 @@
 import { Trace } from "@repo/checks/trace";
-import {
-	type ConversationStore,
-	conversationExtension,
-} from "@repo/conversation-extension";
-import { conversationHostFor } from "@repo/conversation-extension/host";
+import { conversationExtension } from "@repo/conversation-extension";
+import { conversationHost } from "@repo/conversation-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { AgentRepl } from "@repo/repl/repl";
 import { envSecretsStore } from "@repo/secrets-extension/host";
@@ -15,7 +12,6 @@ export type ExtensionsFor = () => InterpExtension[];
 export interface HarnessOptions {
 	mocks?: MockSpec;
 	extensions: ExtensionsFor;
-	conversation?: ConversationStore;
 }
 
 export interface Harness {
@@ -29,7 +25,7 @@ export function tracedRepl(options: HarnessOptions): Harness {
 	const trace = new Trace({ secrets });
 	const mocks = options.mocks ?? { servers: {} };
 	const extensions = withRun({ trace, mocks, secrets }, () => [
-		conversationExtension(conversationHostFor(options.conversation)),
+		conversationExtension(conversationHost),
 		...options.extensions(),
 		trace.extension(),
 	]);
