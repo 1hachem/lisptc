@@ -604,6 +604,22 @@ function timeoutOf(name: string, given: unknown): number {
 	return seconds * 1000;
 }
 
+function timeoutOf(name: string, given: unknown): number {
+	if (given === undefined) return TOOL_TIMEOUT_SECONDS * 1000;
+	const seconds = typeof given === "bigint" ? Number(given) : given;
+	if (
+		typeof seconds !== "number" ||
+		!(seconds > 0) ||
+		seconds > MAX_TOOL_TIMEOUT_SECONDS
+	)
+		throw new EvalException(
+			`${name}: :${TIMEOUT_OPTION} is seconds, above 0 and at most ${MAX_TOOL_TIMEOUT_SECONDS}`,
+			given,
+			false,
+		);
+	return seconds * 1000;
+}
+
 function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
 	return wiring.interp.makeBuiltIn(
 		`${ref.server}/${ref.tool}`,
