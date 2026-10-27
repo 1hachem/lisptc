@@ -28,8 +28,9 @@ A component sizes itself with the tokens `@repo/ui` defines: `h-control`,
 Tailwind's roomy default heights and icon sizes, nor an arbitrary pixel size.
 `packages/ui/AGENTS.md` holds the scale.
 
-`@repo/ui` is the only workspace dependency. Adding another one is a sign the
-component belongs in the app instead.
+`@repo/ui` is the only workspace dependency besides `@repo/shared`, whose pure
+split layout the split view draws. Adding another one is a sign the component
+belongs in the app instead.
 
 ## Tests
 
