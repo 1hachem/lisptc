@@ -1,5 +1,5 @@
 import { desktopEnv } from "@repo/env/desktop";
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, Menu, shell } from "electron";
 import electronUpdater from "electron-updater";
 
 const origin = new URL(desktopEnv.LISPTC_DESKTOP_URL).origin;
@@ -44,7 +44,11 @@ app.on("second-instance", () => {
 	window.focus();
 });
 
+const macMenu = () =>
+	Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }]);
+
 app.whenReady().then(() => {
+	Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null);
 	open();
 	if (app.isPackaged)
 		void electronUpdater.autoUpdater.checkForUpdatesAndNotify();
