@@ -1,5 +1,6 @@
 import type { Threads } from "@repo/ai";
-import type { Image } from "@repo/interpreter/image";
+import { extract, type Image, snapshot } from "@repo/interpreter/image";
+import { Interp, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import type { ChildRecord, Supervisor } from "../../src/agent-repl.ts";
@@ -15,6 +16,8 @@ function world() {
 		copied: [] as [string, string][],
 		asked: [] as unknown[][],
 		cancelled: [] as string[],
+		imaged: [] as [string, string][],
+		stored: undefined as Image | undefined,
 	};
 	const threads = {
 		spawn: async (
@@ -51,6 +54,10 @@ function world() {
 		},
 		copyTranscript: async (from, to) => {
 			seen.copied.push([from, to]);
+		},
+		image: async (parent, child) => {
+			seen.imaged.push([parent, child]);
+			return child === CHILD ? seen.stored : undefined;
 		},
 	};
 	return { seen, agents: new SupervisedAgents(supervisor, PARENT) };
@@ -131,5 +138,19 @@ describe("the agent threads adapter", () => {
 		expect(agents.state(CHILD)).toEqual({ state: "pending" });
 		expect(await agents.cancel(CHILD)).toBe(true);
 		expect(seen.cancelled).toEqual([CHILD]);
+	});
+
+	it("reads one global out of the child's stored image, as the parent's child", async () => {
+		const { seen, agents } = world();
+		const child = new Interp();
+		runSync(child, "(setq rows (list 1 2) other 3)");
+		seen.stored = snapshot(child);
+		expect(await agents.read(CHILD, "rows")).toEqual(
+			extract(seen.stored, "rows"),
+		);
+		expect(seen.imaged).toEqual([[PARENT, CHILD]]);
+		await expect(agents.read("stranger", "rows")).rejects.toThrow(
+			"has run nothing yet",
+		);
 	});
 });

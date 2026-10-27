@@ -166,7 +166,7 @@ export type TurnRun = (
 
 export type TurnOutcome =
 	| { readonly answer: string }
-	| { readonly held: StepAnnotations }
+	| { readonly held: StepAnnotations; readonly message: string }
 	| { readonly stopped: string };
 
 type Of<T extends TurnEvent["type"]> = Extract<TurnEvent, { type: T }>;
@@ -178,7 +178,7 @@ class TurnWire {
 	steps = 0;
 	failure: string | undefined;
 	outcome: TurnOutcome = { stopped: "stopped without answering" };
-	private held: StepAnnotations | undefined;
+	private held: { held: StepAnnotations; message: string } | undefined;
 	private lastMeta: Record<string, unknown> | undefined;
 	private lastAnswer = -1;
 	private provisional: WireMessage | undefined;
@@ -274,10 +274,7 @@ class TurnWire {
 			case "halt":
 				this.provisional = undefined;
 				this.steps = event.steps;
-				this.outcome =
-					this.held === undefined
-						? { answer: event.answer }
-						: { held: this.held };
+				this.outcome = this.held ?? { answer: event.answer };
 				if (this.lastMeta) {
 					this.lastMeta.steps = event.steps;
 					this.reviseFlushed(this.lastAnswer);
@@ -341,9 +338,10 @@ class TurnWire {
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
 		this.provisional = undefined;
-		if (event.held) this.held = event.annotations;
+		const message = crypto.randomUUID();
+		if (event.held) this.held = { held: event.annotations, message };
 		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
-		this.wire.push(toolMessage(event, crypto.randomUUID()));
+		this.wire.push(toolMessage(event, message));
 		this.flush();
 		return this.snapshot();
 	}

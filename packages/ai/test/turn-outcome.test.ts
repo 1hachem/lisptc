@@ -66,6 +66,7 @@ describe("how a turn ended", () => {
 		model.script = [[{ text: "(wait-for-human)" }], [{ text: "never." }]];
 		expect(await outcomeOf({ repl: testRepl([holding()]) })).toEqual({
 			held: expect.objectContaining({ output: { waiting: ["approve it"] } }),
+			message: expect.any(String),
 		});
 	});
 

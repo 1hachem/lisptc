@@ -74,6 +74,25 @@ describe("what the watch stream shows", () => {
 		expect(shownMessages(watched)).toEqual([human, ask]);
 	});
 
+	test("shows a relayed ask as stored once its answer is written there", () => {
+		const step: ChatMessage = { id: "s", type: "ai", content: "(+ 1 2)" };
+		const answered: ChatMessage = {
+			...ask,
+			additional_kwargs: { output: { asks: { answered: ["yes"] } } },
+		};
+		const watched = watch(
+			sse("status", { status: "running" }),
+			sse("values", { messages: [human] }),
+			sse("relayed", ask),
+			sse("values", { messages: [human, step] }),
+		);
+		expect(shownMessages(watched, [human, answered])).toEqual([
+			human,
+			answered,
+			step,
+		]);
+	});
+
 	test("carries the failure an errored thread reports", () => {
 		const watched = watch(
 			sse("status", { status: "errored", failure: "boom" }),

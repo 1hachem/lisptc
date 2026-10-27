@@ -5,9 +5,10 @@ export interface Handle {
 	readonly name: string;
 	readonly child: string;
 	readonly unsaved?: string;
+	readonly job?: string;
 }
 
-function itemsOf(x: unknown): unknown[] {
+export function itemsOf(x: unknown): unknown[] {
 	const items: unknown[] = [];
 	for (let at = x; at instanceof Cell; at = at.cdr) items.push(at.car);
 	return items;
@@ -16,19 +17,22 @@ function itemsOf(x: unknown): unknown[] {
 export const handlesCodec: StateCodec<readonly Handle[]> = {
 	toLisp: (handles) =>
 		arrayToList(
-			handles.map(({ name, child, unsaved }) =>
-				arrayToList(
-					unsaved === undefined ? [name, child] : [name, child, unsaved],
-				),
+			handles.map(({ name, child, unsaved, job }) =>
+				arrayToList([name, child, unsaved ?? null, job ?? null]),
 			),
 		),
 	fromLisp: (x) =>
 		itemsOf(x).flatMap((item) => {
-			const [name, child, unsaved] = itemsOf(item);
+			const [name, child, unsaved, job] = itemsOf(item);
 			if (typeof name !== "string" || typeof child !== "string") return [];
-			return typeof unsaved === "string"
-				? [{ name, child, unsaved }]
-				: [{ name, child }];
+			return [
+				{
+					name,
+					child,
+					...(typeof unsaved === "string" ? { unsaved } : {}),
+					...(typeof job === "string" ? { job } : {}),
+				},
+			];
 		}),
 };
 
@@ -52,5 +56,22 @@ export class Handles {
 			...this.held.get().filter((entry) => entry.name !== handle.name),
 			handle,
 		]);
+	}
+
+	saved(name: string): void {
+		this.update(name, ({ unsaved: _, ...kept }) => kept);
+	}
+
+	sent(name: string, job: string): string {
+		this.update(name, (handle) => ({ ...handle, job }));
+		return name;
+	}
+
+	private update(name: string, change: (handle: Handle) => Handle): void {
+		this.held.set(
+			this.held
+				.get()
+				.map((entry) => (entry.name === name ? change(entry) : entry)),
+		);
 	}
 }

@@ -99,16 +99,21 @@ export function applyWatched(
 	}
 }
 
-export function shownMessages(watched: Watched): ChatMessage[] {
+export function shownMessages(
+	watched: Watched,
+	stored: readonly ChatMessage[] = [],
+): ChatMessage[] {
 	const ids = new Set(watched.snapshot.map((message) => message.id));
 	const waiting = watched.relayed.filter(({ message }) => !ids.has(message.id));
+	const latest = new Map(stored.map((message) => [message.id, message]));
+	const current = ({ message }: Relayed) => latest.get(message.id) ?? message;
 	const placed = new Set<Relayed>();
 	const shown: ChatMessage[] = [];
 	const place = (after: string | undefined) => {
 		for (const relayed of waiting)
 			if (relayed.after === after && !placed.has(relayed)) {
 				placed.add(relayed);
-				shown.push(relayed.message);
+				shown.push(current(relayed));
 				place(relayed.message.id);
 			}
 	};
@@ -118,7 +123,7 @@ export function shownMessages(watched: Watched): ChatMessage[] {
 		place(message.id);
 	}
 	for (const relayed of waiting)
-		if (!placed.has(relayed)) shown.push(relayed.message);
+		if (!placed.has(relayed)) shown.push(current(relayed));
 	return shown;
 }
 

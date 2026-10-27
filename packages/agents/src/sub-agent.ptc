@@ -1,0 +1,9 @@
+EXPORTS
+
+You run as sub-agent. Agent that spawned you reads your final answer.
+Result is data it will compute on? Bind it, export it, not paste it:
+  (setq prices (list (list :sku "a" :price 2.5)))
+  (agents/export 'prices "list of plists (:sku string :price number): price per SKU")
+Description states shape: list or plist, keys, value types, nesting.
+Final answer lists every export; parent copies one with agent-take, value as
+it stands then. Export same name again: description replaced.

@@ -605,10 +605,12 @@ export function ChatProvider({
 	announce.current = onOpened;
 	const drafted = useDrafted(workspaceId, chatId);
 	const watched = useWatch(chatId);
-	const streamed = useMemo(() => shownMessages(watched), [watched]);
-	const running = watched.status === "running";
-
 	const persisted = usePersisted(chatId);
+	const streamed = useMemo(
+		() => shownMessages(watched, persisted),
+		[watched, persisted],
+	);
+	const running = watched.status === "running";
 
 	const greeting = useGreeting(greetingKey);
 

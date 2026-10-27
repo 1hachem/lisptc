@@ -1,6 +1,6 @@
 import type { SourceFolder } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
-import type { AgentsHost } from "./agents.ts";
+import type { AgentsHost, SubAgentHost } from "./agents.ts";
 import type { AgentThreads } from "./ports.ts";
 
 export class MemorySourceFolder implements SourceFolder {
@@ -46,4 +46,8 @@ export function agentsHostFor(options: AgentsHostOptions = {}): AgentsHost {
 		...(options.roster === undefined ? {} : { roster: options.roster }),
 		...(options.threads === undefined ? {} : { threads: options.threads }),
 	};
+}
+
+export function subAgentHost(): SubAgentHost {
+	return { prompt: filePrompt(new URL("./sub-agent.ptc", import.meta.url)) };
 }
