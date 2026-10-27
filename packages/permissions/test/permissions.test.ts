@@ -153,6 +153,17 @@ describe("the permissions guard", () => {
 		expect(decided.failed).toBe(true);
 	});
 
+	it("closes a request that is not open as expired, so nothing waits on it", async () => {
+		const s = session("(permission/ask string-upcase)");
+		const decided = await s.invoke(DECIDE_ACTION, {
+			id: "nope",
+			approved: true,
+		});
+		expect(decided.annotations.output).toEqual({
+			asks: { answered: { nope: { accepted: false, label: "Expired" } } },
+		});
+	});
+
 	it("passes every other action on", async () => {
 		const s = session("(permission/ask string-upcase)");
 		expect((await s.invoke("ui/click", {})).failed).toBe(true);
@@ -218,6 +229,47 @@ describe("a form the host asks for", () => {
 	it("leaves every other form to the config", async () => {
 		const s = session("", undefined, ASKED);
 		expect((await s.step('(string-downcase "A")')).value).toBe('"a"');
+	});
+});
+
+describe("a bound the session cannot change", () => {
+	it("denies what the bound denies, though the config allows it", async () => {
+		const s = session(
+			"(permission/allow string-upcase)",
+			undefined,
+			undefined,
+			["(permission/deny string-upcase)"],
+		);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("asks for what the bound asks for", async () => {
+		const s = session("", undefined, undefined, ["(permission/ask string-*)"]);
+		expect((await s.step(UPCASE)).held).toBe(true);
+	});
+
+	it("never loosens what the config denies", async () => {
+		const s = session("(permission/deny string-upcase)", undefined, undefined, [
+			"(permission/allow string-upcase)",
+		]);
+		expect((await s.step(UPCASE)).failed).toBe(true);
+	});
+
+	it("leaves a form it never names to the config", async () => {
+		const s = session("", undefined, undefined, ["(permission/deny string-*)"]);
+		expect((await s.step("(+ 1 2)")).value).toBe("3");
+	});
+
+	it("hides a server's tool the config shows", () => {
+		const s = session("", undefined, undefined, [
+			"(permission/hide-server fx)",
+		]);
+		expect(s.extension.rules.server("fx").access).toBe("hidden");
+	});
+
+	it("stays out of the saved config", async () => {
+		const s = session("", undefined, undefined, ["(permission/deny string-*)"]);
+		expect((await s.step("(permission/list)")).value).toBe("nil");
 	});
 });
 

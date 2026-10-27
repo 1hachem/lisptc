@@ -90,8 +90,8 @@ workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point
 for working in it.
 
 Not all of it is a workspace. The dialect is served outside the node build too,
-and those parts answer to `task` rather than to `pnpm`: `tree-sitter-lisptc/` is
-the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
+and those parts answer to `task` rather than to `pnpm`: `nix/` builds the
+`ptcfmt` formatter from the grammar in `packages/tree-sitter` and holds its checks,
 `editors/nvim` is the editor plugin, and `examples/` is the dialect written out.
 A change to the language surface is not done until they still pass.
 
@@ -112,7 +112,7 @@ The extensions, one language surface each. Every one depends on the
 interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
-- `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when.
+- `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when, and the sub-agents it starts.
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
 - `packages/knowledge` (`@repo/knowledge-extension`) — the files the user uploaded to a workspace, read and written by the agent.
@@ -136,6 +136,7 @@ Everything else:
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
+- `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
@@ -208,10 +209,10 @@ circular imports between files in a package.
 A name is exported once, by the module that declares it, and imported from
 there. No module re-exports a name it imported, and none renames one with an
 alias type or const. Only a package's root entrypoint gathers names, and only
-from its own files. `check:arch` fails on a relay. `scripts/check-arch.ts`
-(`pnpm check:arch`) holds the rules a manifest cannot express, including the two
-below. Every failure prints the way out. Take it. Do not widen a list to get
-past one.
+from its own files. `check:arch` fails on a relay. `scripts/check-arch/`
+(`pnpm check:arch`) holds the rules a manifest cannot express, one check per
+file, including the two below. Every failure prints the way out. Take it. Do not
+widen a list to get past one.
 
 ## Host ports
 

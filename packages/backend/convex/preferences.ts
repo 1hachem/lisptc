@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
-import type { Doc } from "./_generated/dataModel.js";
-import { mutation, query } from "./_generated/server.js";
-import { requireUser } from "./lib/auth.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
+import { mutation, type QueryCtx, query } from "./_generated/server.js";
+import { requireUserOrThread } from "./lib/auth.js";
 import { withDefaults } from "./lib/preferenceDefaults.js";
 import { MAX_PREFERENCES_BYTES } from "./limits.js";
 
@@ -23,28 +23,30 @@ const preferences = v.object({
 
 function stripped(row: Doc<"preferences"> | null) {
 	if (row === null) return {};
-	const { _id, _creationTime, userId, theme, ...stored } = row;
+	const { _id, _creationTime, userId, ...stored } = row;
 	return stored;
+}
+
+export async function preferencesOf(ctx: QueryCtx, userId: Id<"users">) {
+	const row = await ctx.db
+		.query("preferences")
+		.withIndex("by_user", (q) => q.eq("userId", userId))
+		.unique();
+	return withDefaults(stripped(row));
 }
 
 export const get = query({
 	args: {},
 	returns: preferences,
-	handler: async (ctx) => {
-		const user = await requireUser(ctx);
-		const row = await ctx.db
-			.query("preferences")
-			.withIndex("by_user", (q) => q.eq("userId", user._id))
-			.unique();
-		return withDefaults(stripped(row));
-	},
+	handler: async (ctx) =>
+		await preferencesOf(ctx, (await requireUserOrThread(ctx))._id),
 });
 
 export const put = mutation({
 	args: { preferences },
 	returns: v.null(),
 	handler: async (ctx, { preferences }) => {
-		const user = await requireUser(ctx);
+		const user = await requireUserOrThread(ctx);
 		const existing = await ctx.db
 			.query("preferences")
 			.withIndex("by_user", (q) => q.eq("userId", user._id))

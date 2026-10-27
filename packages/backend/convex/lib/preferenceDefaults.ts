@@ -31,7 +31,7 @@ export const DEFAULT_TOGGLES = {
 	Record<string, boolean>
 >;
 
-type Toggles = Record<string, boolean>;
+export type Toggles = Record<string, boolean>;
 
 export function withDefaults<
 	T extends {

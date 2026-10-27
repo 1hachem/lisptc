@@ -32,16 +32,20 @@ vi.mock("@convex-dev/react-query", () => ({
 vi.mock("@tanstack/react-query", () => ({
 	useQuery: () => ({ data: undefined }),
 }));
-vi.mock("@langchain/langgraph-sdk/react", () => ({
-	FetchStreamTransport: class {},
-	useStream: () => ({
-		messages: [],
-		isLoading: false,
-		error: undefined,
-		submit: world.submit,
-		stop: vi.fn(),
-	}),
-}));
+
+function watching(): Response {
+	return new Response(new ReadableStream(), {
+		headers: { "content-type": "text/event-stream" },
+	});
+}
+
+vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+	if (url === "/api/chat") {
+		world.submit(JSON.parse(String(init?.body)).input);
+		return Promise.resolve(Response.json({ accepted: true }, { status: 202 }));
+	}
+	return Promise.resolve(watching());
+});
 vi.mock("../src/lib/analytics.tsx", () => ({
 	reportIssue: world.reportIssue,
 }));
@@ -138,7 +142,6 @@ describe("sending from the chat", () => {
 				annotations,
 				message: expect.stringContaining("knowledge/a.md"),
 			}),
-			expect.anything(),
 		);
 	});
 

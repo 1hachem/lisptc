@@ -11,7 +11,7 @@ import {
 import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { slugify } from "./lib/slug.js";
 import { dropRepl } from "./repls.js";
-import { modelChoice, storedModel, workspaceIcon } from "./schema.js";
+import { modelChoice, workspaceIcon } from "./schema.js";
 
 export const MAX_WORKSPACES = 25;
 
@@ -23,7 +23,7 @@ const workspace = v.object({
 	ownerId: v.id("users"),
 	name: v.string(),
 	slug: v.string(),
-	model: v.optional(storedModel),
+	model: v.optional(modelChoice),
 	icon: v.optional(workspaceIcon),
 	theme: v.optional(v.string()),
 });
@@ -35,6 +35,7 @@ export async function dropWorkspace(
 	await ctx.db.delete(workspaceId);
 	await ctx.scheduler.runAfter(0, internal.workspaces.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.memories.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.sources.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.permissions.purge, { workspaceId });

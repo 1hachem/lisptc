@@ -8,3 +8,5 @@ export const decided = topic<string>("permissions-decided");
 export const settled = topic<{ id: string; approved: boolean; scope: Scope }>(
 	"permissions-settled",
 );
+
+export const lapsed = topic<string>("permissions-lapsed");

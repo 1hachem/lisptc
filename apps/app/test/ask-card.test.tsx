@@ -33,7 +33,6 @@ const session = vi.hoisted(() => ({
 	chatId: "c1",
 	workspaceId: "ws1",
 	send: vi.fn(),
-	resume: vi.fn(),
 }));
 
 vi.mock("../src/lib/chat.tsx", () => ({
@@ -151,17 +150,6 @@ function StoredCard({
 }
 const CHOICES = ["Deny", "Allow for session", "Allow once"];
 
-const APPROVED = {
-	token: "t-approved",
-	source: "permissions/decide",
-	text: "I approved (permission/deny eval)",
-};
-const DENIED = {
-	token: "t-denied",
-	source: "permissions/decide",
-	text: "I denied (permission/deny eval)",
-};
-
 beforeAll(() => {
 	(
 		globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -172,7 +160,6 @@ const roots: Root[] = [];
 
 beforeEach(() => {
 	session.send.mockReset();
-	session.resume.mockReset();
 });
 
 afterEach(() => {
@@ -270,21 +257,18 @@ describe("the approval card", () => {
 			MESSAGE_ID,
 			REQUEST.choices[2],
 		);
-		expect(session.resume).not.toHaveBeenCalled();
 
 		await act(async () => {
-			resolve({ ok: true, event: APPROVED });
+			resolve({ ok: true });
 		});
 
-		expect(session.resume).toHaveBeenCalledTimes(1);
-		expect(session.resume).toHaveBeenCalledWith(APPROVED);
 		expect(session.send).not.toHaveBeenCalled();
 		expect(card.text()).toContain("Allowed");
 	});
 
-	it("drives the next turn on a denial too, once", async () => {
+	it("settles on a denial too", async () => {
 		const client = clientHolding(transcript());
-		const transport = transportResolving({ ok: true, event: DENIED });
+		const transport = transportResolving({ ok: true });
 		const card = await mount(client, transport);
 
 		await card.click("Deny");
@@ -296,8 +280,6 @@ describe("the approval card", () => {
 			MESSAGE_ID,
 			REQUEST.choices[0],
 		);
-		expect(session.resume).toHaveBeenCalledTimes(1);
-		expect(session.resume).toHaveBeenCalledWith(DENIED);
 		expect(session.send).not.toHaveBeenCalled();
 	});
 
@@ -314,7 +296,6 @@ describe("the approval card", () => {
 		expect(remounted.text()).toContain("Denied");
 		expect(remounted.buttons()).toEqual([]);
 		expect(transport.answer).not.toHaveBeenCalled();
-		expect(session.resume).not.toHaveBeenCalled();
 	});
 
 	it("rolls the message back and closes on a refused decision", async () => {
@@ -333,7 +314,6 @@ describe("the approval card", () => {
 		expect(card.text()).not.toContain("Allowed");
 		expect(card.buttons()).toEqual([]);
 		expect(client.getQueryData<Row[]>(KEY)).toEqual(transcript());
-		expect(session.resume).not.toHaveBeenCalled();
 	});
 
 	it("rolls the message back and keeps the buttons when the request fails", async () => {
@@ -367,7 +347,7 @@ describe("a sign-in ask", () => {
 
 	it("opens the link and answers only once the sign-in came back", async () => {
 		const opened = vi.spyOn(window, "open").mockReturnValue(null);
-		const transport = transportResolving({ ok: true, event: APPROVED });
+		const transport = transportResolving({ ok: true });
 		const card = await mount(
 			clientHolding(transcript(undefined, SIGN_IN)),
 			transport,
@@ -394,7 +374,6 @@ describe("a sign-in ask", () => {
 		});
 
 		expect(transport.answer).toHaveBeenCalledWith("c1", MESSAGE_ID, AUTHORIZE);
-		expect(session.resume).toHaveBeenCalledWith(APPROVED);
 		expect(localStorage.getItem(OAUTH_AUTHORIZED_KEY)).toBe(null);
 		opened.mockRestore();
 	});

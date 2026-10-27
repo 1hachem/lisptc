@@ -15,8 +15,7 @@ export const get = query({
 			.query("layouts")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.unique();
-		if (row === null || !("nodes" in row.layout)) return null;
-		return row.layout;
+		return row?.layout ?? null;
 	},
 });
 

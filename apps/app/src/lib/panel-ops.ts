@@ -5,7 +5,6 @@ import {
 	openTab,
 	type Placement,
 	paneOf,
-	replaceTab,
 	type SplitLayout,
 	type Tab,
 } from "@repo/components";
@@ -26,13 +25,12 @@ export type Page = (typeof PAGES)[number];
 
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
+	| { kind: "source"; folder: string; name: string }
 	| { kind: "view"; title: string; node: unknown; chatId?: string }
 	| { kind: "chat"; chatId: string | null; title: string }
 	| { kind: "page"; page: Page; id?: string; title: string };
 
 export type PanelLayout = SplitLayout<PanelContent>;
-
-const RETIRED_MAIN = "main";
 
 export const NEW_CHAT: PanelContent = {
 	kind: "chat",
@@ -62,11 +60,6 @@ export function leadChat(layout: PanelLayout): string | undefined {
 	const focused = focusedTab(layout);
 	if (focused?.content.kind === "chat") return focused.id;
 	return shownTabs(layout).find((t) => t.content.kind === "chat")?.id;
-}
-
-export function retireMain(layout: PanelLayout): PanelLayout {
-	if (paneOf(layout, RETIRED_MAIN) === undefined) return layout;
-	return replaceTab(layout, RETIRED_MAIN, panelTab(NEW_CHAT));
 }
 
 function placed(
@@ -112,6 +105,16 @@ function fileOf(content: Fields): PanelContent | undefined {
 	return { kind: "file", folder: content.folder, name: content.name };
 }
 
+export function sourcePanel(folder: string, name: string): PanelContent {
+	return { kind: "source", folder, name };
+}
+
+function sourceOf(content: Fields): PanelContent | undefined {
+	if (typeof content.folder !== "string" || typeof content.name !== "string")
+		return undefined;
+	return sourcePanel(content.folder, content.name);
+}
+
 function viewOf(content: Fields): PanelContent | undefined {
 	if (typeof content.title !== "string") return undefined;
 	return {
@@ -143,7 +146,13 @@ function pageOf(content: Fields): PanelContent | undefined {
 const CONTENT_OF: Record<
 	PanelContent["kind"],
 	(content: Fields) => PanelContent | undefined
-> = { file: fileOf, view: viewOf, chat: chatOf, page: pageOf };
+> = {
+	file: fileOf,
+	source: sourceOf,
+	view: viewOf,
+	chat: chatOf,
+	page: pageOf,
+};
 
 function contentOf(value: unknown): PanelContent | undefined {
 	const content = record(value);
@@ -154,7 +163,9 @@ function contentOf(value: unknown): PanelContent | undefined {
 }
 
 export function tabLabel(content: PanelContent): string {
-	return content.kind === "file" ? content.name : content.title;
+	return content.kind === "file" || content.kind === "source"
+		? content.name
+		: content.title;
 }
 
 const CHAT_MIN_WIDTH = 360;
@@ -169,6 +180,8 @@ function tabId(content: PanelContent): string {
 	switch (content.kind) {
 		case "file":
 			return fileTab(content.folder, content.name);
+		case "source":
+			return `source:${content.folder}/${content.name}`;
 		case "view":
 			return `view:${content.title}`;
 		case "chat":

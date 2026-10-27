@@ -1,16 +1,18 @@
 import { providerSpecs } from "@repo/env/providers";
 import type { ModelDelta } from "@repo/interpreter/session";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
-import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { MemorySteerInbox } from "../src/inbox.ts";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import type { Envelope } from "../src/mailbox.ts";
 import { replResultContent } from "../src/repl.ts";
-import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
+import type { ChatInput } from "../src/stream.ts";
 import {
+	type ChatStreamOptions,
 	extension,
 	hearing,
 	receiving,
 	reporting,
 	riding,
+	streamChat,
 	testRepl,
 } from "./helpers.ts";
 
@@ -86,17 +88,11 @@ async function finalMessages(response: Response): Promise<WireMessage[]> {
 }
 
 describe("chat stream", () => {
-	let streamChatResponse: typeof import("../src/stream.ts").streamChatResponse;
-
-	beforeAll(async () => {
-		({ streamChatResponse } = await import("../src/stream.ts"));
-	});
-
 	function stream(
 		input: ChatInput,
 		options: Partial<ChatStreamOptions> = {},
 	): Response {
-		return streamChatResponse(input, { repl: testRepl(), ...options });
+		return streamChat(input, { repl: testRepl(), ...options });
 	}
 
 	beforeEach(() => {
@@ -119,21 +115,22 @@ describe("chat stream", () => {
 		expect(failures).toEqual([undefined, expect.stringContaining("down")]);
 	});
 
-	test("a steer posted mid-turn is recorded in order, and the inbox closes with the turn", async () => {
-		const inbox = new MemorySteerInbox();
+	test("a steer posted mid-turn is recorded in order", async () => {
+		const waiting: Envelope[] = [
+			{ kind: "user", id: "s1", text: "use hex", forms: true },
+		];
 		const recorded: { type: string; content: string; id: string }[] = [];
-		const response = stream(
-			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
-			{
-				steer: { inbox, key: "t" },
-				onTurn: (produced) => {
-					recorded.push(...produced);
+		const messages = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{
+					inbox: async () => waiting.splice(0),
+					onTurn: (produced) => {
+						recorded.push(...produced);
+					},
 				},
-			},
+			),
 		);
-		expect(await inbox.post("t", { id: "s1", content: "use hex" })).toBe(true);
-
-		const messages = await finalMessages(response);
 
 		expect(messages.map((m) => m.type)).toEqual([
 			"human",
@@ -144,7 +141,25 @@ describe("chat stream", () => {
 		]);
 		expect(recorded.map((m) => m.type)).toEqual(["ai", "tool", "human", "ai"]);
 		expect(recorded[2]).toMatchObject({ id: "s1", content: "use hex" });
-		expect(await inbox.post("t", { id: "s2", content: "late" })).toBe(false);
+	});
+
+	test("an event taken mid-turn is recorded as a system message", async () => {
+		const waiting: Envelope[] = [
+			{ kind: "event", id: "e1", source: "agent:r", text: "(+ 1 2)" },
+		];
+		const messages = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{ inbox: async () => waiting.splice(0) },
+			),
+		);
+
+		expect(messages[3]).toMatchObject({
+			type: "system",
+			id: "e1",
+			content: "(+ 1 2)",
+			additional_kwargs: { source: "agent:r" },
+		});
 	});
 
 	test("every model call reports what it cost, and only its own", async () => {
