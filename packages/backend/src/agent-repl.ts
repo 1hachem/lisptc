@@ -37,6 +37,7 @@ import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import type { Infer } from "convex/values";
+import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
