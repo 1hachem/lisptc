@@ -6,6 +6,7 @@ import {
 	LoopSignal,
 	messageOf,
 	StepHold,
+	ThrowSignal,
 } from "./errors.ts";
 import { assert, Cell, LispKeyword, type List, type Sym } from "./objects.ts";
 import { str } from "./print.ts";
@@ -255,6 +256,7 @@ export class BuiltInFunc extends Func {
 			if (
 				ex instanceof EvalException ||
 				ex instanceof LoopSignal ||
+				ex instanceof ThrowSignal ||
 				ex instanceof StepHold
 			)
 				throw ex;
@@ -273,7 +275,12 @@ export class BuiltInFunc extends Func {
 	}
 
 	private failure(ex: unknown, frame: unknown[]): unknown {
-		if (ex instanceof LoopSignal || ex instanceof StepHold) return ex;
+		if (
+			ex instanceof LoopSignal ||
+			ex instanceof ThrowSignal ||
+			ex instanceof StepHold
+		)
+			return ex;
 		if (ex instanceof EvalException) return this.named(ex);
 		return this.named(new EvalException(`${ex} -- ${this.callName}`, frame));
 	}
