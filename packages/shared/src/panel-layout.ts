@@ -16,10 +16,6 @@ export type PanelOp<C> =
 	| { op: "close"; tab: string }
 	| { op: "focus"; tab: string };
 
-interface Kinded {
-	kind: string;
-}
-
 const PLACEMENT: Record<Split, Placement> = {
 	here: "focused",
 	right: "right",
@@ -33,7 +29,7 @@ export function focusedTab<C>(layout: SplitLayout<C>): Tab<C> | undefined {
 	});
 }
 
-function placed<C extends Kinded>(
+function placed<C extends { kind: string }>(
 	layout: SplitLayout<C>,
 	split: Split,
 	content: C,
@@ -44,7 +40,7 @@ function placed<C extends Kinded>(
 		: "focused";
 }
 
-export function applyPanelOps<C extends Kinded>(
+export function applyPanelOps<C extends { kind: string }>(
 	layout: SplitLayout<C>,
 	ops: readonly PanelOp<C>[],
 ): SplitLayout<C> {
