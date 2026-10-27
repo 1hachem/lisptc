@@ -439,11 +439,11 @@ function useStepProse(message: ChatMessage | undefined) {
 		[message],
 	);
 	const classified = message !== undefined && messageClassified(message);
-	const { prose } = useMemo(
+	const { prose, heads } = useMemo(
 		() => formsIn(text, spans, classified),
 		[text, spans, classified],
 	);
-	return { text, spans, prose };
+	return { text, spans, prose, heads };
 }
 
 function StepThinking({ thinking }: { thinking: string }) {
@@ -486,6 +486,7 @@ function StepText({ message }: { message: ChatMessage }) {
 }
 
 function StepCall({
+	call,
 	result,
 	doing,
 	entries,
@@ -493,6 +494,7 @@ function StepCall({
 	live,
 	ran,
 }: {
+	call: ChatMessage | undefined;
 	result: ChatMessage;
 	ran: boolean;
 	doing: string | undefined;
@@ -500,9 +502,13 @@ function StepCall({
 	progress: Progress | undefined;
 	live: boolean;
 }) {
+	const { heads } = useStepProse(call);
 	const label = entries.some((entry) => entry.kind === "intent")
 		? undefined
-		: doing;
+		: (doing ??
+			(entries.length === 0 && !ran && heads.length > 0
+				? heads.join(" · ")
+				: undefined));
 	return (
 		<div className="flex min-w-0 flex-col gap-2 empty:hidden">
 			{label && (
@@ -609,6 +615,7 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 		) : (
 			<StepCall
 				key={`call:${link.call?.id ?? link.result.id ?? at}`}
+				call={link.call}
 				result={link.result}
 				ran={link.ran}
 				doing={link.doing}

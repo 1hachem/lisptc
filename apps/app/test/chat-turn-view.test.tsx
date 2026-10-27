@@ -1080,11 +1080,16 @@ describe("a turn's chain", () => {
 		session.isLoading = false;
 		const host = await mount(<ChatView />);
 
-		const at = order(host, ["Let me look.", "Found it.", "It is empty."]);
+		const at = order(host, [
+			"Let me look.",
+			"fs/list",
+			"Found it.",
+			"fs/read",
+			"It is empty.",
+		]);
 		expect(at.every((n) => n >= 0)).toBe(true);
 		expect([...at].sort((a, b) => a - b)).toEqual(at);
-		expect(host.textContent).not.toContain("fs/list");
-		expect(host.textContent).not.toContain("fs/read");
+		expect(host.textContent).not.toContain('"notes/"');
 	});
 
 	it("keeps the text already written while the next call runs", async () => {
@@ -1094,7 +1099,10 @@ describe("a turn's chain", () => {
 
 		expect(host.textContent).toContain("Let me look.");
 		expect(host.textContent).toContain("Found it.");
-		expect(host.querySelector("[data-step-call]")).toBeNull();
+		const labels = [...host.querySelectorAll("[data-step-call]")].map(
+			(label) => label.textContent,
+		);
+		expect(labels).toEqual(["fs/list", "fs/read"]);
 	});
 });
 
