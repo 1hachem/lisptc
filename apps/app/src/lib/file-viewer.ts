@@ -1,3 +1,5 @@
+import { queryOptions } from "@tanstack/react-query";
+
 const TEXT_EXTENSIONS = new Set([
 	"txt",
 	"log",
@@ -87,4 +89,18 @@ export function knowledgeViewer(
 		return "json";
 	if (type.startsWith("text/") || TEXT_EXTENSIONS.has(extension)) return "text";
 	return "download";
+}
+
+async function fetchText(url: string): Promise<string> {
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`fetch failed (${response.status})`);
+	return await response.text();
+}
+
+export function storedTextQuery(url: string) {
+	return queryOptions({
+		queryKey: ["knowledge-text", url],
+		queryFn: () => fetchText(url),
+		staleTime: Number.POSITIVE_INFINITY,
+	});
 }
