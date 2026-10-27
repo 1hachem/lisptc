@@ -135,9 +135,18 @@ export const activityIcons = [
 
 export type ActivityIcon = (typeof activityIcons)[number];
 
+const activityImage = z.object({
+	src: z.string(),
+	theme: z.enum(["light", "dark"]).optional(),
+});
+
+export type ActivityImage = z.infer<typeof activityImage>;
+
 const activityEntry = z.object({
 	kind: z.string(),
-	icon: z.enum(activityIcons).optional(),
+	icon: z
+		.union([z.enum(activityIcons), z.array(activityImage).min(1)])
+		.optional(),
 	label: z.string(),
 	detail: z.string().optional(),
 	state: z.enum(["started", "done", "failed"]),

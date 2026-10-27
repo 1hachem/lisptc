@@ -7,7 +7,7 @@ import { noAnnotations, openSession } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
-import type { McpClient, Tool } from "../src/ports.ts";
+import type { Icon, McpClient, Tool } from "../src/ports.ts";
 
 const TOOLS: Tool[] = [
 	{
@@ -22,11 +22,28 @@ const TOOLS: Tool[] = [
 		description: `Fetches ${"a very long page description ".repeat(8)}`,
 	},
 	{ name: "explode" },
+	{
+		name: "painted",
+		icons: [
+			{ src: "javascript:alert(1)" },
+			{ src: "https://acme.example/tool-light.png", theme: "light" },
+			{ src: "https://acme.example/tool-dark.png", theme: "dark" },
+		],
+	},
+	{ name: "unsafe", icons: [{ src: "http://acme.example/plain.png" }] },
 ];
 
-function fakeClient(): McpClient {
+const SERVER_ICONS: Icon[] = [
+	{ src: "https://acme.example/logo.svg", mimeType: "image/svg+xml" },
+];
+
+function fakeClient(icons: Icon[] | undefined = SERVER_ICONS): McpClient {
 	return {
-		connect: async () => ({ serverId: "acme-1", tools: TOOLS }),
+		connect: async () => ({
+			serverId: "acme-1",
+			tools: TOOLS,
+			...(icons === undefined ? {} : { icons }),
+		}),
 		callTool: async (call) => {
 			if (call.tool === "explode") throw new Error("boom");
 			return { ok: true };
@@ -49,10 +66,10 @@ function ticking(from: number, step: number): { now(): number } {
 	};
 }
 
-async function session() {
+async function session(icons?: Icon[]) {
 	const extension = mcpExtension({
 		...mcpHost,
-		client: fakeClient(),
+		client: fakeClient(icons),
 		clock: ticking(1000, 25),
 	});
 	const interp = new Interp({ extensions: [extension] });
@@ -64,11 +81,14 @@ async function session() {
 	return { interp, hooks: openSession([extension]) };
 }
 
-async function activityOf(code: string): Promise<{
+async function activityOf(
+	code: string,
+	icons?: Icon[],
+): Promise<{
 	activity: Activity | undefined;
 	reported: unknown[];
 }> {
-	const { interp, hooks } = await session();
+	const { interp, hooks } = await session(icons);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
 	try {
@@ -97,7 +117,7 @@ describe("a tool call from lisp", () => {
 		expect(activity).toEqual([
 			{
 				kind: "mcp",
-				icon: "tool",
+				icon: [{ src: "https://acme.example/logo.svg" }],
 				label: "acme · Web search",
 				detail: "Searches the web for a query.",
 				state: "done",
@@ -113,7 +133,7 @@ describe("a tool call from lisp", () => {
 		expect(activity).toEqual([
 			{
 				kind: "mcp",
-				icon: "tool",
+				icon: [{ src: "https://acme.example/logo.svg" }],
 				label: "acme · explode",
 				state: "failed",
 				error: "boom",
@@ -172,7 +192,7 @@ describe("loading a server", () => {
 		expect(activityKey.schema.parse(into.output[activityKey.name])).toEqual([
 			{
 				kind: "mcp",
-				icon: "tool",
+				icon: [{ src: "https://acme.example/logo.svg" }],
 				label: "load-mcp · acme",
 				state: "done",
 				id: "mcp-load-1",
@@ -180,5 +200,29 @@ describe("loading a server", () => {
 				ms: 25,
 			},
 		]);
+	});
+});
+
+describe("an mcp icon", () => {
+	it("shows the tool's own icons ahead of the server's, dropping unsafe sources", async () => {
+		const { activity } = await activityOf("(acme/painted)");
+		expect(activity?.[0].icon).toEqual([
+			{ src: "https://acme.example/tool-light.png", theme: "light" },
+			{ src: "https://acme.example/tool-dark.png", theme: "dark" },
+		]);
+	});
+
+	it("falls back to the server's icon when the tool's are all unsafe", async () => {
+		const { activity } = await activityOf("(acme/unsafe)");
+		expect(activity?.[0].icon).toEqual([
+			{ src: "https://acme.example/logo.svg" },
+		]);
+	});
+
+	it("drops an oversized data icon and falls back to the tool icon", async () => {
+		const { activity } = await activityOf("(acme/explode)", [
+			{ src: `data:image/png;base64,${"A".repeat(9000)}` },
+		]);
+		expect(activity?.[0].icon).toBe("tool");
 	});
 });

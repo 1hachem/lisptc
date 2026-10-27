@@ -17,7 +17,11 @@ import {
 	UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import type { ActivityIcon, Progress } from "@repo/interpreter/annotations";
+import type {
+	ActivityIcon,
+	ActivityImage,
+	Progress,
+} from "@repo/interpreter/annotations";
 import { useEffect, useState } from "react";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 
@@ -89,15 +93,60 @@ function useGlyphBeat(active: boolean) {
 function markOf(entry: TimelineEntry, live: boolean) {
 	if (entry.kind === "intent") return undefined;
 	if (entry.state === "running" && !live) return STALLED_MARK;
-	if (entry.state === "done" && entry.icon !== undefined)
+	if (entry.state === "done" && typeof entry.icon === "string")
 		return { icon: ACTIVITY_ICON[entry.icon], tone: STATE_MARK.done.tone };
 	return STATE_MARK[entry.state];
+}
+
+const IMAGE_THEME = {
+	light: "dark:hidden",
+	dark: "hidden dark:block",
+	any: "",
+} as const;
+
+function themedImages(images: readonly ActivityImage[]) {
+	const light = images.find((i) => i.theme === "light");
+	const dark = images.find((i) => i.theme === "dark");
+	const plain = images.find((i) => i.theme === undefined);
+	if (light && dark)
+		return [
+			{ src: light.src, show: IMAGE_THEME.light },
+			{ src: dark.src, show: IMAGE_THEME.dark },
+		];
+	const one = plain ?? light ?? dark;
+	return one ? [{ src: one.src, show: IMAGE_THEME.any }] : [];
+}
+
+function ImageMark({
+	images,
+	onBroken,
+}: {
+	images: readonly ActivityImage[];
+	onBroken: () => void;
+}) {
+	return themedImages(images).map(({ src, show }) => (
+		<img
+			key={src}
+			src={src}
+			alt=""
+			referrerPolicy="no-referrer"
+			loading="lazy"
+			onError={onBroken}
+			data-activity-image
+			className={`absolute left-0 size-icon flex-none rounded-sm object-contain ${show}`}
+		/>
+	));
 }
 
 function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 	const mark = markOf(entry, live);
 	const cycling = mark === STATE_MARK.running;
 	const glyph = useGlyphBeat(cycling);
+	const [broken, setBroken] = useState(false);
+	const images =
+		entry.state === "done" && Array.isArray(entry.icon) && !broken
+			? entry.icon
+			: undefined;
 	return (
 		<li
 			data-timeline={entry.state}
@@ -109,12 +158,16 @@ function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 			}
 		>
 			<div title={entry.detail} className="flex min-w-0 items-center gap-2">
-				{mark && (
-					<HugeiconsIcon
-						icon={cycling ? glyph : mark.icon}
-						aria-label={entry.state}
-						className={`absolute left-0 size-icon flex-none ${mark.tone}`}
-					/>
+				{mark && images ? (
+					<ImageMark images={images} onBroken={() => setBroken(true)} />
+				) : (
+					mark && (
+						<HugeiconsIcon
+							icon={cycling ? glyph : mark.icon}
+							aria-label={entry.state}
+							className={`absolute left-0 size-icon flex-none ${mark.tone}`}
+						/>
+					)
 				)}
 				<span
 					className={`min-w-0 truncate ${entry.state === "failed" ? "text-red" : "text-fg"}`}

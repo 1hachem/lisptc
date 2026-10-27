@@ -1,5 +1,6 @@
 import {
 	type ActivityEntry,
+	type ActivityImage,
 	recordActivity,
 } from "@repo/interpreter/annotations";
 import { isNumeric } from "@repo/interpreter/arith";
@@ -38,6 +39,7 @@ import {
 	type ConnConfig,
 	type ConnectResult,
 	type HttpConnConfig,
+	type Icon,
 	type JsonSchema,
 	type McpClient,
 	type McpPolicy,
@@ -73,6 +75,36 @@ function toolDetail(description: string | undefined): string | undefined {
 	return sentence.length <= DETAIL_MAX
 		? sentence
 		: `${sentence.slice(0, DETAIL_MAX - 1).trimEnd()}…`;
+}
+
+const DATA_ICON_MAX = 8 * 1024;
+
+function safeIcon(icon: Icon): boolean {
+	if (icon.src.startsWith("https://")) return true;
+	return icon.src.startsWith("data:image/") && icon.src.length <= DATA_ICON_MAX;
+}
+
+function activityImage(
+	...sources: (readonly Icon[] | undefined)[]
+): ActivityImage[] | undefined {
+	for (const icons of sources) {
+		const safe = (icons ?? []).filter(safeIcon);
+		if (safe.length > 0)
+			return safe.map(({ src, theme }) =>
+				theme === undefined ? { src } : { src, theme },
+			);
+	}
+	return undefined;
+}
+
+function iconOf(
+	...sources: (readonly Icon[] | undefined)[]
+): ActivityImage[] | "tool" {
+	return activityImage(...sources) ?? "tool";
+}
+
+function manifestIcons(conf: ConnConfig): Icon[] | undefined {
+	return conf.icon === undefined ? undefined : [{ src: conf.icon }];
 }
 
 function reportActivity(hooks: SessionHooks): void {
@@ -189,6 +221,7 @@ interface ServerEntry {
 	readonly state: "loaded" | "dormant" | "failed";
 	readonly reason?: string;
 	readonly tools: readonly Tool[];
+	readonly icons?: readonly Icon[];
 	readonly args: List;
 }
 
@@ -222,6 +255,7 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 							state: entry.state,
 							reason: entry.reason ?? null,
 							tools: JSON.stringify(entry.tools),
+							icons: JSON.stringify(entry.icons ?? []),
 						}),
 					),
 			),
@@ -229,12 +263,16 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 	fromLisp: (list) =>
 		listToArray(list as List).map((alist) => {
 			const reason = field(alist, "reason");
+			const icons = field(alist, "icons");
 			return {
 				name: field(alist, "name") as string,
 				serverId: field(alist, "server-id") as string,
 				state: field(alist, "state") as ServerEntry["state"],
 				reason: typeof reason === "string" ? reason : undefined,
 				tools: JSON.parse(field(alist, "tools") as string) as Tool[],
+				...(typeof icons === "string"
+					? { icons: JSON.parse(icons) as Icon[] }
+					: {}),
 				args: field(alist, "args") as List,
 			};
 		}),
@@ -572,12 +610,13 @@ function callTool(
 	const n = calls.get() + 1;
 	calls.set(n);
 	const detail = toolDetail(tool.description);
+	const icon = iconOf(tool.icons, entry.icons);
 	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
 		toolActivity.emit(interp.channels, {
 			user: {
 				kind: "mcp",
-				icon: "tool",
+				icon,
 				label: toolLabel(ref.server, tool),
 				...(detail === undefined ? {} : { detail }),
 				state,
@@ -668,6 +707,7 @@ function installServer(
 		serverId: res.serverId,
 		state: "loaded",
 		tools: res.tools,
+		...(res.icons === undefined ? {} : { icons: res.icons }),
 		args,
 	};
 	servers.set([...servers.get().filter((e) => e.name !== name), entry]);
@@ -755,7 +795,12 @@ export function registerMcp(
 					void client.disconnect(res.serverId).catch(() => {});
 					throw new EvalException("MCP load cancelled", conf.name, false);
 				}
-				return installServer(wiring, conf.name, res, args);
+				return installServer(
+					wiring,
+					conf.name,
+					{ ...res, icons: res.icons ?? manifestIcons(conf) },
+					args,
+				);
 			},
 			(error: unknown) => {
 				throw holdForAuthorization(interp, error);
@@ -764,7 +809,8 @@ export function registerMcp(
 	}
 
 	function startLoad(args: List): LispPromise {
-		const { name } = connConfigFromArgs(args, shown());
+		const conf = connConfigFromArgs(args, shown());
+		const { name } = conf;
 		admitServer(policy, name);
 		const n = loads.get() + 1;
 		loads.set(n);
@@ -773,7 +819,10 @@ export function registerMcp(
 			toolActivity.emit(interp.channels, {
 				user: {
 					kind: "mcp",
-					icon: "tool",
+					icon: iconOf(
+						state === "done" ? entryOf(servers, name)?.icons : undefined,
+						manifestIcons(conf),
+					),
 					label: `load-mcp · ${name}`,
 					state,
 					...(error === undefined ? {} : { error: messageOf(error) }),
