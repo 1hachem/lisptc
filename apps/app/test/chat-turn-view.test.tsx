@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
 import { TraceLines } from "../src/components/trace-view.tsx";
 import { CallTimeline } from "../src/components/turn-intent.tsx";
+import { CHANNELS, type ChannelId } from "../src/lib/channels.ts";
 import type { ChatMessage } from "../src/lib/chat.tsx";
 import { traceOpen } from "../src/lib/panel-ops.ts";
 import { SideTraceProvider } from "../src/lib/side-trace.tsx";
@@ -145,6 +146,15 @@ vi.mock("../src/components/generative-ui.tsx", () => ({
 	GenerativeUI: () => <div data-ui>drawn ui</div>,
 }));
 vi.mock("../src/components/ask-card.tsx", () => ({ AskCard: () => null }));
+vi.mock("../src/components/attached-files.tsx", () => ({
+	AttachedFiles: ({ files }: { files: readonly { name: string }[] }) => (
+		<ul data-attached>
+			{files.map((file) => (
+				<li key={file.name}>{file.name}</li>
+			))}
+		</ul>
+	),
+}));
 
 beforeAll(() => {
 	(
@@ -532,17 +542,114 @@ describe("the trace", () => {
 		expect(titles).toEqual(["drawing the chart", PROSE, "step"]);
 	});
 
-	it("hides a channel its toolbar turns off", async () => {
-		const host = await mount(<TraceLines messages={MESSAGES} />);
-		const output = [...host.querySelectorAll("button[aria-pressed]")].find(
-			(b) => b.textContent === "output",
+	const CHANNEL_TRACE: ChatMessage[] = [
+		{
+			id: "h1",
+			type: "human",
+			content: "make a chart",
+			additional_kwargs: {
+				attachments: [{ folder: "attachments", name: "USER-FILE.pdf" }],
+			},
+		},
+		{
+			id: "a1",
+			type: "ai",
+			content: "(draw-chart)",
+			additional_kwargs: {
+				reasoning_content: "THINKING-MARK",
+				meta: { durationMs: 5, memories: [{ key: "remembered", body: "b" }] },
+			},
+		},
+		{
+			id: "t1",
+			type: "tool",
+			content: '{"source":"lisp-repl","output":"MODEL-MARK"}',
+			additional_kwargs: {
+				display: "OUTPUT-MARK",
+				ui: { tag: "text", props: { text: "UI-MARK" }, children: [] },
+				question: {
+					id: "q1",
+					prompt: "ASKS-MARK",
+					choices: ["yes"],
+					multi: false,
+				},
+				activity: [
+					{
+						kind: "agent",
+						label: "AGENTS-MARK",
+						state: "done",
+						id: "scout",
+						chat: "child-chat",
+					},
+				],
+			},
+		},
+		{
+			id: "s1",
+			type: "system",
+			content: "SYSTEM-MARK",
+		},
+		{
+			id: "p1",
+			type: "system",
+			content: "PARENT-MARK",
+			additional_kwargs: { source: "agent:parent-chat" },
+		},
+	];
+
+	const MARKS: Record<ChannelId, string> = {
+		output: "OUTPUT-MARK",
+		ui: "UI-MARK",
+		attachments: "USER-FILE.pdf",
+		thinking: "THINKING-MARK",
+		memory: "1 memory recalled",
+		asks: "ASKS-MARK",
+		model: "MODEL-MARK",
+		system: "SYSTEM-MARK",
+		agents: "AGENTS-MARK",
+	};
+
+	async function traced() {
+		const host = await mount(<TraceLines messages={CHANNEL_TRACE} />);
+		for (const header of host.querySelectorAll<HTMLButtonElement>(
+			"[data-step-header]",
+		))
+			await act(async () => header.click());
+		const you = host.querySelector<HTMLButtonElement>(
+			'[data-trace-message="you"] > button',
+		);
+		await act(async () => you?.click());
+		return host;
+	}
+
+	const toggleOf = (host: HTMLElement, label: string) =>
+		[...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].find(
+			(b) => b.textContent === label,
 		) as HTMLButtonElement;
 
-		await act(async () => output.click());
+	it.each(
+		CHANNELS.map((c) => [c.id, c.label] as const),
+	)("hides the %s channel its toolbar turns off", async (id, label) => {
+		const host = await traced();
+		expect(host.textContent).toContain(MARKS[id]);
 
-		expect(output.getAttribute("aria-pressed")).toBe("false");
-		expect(host.textContent).not.toContain("RESULT-VALUE");
-		expect(host.textContent).not.toContain("drawn for you");
+		const toggle = toggleOf(host, label);
+		await act(async () => toggle.click());
+
+		expect(toggle.getAttribute("aria-pressed")).toBe("false");
+		expect(host.textContent).not.toContain(MARKS[id]);
+	});
+
+	it("hides every channel at once without breaking the trace", async () => {
+		const host = await traced();
+		for (const { label } of CHANNELS)
+			await act(async () => toggleOf(host, label).click());
+
+		for (const mark of Object.values(MARKS))
+			expect(host.textContent).not.toContain(mark);
+		expect(host.querySelectorAll('button[aria-pressed="false"]').length).toBe(
+			CHANNELS.length,
+		);
 	});
 });
 

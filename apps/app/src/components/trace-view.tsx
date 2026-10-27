@@ -414,6 +414,7 @@ function TraceEntries({
 								</TracedMessage>
 							))}
 						{open &&
+							shown.agents &&
 							step.children.map((child) => (
 								<ChildTrace key={child.chatId} child={child} />
 							))}
