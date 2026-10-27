@@ -265,7 +265,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		const definition = await library.saved(name);
 		if (definition === undefined)
 			throw new EvalException(
-				"spawn: no saved agent by that name; define it with defagent or pass :prompt",
+				'spawn: no saved agent by that name; pass :prompt "task" for a temporary agent that starts on that task, or delegate the work',
 				name,
 			);
 		return definition;
@@ -374,7 +374,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"spawn",
 		-1,
 		'(spawn "name" [:prompt "..."] [:repl :fresh|:fork] [:chat :fresh|:fork])',
-		"Start a sub-agent on a thread of its own under a name, print the name, and return it. A name is unique in this session: one spawned or delegated already is refused, finished or not. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that starts at once on that prompt; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far.",
+		"Start a sub-agent on a thread of its own under a name, print the name, and return it. A name is unique in this session: one spawned or delegated already is refused, finished or not. Without :prompt it runs the saved definition of that name. With :prompt it is a temporary agent that runs that prompt at once as its first task and replies to it, so write a task with its expected reply, not a persona; its reply comes back later as a system event from agent:name. Nothing is saved, and a name a saved agent already holds is refused. agent-keep saves a temporary agent that proved worth reusing. :repl :fresh gives it a new image; :repl :fork gives it a copy of this one as it stands. :chat :fresh starts it with no conversation; :chat :fork starts it with a copy of this chat so far.",
 		z.tuple([zList]),
 		async ([rest]) => {
 			const { values, options } = parse("spawn", rest, [
@@ -596,7 +596,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"agent-cancel",
 		1,
 		'(agent-cancel "name")',
-		"Stop that agent and every agent under it. Return t when something was cancelled, nil otherwise.",
+		"Stop that agent and every agent under it, the message it was last sent too, queued or running. Return t when something was cancelled, nil when it had nothing left to do.",
 		z.tuple([zString]),
 		async ([target]) => {
 			const name = spawnedName("agent-cancel", target);

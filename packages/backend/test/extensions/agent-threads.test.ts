@@ -154,6 +154,14 @@ describe("the agent threads adapter", () => {
 		});
 	});
 
+	it("cancels the last job sent to a name, queued or running, then its thread", async () => {
+		const { seen, agents } = world();
+		await agents.spawn({ definition: { name: "r", prompt: "p" }, ...fresh });
+		await agents.send("r", { text: "dig", maxSteps: 4 });
+		expect(await agents.cancel("r")).toBe(true);
+		expect(seen.cancelled).toEqual(["job-1", CHILD]);
+	});
+
 	it("finds a child spawned before a restart by its name in the store", async () => {
 		const { seen, agents } = world();
 		expect(await agents.cancel("earlier")).toBe(true);

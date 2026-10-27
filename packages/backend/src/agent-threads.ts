@@ -80,7 +80,11 @@ export class SupervisedAgents implements AgentThreads {
 	}
 
 	async cancel(agent: string): Promise<boolean> {
-		return await this.supervisor.threads.cancel(await this.child(agent));
+		const { threads } = this.supervisor;
+		const job = await this.latest(agent);
+		const withdrawn = job !== undefined && (await threads.cancel(job));
+		const halted = await threads.cancel(await this.child(agent));
+		return withdrawn || halted;
 	}
 
 	async read(agent: string, global: string): Promise<Fragment> {
