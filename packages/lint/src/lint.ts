@@ -6,8 +6,6 @@ function formsAsRead(interp: Interp, code: string): string {
 	return interp.hooks.readSource.run((_i, text) => text, interp, code);
 }
 
-export type { Problem } from "./check.ts";
-
 export function checkSource(interp: Interp, code: string): Problem[] {
 	const unclosed = unclosedIn(code);
 	if (unclosed === undefined)
