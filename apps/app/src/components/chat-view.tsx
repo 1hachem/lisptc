@@ -348,19 +348,6 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
 	);
 }
 
-export function SystemLine({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
-	if (isParentMessage(message))
-		return shown.agents ? <AgentMessage message={message} /> : null;
-	if (!shown.system) return null;
-	const { text } = channel("system");
-	return (
-		<Marked id="system">
-			<ChannelText text={messageText(message)} tone={text} />
-		</Marked>
-	);
-}
-
 function AgentMessage({
 	message,
 	onTrace,
