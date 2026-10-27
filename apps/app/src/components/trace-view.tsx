@@ -76,7 +76,13 @@ function ChannelToggles({
 	);
 }
 
-function TraceLine({ message }: { message: ChatMessage }) {
+function TraceLine({
+	message,
+	focused,
+}: {
+	message: ChatMessage;
+	focused: boolean;
+}) {
 	const { metaShown } = useUI();
 	const { openModelPicker } = useModelPicker();
 	const shown = useChannels();
@@ -89,7 +95,7 @@ function TraceLine({ message }: { message: ChatMessage }) {
 				<ChatLine message={message} />
 			)}
 			{shown.memory && stats?.memories && (
-				<MessageMemories memories={stats.memories} />
+				<MessageMemories memories={stats.memories} focused={focused} />
 			)}
 			{stats && (
 				<MessageMeta
@@ -359,10 +365,12 @@ function TraceEntries({
 	entries,
 	steps,
 	flashing,
+	focused,
 }: {
 	entries: readonly TraceEntry[];
 	steps: ReturnType<typeof useOpenSteps>;
 	flashing?: string;
+	focused?: string;
 }) {
 	const shown = useChannels();
 	return (
@@ -399,7 +407,10 @@ function TraceEntries({
 									message={message}
 									flashing={flashing}
 								>
-									<TraceLine message={message} />
+									<TraceLine
+										message={message}
+										focused={message.id !== undefined && message.id === focused}
+									/>
 								</TracedMessage>
 							))}
 						{open &&
@@ -437,7 +448,12 @@ export function TraceLines({
 					className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4"
 				>
 					<div className="mx-auto w-full max-w-[680px]">
-						<TraceEntries entries={entries} steps={steps} flashing={flashing} />
+						<TraceEntries
+							entries={entries}
+							steps={steps}
+							flashing={flashing}
+							focused={turn}
+						/>
 					</div>
 				</div>
 			</div>

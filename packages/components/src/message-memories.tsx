@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FiredMemory } from "./memories.ts";
 
 const TRIGGER_COLORS: Record<string, string> = {
@@ -54,11 +54,16 @@ function Dot({ on, stack }: { on?: string; stack?: Stack }) {
 export function MessageMemories({
 	memories,
 	onOpen,
+	focused = false,
 }: {
 	memories: FiredMemory[];
 	onOpen?: () => void;
+	focused?: boolean;
 }) {
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(focused);
+	useEffect(() => {
+		if (focused) setOpen(true);
+	}, [focused]);
 
 	if (memories.length === 0) return null;
 
