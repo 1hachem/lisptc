@@ -89,6 +89,32 @@ describe("removing a chat", () => {
 			alice.as.mutation(api.chats.remove, { chatId }),
 		).rejects.toThrow();
 	});
+	it("takes the sub-agent chats it spawned, and their messages, with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const agent = { name: "r", prompt: "dig", bounds: [] };
+		const first = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		const second = await alice.as.mutation(api.chats.spawn, { chatId, agent });
+		for (const child of [first, second]) {
+			await alice.as.mutation(api.messages.append, {
+				chatId: child,
+				messages: [{ type: "human", content: "hello" }],
+			});
+		}
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("chats").collect()),
+			...(await ctx.db.query("messages").collect()),
+		]);
+		expect(left).toEqual([]);
+	});
 });
 
 describe("removing a workspace", () => {
@@ -128,7 +154,7 @@ describe("removing a workspace", () => {
 		expect(replLayers).toEqual([]);
 	});
 
-	it("takes its secrets, oauth records, permissions and readme with it", async () => {
+	it("takes its secrets, oauth records, permissions, readme, knowledge, attachments, bin and panel layout with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
@@ -151,23 +177,70 @@ describe("removing a workspace", () => {
 			workspaceId: doomed,
 			body: "# doomed",
 		});
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
+			workspaceId: doomed,
+			name: "doomed.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
+		});
+		await alice.as.mutation(api.files.add, {
+			folder: "attachments",
+			workspaceId: doomed,
+			name: "attached.txt",
+			storageId: await t.run((ctx) =>
+				ctx.storage.store(new Blob(["attached"])),
+			),
+		});
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
+			workspaceId: doomed,
+			name: "binned.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["binned"]))),
+		});
+		await alice.as.mutation(api.files.remove, {
+			folder: "knowledge",
+			workspaceId: doomed,
+			name: "binned.txt",
+		});
+		await alice.as.mutation(api.layouts.put, {
+			workspaceId: doomed,
+			layout: { root: null, focused: null, nodes: [] },
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { secrets, oauthRecords, permissions, readmes } = await t.run(
-			async (ctx) => ({
-				secrets: await ctx.db.query("secrets").collect(),
-				oauthRecords: await ctx.db.query("oauthRecords").collect(),
-				permissions: await ctx.db.query("permissions").collect(),
-				readmes: await ctx.db.query("readmes").collect(),
-			}),
-		);
+		const {
+			secrets,
+			oauthRecords,
+			permissions,
+			readmes,
+			knowledge,
+			attachments,
+			bin,
+			layouts,
+			blobs,
+		} = await t.run(async (ctx) => ({
+			secrets: await ctx.db.query("secrets").collect(),
+			oauthRecords: await ctx.db.query("oauthRecords").collect(),
+			permissions: await ctx.db.query("permissions").collect(),
+			readmes: await ctx.db.query("readmes").collect(),
+			knowledge: await ctx.db.query("knowledge").collect(),
+			attachments: await ctx.db.query("attachments").collect(),
+			bin: await ctx.db.query("bin").collect(),
+			layouts: await ctx.db.query("layouts").collect(),
+			blobs: await ctx.db.system.query("_storage").collect(),
+		}));
 		expect(secrets).toEqual([]);
 		expect(oauthRecords).toEqual([]);
 		expect(permissions).toEqual([]);
 		expect(readmes).toEqual([]);
+		expect(knowledge).toEqual([]);
+		expect(attachments).toEqual([]);
+		expect(bin).toEqual([]);
+		expect(layouts).toEqual([]);
+		expect(blobs).toEqual([]);
 	});
 
 	it("leaves the other workspaces alone", async () => {
@@ -274,10 +347,12 @@ async function remaining(t: TestConvex<typeof schema>) {
 		replLayers: await ctx.db.query("replLayers").collect(),
 		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
+		sources: await ctx.db.query("sources").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
 		permissions: await ctx.db.query("permissions").collect(),
 		readmes: await ctx.db.query("readmes").collect(),
+		knowledge: await ctx.db.query("knowledge").collect(),
 		preferences: await ctx.db.query("preferences").collect(),
 	}));
 }
@@ -291,10 +366,12 @@ const nothing = {
 	replLayers: [],
 	replLayerChunks: [],
 	memories: [],
+	sources: [],
 	secrets: [],
 	oauthRecords: [],
 	permissions: [],
 	readmes: [],
+	knowledge: [],
 	preferences: [],
 };
 
@@ -349,15 +426,27 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, secrets, oauth records, permissions, readme and preferences", async () => {
+	it("takes its memories, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
+		await alice.as.mutation(api.sources.put, {
+			workspaceId: alice.workspace,
+			folder: "sub-agents",
+			name: "doomed.ptc",
+			text: "doomed",
+		});
 		await alice.as.mutation(api.readmes.put, {
 			workspaceId: alice.workspace,
 			body: "doomed",
 		});
+		await alice.as.mutation(api.files.add, {
+			folder: "knowledge",
+			workspaceId: alice.workspace,
+			name: "notes.txt",
+			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
+		});
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { theme: "dusk", themeUses: {} },
+			preferences: { font: "mono", themeUses: {} },
 		});
 		await alice.as.mutation(api.secrets.put, {
 			workspaceId: alice.workspace,
@@ -415,7 +504,7 @@ describe("removing a user", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
-			preferences: { theme: "dusk", themeUses: {} },
+			preferences: { font: "mono", themeUses: {} },
 		});
 
 		await t.mutation(internal.users.purge, { userId: alice.user });

@@ -49,6 +49,7 @@ export interface PermissionsHostOptions {
 	store?: PermissionsStore;
 	approvers?: readonly Approver[];
 	asks?: readonly string[];
+	bounds?: readonly string[];
 }
 
 export function permissionsHostFor(
@@ -61,6 +62,7 @@ export function permissionsHostFor(
 		clock: systemClock,
 		prompt: permissionsPrompt,
 		...(options.asks === undefined ? {} : { asks: options.asks }),
+		...(options.bounds === undefined ? {} : { bounds: options.bounds }),
 	};
 }
 

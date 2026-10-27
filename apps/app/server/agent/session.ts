@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { webEnv } from "@repo/env/web";
 import { createMiddleware } from "@tanstack/react-start";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -12,16 +11,6 @@ const jwks = createRemoteJWKSet(
 export interface Session {
 	token: string;
 	subject: string;
-}
-
-const inFlight = new AsyncLocalStorage<Session>();
-
-export function currentSession(): Session {
-	const found = inFlight.getStore();
-	if (found === undefined) {
-		throw new HttpError(401, "no session on this request");
-	}
-	return found;
 }
 
 function bearer(header: string | null): string {
@@ -43,7 +32,7 @@ const session = createMiddleware({ type: "request" }).server(
 			throw new HttpError(401, "invalid bearer token");
 		}
 		const current: Session = { token, subject: verified.payload.sub };
-		return inFlight.run(current, () => next({ context: { session: current } }));
+		return next({ context: { session: current } });
 	},
 );
 

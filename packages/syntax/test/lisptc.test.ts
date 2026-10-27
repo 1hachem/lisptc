@@ -1,10 +1,9 @@
 import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
+import { type FormSpan, openForms } from "@repo/shared/lisp-forms";
 import { describe, expect, test } from "vitest";
 import {
-	type FormSpan,
 	formsIn,
 	highlighter,
-	openForms,
 	sourceTokensIn,
 	tokensIn,
 } from "../src/index.ts";

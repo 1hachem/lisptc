@@ -85,6 +85,9 @@
       "entry": ["test/**/*.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
+    "packages/tree-sitter": {
+      "entry": ["grammar.js"]
+    },
     "packages/ui": {
       "project": ["src/**/*.{ts,tsx}"]
     }

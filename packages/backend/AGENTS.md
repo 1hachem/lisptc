@@ -23,9 +23,6 @@ where the `users` table and a workspace are kept in step with the auth user.
 declares the components the deployment uses, and `convex/migrations.ts` holds
 the migration runner.
 
-`convex/_generated/` is generated. Never edit it, and never hand-write what
-belongs there.
-
 `src/` holds what runs outside the deployment against it: the stores a REPL
 talks to. A store here satisfies a port and owns the codec between the row and
 the domain value. A port is declared with the extension and satisfied here,
@@ -51,10 +48,14 @@ A public function takes the caller from the context, never from an argument, and
 resolves ownership before it touches a row. Read the guards in `convex/lib/`
 before writing a new one.
 
-A schema change on a live deployment goes through a migration, and the runner is
-already here. A migration is new work under a new name, never a reset of one
-that has run. The schema keeps accepting the old shape until the release that
-migrated it has shipped. A reset is an operator's call.
+There is no production data yet. Every deployment is a dev one, and its rows
+can be wiped. So a schema change replaces the old shape outright. Do not keep a
+legacy validator in a union, a retired value in a literal list, an optional
+field for rows written before it existed, a converter that reads an old row, or
+a migration that moves one. A row the new schema rejects is cleared from the
+dev deployment, never accommodated in code. The migration runner stays wired
+into every deploy with an empty series, so it is ready the day it is needed.
+Once production data exists, this rule is replaced here, and not before.
 
 Size limits belong to the data, so they live in `convex/limits.ts` and are
 enforced where a row is written.
@@ -68,6 +69,10 @@ pnpm --filter @repo/backend test       # convex-test, in memory
 
 `dev` wants `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` in its
 environment. Under `task`, Infisical supplies them.
+
+An agent may run `task convex:generate` without asking. It is how
+`convex/_generated/` is brought up to date, and the way out when a bare
+`convex codegen` fails for want of a deployment.
 
 ## Tests
 

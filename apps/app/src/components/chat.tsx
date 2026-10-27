@@ -1,39 +1,18 @@
-import { convexQuery } from "@convex-dev/react-query";
-import { api } from "@repo/backend/api";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
 import { useChatSession } from "../lib/chat.tsx";
-import { useCommandRunner } from "../lib/commands.ts";
-import { sentHistory } from "../lib/message-history.ts";
-import { useSymbols } from "../lib/symbols.ts";
-import { useUI } from "../lib/ui.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
-import { ChatInput } from "./chat-input.tsx";
+import { ChatComposer } from "./chat-composer.tsx";
 import { ChatView } from "./chat-view.tsx";
+import { ChildThreads } from "./child-threads.tsx";
 import { Greeting } from "./greeting.tsx";
 
 export function Chat() {
-	const runCommand = useCommandRunner();
-	const { inputOn } = useUI();
-	const { workspaceId, chatId, draftChatId, send, stop, isLoading, fresh } =
-		useChatSession((state) => ({
-			workspaceId: state.workspaceId,
-			chatId: state.chatId,
-			draftChatId: state.draftChatId,
-			send: state.send,
-			stop: state.stop,
-			isLoading: state.isLoading,
-			fresh: state.fresh,
-		}));
-	const { data: sent } = useQuery(
-		convexQuery(api.messages.sent, { workspaceId }),
-	);
-	const history = useMemo(() => sentHistory(sent ?? []), [sent]);
-	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
+	const fresh = useChatSession((state) => state.fresh);
+	const chatId = useChatSession((state) => state.chatId);
 
 	return (
-		<>
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			{fresh ? null : <ChatView />}
+			<ChildThreads chatId={chatId} />
 			<div
 				className={
 					fresh
@@ -55,17 +34,8 @@ export function Chat() {
 						</>
 					) : null}
 				</div>
-				<ChatInput
-					placeholder="type a message"
-					onSubmit={send}
-					history={history}
-					onCommand={runCommand}
-					isStreaming={isLoading}
-					onStop={stop}
-					symbols={symbols}
-					lisp={inputOn.lisp}
-				/>
+				<ChatComposer />
 			</div>
-		</>
+		</div>
 	);
 }

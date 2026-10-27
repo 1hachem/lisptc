@@ -1,6 +1,7 @@
-import type { ErrorComponentProps } from "@tanstack/react-router";
+import { type ErrorComponentProps, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
+import { EverythingFine } from "./everything-fine.tsx";
 
 export function RouteError({ error, reset }: ErrorComponentProps) {
 	useEffect(() => {
@@ -11,8 +12,8 @@ export function RouteError({ error, reset }: ErrorComponentProps) {
 	}, [error]);
 
 	return (
-		<div className="flex flex-col items-start gap-3 p-8">
-			<div className="whitespace-pre-wrap break-words text-red">
+		<EverythingFine>
+			<div className="max-w-dialog whitespace-pre-wrap break-words text-red">
 				{error instanceof Error ? error.message : String(error)}
 			</div>
 			<button
@@ -22,6 +23,20 @@ export function RouteError({ error, reset }: ErrorComponentProps) {
 			>
 				try again
 			</button>
-		</div>
+		</EverythingFine>
+	);
+}
+
+export function RouteNotFound() {
+	return (
+		<EverythingFine>
+			<div>this page doesn't exist</div>
+			<Link
+				to="/"
+				className="text-dim underline underline-offset-4 hover:text-fg"
+			>
+				go home
+			</Link>
+		</EverythingFine>
 	);
 }

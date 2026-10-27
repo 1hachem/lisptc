@@ -23,8 +23,19 @@ export {
 	DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu.tsx";
 export { Input } from "./components/ui/input.tsx";
+export {
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "./components/ui/resizable.tsx";
 export * from "./components/ui/sidebar.tsx";
 export { Switch } from "./components/ui/switch.tsx";
+export {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "./components/ui/tabs.tsx";
 
 export {
 	defaultFontId,

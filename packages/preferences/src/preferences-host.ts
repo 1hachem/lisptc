@@ -10,8 +10,6 @@ export function preferencesHostFor(
 ): PreferencesHost {
 	return {
 		store: options.store ?? new MemoryPreferencesStore(),
-		themes: options.themes ?? [],
-		defaultDarkTheme: options.defaultDarkTheme,
 		fonts: options.fonts ?? [],
 		motions: options.motions ?? [],
 		prompt: preferencesPrompt,

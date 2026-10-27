@@ -7,6 +7,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import type { Answered, Ask, AskChoice } from "@repo/interpreter/asks";
 import {
 	Confirmation,
 	ConfirmationAccepted,
@@ -22,9 +23,6 @@ import type { FunctionReturnType } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import {
-	type Answered,
-	type Ask,
-	type AskChoice,
 	type AskTransport,
 	uiActionTransport,
 	withAnswer,
@@ -107,6 +105,28 @@ function useLinkReturn(
 	}, [awaited, open]);
 }
 
+function answerState(mutation: {
+	data?: { ok: true } | { ok: false; error: string };
+	error: unknown;
+	isError: boolean;
+	variables?: AskChoice;
+}) {
+	const refused =
+		mutation.data && !mutation.data.ok
+			? `${mutation.data.error}; ask again to get a new request`
+			: undefined;
+	const failure = mutation.error
+		? mutation.error instanceof Error
+			? mutation.error.message
+			: String(mutation.error)
+		: undefined;
+	const chosen: Answered | undefined =
+		mutation.variables && !mutation.isError && !refused
+			? { accepted: mutation.variables.accepts, label: mutation.variables.done }
+			: undefined;
+	return { refused, failure, chosen };
+}
+
 export function AskCard({
 	ask,
 	messageId,
@@ -118,10 +138,9 @@ export function AskCard({
 	answered?: Answered;
 	transport?: AskTransport;
 }) {
-	const { chatId, workspaceId, resume } = useChatSession((state) => ({
+	const { chatId, workspaceId } = useChatSession((state) => ({
 		chatId: state.chatId,
 		workspaceId: state.workspaceId,
-		resume: state.resume,
 	}));
 	const queryClient = useQueryClient();
 	const [linked, setLinked] = useState<string | undefined>(undefined);
@@ -149,26 +168,15 @@ export function AskCard({
 			if (context) rollback(context.snapshot);
 		},
 		onSuccess: (outcome, _choice, context) => {
-			if (!outcome.ok) {
-				if (context) rollback(context.snapshot);
-				return;
-			}
-			if (outcome.event) resume(outcome.event);
+			if (!outcome.ok && context) rollback(context.snapshot);
 		},
 	});
-	const refused =
-		mutation.data && !mutation.data.ok
-			? `${mutation.data.error}; ask again to get a new request`
-			: undefined;
-	const failure = mutation.error
-		? mutation.error instanceof Error
-			? mutation.error.message
-			: String(mutation.error)
-		: undefined;
+	const { refused, failure, chosen } = answerState(mutation);
+	const shown = answered ?? chosen;
 	const approval: ConfirmationApproval =
-		answered === undefined || refused
+		shown === undefined || refused
 			? { id: ask.id }
-			: { id: ask.id, approved: answered.accepted };
+			: { id: ask.id, approved: shown.accepted };
 	const open = approval.approved === undefined && !refused;
 
 	const answer = (choice: AskChoice) => {
@@ -193,15 +201,15 @@ export function AskCard({
 		<Confirmation
 			approval={approval}
 			state={open ? "approval-requested" : "approval-responded"}
-			className="mt-2 gap-1.5 border-yellow/50 px-3 py-2"
+			className="mt-2 gap-1.5 overflow-hidden border-yellow/50 px-3 py-2"
 		>
-			<ConfirmationTitle>
-				<span className="flex items-center gap-2 text-yellow">
+			<ConfirmationTitle className="min-w-0 wrap-anywhere">
+				<span className="flex min-w-0 items-center gap-2 text-yellow">
 					<HugeiconsIcon icon={SecurityCheckIcon} size={14} />
-					<span className="font-mono">{ask.title}</span>
+					<span className="truncate font-mono">{ask.title}</span>
 				</span>
 				{ask.detail && (
-					<span className="block whitespace-pre-wrap break-words font-mono text-dim text-xs">
+					<span className="block whitespace-pre-wrap font-mono text-dim text-xs">
 						{ask.detail}
 					</span>
 				)}
@@ -215,13 +223,13 @@ export function AskCard({
 				<ConfirmationAccepted>
 					<span className="flex items-center gap-1 text-green">
 						<HugeiconsIcon icon={CheckmarkCircle02Icon} size={12} />
-						{answered?.label}
+						{shown?.label}
 					</span>
 				</ConfirmationAccepted>
 				<ConfirmationRejected>
 					<span className="flex items-center gap-1 text-red">
 						<HugeiconsIcon icon={Cancel01Icon} size={12} />
-						{answered?.label}
+						{shown?.label}
 					</span>
 				</ConfirmationRejected>
 				{refused && <span className="block text-red">{refused}</span>}

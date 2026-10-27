@@ -1,23 +1,26 @@
-import { contentToText } from "@repo/shared/messages";
-import type { AgentConfig } from "./agent.ts";
-import type { Steer, SteerInbox } from "./inbox.ts";
+import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
+import {
+	contentToText,
+	ENVELOPE_KEYS,
+	envelopeOf,
+	type MessageKwargs,
+} from "@repo/shared/messages";
 import {
 	isUserPrompt,
 	joinRiding,
-	replResultContent,
 	type TranscriptEntry,
 	withItsResult,
 } from "./repl.ts";
-import { type ReplSource, replFrom } from "./repl-store.ts";
 import type { SystemEvent } from "./system-event.ts";
-import { runAgentTurn, type TurnEvent } from "./turn.ts";
+import { toolMessage } from "./tool-message.ts";
+import type { TurnEvent } from "./turn.ts";
 
 export interface ChatMessageInput {
 	id?: string;
 	type?: string;
 	role?: string;
 	content?: unknown;
-	additional_kwargs?: Record<string, unknown>;
+	additional_kwargs?: MessageKwargs;
 }
 
 export interface ChatInput {
@@ -28,10 +31,12 @@ export interface WireMessage {
 	type: string;
 	content: string;
 	id: string;
-	additional_kwargs?: Record<string, unknown>;
+	additional_kwargs?: MessageKwargs;
 }
 
 const encoder = new TextEncoder();
+
+const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
 function mergeInto(
 	into: Record<string, unknown>,
@@ -57,30 +62,13 @@ function annotate(
 	annotations: Record<string, unknown>,
 ): WireMessage {
 	const kwargs = message.additional_kwargs ?? {};
-	const meta = { ...((kwargs.meta as Record<string, unknown>) ?? {}) };
+	const meta: Record<string, unknown> = { ...envelopeOf(kwargs).meta };
 	mergeInto(meta, annotations);
 	return { ...message, additional_kwargs: { ...kwargs, meta } };
 }
 
-function resultMessage(
-	event: Extract<TurnEvent, { type: "result" }>,
-): WireMessage {
-	const extras: Record<string, unknown> = { ...event.annotations.output };
-	if (event.display !== event.output) extras.display = event.display;
-	if (event.failed) extras.failed = true;
-	if (event.riding !== undefined) extras.riding = event.riding;
-	if (event.results.length > 0) extras.results = event.results;
-	return {
-		type: "tool",
-		content: replResultContent(event.output, event.error),
-		id: crypto.randomUUID(),
-		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
-	};
-}
-
-function riding(message: { additional_kwargs?: Record<string, unknown> }) {
-	const standing = message.additional_kwargs?.riding;
-	return typeof standing === "string" ? standing : undefined;
+function riding(message: { additional_kwargs?: MessageKwargs }) {
+	return envelopeOf(message.additional_kwargs).riding;
 }
 
 function sse(event: string, data: unknown): Uint8Array {
@@ -103,8 +91,6 @@ function wireType(
 	return "human";
 }
 
-const SOURCE_KEY = "source";
-
 export function systemEventMessage(
 	event: SystemEvent,
 	id: string,
@@ -113,13 +99,15 @@ export function systemEventMessage(
 		type: "system",
 		content: event.text,
 		id,
-		additional_kwargs: { [SOURCE_KEY]: event.source },
+		additional_kwargs: {
+			source: event.source,
+			...(event.failed ? { failed: true } : {}),
+		},
 	};
 }
 
 function eventSource(message: ChatMessageInput): string {
-	const source = message.additional_kwargs?.[SOURCE_KEY];
-	return typeof source === "string" ? source : "system";
+	return envelopeOf(message.additional_kwargs).source ?? "system";
 }
 
 function toEntry(m: ChatMessageInput): TranscriptEntry {
@@ -129,6 +117,16 @@ function toEntry(m: ChatMessageInput): TranscriptEntry {
 		return { role: "user", content, event: { source: eventSource(m) } };
 	const rode = riding(m);
 	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
+}
+
+function received(input: ChatInput): Annotations | undefined {
+	const newest = input.messages?.at(-1);
+	if (newest === undefined || wireType(newest.type ?? newest.role) !== "human")
+		return undefined;
+	const carried = Object.entries(newest.additional_kwargs ?? {}).filter(
+		([key]) => !ENVELOPE.has(key),
+	);
+	return carried.length === 0 ? undefined : Object.fromEntries(carried);
 }
 
 function toTranscript(input: ChatInput): TranscriptEntry[] {
@@ -142,34 +140,27 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	return transcript;
 }
 
-export type ChatStreamOptions<Id extends string = string> = ReplSource<Id> & {
-	config?: AgentConfig;
+export interface TurnStreamOptions {
 	signal?: AbortSignal;
-	identity?: { distinctId?: string; sessionId?: string };
 	onTurn?: (
 		messages: WireMessage[],
 		revised: ReadonlyMap<number, WireMessage>,
 		failure: string | undefined,
 	) => Promise<void> | void;
-	steer?: { inbox: SteerInbox; key: string };
 	quiet?: boolean;
-	runsForms?: boolean;
-};
-
-function steerLine(steer: ChatStreamOptions["steer"]) {
-	if (steer === undefined)
-		return {
-			open: async () => {},
-			take: async (): Promise<Steer[]> => [],
-			close: async () => {},
-		};
-	const { inbox, key } = steer;
-	return {
-		open: () => inbox.open(key),
-		take: () => inbox.take(key),
-		close: () => inbox.close(key),
-	};
+	onOutcome?: (outcome: TurnOutcome) => void;
 }
+
+export type TurnRun = (
+	transcript: TranscriptEntry[],
+	received: Annotations | undefined,
+	signal: AbortSignal,
+) => AsyncIterable<TurnEvent>;
+
+export type TurnOutcome =
+	| { readonly answer: string }
+	| { readonly held: StepAnnotations; readonly message: string }
+	| { readonly stopped: string };
 
 type Of<T extends TurnEvent["type"]> = Extract<TurnEvent, { type: T }>;
 
@@ -179,6 +170,8 @@ class TurnWire {
 	readonly revised = new Map<number, WireMessage>();
 	steps = 0;
 	failure: string | undefined;
+	outcome: TurnOutcome = { stopped: "stopped without answering" };
+	private held: { held: StepAnnotations; message: string } | undefined;
 	private lastMeta: Record<string, unknown> | undefined;
 
 	constructor(
@@ -205,7 +198,18 @@ class TurnWire {
 			case "delta":
 				return this.delta(event);
 			case "steered":
-				this.wire.push({ type: "human", content: event.content, id: event.id });
+				this.wire.push(
+					event.source === undefined
+						? { type: "human", content: event.content, id: event.id }
+						: systemEventMessage(
+								{
+									source: event.source,
+									text: event.content,
+									failed: event.failed,
+								},
+								event.id,
+							),
+				);
 				return this.snapshot();
 			case "evaluated":
 				this.wire.push(event.message);
@@ -225,14 +229,19 @@ class TurnWire {
 				return this.result(event);
 			case "halt":
 				this.steps = event.steps;
+				this.outcome = this.held ?? { answer: event.answer };
 				if (this.lastMeta) this.lastMeta.steps = event.steps;
 				this.snapshot();
 				return true;
 			case "capped":
 				this.steps = event.steps;
+				this.outcome = {
+					stopped: `used its ${event.steps} steps without answering`,
+				};
 				return true;
 			case "silent":
 				this.steps = event.steps;
+				this.outcome = { stopped: "replied with nothing" };
 				console.error(
 					`[ai] the model returned an empty reply after ${event.steps} step(s)`,
 				);
@@ -240,6 +249,7 @@ class TurnWire {
 			case "failed":
 				console.error("[ai] chat stream failed:", event.error);
 				this.failure = event.message;
+				this.outcome = { stopped: `failed: ${event.message}` };
 				this.write(
 					sse("error", { error: "AgentError", message: event.message }),
 				);
@@ -276,8 +286,10 @@ class TurnWire {
 
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
+		const message = crypto.randomUUID();
+		if (event.held) this.held = { held: event.annotations, message };
 		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
-		this.wire.push(resultMessage(event));
+		this.wire.push(toolMessage(event, message));
 		return this.snapshot();
 	}
 
@@ -303,7 +315,7 @@ function carrying(message: WireMessage, text: string): WireMessage {
 }
 
 async function record(
-	onTurn: ChatStreamOptions["onTurn"],
+	onTurn: TurnStreamOptions["onTurn"],
 	turn: TurnWire,
 ): Promise<void> {
 	if (!onTurn) return;
@@ -318,20 +330,12 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-export function streamChatResponse<Id extends string>(
+export function streamTurn(
 	input: ChatInput,
-	options: ChatStreamOptions<Id>,
+	run: TurnRun,
+	options: TurnStreamOptions = {},
 ): Response {
-	const {
-		threadId,
-		config,
-		identity,
-		onTurn,
-		signal,
-		steer,
-		quiet,
-		runsForms,
-	} = options;
+	const { onTurn, signal, quiet, onOutcome } = options;
 	const abort = new AbortController();
 	if (signal?.aborted) abort.abort();
 	else signal?.addEventListener("abort", () => abort.abort(), { once: true });
@@ -350,35 +354,24 @@ export function streamChatResponse<Id extends string>(
 				}
 			};
 			const turn = new TurnWire(input, write);
-			const steering = steerLine(steer);
 
 			try {
-				await steering.open();
 				turn.snapshot();
-				if (!quiet) {
-					const repl = await replFrom(options);
-					for await (const event of runAgentTurn(toTranscript(input), {
-						repl,
-						threadId,
-						config,
-						signal: abort.signal,
-						identity,
-						inbox: steering.take,
-						runsForms,
-					}))
+				if (!quiet)
+					for await (const event of run(
+						toTranscript(input),
+						received(input),
+						abort.signal,
+					))
 						if (!turn.apply(event)) break;
-				}
 			} catch (error) {
 				console.error("[ai] the turn could not run:", error);
 				turn.failure = errorText(error);
+				turn.outcome = { stopped: `failed: ${errorText(error)}` };
 				write(sse("error", { error: "AgentError", message: errorText(error) }));
 			} finally {
-				await steering
-					.close()
-					.catch((error) =>
-						console.error("[ai] the steer inbox did not close:", error),
-					);
 				await record(onTurn, turn);
+				onOutcome?.(turn.outcome);
 				console.log(
 					`[ai] chat stream closed after ${turn.steps} step(s)${abort.signal.aborted ? " (client disconnected)" : ""}`,
 				);
@@ -393,11 +386,91 @@ export function streamChatResponse<Id extends string>(
 		},
 	});
 
-	return new Response(body, {
-		headers: {
-			"content-type": "text/event-stream; charset=utf-8",
-			"cache-control": "no-cache, no-transform",
-			connection: "keep-alive",
-		},
-	});
+	return new Response(body, { headers: SSE_HEADERS });
+}
+
+export type ThreadState = "running" | "idle" | "waiting" | "errored";
+
+export type ThreadEvent =
+	| { readonly type: "wire"; readonly chunk: Uint8Array }
+	| { readonly type: "relayed"; readonly message: WireMessage }
+	| {
+			readonly type: "status";
+			readonly status: ThreadState;
+			readonly failure?: string;
+	  };
+
+const SSE_HEADERS = {
+	"content-type": "text/event-stream; charset=utf-8",
+	"cache-control": "no-cache, no-transform",
+	connection: "keep-alive",
+};
+
+type Client = (chunk: Uint8Array) => boolean;
+
+export class Watchers {
+	private readonly clients = new Set<Client>();
+	private turn: Uint8Array[] = [];
+	private status: Uint8Array = sse("status", { status: "idle" });
+
+	get size(): number {
+		return this.clients.size;
+	}
+
+	begin(): void {
+		this.turn = [];
+	}
+
+	publish(event: ThreadEvent): void {
+		const chunk = this.encode(event);
+		for (const client of this.clients)
+			if (!client(chunk)) this.clients.delete(client);
+	}
+
+	attach(signal?: AbortSignal): Response {
+		let detach = () => {};
+		const body = new ReadableStream<Uint8Array>({
+			start: (controller) => {
+				const client: Client = (chunk) => {
+					try {
+						controller.enqueue(chunk);
+						return true;
+					} catch {
+						return false;
+					}
+				};
+				detach = () => {
+					this.clients.delete(client);
+					try {
+						controller.close();
+					} catch {}
+				};
+				if (signal?.aborted) return detach();
+				signal?.addEventListener("abort", detach, { once: true });
+				client(this.status);
+				for (const chunk of this.turn) client(chunk);
+				this.clients.add(client);
+			},
+			cancel: () => detach(),
+		});
+		return new Response(body, { headers: SSE_HEADERS });
+	}
+
+	private encode(event: ThreadEvent): Uint8Array {
+		switch (event.type) {
+			case "wire":
+				this.turn.push(event.chunk);
+				return event.chunk;
+			case "relayed": {
+				const chunk = sse("relayed", event.message);
+				this.turn.push(chunk);
+				return chunk;
+			}
+			case "status": {
+				const { type: _, ...status } = event;
+				this.status = sse("status", status);
+				return this.status;
+			}
+		}
+	}
 }

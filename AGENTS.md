@@ -26,10 +26,7 @@ what to change.
 
 The only prose that stays is what is written for someone who is not reading the
 code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, and what an
-agent runner itself reads under `.agents/` and `.github/`. Two guards back the
-rule: a `PreToolUse` hook in `.claude/settings.json` refuses to create a new
-markdown file, and `pnpm check:docs` fails CI on any tracked markdown outside
-that allowlist.
+agent runner itself reads under `.agents/` and `.github/`.
 
 ## The IO goes out to an agent
 
@@ -63,10 +60,6 @@ Keep for yourself the file you are about to edit, the edit, and the short
 command whose whole output you actually want. Anything long, wide or repeated is
 theirs.
 
-`.agents/hooks/io-budget.sh` holds you to it. A refusal names the agent that
-should have had the call, so take it and spawn that agent instead of retrying.
-An agent's own calls are never refused.
-
 ## Worktrees
 
 Every git worktree lives in `worktrees/` at the repository root, at the path of
@@ -80,10 +73,6 @@ repository, a temporary directory, or flat at the top of `worktrees/`.
 The directory is tracked through its `.gitkeep`, and `.gitignore` keeps
 everything else in it out of git. Move a worktree with `git worktree move`,
 never `mv`, so git keeps track of where it is.
-
-`.husky/post-checkout` removes a worktree added anywhere else, home directory
-included, and the hooks under `.agents/hooks/` hold Claude's own worktrees and
-its `git worktree move` to the same path.
 
 Remove a worktree with `git worktree remove` once its pull request is merged,
 and delete its branch with it. Do the same for a worktree whose branch has no
@@ -101,8 +90,8 @@ workspaces `packages/*` and `apps/*`. Each one's `AGENTS.md` is the entry point
 for working in it.
 
 Not all of it is a workspace. The dialect is served outside the node build too,
-and those parts answer to `task` rather than to `pnpm`: `tree-sitter-lisptc/` is
-the grammar, `nix/` builds the `ptcfmt` formatter and holds its checks,
+and those parts answer to `task` rather than to `pnpm`: `nix/` builds the
+`ptcfmt` formatter from the grammar in `packages/tree-sitter` and holds its checks,
 `editors/nvim` is the editor plugin, and `examples/` is the dialect written out.
 A change to the language surface is not done until they still pass.
 
@@ -123,9 +112,10 @@ The extensions, one language surface each. Every one depends on the
 interpreter, reaches the world only through ports it declares itself, and is
 named only at a composition root:
 
-- `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when.
+- `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when, and the sub-agents it starts.
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
+- `packages/knowledge` (`@repo/knowledge-extension`) — the files the user uploaded to a workspace, read and written by the agent.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
@@ -143,9 +133,10 @@ Everything else:
 - `packages/repl` (`@repo/repl`) — REPL front-ends over the interpreter.
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
-- `packages/shared` (`@repo/shared`) — the no-dependency utility layer.
+- `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
+- `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
 - `packages/env` (`@repo/env`) — typed env. The only place `process.env` is read.
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
@@ -194,7 +185,7 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   that runs a REPL itself, and `@repo/backend` for the agent `apps/app` serves.
   Adding one to the served agent means adding its prompt to what `apps/app`
   ships, and `apps/app/AGENTS.md` carries that rule.
-- `@repo/shared` carries no dependencies at all. `@repo/ui` carries no
+- `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
 - A package tagged `static` is data, like `@repo/toolkit`. It depends on a
   `foundation` package at most, and every package and app may depend on it.
@@ -213,10 +204,15 @@ tag may not depend on. `pnpm boundaries` fails on a wrong-direction dependency,
 on an import of a package missing from a `package.json`, on an import that
 reaches into another package's files, and on cycles between workspace packages.
 It does not detect circular imports between files within a package. Do not add
-circular imports between files in a package. `scripts/check-arch.ts`
-(`pnpm check:arch`) holds the rules a manifest cannot express, including the two
-below. Every failure prints the way out. Take it. Do not widen a list to get
-past one.
+circular imports between files in a package.
+
+A name is exported once, by the module that declares it, and imported from
+there. No module re-exports a name it imported, and none renames one with an
+alias type or const. Only a package's root entrypoint gathers names, and only
+from its own files. `check:arch` fails on a relay. `scripts/check-arch/`
+(`pnpm check:arch`) holds the rules a manifest cannot express, one check per
+file, including the two below. Every failure prints the way out. Take it. Do not
+widen a list to get past one.
 
 ## Host ports
 

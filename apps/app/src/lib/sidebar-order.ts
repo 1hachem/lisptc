@@ -1,25 +1,29 @@
-export const SIDEBAR_ENTRIES = [
-	"home",
-	"new_chat",
+export const SIDEBAR_FOLDERS = [
 	"chat",
 	"memories",
 	"permissions",
 	"knowledge",
+	"attachments",
+	"bin",
 	"sub-agents",
 	"triggers",
 	"tasks",
 	"ui",
 	"tests",
+] as const;
+
+export type SidebarFolder = (typeof SIDEBAR_FOLDERS)[number];
+
+export const SIDEBAR_ENTRIES = [
+	"home",
+	"new_chat",
+	...SIDEBAR_FOLDERS,
 	"README.md",
 	"settings.ptc",
 	"preferences.ptc",
 ] as const;
 
 export type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number];
-
-const RENAMED: Readonly<Record<string, SidebarEntry>> = {
-	agents: "sub-agents",
-};
 
 function isEntry(name: string): name is SidebarEntry {
 	return (SIDEBAR_ENTRIES as readonly string[]).includes(name);
@@ -28,9 +32,7 @@ function isEntry(name: string): name is SidebarEntry {
 export function sidebarOrder(
 	stored: readonly string[] | undefined,
 ): SidebarEntry[] {
-	const kept = [
-		...new Set((stored ?? []).map((name) => RENAMED[name] ?? name)),
-	].filter(isEntry);
+	const kept = [...new Set(stored ?? [])].filter(isEntry);
 	return [...kept, ...SIDEBAR_ENTRIES.filter((name) => !kept.includes(name))];
 }
 
@@ -38,7 +40,7 @@ export function shownEntries(
 	order: readonly SidebarEntry[],
 	hidden: readonly string[] | undefined,
 ): SidebarEntry[] {
-	const gone = new Set((hidden ?? []).map((name) => RENAMED[name] ?? name));
+	const gone = new Set(hidden ?? []);
 	return order.filter((name) => !gone.has(name));
 }
 

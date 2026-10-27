@@ -116,6 +116,10 @@ export interface InterpExtension extends Installable {
 
 export interface SessionHooks {
 	readonly turnStart: Chain<[ctx: TurnContext], Eval<void>>;
+	readonly received: Chain<
+		[ctx: TurnContext, received: Annotations],
+		Eval<void>
+	>;
 	readonly system: Chain<[interp: Interp, prompt: string], Eval<string>>;
 	readonly beginStep: Chain<[ctx: TurnContext], Eval<void>>;
 	readonly context: Chain<
@@ -135,6 +139,7 @@ export interface SessionHooks {
 		[ctx: TurnContext, more: boolean],
 		Eval<boolean>
 	>;
+	readonly answer: Chain<[interp: Interp, code: string], string>;
 	readonly settled: Chain<[turn: AgentTurn, end: AgentEnd], void>;
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
 	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
@@ -155,6 +160,7 @@ export function newSessionHooks(): SessionHooks {
 	const slots = new Map<string, unknown>();
 	return {
 		turnStart: new Chain(),
+		received: new Chain(),
 		system: new Chain(),
 		beginStep: new Chain(),
 		context: new Chain(),
@@ -162,6 +168,7 @@ export function newSessionHooks(): SessionHooks {
 		response: new Chain(),
 		stepEnd: new Chain(),
 		beforeSettle: new Chain(),
+		answer: new Chain(),
 		settled: new Chain(),
 		evalStep: new Chain(),
 		stepOutput: new Chain(),

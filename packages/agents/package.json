@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/agents.ts",
-    "./host": "./src/agents-host.ts"
+    "./host": "./src/agents-host.ts",
+    "./ports": "./src/ports.ts"
   },
   "engines": {
     "node": ">=22.6.0"

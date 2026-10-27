@@ -54,6 +54,28 @@ describe("a step that renders", () => {
 	});
 });
 
+describe("a step that opens panel tabs", () => {
+	it("hands the panel ops back beside the output, in order", async () => {
+		const out = await memoryRepl().evalOutput(
+			'(ui/open-file "knowledge" "q3.pdf" :split "right") (ui/close "file:knowledge/q3.pdf")',
+		);
+		expect(out.annotations.output.panel).toEqual([
+			{
+				op: "open",
+				tab: "file:knowledge/q3.pdf",
+				split: "right",
+				content: { kind: "file", folder: "knowledge", name: "q3.pdf" },
+			},
+			{ op: "close", tab: "file:knowledge/q3.pdf" },
+		]);
+	});
+
+	it("reports no panel ops for a step that opened none", async () => {
+		const out = await memoryRepl().evalOutput("(+ 1 2)");
+		expect(out.annotations.output.panel).toBeUndefined();
+	});
+});
+
 describe("driving the view", () => {
 	it("runs a click in the same session and answers with the new view", async () => {
 		const r = memoryRepl();

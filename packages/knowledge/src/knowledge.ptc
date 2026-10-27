@@ -1,0 +1,65 @@
+KNOWLEDGE
+
+Files user uploaded to workspace. User sees same files in sidebar; every
+change shows there at once.
+
+- (knowledge/list) lists file names, like "report.md".
+- (knowledge/read "name") by extension: .ptc gives its one form as data, never
+  run; .json gives JSON as data: object as alist, array as list, null as nil,
+  false as :false, [] as :[], {} as :{}; array that would read back as object
+  comes led by :[], number index skips it. .pdf gives page text as string;
+  other text gives string. Other binary (image) refused. nil when no file.
+- (knowledge/write "name" value) replaces file, old one to bin; user can open
+  and download it. User approves it. .ptc takes data, printed; function
+  refused. .json takes data, written as JSON: plist or alist becomes object,
+  keyword values too, (:status :done) gives {"status": "done"}; list led by
+  :[] becomes array of rest, (:[] :red :green) gives ["red", "green"]; other
+  list becomes array; nil becomes null; :false :[] :{} become false [] {};
+  other keyword becomes its name. Same key twice refused. Or takes JSON text
+  string. Other file takes string.
+- Edit .ptc file: read, change with set-in / update-in / remove-in, write back:
+  (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
+  Same for .json. Removing last entry leaves nil, written null; set :[] or :{}
+  to keep it empty.
+- (knowledge/delete "name") moves file to bin. User approves it.
+
+ATTACHMENTS
+
+Files user attached to message land in attachments, shown as attachments/ in
+sidebar; message then carries "user attached: attachments/spec.pdf". Unkept
+attachment moves to bin after a week.
+
+- User message can point at file: @knowledge/report.md or
+  @attachments/spec.pdf; quoted when name has space:
+  @"attachments/Q3 Sales.json". Read it with (knowledge/read "report.md") or
+  (attachments/read "spec.pdf"), name without folder.
+- (attachments/list) lists attachment names.
+- (attachments/read "name") reads attachment, same rules as knowledge/read.
+- (knowledge/keep "name") moves attachment into knowledge, kept for good. User
+  approves it. Keep what user wants to reuse later; leave rest to expire.
+- (attachments/write "name" value) puts file in attachments. String stored as
+  text; (:base64 "…" :type "image/png") stored as bytes, like image from tool.
+  Returns stored name; gains number when name taken.
+- (attachments/fetch "https://…") downloads url into attachments;
+  (attachments/fetch url "name") names it. User approves it. Returns stored
+  name.
+- (attachments/delete "name") moves attachment to bin. User approves it.
+
+BIN
+
+Deleted knowledge and attachments land in bin, shown as bin/ in sidebar. Bin
+deletes them for good a month later. Bin file cannot be read; restore it first.
+
+- (bin/list) lists bin file names, newest first.
+- (bin/search "text") lists bin file names containing text, any case. Matches
+  name only, never content.
+- (bin/restore "name") moves file back to folder it came from. User approves
+  it. Returns "knowledge/name" or "attachments/name"; name gains number when
+  taken.
+- (bin/delete "name") deletes bin file for good. User approves it.
+
+ATTACH
+
+- (attachments/attach "name") or (knowledge/attach "name") shows file under
+  your reply; user clicks to open it. Use after attachments/write or
+  attachments/fetch to hand user the file. Errors when no such file.

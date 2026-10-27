@@ -3,10 +3,16 @@ WORKSPACE
 Workspace you work in, and its chats. User sees same things as files in
 sidebar; every change shows there at once.
 
-- (settings) gives (:name "…" :model "provider/model").
+- (settings) gives (:name "…" :model "provider/model" :icon "…" :theme id).
 - (settings/models) lists models workspace can run on.
-- (settings/set :model "provider/model") or (settings/set :name "…") changes
-  them. User approves first. New model answers from next turn.
+- (settings/icons) lists icons workspace can show in sidebar.
+- (settings/themes) gives alist of (id . name) of themes app can wear.
+- (settings/set :model "provider/model"), (settings/set :name "…"),
+  (settings/set :icon "rocket") or (settings/set :theme "gruvbox-light")
+  changes them. User approves first. New model answers from next turn. Theme
+  belongs to workspace, not user: each workspace wears its own.
+- (settings/set :theme "dark") flips current theme to its dark twin. No dark
+  twin: default dark theme.
 
 - (chats) lists (:id id :title title), most recently active first.
   (chats :search "login" :limit 5) narrows by title.

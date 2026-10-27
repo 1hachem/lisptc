@@ -1,11 +1,20 @@
 import { providerSpecs } from "@repo/env/providers";
+import type { ModelDelta } from "@repo/interpreter/session";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
-import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { AgentDelta } from "../src/agent.ts";
-import { MemorySteerInbox } from "../src/inbox.ts";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import type { Envelope } from "../src/mailbox.ts";
 import { replResultContent } from "../src/repl.ts";
-import type { ChatInput, ChatStreamOptions } from "../src/stream.ts";
-import { extension, hearing, reporting, riding, testRepl } from "./helpers.ts";
+import type { ChatInput } from "../src/stream.ts";
+import {
+	type ChatStreamOptions,
+	extension,
+	hearing,
+	receiving,
+	reporting,
+	riding,
+	streamChat,
+	testRepl,
+} from "./helpers.ts";
 
 const emitting = (text: string) =>
 	extension((hooks) =>
@@ -15,7 +24,7 @@ const emitting = (text: string) =>
 		}),
 	);
 
-const TURNS: AgentDelta[][] = [
+const TURNS: ModelDelta[][] = [
 	[{ text: "(+ 1 2)" }, { usage: { input: 10, output: 4 } }],
 	[{ text: "three." }, { usage: { input: 20, output: 6, cachedInput: 10 } }],
 ];
@@ -79,17 +88,11 @@ async function finalMessages(response: Response): Promise<WireMessage[]> {
 }
 
 describe("chat stream", () => {
-	let streamChatResponse: typeof import("../src/stream.ts").streamChatResponse;
-
-	beforeAll(async () => {
-		({ streamChatResponse } = await import("../src/stream.ts"));
-	});
-
 	function stream(
 		input: ChatInput,
 		options: Partial<ChatStreamOptions> = {},
 	): Response {
-		return streamChatResponse(input, { repl: testRepl(), ...options });
+		return streamChat(input, { repl: testRepl(), ...options });
 	}
 
 	beforeEach(() => {
@@ -112,21 +115,22 @@ describe("chat stream", () => {
 		expect(failures).toEqual([undefined, expect.stringContaining("down")]);
 	});
 
-	test("a steer posted mid-turn is recorded in order, and the inbox closes with the turn", async () => {
-		const inbox = new MemorySteerInbox();
+	test("a steer posted mid-turn is recorded in order", async () => {
+		const waiting: Envelope[] = [
+			{ kind: "user", id: "s1", text: "use hex", forms: true },
+		];
 		const recorded: { type: string; content: string; id: string }[] = [];
-		const response = stream(
-			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
-			{
-				steer: { inbox, key: "t" },
-				onTurn: (produced) => {
-					recorded.push(...produced);
+		const messages = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{
+					inbox: async () => waiting.splice(0),
+					onTurn: (produced) => {
+						recorded.push(...produced);
+					},
 				},
-			},
+			),
 		);
-		expect(await inbox.post("t", { id: "s1", content: "use hex" })).toBe(true);
-
-		const messages = await finalMessages(response);
 
 		expect(messages.map((m) => m.type)).toEqual([
 			"human",
@@ -137,7 +141,25 @@ describe("chat stream", () => {
 		]);
 		expect(recorded.map((m) => m.type)).toEqual(["ai", "tool", "human", "ai"]);
 		expect(recorded[2]).toMatchObject({ id: "s1", content: "use hex" });
-		expect(await inbox.post("t", { id: "s2", content: "late" })).toBe(false);
+	});
+
+	test("an event taken mid-turn is recorded as a system message", async () => {
+		const waiting: Envelope[] = [
+			{ kind: "event", id: "e1", source: "agent:r", text: "(+ 1 2)" },
+		];
+		const messages = await finalMessages(
+			stream(
+				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+				{ inbox: async () => waiting.splice(0) },
+			),
+		);
+
+		expect(messages[3]).toMatchObject({
+			type: "system",
+			id: "e1",
+			content: "(+ 1 2)",
+			additional_kwargs: { source: "agent:r" },
+		});
 	});
 
 	test("every model call reports what it cost, and only its own", async () => {
@@ -302,6 +324,65 @@ describe("chat stream", () => {
 		expect(messages[0].content).toBe("what is 1 + 2?");
 		expect(messages[0].additional_kwargs?.riding).toBe("you are a pirate");
 		expect(revised.get(0)?.additional_kwargs?.riding).toBe("you are a pirate");
+	});
+
+	describe("what the user's newest message carried", () => {
+		const told = () =>
+			sent[0].some((m) => m.content.includes("the user also said: in hex"));
+
+		test("reaches the extensions on the turn it was sent", async () => {
+			await stream(
+				{
+					messages: [
+						{
+							type: "human",
+							content: "what is 1 + 2?",
+							additional_kwargs: { said: "in hex" },
+						},
+					],
+				},
+				{ repl: testRepl([receiving()]) },
+			).text();
+
+			expect(told()).toBe(true);
+		});
+
+		test("is not told again when the request ends past it", async () => {
+			await stream(
+				{
+					messages: [
+						{
+							type: "human",
+							content: "what is 1 + 2?",
+							additional_kwargs: { said: "in hex" },
+						},
+						{ type: "ai", content: "(+ 1 2)" },
+						{ type: "tool", content: "3" },
+					],
+				},
+				{ repl: testRepl([receiving()]) },
+			).text();
+
+			expect(told()).toBe(false);
+		});
+
+		test("is not told when a system event is the newest message", async () => {
+			await stream(
+				{
+					messages: [
+						{
+							type: "human",
+							content: "what is 1 + 2?",
+							additional_kwargs: { said: "in hex" },
+						},
+						{ type: "system", content: "a timer fired" },
+					],
+				},
+				{ repl: testRepl([receiving()]) },
+			).text();
+
+			expect(told()).toBe(false);
+		});
 	});
 
 	test("a REPL result carries no cost of its own", async () => {

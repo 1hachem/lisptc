@@ -9,6 +9,7 @@ import {
 	Outlet,
 	Scripts,
 	useMatches,
+	useParams,
 	useRouteContext,
 } from "@tanstack/react-router";
 import { Analytics } from "../lib/analytics.tsx";
@@ -16,6 +17,7 @@ import { providerClient } from "../lib/auth-client.ts";
 import { ssrAuth } from "../lib/auth-server.ts";
 import { preferencesQuery, useCachedPreferences } from "../lib/preferences.ts";
 import { fontOf, themeOf } from "../lib/resolved-preferences.ts";
+import { useCachedWorkspace } from "../lib/workspace.tsx";
 import appCss from "../styles/app.css?url";
 
 interface RouterContext {
@@ -58,11 +60,16 @@ function RootComponent() {
 	const themed = useMatches({
 		select: (matches) => matches.some((match) => match.staticData.themed),
 	});
+	const inRoute = useParams({ strict: false }).workspaceId;
 	const cached = useCachedPreferences(queryClient);
+	const workspace = useCachedWorkspace(queryClient, inRoute);
 	const stored = themed ? cached : undefined;
 
 	return (
-		<RootDocument theme={themeOf(stored)} font={fontOf(stored)}>
+		<RootDocument
+			theme={themeOf(themed ? (workspace ?? undefined) : undefined)}
+			font={fontOf(stored)}
+		>
 			<ConvexBetterAuthProvider
 				client={convexQueryClient.convexClient}
 				authClient={providerClient}

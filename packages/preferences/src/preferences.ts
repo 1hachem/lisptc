@@ -12,33 +12,22 @@ import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
-import type {
-	Choice,
-	Preferences,
-	PreferencesHost,
-	ThemeChoice,
-	Toggles,
-} from "./ports.ts";
+import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
 
 const SET_KEYS = [
-	"theme",
 	"font",
 	"channels",
 	"metadata",
 	"input",
 	"sidebar",
 	"hidden",
+	"status-bar",
+	"status-bar-hidden",
 	"motion",
+	"panel-motion",
 ];
 
 const SET_ARGS = [
-	{
-		name: "theme",
-		type: "string",
-		required: false,
-		description:
-			'a theme id from (themes), or "dark" for the dark counterpart of the current theme, falling back to the default dark theme',
-	},
 	{
 		name: "font",
 		type: "string",
@@ -81,11 +70,32 @@ const SET_ARGS = [
 			'every sidebar entry to hide, as ("name" ...); an entry not named is shown, so \'() shows them all',
 	},
 	{
+		name: "status-bar",
+		type: "list",
+		required: false,
+		description:
+			'the bottom bar\'s three slots, left, centre and right, as ("name" ...); an empty slot is named like an item; slots not named follow in their current order',
+	},
+	{
+		name: "status-bar-hidden",
+		type: "list",
+		required: false,
+		description:
+			'every bottom bar item to hide, as ("name" ...); an item not named is shown, so \'() shows them all',
+	},
+	{
 		name: "motion",
 		type: "string",
 		required: false,
 		description:
 			"how the sidebar animates a drag, a motion id from (motions); the system's reduced-motion setting still wins",
+	},
+	{
+		name: "panel-motion",
+		type: "boolean",
+		required: false,
+		description:
+			"t to animate panels as they open, split and switch tabs, nil to keep them still; the system's reduced-motion setting still wins",
 	},
 ];
 
@@ -103,14 +113,19 @@ function togglesList(toggles: Toggles | undefined): List {
 
 export function preferencesList(preferences: Preferences): List {
 	return plist([
-		["theme", preferences.theme ?? null],
 		["font", preferences.font ?? null],
 		["channels", togglesList(preferences.channels)],
 		["metadata", togglesList(preferences.metadata)],
 		["input", togglesList(preferences.input)],
 		["sidebar", arrayToList([...(preferences.sidebar ?? [])])],
 		["hidden", arrayToList([...(preferences.hidden ?? [])])],
+		["status-bar", arrayToList([...(preferences.statusBar ?? [])])],
+		[
+			"status-bar-hidden",
+			arrayToList([...(preferences.statusBarHidden ?? [])]),
+		],
 		["motion", preferences.motion ?? null],
+		["panel-motion", preferences.panelMotion === false ? null : true],
 	]);
 }
 
@@ -119,7 +134,7 @@ function choices(offered: readonly Choice[]): List {
 }
 
 function chosen(
-	kind: "theme" | "font" | "motion",
+	kind: "font" | "motion",
 	value: unknown,
 	offered: readonly Choice[],
 ): string {
@@ -128,24 +143,6 @@ function chosen(
 	if (offered.length > 0 && !offered.some((choice) => choice.id === value))
 		throw new EvalException(`unknown ${kind}, see (${kind}s)`, value);
 	return value;
-}
-
-function darkCounterpart(
-	current: string | undefined,
-	offered: readonly ThemeChoice[],
-	fallback: string | undefined,
-): string {
-	const family = offered.find((theme) => theme.id === current)?.family;
-	const dark = offered.find(
-		(theme) => theme.family === family && theme.scheme === "dark",
-	);
-	const id = dark?.id ?? fallback;
-	if (id === undefined)
-		throw new EvalException(
-			"no dark theme to switch to, see (themes)",
-			current ?? null,
-		);
-	return id;
 }
 
 function toggled(
@@ -166,8 +163,11 @@ function toggled(
 	return next;
 }
 
-function sidebarNames(
-	kind: "sidebar" | "hidden",
+type Listed = "sidebar entry" | "status bar item";
+
+function names(
+	kind: string,
+	what: Listed,
 	value: unknown,
 	known: readonly string[] | undefined,
 ): string[] {
@@ -175,24 +175,26 @@ function sidebarNames(
 		throw new EvalException(`${kind} must be a list ("name" ...)`, value);
 	const named = listToArray(value).map((name) => {
 		if (typeof name !== "string")
-			throw new EvalException("a sidebar entry is named by a string", name);
+			throw new EvalException(`a ${what} is named by a string`, name);
 		if (known && known.length > 0 && !known.includes(name))
 			throw new EvalException(
-				`unknown sidebar entry, there are ${known.map((id) => JSON.stringify(id)).join(" ")}`,
+				`unknown ${what}, there are ${known.map((id) => JSON.stringify(id)).join(" ")}`,
 				name,
 			);
 		return name;
 	});
 	if (new Set(named).size !== named.length)
-		throw new EvalException("a sidebar entry is named twice", value);
+		throw new EvalException(`a ${what} is named twice`, value);
 	return named;
 }
 
 function ordered(
+	kind: string,
+	what: Listed,
 	value: unknown,
 	known: readonly string[] | undefined,
 ): string[] {
-	const named = sidebarNames("sidebar", value, known);
+	const named = names(kind, what, value, known);
 	return [...named, ...(known ?? []).filter((name) => !named.includes(name))];
 }
 
@@ -206,7 +208,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:theme id :font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :motion id). They belong to the user, not the workspace, and the app applies them live.',
+		'Return the user\'s preferences as a plist: (:font id :channels (:id t ...) :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -216,23 +218,18 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:theme id] [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:motion id])',
+		'(preferences/set [:font id] [:channels (:id t ...)] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t])',
 		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :theme :font :channels :metadata :input :sidebar :hidden :motion",
+					"nothing to set, give one of :font :channels :metadata :input :sidebar :hidden :status-bar :status-bar-hidden :motion :panel-motion",
 					null,
 				);
 			const current = yield* settled(store.read());
 			const change: Preferences = {};
-			if (options.has("theme"))
-				change.theme =
-					options.get("theme") === "dark"
-						? darkCounterpart(current.theme, host.themes, host.defaultDarkTheme)
-						: chosen("theme", options.get("theme"), host.themes);
 			if (options.has("font"))
 				change.font = chosen("font", options.get("font"), host.fonts);
 			if (options.has("channels"))
@@ -250,28 +247,41 @@ export function registerPreferences(
 			if (options.has("input"))
 				change.input = toggled("input", options.get("input"), current.input);
 			if (options.has("sidebar"))
-				change.sidebar = ordered(options.get("sidebar"), current.sidebar);
+				change.sidebar = ordered(
+					"sidebar",
+					"sidebar entry",
+					options.get("sidebar"),
+					current.sidebar,
+				);
 			if (options.has("hidden"))
-				change.hidden = sidebarNames(
+				change.hidden = names(
 					"hidden",
+					"sidebar entry",
 					options.get("hidden"),
 					current.sidebar,
 				);
+			if (options.has("status-bar"))
+				change.statusBar = ordered(
+					"status-bar",
+					"status bar item",
+					options.get("status-bar"),
+					current.statusBar,
+				);
+			if (options.has("status-bar-hidden"))
+				change.statusBarHidden = names(
+					"status-bar-hidden",
+					"status bar item",
+					options.get("status-bar-hidden"),
+					current.statusBar,
+				);
 			if (options.has("motion"))
 				change.motion = chosen("motion", options.get("motion"), host.motions);
+			if (options.has("panel-motion"))
+				change.panelMotion = options.get("panel-motion") !== null;
 			yield* settled(store.write(change));
 			return preferencesList({ ...current, ...change });
 		},
 		SET_ARGS,
-	);
-
-	interp.def(
-		"themes",
-		0,
-		"(themes)",
-		"Return an alist of (id . name) for every theme the app offers.",
-		z.tuple([]),
-		() => choices(host.themes),
 	);
 
 	interp.def(

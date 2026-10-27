@@ -1,5 +1,9 @@
-import { useConvexMutation } from "@convex-dev/react-query";
-import { Alert02Icon, BubbleChatIcon } from "@hugeicons/core-free-icons";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import {
+	Alert02Icon,
+	BubbleChatIcon,
+	StopCircleIcon,
+} from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Doc } from "@repo/backend/dataModel";
@@ -12,21 +16,30 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@repo/ui";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { abandonChat } from "../lib/chat.tsx";
+import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { ConfirmItem } from "./confirm-item.tsx";
+import { PanelLink, useShown } from "./panel-link.tsx";
 
 const STATUS_ICONS = {
 	waiting: { icon: BubbleChatIcon, iconClassName: "text-yellow" },
 	errored: { icon: Alert02Icon, iconClassName: "text-red" },
+	stopped: { icon: StopCircleIcon, iconClassName: "text-dim" },
 } satisfies Record<
 	Exclude<Doc<"chats">["status"], "streaming" | undefined>,
 	{ icon: IconSvgElement; iconClassName: string }
 >;
 
-function statusGlyph(chat: Doc<"chats">) {
+export type SessionChat = Pick<
+	Doc<"chats">,
+	"_id" | "workspaceId" | "title" | "status" | "failure"
+>;
+
+function statusGlyph(chat: SessionChat) {
 	if (chat.status === undefined) return {};
 	if (chat.status === "streaming")
 		return {
@@ -43,14 +56,28 @@ function statusGlyph(chat: Doc<"chats">) {
 const item =
 	"rounded-none px-2.5 py-1 text-[11.5px] text-dim focus:bg-bg2 focus:text-fg";
 
+function SubAgentRows({ chat, depth }: { chat: SessionChat; depth: number }) {
+	const { data } = useQuery(
+		convexQuery(api.chats.children, { chatId: chat._id }),
+	);
+	return data?.map((child) => (
+		<SessionRow key={child._id} chat={child} depth={depth} />
+	));
+}
+
 export function SessionRow({
 	chat,
-	current,
+	depth = 1,
 }: {
-	chat: Doc<"chats">;
-	current: boolean;
+	chat: SessionChat;
+	depth?: number;
 }) {
-	const navigate = useNavigate();
+	const shown = useShown();
+	const opens: PanelContent = {
+		kind: "chat",
+		chatId: chat._id,
+		title: chat.title === "" ? "untitled" : chat.title,
+	};
 	const renameChat = useConvexMutation(api.chats.rename);
 	const removeChat = useConvexMutation(api.chats.remove);
 	const { failure, attempt } = useAttempt("session action");
@@ -89,16 +116,17 @@ export function SessionRow({
 			<TreeFile
 				name={chat.title === "" ? "untitled" : chat.title}
 				{...statusGlyph(chat)}
-				selected={current}
-				depth={1}
+				selected={shown(opens)}
+				depth={depth}
+				onDragStart={dragsAs(opens)}
 				link={(content, className) => (
-					<Link
-						to="/$workspaceId/chat/$chatId"
-						params={{ workspaceId: chat.workspaceId, chatId: chat._id }}
+					<PanelLink
+						workspaceId={chat.workspaceId}
+						content={opens}
 						className={className}
 					>
 						{content}
-					</Link>
+					</PanelLink>
 				)}
 				trailing={
 					<DropdownMenu>
@@ -130,13 +158,7 @@ export function SessionRow({
 								onConfirm={() => {
 									attempt(async () => {
 										abandonChat(chat._id);
-										if (current) {
-											await navigate({
-												to: "/$workspaceId",
-												params: { workspaceId: chat.workspaceId },
-												replace: true,
-											});
-										}
+										requestPanelClosed(opens);
 										await removeChat({ chatId: chat._id });
 									});
 								}}
@@ -148,6 +170,7 @@ export function SessionRow({
 			{failure && (
 				<div className="px-2.5 py-1 text-[11px] text-red">{failure}</div>
 			)}
+			<SubAgentRows chat={chat} depth={depth + 1} />
 		</>
 	);
 }

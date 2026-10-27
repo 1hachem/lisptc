@@ -66,6 +66,7 @@ export interface ToolCall {
 	serverId: string;
 	tool: string;
 	args: Record<string, unknown>;
+	timeoutMs?: number;
 }
 
 export interface McpClient {
@@ -125,12 +126,6 @@ export const openPolicy: McpPolicy = {
 	server: () => ({ access: "open" }),
 	tool: () => true,
 };
-
-export type {
-	SearchDocument,
-	SearchEngine,
-	SearchHit,
-} from "@repo/shared/search";
 
 export interface PendingAuthorization {
 	state: string;

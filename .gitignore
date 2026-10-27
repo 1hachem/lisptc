@@ -32,9 +32,6 @@ apps/trace-viewer/.evals/
 next-env.d.ts
 *.tsbuildinfo
 
-.claude/canvas/sessions/
-.claude/canvas/server.log
-
 packages/backend/.env.local
 
 .env.local

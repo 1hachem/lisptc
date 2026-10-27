@@ -30,6 +30,7 @@ import {
 	type AgentEnd,
 	type AgentStep,
 	type AgentTurn,
+	type Annotations,
 	type Bounded,
 	type InterpExtension,
 	type ModelDelta,
@@ -557,6 +558,19 @@ export class AgentRepl extends MemoryRepl {
 		return { emitted, annotations };
 	}
 
+	received(
+		received: Annotations,
+		around?: Middleware<[TurnContext, Annotations], Eval<void>>,
+	): Promise<{
+		emitted: string;
+		annotations: StepAnnotations;
+	}> {
+		const chain = outermost(this.hooks.received, around);
+		return this.emitting((ctx) =>
+			chain.run(() => settled(undefined), ctx, received),
+		);
+	}
+
 	async system(
 		prompt: string,
 	): Promise<{ prompt: string; annotations: StepAnnotations }> {
@@ -613,6 +627,10 @@ export class AgentRepl extends MemoryRepl {
 			decided = yield* beforeSettle.run((_c, m) => settled(m), ctx, more);
 		});
 		return { more: decided, emitted };
+	}
+
+	answer(code: string): string {
+		return this.hooks.answer.run((_i, c) => c, this.interp, code);
 	}
 
 	settled(
