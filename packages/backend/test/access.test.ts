@@ -660,6 +660,78 @@ describe("panel layout access", () => {
 		).rejects.toThrow();
 	});
 
+	it("applies the agent's panel ops to the stored layout, for the owner alone", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chat = {
+			op: "open" as const,
+			tab: "chat:c1",
+			split: "here" as const,
+			content: { kind: "chat" as const, chatId: "c1", title: "chat" },
+		};
+		const file = {
+			op: "open" as const,
+			tab: "file:knowledge/a.md",
+			split: "here" as const,
+			content: tab("a.md").content,
+		};
+		await bob.as.mutation(api.layouts.apply, {
+			workspaceId: bob.workspace,
+			ops: [chat, file],
+		});
+		const stored = await bob.as.query(api.layouts.get, {
+			workspaceId: bob.workspace,
+		});
+		const panes = stored?.nodes.filter((node) => node.kind === "pane") ?? [];
+		expect(panes.map((pane) => pane.active)).toEqual([
+			"chat:c1",
+			"file:knowledge/a.md",
+		]);
+		await bob.as.mutation(api.layouts.apply, {
+			workspaceId: bob.workspace,
+			ops: [{ op: "close", tab: "file:knowledge/a.md" }],
+		});
+		expect(
+			(
+				await bob.as.query(api.layouts.get, { workspaceId: bob.workspace })
+			)?.nodes.flatMap((node) =>
+				node.kind === "pane" ? node.tabs.map((t) => t.id) : [],
+			),
+		).toEqual(["chat:c1"]);
+		await expect(
+			alice.as.mutation(api.layouts.apply, {
+				workspaceId: bob.workspace,
+				ops: [{ op: "focus", tab: "chat:c1" }],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("refuses panel ops that would grow the layout past its size", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.layouts.apply, {
+				workspaceId: alice.workspace,
+				ops: [
+					{
+						op: "open",
+						tab: "view:big",
+						split: "here",
+						content: {
+							kind: "view",
+							title: "big",
+							node: "x".repeat(300_000),
+						},
+					},
+				],
+			}),
+		).rejects.toThrow(/LAYOUT_TOO_LARGE/);
+		expect(
+			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
+		).toBeNull();
+	});
+
 	it("holds one layout per workspace, replaced on save, and none before the first", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

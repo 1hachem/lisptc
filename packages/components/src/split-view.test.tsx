@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-import { act, type ReactNode } from "react";
-import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it } from "vitest";
+
 import {
 	allTabs,
 	closeTab,
@@ -10,7 +8,10 @@ import {
 	openTab,
 	paneOf,
 	type SplitLayout,
-} from "./split-layout.ts";
+} from "@repo/shared/split-layout";
+import { act, type ReactNode } from "react";
+import { createRoot } from "react-dom/client";
+import { beforeAll, describe, expect, it } from "vitest";
 import { pagedStop, SplitView, widthFloor } from "./split-view.tsx";
 
 beforeAll(() => {

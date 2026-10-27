@@ -1,13 +1,11 @@
+import { focusedTab, type PanelOp } from "@repo/shared/panel-layout";
 import {
 	allTabs,
-	closeTab,
-	focusTab,
 	openTab,
-	type Placement,
 	paneOf,
 	type SplitLayout,
 	type Tab,
-} from "@repo/components";
+} from "@repo/shared/split-layout";
 
 export type Folder = "attachments" | "knowledge";
 
@@ -49,13 +47,6 @@ export const STARTING_LAYOUT: PanelLayout = openTab(
 	{ id: "chat:new:start", content: NEW_CHAT },
 );
 
-export function focusedTab(layout: PanelLayout): Tab<PanelContent> | undefined {
-	return allTabs(layout).find((tab) => {
-		const pane = paneOf(layout, tab.id);
-		return pane?.id === layout.focused && pane.active === tab.id;
-	});
-}
-
 export function shownTabs(layout: PanelLayout): Tab<PanelContent>[] {
 	return allTabs(layout).filter(
 		(tab) => paneOf(layout, tab.id)?.active === tab.id,
@@ -67,30 +58,6 @@ export function leadChat(layout: PanelLayout): string | undefined {
 	if (focused?.content.kind === "chat") return focused.id;
 	return shownTabs(layout).find((t) => t.content.kind === "chat")?.id;
 }
-
-function placed(
-	layout: PanelLayout,
-	split: Split,
-	content: PanelContent,
-): Placement {
-	if (split !== "here") return PLACEMENT[split];
-	return content.kind !== "chat" && focusedTab(layout)?.content.kind === "chat"
-		? "right"
-		: "focused";
-}
-
-export type Split = "here" | "right" | "down";
-
-export type PanelOp =
-	| { op: "open"; tab: string; split: Split; content: PanelContent }
-	| { op: "close"; tab: string }
-	| { op: "focus"; tab: string };
-
-const PLACEMENT: Record<Split, Placement> = {
-	here: "focused",
-	right: "right",
-	down: "down",
-};
 
 function traceTab(chatId: string): string {
 	return `trace:${chatId}`;
@@ -108,7 +75,10 @@ function traceTabFor(chatId: string, turn?: string): Tab<PanelContent> {
 	};
 }
 
-export function traceOpen(chatId: string, turn?: string): PanelOp {
+export function traceOpen(
+	chatId: string,
+	turn?: string,
+): PanelOp<PanelContent> {
 	const { id, content } = traceTabFor(chatId, turn);
 	return { op: "open", tab: id, split: "right", content };
 }
@@ -285,34 +255,4 @@ export function sideTraceShown(
 	besideByDefault: boolean,
 ): SideTrace {
 	return trace ?? { shown: besideByDefault ? "open" : "collapsed" };
-}
-
-export function toPanelOps(value: unknown): PanelOp[] {
-	if (!Array.isArray(value)) return [];
-	return value.flatMap((item): PanelOp[] => {
-		const op = record(item);
-		if (typeof op?.tab !== "string") return [];
-		if (op.op === "close" || op.op === "focus")
-			return [{ op: op.op, tab: op.tab }];
-		const content = contentOf(op.content);
-		if (op.op !== "open" || content === undefined) return [];
-		const split =
-			op.split === "right" || op.split === "down" ? op.split : "here";
-		return [{ op: "open", tab: op.tab, split, content }];
-	});
-}
-
-export function applyPanelOps(
-	layout: PanelLayout,
-	ops: readonly PanelOp[],
-): PanelLayout {
-	return ops.reduce((current, op) => {
-		if (op.op === "close") return closeTab(current, op.tab);
-		if (op.op === "focus") return focusTab(current, op.tab);
-		return openTab(
-			current,
-			{ id: op.tab, content: op.content },
-			placed(current, op.split, op.content),
-		);
-	}, layout);
 }

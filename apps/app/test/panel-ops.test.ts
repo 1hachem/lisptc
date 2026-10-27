@@ -1,7 +1,7 @@
-import { allTabs, emptyLayout } from "@repo/components";
+import { applyPanelOps } from "@repo/shared/panel-layout";
+import { allTabs, emptyLayout } from "@repo/shared/split-layout";
 import { describe, expect, it } from "vitest";
 import {
-	applyPanelOps,
 	CHAT_MIN_WIDTH,
 	leadChat,
 	NEW_CHAT,
@@ -13,7 +13,6 @@ import {
 	sideTraceShown,
 	startPanelDrag,
 	tabMinWidth,
-	toPanelOps,
 	traceOpen,
 } from "../src/lib/panel-ops.ts";
 
@@ -50,43 +49,9 @@ describe("dragging a file into the panel", () => {
 	});
 });
 
-describe("the panel lane off the wire", () => {
-	it("keeps the ops it can place and drops the rest", () => {
-		expect(
-			toPanelOps([
-				{
-					op: "open",
-					tab: "file:knowledge/q3.pdf",
-					split: "right",
-					content: report,
-				},
-				{
-					op: "open",
-					tab: "x",
-					content: { kind: "file", folder: "bin", name: "x" },
-				},
-				{ op: "close", tab: "file:knowledge/q3.pdf" },
-				{ op: "explode", tab: "x" },
-				"nonsense",
-			]),
-		).toEqual([
-			{
-				op: "open",
-				tab: "file:knowledge/q3.pdf",
-				split: "right",
-				content: report,
-			},
-			{ op: "close", tab: "file:knowledge/q3.pdf" },
-		]);
-	});
-
-	it("reads nothing from a lane that is not a list", () => {
-		expect(toPanelOps(undefined)).toEqual([]);
-		expect(toPanelOps({ op: "open" })).toEqual([]);
-	});
-
+describe("the panel ops", () => {
 	it("opens to the side the step asked for and closes by tab id", () => {
-		const opened = applyPanelOps(emptyLayout(), [
+		const opened = applyPanelOps(emptyLayout<PanelContent>(), [
 			{ op: "open", tab: "a", split: "here", content: report },
 			{
 				op: "open",
@@ -112,7 +77,7 @@ describe("chats in the layout", () => {
 	});
 
 	it("opens a file beside a focused chat, never over it", () => {
-		const layout = applyPanelOps(emptyLayout(), [
+		const layout = applyPanelOps(emptyLayout<PanelContent>(), [
 			{ op: "open", tab: "chat:c1", split: "here", content: chat },
 			{ op: "open", tab: "a", split: "here", content: report },
 		]);
@@ -122,32 +87,13 @@ describe("chats in the layout", () => {
 	});
 
 	it("leads with the focused chat, else the first chat on show", () => {
-		const layout = applyPanelOps(emptyLayout(), [
+		const layout = applyPanelOps(emptyLayout<PanelContent>(), [
 			{ op: "open", tab: "chat:c1", split: "here", content: chat },
 			{ op: "open", tab: "a", split: "here", content: report },
 		]);
 		expect(leadChat(layout)).toBe("chat:c1");
 		const closed = applyPanelOps(layout, [{ op: "close", tab: "chat:c1" }]);
 		expect(leadChat(closed)).toBeUndefined();
-	});
-
-	it("keeps the chat a drawn view came from", () => {
-		expect(
-			toPanelOps([
-				{
-					op: "open",
-					tab: "view:t",
-					content: { kind: "view", title: "t", node: null, chatId: "c1" },
-				},
-			]),
-		).toEqual([
-			{
-				op: "open",
-				tab: "view:t",
-				split: "here",
-				content: { kind: "view", title: "t", node: null, chatId: "c1" },
-			},
-		]);
 	});
 });
 
@@ -175,12 +121,10 @@ describe("a chat's trace", () => {
 		expect(again.root?.kind).toBe("split");
 	});
 
-	it("survives the wire and a drag as the same tab", () => {
-		const [op] = toPanelOps([traceOpen("c1", "h1")]);
+	it("survives a drag as the same tab", () => {
 		const data = transfer();
 		startPanelDrag(data, { kind: "trace", chatId: "c1", title: "trace" });
 
-		expect(op).toEqual(traceOpen("c1", "h1"));
 		expect(readPanelDrag(data)).toEqual({
 			id: "trace:c1",
 			content: { kind: "trace", chatId: "c1", title: "trace" },

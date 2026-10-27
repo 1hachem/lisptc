@@ -5,7 +5,7 @@ import {
 } from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import type { DocArg } from "@repo/interpreter/docs";
-import { driveAsync } from "@repo/interpreter/drive";
+import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
@@ -21,11 +21,7 @@ import {
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 import {
@@ -33,7 +29,7 @@ import {
 	type Folder,
 	fileTab,
 	type PanelOp,
-	panelOps,
+	type PanelStore,
 	SPLITS,
 	type Split,
 	viewTab,
@@ -44,7 +40,7 @@ export {
 	fileTab,
 	type PanelContent,
 	type PanelOp,
-	panelOps,
+	type PanelStore,
 	viewTab,
 } from "./panel.ts";
 export type { UiNode, UiValue } from "./view.ts";
@@ -407,7 +403,11 @@ function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
 }
 
-function registerUi(interp: Interp, surface: UiSurface): void {
+function registerUi(
+	interp: Interp,
+	surface: UiSurface,
+	panel: PanelStore,
+): void {
 	surface.bind(interp);
 	surface.reset();
 	interp.recovery.kind({
@@ -663,18 +663,20 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 			new UiElement("file-link", { text, folder: folderOf(folder), name }),
 	);
 
-	const emit = (op: PanelOp) => panelOps.emit(interp.channels, { user: op });
+	function* emit(op: PanelOp): Eval<void> {
+		yield* settled(panel.apply([op]));
+	}
 
-	interp.def(
+	interp.defGen(
 		"ui/open-file",
 		-3,
 		'(ui/open-file folder name [:split "right"])',
 		`Open a stored file's preview in a tab of the panel beside the chat. \`folder\` is one of ${FOLDERS.join(" ")}; list it first, since a name that is not there opens a tab that says so. \`:split\` is one of ${SPLITS.join(" ")}: here adds the tab to the focused split, right and down open a new split beside it. A file already open is focused instead. Returns the tab id.`,
 		z.tuple([zString, zString, zList]),
-		([folder, name, rest]) => {
+		function* ([folder, name, rest]): Eval {
 			const checked = folderOf(folder);
 			const tab = fileTab(checked, name);
-			emit({
+			yield* emit({
 				op: "open",
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
@@ -684,17 +686,17 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/open-view",
 		-3,
 		'(ui/open-view title view [:split "right"])',
 		`Open a widget in a tab of the panel beside the chat, titled \`title\`, instead of under your message. Its controls run in this REPL like any other view's. Opening the same title again replaces that tab. \`:split\` is as for \`ui/open-file\`. Returns the tab id.`,
 		z.tuple([zString, zAny, zList]),
-		([title, view, rest]) => {
+		function* ([title, view, rest]): Eval {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			const tab = viewTab(title);
-			emit({
+			yield* emit({
 				op: "open",
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
@@ -704,26 +706,26 @@ function registerUi(interp: Interp, surface: UiSurface): void {
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/close",
 		1,
 		"(ui/close tab)",
 		"Close a panel tab by the id `ui/open-file` or `ui/open-view` returned. A split left empty folds into its neighbour.",
 		z.tuple([zString]),
-		([tab]) => {
-			emit({ op: "close", tab });
+		function* ([tab]): Eval {
+			yield* emit({ op: "close", tab });
 			return Unspecified;
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/focus",
 		1,
 		"(ui/focus tab)",
 		"Bring a panel tab to the front by the id `ui/open-file` or `ui/open-view` returned.",
 		z.tuple([zString]),
-		([tab]) => {
-			emit({ op: "focus", tab });
+		function* ([tab]): Eval {
+			yield* emit({ op: "focus", tab });
 			return Unspecified;
 		},
 	);
@@ -801,6 +803,7 @@ function renderView(surface: UiSurface, view: UiElement): string {
 
 export interface UiHost {
 	prompt: PromptSource;
+	panel: PanelStore;
 }
 
 export interface UiOptions {
@@ -814,26 +817,26 @@ export function uiExtension(
 	options: UiOptions = {},
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
-	return Object.assign((interp: Interp): void => registerUi(interp, surface), {
-		surface,
-		prompt: host.prompt(),
-		session(hooks: SessionHooks): void {
-			hooks.invoke.use(async (ctx) => {
-				await surface.invoke(ctx.action, ctx.values);
-			});
-			hooks.annotate.use((buffer, into, next) => {
-				const view = buffer.collect(rendered).at(-1);
-				const panel = buffer.collect(panelOps);
-				const viewed =
-					view === undefined ? into : annotate(into, viewKey, viewOf(view));
-				return next(
-					buffer,
-					panel.length === 0 ? viewed : annotating(viewed, "output", { panel }),
+	return Object.assign(
+		(interp: Interp): void => registerUi(interp, surface, host.panel),
+		{
+			surface,
+			prompt: host.prompt(),
+			session(hooks: SessionHooks): void {
+				hooks.invoke.use(async (ctx) => {
+					await surface.invoke(ctx.action, ctx.values);
+				});
+				hooks.annotate.use((buffer, into, next) => {
+					const view = buffer.collect(rendered).at(-1);
+					return next(
+						buffer,
+						view === undefined ? into : annotate(into, viewKey, viewOf(view)),
+					);
+				});
+				hooks.message.use(
+					(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
 				);
-			});
-			hooks.message.use(
-				(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
-			);
+			},
 		},
-	});
+	);
 }

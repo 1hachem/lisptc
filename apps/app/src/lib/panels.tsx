@@ -2,13 +2,18 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import {
+	applyPanelOps,
+	focusedTab,
+	type PanelOp,
+} from "@repo/shared/panel-layout";
+import {
 	allTabs,
 	emptyLayout,
 	type FlatLayout,
 	flatten,
 	replaceTab,
 	unflatten,
-} from "@repo/components";
+} from "@repo/shared/split-layout";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -22,40 +27,23 @@ import {
 	useState,
 } from "react";
 import { reportIssue } from "./analytics.tsx";
-import type { ChatMessage } from "./chat.tsx";
-import { useChatSession } from "./chat.tsx";
 import {
-	applyPanelOps,
 	type Folder,
 	fileTab,
-	focusedTab,
 	type PanelContent,
 	type PanelLayout,
-	type PanelOp,
 	panelTab,
 	STARTING_LAYOUT,
-	toPanelOps,
 } from "./panel-ops.ts";
 import { panelAt, panelPath } from "./panel-paths.ts";
 import { usePanelRequests } from "./panel-requests.ts";
-
-function toolPanel(message: ChatMessage, chatId: string | null): PanelOp[] {
-	return toPanelOps(message.additional_kwargs?.panel).map((op) =>
-		op.op === "open" &&
-		op.content.kind === "view" &&
-		op.content.chatId === undefined &&
-		chatId !== null
-			? { ...op, content: { ...op.content, chatId } }
-			: op,
-	);
-}
 
 export interface Panels {
 	workspaceId: Id<"workspaces"> | null;
 	layout: PanelLayout;
 	change: (layout: PanelLayout) => void;
 	arrange: (layout: PanelLayout) => void;
-	apply: (ops: readonly PanelOp[]) => void;
+	apply: (ops: readonly PanelOp<PanelContent>[]) => void;
 	openFile: (folder: Folder, name: string) => void;
 	retab: (tabId: string, content: PanelContent, keepId?: boolean) => void;
 }
@@ -119,36 +107,7 @@ function usePanelLayout(workspaceId: Id<"workspaces">) {
 	};
 }
 
-function useLiveOps(apply: (ops: readonly PanelOp[]) => void) {
-	const { messages, isLoading, chatId } = useChatSession((state) => ({
-		messages: state.messages,
-		isLoading: state.isLoading,
-		chatId: state.chatId,
-	}));
-	const seen = useRef<{ chatId: string | null; ids: Set<string> } | null>(null);
-	useEffect(() => {
-		const ids = messages.flatMap((m) => (m.id === undefined ? [] : [m.id]));
-		if (!isLoading || seen.current?.chatId !== chatId) {
-			seen.current = { chatId, ids: new Set(ids) };
-			return;
-		}
-		const known = seen.current.ids;
-		const arrived = messages.filter(
-			(m) => m.id !== undefined && !known.has(m.id),
-		);
-		for (const id of ids) known.add(id);
-		const ops = arrived.flatMap((m) => toolPanel(m, chatId));
-		if (ops.length > 0) apply(ops);
-	}, [messages, isLoading, chatId, apply]);
-}
-
-export function PanelLiveOps() {
-	const { apply } = usePanels();
-	useLiveOps(apply);
-	return null;
-}
-
-function askedFor(layout: PanelLayout, at: string): PanelOp[] {
+function askedFor(layout: PanelLayout, at: string): PanelOp<PanelContent>[] {
 	const asked = at === "" ? undefined : panelAt(at);
 	if (asked === undefined) return [];
 	const focused = focusedTab(layout);
@@ -162,7 +121,7 @@ function useUrlFocus(
 	workspaceId: Id<"workspaces">,
 	stored: PanelLayout,
 	ready: boolean,
-	apply: (ops: readonly PanelOp[]) => void,
+	apply: (ops: readonly PanelOp<PanelContent>[]) => void,
 ): PanelLayout {
 	const navigate = useNavigate();
 	const at = useParams({ strict: false })._splat ?? "";
@@ -209,7 +168,7 @@ export function PanelsProvider({
 }) {
 	const { layout: stored, latest, save, ready } = usePanelLayout(workspaceId);
 	const apply = useCallback(
-		(ops: readonly PanelOp[]) => {
+		(ops: readonly PanelOp<PanelContent>[]) => {
 			if (ops.length === 0) return;
 			save(applyPanelOps(latest.current, ops));
 		},

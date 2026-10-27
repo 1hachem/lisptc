@@ -1,7 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { type FlatLayout, unflatten } from "@repo/components";
+import { type FlatLayout, unflatten } from "@repo/shared/split-layout";
 import type { QueryClient } from "@tanstack/react-query";
 import { type PanelContent, type PanelLayout, shownTabs } from "./panel-ops.ts";
 import { panelAt } from "./panel-paths.ts";

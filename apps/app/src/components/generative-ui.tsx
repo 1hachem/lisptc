@@ -3,7 +3,7 @@ import { viewKey } from "@repo/interpreter/annotations";
 import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
-import { startPanelDrag, toPanelOps } from "../lib/panel-ops.ts";
+import { startPanelDrag } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
 import { Markdown } from "./markdown.tsx";
@@ -337,7 +337,6 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 		chatId: state.chatId,
 		send: state.send,
 	}));
-	const { apply } = usePanels();
 	const [ui, setUi] = useState(node);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
@@ -357,7 +356,6 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 				const data = result.response;
 				const next = viewKey.schema.safeParse(data.ui).data;
 				if (next) setUi(next);
-				apply(toPanelOps(data.panel));
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
 				if (data.message) void send(data.message);

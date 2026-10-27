@@ -46,58 +46,60 @@ export const workspaceIcon = v.union(
 	...WORKSPACE_ICONS.map((icon) => v.literal(icon)),
 );
 
+export const panelContent = v.union(
+	v.object({
+		kind: v.literal("file"),
+		folder: v.union(v.literal("attachments"), v.literal("knowledge")),
+		name: v.string(),
+	}),
+	v.object({
+		kind: v.literal("source"),
+		folder: v.string(),
+		name: v.string(),
+	}),
+	v.object({
+		kind: v.literal("view"),
+		title: v.string(),
+		node: v.any(),
+		chatId: v.optional(v.string()),
+	}),
+	v.object({
+		kind: v.literal("chat"),
+		chatId: v.union(v.string(), v.null()),
+		title: v.string(),
+		trace: v.optional(
+			v.object({
+				shown: v.union(v.literal("open"), v.literal("collapsed")),
+				turn: v.optional(v.string()),
+			}),
+		),
+	}),
+	v.object({
+		kind: v.literal("trace"),
+		chatId: v.string(),
+		title: v.string(),
+		turn: v.optional(v.string()),
+	}),
+	v.object({
+		kind: v.literal("page"),
+		page: v.union(
+			v.literal("memory"),
+			v.literal("permission"),
+			v.literal("readme"),
+			v.literal("settings"),
+			v.literal("preferences"),
+			v.literal("account"),
+			v.literal("bin"),
+		),
+		id: v.optional(v.string()),
+		title: v.string(),
+	}),
+);
+
 const panelTab = v.object({
 	id: v.string(),
 	fixed: v.optional(v.boolean()),
-	content: v.union(
-		v.object({
-			kind: v.literal("file"),
-			folder: v.union(v.literal("attachments"), v.literal("knowledge")),
-			name: v.string(),
-		}),
-		v.object({
-			kind: v.literal("source"),
-			folder: v.string(),
-			name: v.string(),
-		}),
-		v.object({
-			kind: v.literal("view"),
-			title: v.string(),
-			node: v.any(),
-			chatId: v.optional(v.string()),
-		}),
-		v.object({
-			kind: v.literal("chat"),
-			chatId: v.union(v.string(), v.null()),
-			title: v.string(),
-			trace: v.optional(
-				v.object({
-					shown: v.union(v.literal("open"), v.literal("collapsed")),
-					turn: v.optional(v.string()),
-				}),
-			),
-		}),
-		v.object({
-			kind: v.literal("trace"),
-			chatId: v.string(),
-			title: v.string(),
-			turn: v.optional(v.string()),
-		}),
-		v.object({
-			kind: v.literal("page"),
-			page: v.union(
-				v.literal("memory"),
-				v.literal("permission"),
-				v.literal("readme"),
-				v.literal("settings"),
-				v.literal("preferences"),
-				v.literal("account"),
-				v.literal("bin"),
-			),
-			id: v.optional(v.string()),
-			title: v.string(),
-		}),
-	),
+	content: panelContent,
 });
 
 export const panelLayout = v.object({

@@ -1,4 +1,4 @@
-import { topic } from "@repo/interpreter/channels";
+import type { Awaitable } from "@repo/shared/host";
 import type { UiValue } from "./view.ts";
 
 export const FOLDERS = ["attachments", "knowledge"] as const;
@@ -18,7 +18,9 @@ export type PanelOp =
 	| { op: "close"; tab: string }
 	| { op: "focus"; tab: string };
 
-export const panelOps = topic<PanelOp>("ui-panel");
+export interface PanelStore {
+	apply(ops: readonly PanelOp[]): Awaitable<void>;
+}
 
 export function fileTab(folder: Folder, name: string): string {
 	return `file:${folder}/${name}`;

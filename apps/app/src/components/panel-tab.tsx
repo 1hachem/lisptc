@@ -18,7 +18,7 @@ import {
 	type PanelContent,
 	sideTraceShown,
 } from "../lib/panel-ops.ts";
-import { PanelLiveOps, usePanels } from "../lib/panels.tsx";
+import { usePanels } from "../lib/panels.tsx";
 import { useTraceBesideChat } from "../lib/preferences.ts";
 import {
 	type SideTraceControl,
@@ -107,7 +107,6 @@ function ChatPane({
 							<ClaimLead />
 						</>
 					)}
-					<PanelLiveOps />
 					<SideTraceProvider control={trace}>
 						<ChatWithTrace chatId={chatId} />
 					</SideTraceProvider>
