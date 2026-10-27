@@ -22,6 +22,12 @@ transcript and turn shaping, the command list, analytics.
 router at this app's own origin, and `server/routes/ingest/[...path].ts` proxies
 analytics. `src/styles/app.css` pulls in the design system's stylesheet.
 
+`server/routes/api/desktop.ts` is the one websocket, where the desktop app
+connects. `server/desktop/` holds what it speaks and the registry that hands a
+user's `:local` MCP servers to that user's desktop. It is a Nitro route because
+TanStack Start serves no websocket. The wire is mirrored in `apps/desktop`, and
+`apps/desktop/AGENTS.md` says how a change to it ships.
+
 `server/agent/` is the agent. It is served as TanStack Start server routes and
 takes no other HTTP framework. A route file under `src/routes/` binds a path to
 a handler from `server/agent/` and holds no logic. Cross-cutting behaviour
