@@ -7,6 +7,7 @@ import {
 	snapshot,
 } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import {
@@ -37,12 +38,13 @@ import type {
 	Message,
 	Outcome,
 	Seen,
+	Sent,
 	Spawn,
 } from "../src/ports.ts";
 
 class FakeThreads implements AgentThreads {
 	readonly spawned: Spawn[] = [];
-	readonly sent: { child: string; message: Message }[] = [];
+	readonly sent: { agent: string; message: Message }[] = [];
 	readonly cancelled: string[] = [];
 	readonly children = new Map<string, Interp>();
 
@@ -51,30 +53,38 @@ class FakeThreads implements AgentThreads {
 		return `child-${this.spawned.length}`;
 	}
 
-	async send(child: string, message: Message): Promise<string> {
-		this.sent.push({ child, message });
-		return `job-${this.sent.length}`;
+	async send(agent: string, message: Message): Promise<Sent> {
+		this.sent.push({ agent, message });
+		const at = this.spawned.findIndex((s) => s.definition.name === agent);
+		return { job: `job-${this.sent.length}`, chat: `child-${at + 1}` };
 	}
 
-	async wait(job: string): Promise<Outcome> {
-		const { message } = this.sent[Number(job.slice(4)) - 1] ?? {};
-		if (message === undefined) return { failure: "lost in a restart" };
+	private last(agent: string): Message | undefined {
+		return this.sent.filter((s) => s.agent === agent).at(-1)?.message;
+	}
+
+	async wait(agent: string): Promise<Outcome> {
+		const message = this.last(agent);
+		if (message === undefined)
+			return { failure: "that agent was sent nothing yet" };
 		return message.text === "fail"
 			? { failure: "it broke" }
 			: { reply: `got ${message.text}` };
 	}
 
-	state(job: string): Seen {
-		return job.startsWith("job-") ? { state: "pending" } : { state: "lost" };
+	state(agent: string): Seen {
+		return this.last(agent) === undefined
+			? { state: "idle" }
+			: { state: "pending" };
 	}
 
-	cancel(id: string): boolean {
-		this.cancelled.push(id);
+	cancel(agent: string): boolean {
+		this.cancelled.push(agent);
 		return true;
 	}
 
-	async read(child: string, name: string): Promise<Fragment> {
-		const interp = this.children.get(child);
+	async read(agent: string, name: string): Promise<Fragment> {
+		const interp = this.children.get(agent);
 		if (interp === undefined) throw new Error("the agent has run nothing yet");
 		return extract(JSON.parse(JSON.stringify(snapshot(interp))), name);
 	}
@@ -272,7 +282,7 @@ describe("spawn", () => {
 			'"scout"',
 		);
 		expect(threads.sent).toEqual([
-			{ child: "child-1", message: { text: "look around", maxSteps: 20 } },
+			{ agent: "scout", message: { text: "look around", maxSteps: 20 } },
 		]);
 	});
 
@@ -285,12 +295,12 @@ describe("spawn", () => {
 });
 
 describe("send", () => {
-	test("asks the port for a job on the spawned child, and returns the name", async () => {
+	test("hands the port the message by the agent's name, and returns the name", async () => {
 		const { run, shown, threads } = world();
 		await run('(spawn "r" :prompt "p")');
 		expect(await shown('(send :to "r" "hi" :max-steps 3)')).toBe('"r"');
 		expect(threads.sent.at(-1)).toEqual({
-			child: "child-1",
+			agent: "r",
 			message: { text: "hi", maxSteps: 3 },
 		});
 	});
@@ -331,7 +341,7 @@ describe("delegate", () => {
 			},
 		]);
 		expect(threads.sent).toEqual([
-			{ child: "child-1", message: { text: "find X", maxSteps: 5 } },
+			{ agent: "delegate-1", message: { text: "find X", maxSteps: 5 } },
 		]);
 	});
 
@@ -342,12 +352,25 @@ describe("delegate", () => {
 			"delegate-1",
 			"delegate-2",
 		]);
-		expect(threads.sent.map((s) => s.child)).toEqual(["child-1", "child-2"]);
+		expect(threads.sent.map((s) => s.agent)).toEqual([
+			"delegate-1",
+			"delegate-2",
+		]);
 	});
 
 	test("hands back a name agent-wait returns the reply of", async () => {
 		const { shown } = world();
 		expect(await shown('(agent-wait (delegate "hello"))')).toBe('"got hello"');
+	});
+
+	test("never reuses a name, even after the session restarts", async () => {
+		const before = world();
+		await before.run('(delegate "a")');
+		const after = session(new FakeThreads());
+		restore(after.interp, snapshot(before.interp));
+		expect(str((await runAsync(after.interp, '(delegate "b")')).value)).toBe(
+			'"delegate-2"',
+		);
 	});
 
 	test("prints its name to the user and the model, even bound", async () => {
@@ -372,7 +395,7 @@ describe("delegate", () => {
 	test("can be cancelled by its name", async () => {
 		const { run, threads } = world();
 		await run('(delegate "a") (agent-cancel "delegate-1")');
-		expect(threads.cancelled).toEqual(["child-1"]);
+		expect(threads.cancelled).toEqual(["delegate-1"]);
 	});
 
 	test("cannot be kept", async () => {
@@ -401,6 +424,36 @@ describe("delegate", () => {
 		const { run } = world(false);
 		await expect(run('(delegate "a")')).rejects.toThrow(
 			"this session runs no sub-agents",
+		);
+	});
+});
+
+describe("a spawned agent's name", () => {
+	test("is returned and printed to the user and the model", async () => {
+		const { interp, run, shown } = world();
+		const printed: { text: string; to: readonly string[] }[] = [];
+		output.on(interp.channels, (text, e) => printed.push({ text, to: e.to }));
+		expect(await shown('(spawn "scratch" :prompt "p")')).toBe('"scratch"');
+		await run('(defagent "r" :prompt "x") (setq a (spawn "r"))');
+		expect(printed).toEqual([
+			{ text: "spawned scratch\n", to: ["user", "model"] },
+			{ text: "spawned r\n", to: ["user", "model"] },
+		]);
+	});
+
+	test("is unique: one spawned already is refused, finished or not", async () => {
+		const { run, threads } = world();
+		await run('(spawn "scratch" :prompt "p") (agent-cancel "scratch")');
+		await expect(run('(spawn "scratch" :prompt "q")')).rejects.toThrow(
+			"an agent of that name is spawned already",
+		);
+		expect(threads.spawned).toHaveLength(1);
+	});
+
+	test("is never parent, the name a sub-agent calls this session", async () => {
+		const { run } = world();
+		await expect(run('(spawn "parent" :prompt "p")')).rejects.toThrow(
+			"parent is what a sub-agent calls this session",
 		);
 	});
 });
@@ -441,21 +494,21 @@ describe("an agent's last message", () => {
 		const { run, shown, threads } = world();
 		await run('(spawn "r" :prompt "p")');
 		expect(await shown('(agent-cancel "r")')).toBe("t");
-		expect(threads.cancelled).toEqual(["child-1"]);
+		expect(threads.cancelled).toEqual(["r"]);
 	});
 
 	test("refuses anything but a spawned agent's name", async () => {
 		const { run } = world();
 		await run('(spawn "r" :prompt "p")');
 		for (const form of ["agent-wait", "agent-state", "agent-cancel"])
-			await expect(run(`(${form} "job-1")`)).rejects.toThrow(
+			await expect(run(`(${form} "nobody")`)).rejects.toThrow(
 				"no agent spawned by that name; (spawned) lists them",
 			);
 	});
 });
 
 describe("a spawned agent's handle", () => {
-	test("survives snapshot and restore, so send reopens the same child", async () => {
+	test("survives snapshot and restore, so send reaches the same agent by name", async () => {
 		const before = world();
 		await before.run('(spawn "r" :prompt "p")');
 		const image = snapshot(before.interp);
@@ -463,12 +516,23 @@ describe("a spawned agent's handle", () => {
 		const threads = new FakeThreads();
 		const after = session(threads);
 		restore(after.interp, image);
-		expect(str((await runAsync(after.interp, '(agent-state "r")')).value)).toBe(
-			":pending",
-		);
 		await runAsync(after.interp, '(send :to "r" "again")');
 		expect(threads.spawned).toEqual([]);
-		expect(threads.sent[0]?.child).toBe("child-1");
+		expect(threads.sent[0]?.agent).toBe("r");
+	});
+
+	test("hold names only, never an id", async () => {
+		const { interp, run } = world();
+		await run('(spawn "scratch" :prompt "p") (delegate "a")');
+		expect(
+			handlesCodec.fromLisp(interp.getGlobal(newSym("*agents/spawned*"))),
+		).toEqual([
+			{
+				name: "scratch",
+				unsaved: writeDefinition({ name: "scratch", prompt: "p" }),
+			},
+			{ name: "delegate-1" },
+		]);
 	});
 
 	test("cannot be set by Lisp code", async () => {
@@ -506,20 +570,15 @@ describe("agent-forget", () => {
 });
 
 describe("agent-keep", () => {
-	test("saves a temporary agent so spawn reuses it by name", async () => {
-		const { run, shown, threads, folder, calls } = world();
+	test("saves a temporary agent as a definition another session spawns by name", async () => {
+		const { run, shown, folder, calls } = world();
 		await run('(spawn "scratch" :prompt "dig" :budget 5)');
 		expect(await shown('(agent-keep "scratch")')).toBe('"scratch"');
 		expect(calls).toContain(KEEP);
 		expect(
 			readDefinition(folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
 		).toEqual({ name: "scratch", prompt: "dig", budget: 5 });
-		await run('(spawn "scratch")');
-		expect(threads.spawned[1]?.definition).toEqual({
-			name: "scratch",
-			prompt: "dig",
-			budget: 5,
-		});
+		expect(await shown("(agents)")).toBe('("scratch")');
 	});
 
 	test("refuses an agent saved already, and one never spawned", async () => {
@@ -657,7 +716,7 @@ describe("agent-take", () => {
 		await parent.run('(spawn "scratch" :prompt "dig")');
 		const child = subAgent();
 		runSync(child.interp, code);
-		parent.threads.children.set("child-1", child.interp);
+		parent.threads.children.set("scratch", child.interp);
 		return parent;
 	}
 
@@ -695,26 +754,14 @@ describe("agent-take", () => {
 		await parent.run('(setq d (delegate "make one"))');
 		const child = subAgent();
 		runSync(child.interp, '(setq id "x7") (agents/export \'id "an id")');
-		parent.threads.children.set("child-1", child.interp);
+		parent.threads.children.set("delegate-1", child.interp);
 		expect(await parent.shown("(agent-take d 'id)")).toBe('"x7"');
 	});
 });
 
 describe("the spawned handles", () => {
-	test("keep their last job through the codec", () => {
-		const held = [
-			{ name: "a", child: "c1", job: "j2" },
-			{ name: "b", child: "c2", unsaved: '(defagent "b")' },
-			{ name: "c", child: "c3" },
-		];
+	test("keep their names through the codec", () => {
+		const held = [{ name: "b", unsaved: '(defagent "b")' }, { name: "c" }];
 		expect(handlesCodec.fromLisp(handlesCodec.toLisp(held))).toEqual(held);
-	});
-
-	test("wait on the last job sent, not an earlier one", async () => {
-		const { run, shown } = world();
-		await run(
-			'(spawn "r" :prompt "p") (send :to "r" "fail") (send :to "r" "ok")',
-		);
-		expect(await shown('(agent-wait "r")')).toBe('"got ok"');
 	});
 });

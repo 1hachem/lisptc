@@ -223,6 +223,8 @@ export class Thread {
 			for (const taken of consumed) this.release(taken, outcome);
 		};
 		this.held = false;
+		const halting = new AbortController();
+		this.halting = halting;
 		this.watchers.begin();
 		this.watchers.publish({ type: "status", status: "running" });
 		this.taken(opening);
@@ -245,14 +247,20 @@ export class Thread {
 				status: "errored",
 				failure: errorText(error),
 			});
+			if (this.halting === halting) this.halting = undefined;
 			endAll({ stopped: `failed: ${errorText(error)}` });
+			return;
+		}
+		if (halting.signal.aborted) {
+			await ports.status.settle(id, { stopped: true });
+			if (this.halting === halting) this.halting = undefined;
+			this.watchers.publish({ type: "status", status: "idle" });
+			endAll(halting.signal.reason);
 			return;
 		}
 		const { setup, history, quiet, repl } = prepared;
 		const deadline = deadlineOf(setup.deadlineMs, left.deadline);
-		const halting = new AbortController();
 		const overspent = new AbortController();
-		this.halting = halting;
 		const signal = AbortSignal.any(
 			[halting.signal, overspent.signal, budget.signal, deadline].filter(
 				(s): s is AbortSignal => s !== undefined,

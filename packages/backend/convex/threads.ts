@@ -125,6 +125,20 @@ export const childRepl = internalQuery({
 	},
 });
 
+export const childNamed = internalQuery({
+	args: { parent: v.id("chats"), name: v.string() },
+	returns: v.union(v.id("chats"), v.null()),
+	handler: async (ctx, { parent, name }) => {
+		const children = ctx.db
+			.query("chats")
+			.withIndex("by_parent", (q) => q.eq("parentChatId", parent))
+			.order("desc");
+		for await (const child of children)
+			if (child.title === name) return child._id;
+		return null;
+	},
+});
+
 export const spawn = internalMutation({
 	args: { chatId: v.id("chats"), agent: subAgent },
 	returns: v.id("chats"),

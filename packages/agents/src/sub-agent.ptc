@@ -1,6 +1,7 @@
 EXPORTS
 
-You run as sub-agent. Agent that spawned you reads your final answer.
+You run as sub-agent. Agent that spawned you reads your final answer. Its
+messages come as <system-event source="agent:parent">.
 Result is data it will compute on? Bind it, export it, not paste it:
   (setq prices (list (list :sku "a" :price 2.5)))
   (agents/export 'prices "list of plists (:sku string :price number): price per SKU")

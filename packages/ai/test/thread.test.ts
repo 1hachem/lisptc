@@ -52,6 +52,7 @@ class World implements TranscriptStore {
 	overlapped = false;
 	onAppend: (messages: WireMessage[]) => void = () => {};
 	broken = false;
+	opening: Promise<void> | undefined;
 	setup: TurnSetup = { runsForms: true };
 
 	async read(): Promise<ChatMessageInput[]> {
@@ -68,7 +69,8 @@ class World implements TranscriptStore {
 	thread(): Thread {
 		return new Thread("t1", {
 			mailbox: new MemoryMailbox(),
-			repl: () => {
+			repl: async () => {
+				await this.opening;
 				if (this.broken) throw new Error("no repl here");
 				return testRepl();
 			},
@@ -350,6 +352,24 @@ describe("stopping a thread", () => {
 		expect(await posted.ended).toEqual(halted);
 		expect(thread.stop(halted)).toBe(false);
 		expect(world.endings).toEqual([{ stopped: true }]);
+	});
+
+	test("stops a turn still opening its repl, before the model is called", async () => {
+		const world = new World();
+		let open: () => void = () => {};
+		world.opening = new Promise((done) => {
+			open = done;
+		});
+		const thread = world.thread();
+		const halted = { stopped: "halted" };
+		const posted = await thread.post(user("a", "hello"));
+		await vi.waitFor(() => expect(world.turns).toEqual(["start"]));
+		expect(await thread.cancel(halted)).toBe(true);
+		open();
+		expect(await posted.ended).toEqual(halted);
+		expect(model.calls).toEqual([]);
+		expect(world.endings).toEqual([{ stopped: true }]);
+		expect(thread.stop(halted)).toBe(false);
 	});
 
 	test("settles a turn that finished as neither stopped nor failed", async () => {

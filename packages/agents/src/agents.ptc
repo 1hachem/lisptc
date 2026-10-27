@@ -13,10 +13,12 @@ Default: do work yourself, in own loop. Spawn only when:
 Never split one job into chain of agents by role. Each handoff loses detail.
 Sub-agents cannot spawn. Fan out from here only.
 
-Names, never ids. spawn, send, delegate return agent name. agent-wait,
-agent-state, agent-take, agent-cancel take it. (spawned) lists every name this
-session spawned or delegated, finished ones too. (agents) lists saved
-definitions only.
+Names, never ids. spawn, send, delegate return agent name; spawn and delegate
+print it too. agent-wait, agent-state, agent-take, agent-cancel take it. Name is
+unique in session: spawn refuses one taken, finished or not. "parent" taken:
+sub-agents see you as <system-event source="agent:parent">. (spawned) lists
+every name this session spawned or delegated. (agents) lists saved definitions
+only.
 
 One-off job: (delegate "brief") spawns fresh temporary agent, sends brief,
 prints "delegated to delegate-1", returns "delegate-1" at once. Reply comes as
@@ -28,17 +30,18 @@ result, evidence, what not checked.
 Named agent, kept chat across sends, order always:
 1. (agents) lists saved names. (agent-definition "researcher") reads one.
    Saved one fits? Spawn it by name. Never save second agent for same job.
-2. None fits? Spawn temporary one with :prompt. Nothing saved. Starts on prompt
-   at once; reply comes as <system-event source="agent:scratch">.
+2. None fits? Spawn temporary one with :prompt. Nothing saved. :prompt is first
+   task, run at once, not persona: say what to do and what to reply. Reply
+   comes as <system-event source="agent:scratch">.
 3. Temporary one did job well, same job will come again? (agent-keep "scratch")
    saves it. Else let it go.
 
-  (spawn "researcher" :repl :fresh)      ; saved definition, new image, new chat; idle till send
+  (spawn "researcher" :repl :fresh)      ; prints "spawned researcher"; saved definition, new image, new chat; idle till send
   (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; temporary, runs prompt now; copy of your image and chat
   (send :to "researcher" "find X" :max-steps 10) ; returns "researcher" at once
   (agent-state "researcher")             ; last send: :idle :pending :held :done :failed :cancelled :lost
   (agent-wait "researcher")              ; wait on last send, return reply
-  (agent-cancel "researcher")            ; stop it and all under it
+  (agent-cancel "researcher")            ; stop it, its last send queued or running, and all under it
   (agent-keep "scratch")                 ; save temporary agent as sub-agents/scratch.ptc
   (agent-forget "scratch")               ; delete sub-agents/scratch.ptc; t, or nil if none
   (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)
@@ -62,8 +65,8 @@ defagent only when user asks for agent definition. defagent and agent-keep
 save sub-agents/<name>.ptc; agent-forget deletes it, only when user asks. All
 three wait on user approval. :prompt on saved name refused. Not waited? Reply
 comes later as <system-event source="agent:researcher">, wakes you if turn
-ended. Agent keeps its chat between sends. Spawning a name again starts it
-over. Spawned names survive restart in your image. :budget caps its steps.
+ended. Agent keeps its chat between sends. Spawned names survive restart in
+your image. :budget caps its steps.
 :permissions only tighten workspace rules. Asks from sub-agents reach user in
 your chat.
 User @sub-agents/researcher = saved definition "researcher": spawn it, send it

@@ -1,6 +1,8 @@
 import type { Fragment, Image } from "@repo/interpreter/image";
 import type { Awaitable } from "@repo/shared/host";
 
+export const PARENT_NAME = "parent";
+
 export interface AgentDefinition {
 	readonly name: string;
 	readonly prompt: string;
@@ -27,6 +29,7 @@ export interface Message {
 }
 
 export type JobState =
+	| "idle"
 	| "pending"
 	| "held"
 	| "done"
@@ -41,11 +44,16 @@ export interface Seen {
 	readonly outcome?: Outcome;
 }
 
+export interface Sent {
+	readonly job: string;
+	readonly chat: string;
+}
+
 export interface AgentThreads {
 	spawn(spawn: Spawn): Promise<string>;
-	send(child: string, message: Message): Promise<string>;
-	wait(job: string, signal: AbortSignal): Promise<Outcome>;
-	state(job: string): Awaitable<Seen>;
-	cancel(id: string): Awaitable<boolean>;
-	read(child: string, name: string): Promise<Fragment>;
+	send(agent: string, message: Message): Promise<Sent>;
+	wait(agent: string, signal: AbortSignal): Promise<Outcome>;
+	state(agent: string): Awaitable<Seen>;
+	cancel(agent: string): Awaitable<boolean>;
+	read(agent: string, global: string): Promise<Fragment>;
 }

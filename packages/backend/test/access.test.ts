@@ -1811,6 +1811,38 @@ describe("a thread's server functions", () => {
 		).rejects.toThrow("NOT_FOUND");
 	});
 
+	it("finds a child by its name under its own parent only, the latest first", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const other = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await t.mutation(internal.threads.spawn, { chatId, agent: lead });
+		const latest = await t.mutation(internal.threads.spawn, {
+			chatId,
+			agent: lead,
+		});
+		await t.mutation(internal.threads.spawn, {
+			chatId: other,
+			agent: { ...lead, name: "scout" },
+		});
+		expect(
+			await t.query(internal.threads.childNamed, {
+				parent: chatId,
+				name: "lead",
+			}),
+		).toBe(latest);
+		expect(
+			await t.query(internal.threads.childNamed, {
+				parent: chatId,
+				name: "scout",
+			}),
+		).toBeNull();
+	});
+
 	it("refuses to spawn past the depth cap", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
