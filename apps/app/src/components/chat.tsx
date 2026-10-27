@@ -33,7 +33,7 @@ export function Chat() {
 				>
 					{fresh ? (
 						<>
-							<AgentAvatar />
+							<AgentAvatar quiet />
 							<Greeting />
 						</>
 					) : null}
