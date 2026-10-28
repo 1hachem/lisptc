@@ -1,7 +1,7 @@
 import { app } from "electron";
 import electronUpdater from "electron-updater";
 
-export const UPDATE_CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
+const UPDATE_CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 
 export type UpdateState =
 	| { status: "idle" }
