@@ -32,8 +32,7 @@ permissions extension is where it is given. A local server is the call
 `open`, and an "always allow" is saved to the workspace's permissions config.
 The shell runs what it is opened with and asks nothing itself.
 
-An update is checked for while the app runs, not only at launch, because the
-app lives in the tray for days. It installs only when the user restarts for
-it, from the tray or the bottom bar.
+An update never installs on its own. It waits until the user asks to restart
+for it.
 
 The app URL comes from `@repo/env/desktop`, never from `process.env`.
