@@ -24,7 +24,7 @@ analytics. `src/styles/app.css` pulls in the design system's stylesheet.
 
 `server/routes/api/desktop.ts` is the one websocket, where the desktop app
 connects. `server/desktop/` holds what it speaks and the registry that hands a
-user's `:local` MCP servers to that user's desktop. It is a Nitro route because
+user's :local MCP servers to that user's desktop. It is a Nitro route because
 TanStack Start serves no websocket. The wire is mirrored in `apps/desktop`, and
 `apps/desktop/AGENTS.md` says how a change to it ships.
 
