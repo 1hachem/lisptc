@@ -10,12 +10,12 @@ import {
 	UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { GlyphCycle } from "@repo/components";
 import type {
 	ActivityIcon,
 	ActivityImage,
 	Progress,
 } from "@repo/interpreter/annotations";
-import { GlyphCycle } from "@repo/components";
 import { useState } from "react";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 
