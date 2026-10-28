@@ -104,9 +104,6 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.43.0
         version: 1.43.0
-      '@posthog/react':
-        specifier: ^1.10.5
-        version: 1.10.5(@types/react@19.2.18)(posthog-js@1.425.1(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
       '@repo/agents-extension':
         specifier: workspace:*
         version: link:../../packages/agents
@@ -3805,16 +3802,6 @@ packages:
 
   '@posthog/core@1.58.0':
     resolution: {integrity: sha512-vluXIlVF6WGeHoQbsQK8Y1ywXZlJDU7YHEKiXAArQU38yFBpgxxfD0kInbYHtura4Fr7Z7H8WiDFvtMpCGehGg==}
-
-  '@posthog/react@1.10.5':
-    resolution: {integrity: sha512-lehh9+mJwb6iEjRBkIvh8olnJ6RV+YgQgdgJ6fdTr+T7EMoml/G1k+q92Oil8vZPcA9Dzg+2n0xaLY5yZrY3YA==}
-    peerDependencies:
-      '@types/react': ^19.2.2
-      posthog-js: '>=1.257.2'
-      react: '>=16.8.0'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
 
   '@posthog/types@1.408.0':
     resolution: {integrity: sha512-xMY8QrRKsTYu4A4Of7XF/xEt0HcnZOWwnICm3do7tGKA0lTlnnr4YW0AHQN1Uv2P3BDqf5GQoqh91MKE+dgdcA==}
@@ -11039,13 +11026,6 @@ snapshots:
   '@posthog/core@1.58.0':
     dependencies:
       '@posthog/types': 1.415.2
-
-  '@posthog/react@1.10.5(@types/react@19.2.18)(posthog-js@1.425.1(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)':
-    dependencies:
-      posthog-js: 1.425.1(@types/react@19.2.18)(react@19.2.8)
-      react: 19.2.8
-    optionalDependencies:
-      '@types/react': 19.2.18
 
   '@posthog/types@1.408.0': {}
 
