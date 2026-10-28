@@ -34,11 +34,17 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 		return { auth };
 	},
 	loader: async ({ context }) => {
-		if (context.auth.source !== "server" || context.auth.token === null) return;
+		if (context.auth.source !== "server" || context.auth.token === null)
+			return { sessionDropped: false };
 		try {
 			await context.queryClient.ensureQueryData(preferencesQuery);
+			return { sessionDropped: false };
 		} catch (error) {
 			dropRejectedSession(error, context.convexQueryClient);
+			context.queryClient.removeQueries({
+				queryKey: preferencesQuery.queryKey,
+			});
+			return { sessionDropped: true };
 		}
 	},
 	head: () => ({
@@ -63,13 +69,16 @@ function RootComponent() {
 	const { queryClient, convexQueryClient, auth } = useRouteContext({
 		from: Route.id,
 	});
+	const { sessionDropped } = Route.useLoaderData();
 
 	return (
 		<ConvexBetterAuthProvider
 			client={convexQueryClient.convexClient}
 			authClient={providerClient}
 			initialToken={
-				auth.source === "server" ? (auth.token ?? undefined) : undefined
+				auth.source === "server" && !sessionDropped
+					? (auth.token ?? undefined)
+					: undefined
 			}
 		>
 			<QueryClientProvider client={queryClient}>
