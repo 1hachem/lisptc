@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export interface DesktopSettings {
+interface DesktopSettings {
 	closeToTray: boolean;
 	openAtLogin: boolean;
 }
