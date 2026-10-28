@@ -43,7 +43,7 @@ import {
 	viewTab,
 } from "./panel.ts";
 import type { UiNode } from "./view.ts";
-import { WIDGET_FORMS, zString } from "./widgets.ts";
+import { WIDGET_FORMS, widgetPromptSection, zString } from "./widgets.ts";
 
 export { nodeToJson } from "./element.ts";
 export {
@@ -474,7 +474,7 @@ export function uiExtension(
 		(interp: Interp): void => registerUi(interp, surface, host.panel),
 		{
 			surface,
-			prompt: host.prompt(),
+			prompt: host.prompt().replace("{{widgets}}", widgetPromptSection()),
 			session(hooks: SessionHooks): void {
 				hooks.invoke.use(async (ctx) => {
 					await surface.invoke(ctx.action, ctx.values);

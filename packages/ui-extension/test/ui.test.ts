@@ -20,6 +20,7 @@ import {
 	viewTab,
 } from "../src/ui.ts";
 import { uiHostFor } from "../src/ui-host.ts";
+import { WIDGET_FORMS } from "../src/widgets.ts";
 
 function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 	let tabs = [...saved];
@@ -778,5 +779,25 @@ describe("the catalog the frontend draws from", () => {
 		if (view === undefined) throw new Error("nothing rendered");
 		expect(strays(view)).toEqual([]);
 		expect(new Set(tagsOf(view))).toEqual(new Set(TAGS));
+	});
+});
+
+describe("the widget form table", () => {
+	it("builds a widget of its own tag from every example", () => {
+		for (const tag of TAGS) {
+			const { interp, ui } = fresh();
+			runSync(interp, `(ui/render ${WIDGET_FORMS[tag].example})`);
+			const node = ui.takeView();
+			if (node === undefined) throw new Error(`${tag} rendered nothing`);
+			expect(node.tag).toBe(tag);
+			expect(widgetOf(node)).toBeDefined();
+		}
+	});
+
+	it("lists every constructor in the prompt", () => {
+		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		expect(prompt).not.toContain("{{widgets}}");
+		for (const tag of TAGS)
+			expect(prompt).toContain(WIDGET_FORMS[tag].signature);
 	});
 });
