@@ -60,7 +60,7 @@ export const panelContent = v.union(
 	v.object({
 		kind: v.literal("view"),
 		title: v.string(),
-		node: v.any(),
+		viewId: v.string(),
 		chatId: v.optional(v.string()),
 	}),
 	v.object({

@@ -289,13 +289,7 @@ export function GenerativeUI({
 	return <View chatId={chatId} node={node} />;
 }
 
-export function View({
-	chatId,
-	node,
-}: {
-	chatId: Id<"chats">;
-	node: ViewNode;
-}) {
+function View({ chatId, node }: { chatId: Id<"chats">; node: ViewNode }) {
 	const send = useChatSession((state) => state.send);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);

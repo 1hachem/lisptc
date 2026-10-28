@@ -198,7 +198,11 @@ describe("the convex panel reader", () => {
 							},
 							{
 								id: "view:counts",
-								content: { kind: "view", title: "counts", node: null },
+								content: {
+									kind: "view",
+									title: "counts",
+									viewId: "view:counts",
+								},
 							},
 						],
 					},

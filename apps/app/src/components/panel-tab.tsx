@@ -24,12 +24,11 @@ import {
 	SideTraceProvider,
 	useSideTrace,
 } from "../lib/side-trace.tsx";
-import { viewNode } from "../lib/ui-node.ts";
 import { AccountPage } from "./account-page.tsx";
 import { AnimatedFavicon } from "./animated-favicon.tsx";
 import { BinPage } from "./bin-page.tsx";
 import { ChatSurface } from "./chat-surface.tsx";
-import { View } from "./generative-ui.tsx";
+import { GenerativeUI } from "./generative-ui.tsx";
 import { MemoryPage } from "./memory-page.tsx";
 import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
@@ -204,16 +203,13 @@ function PageTab({
 
 function ViewTab({
 	workspaceId,
-	node,
+	viewId,
 	chatId,
 }: {
 	workspaceId: Id<"workspaces">;
-	node: unknown;
+	viewId: string;
 	chatId: string | undefined;
 }) {
-	const drawn = viewNode.safeParse(node).data;
-	if (drawn === undefined)
-		return <div className="p-3 text-dim">this view cannot be drawn</div>;
 	if (chatId === undefined)
 		return (
 			<div className="p-3 text-dim">
@@ -227,11 +223,7 @@ function ViewTab({
 			onOpened={() => {}}
 		>
 			<div className="p-3">
-				<View
-					key={JSON.stringify(drawn)}
-					chatId={chatId as Id<"chats">}
-					node={drawn}
-				/>
+				<GenerativeUI chatId={chatId as Id<"chats">} viewId={viewId} />
 			</div>
 		</ChatProvider>
 	);
@@ -289,7 +281,7 @@ export function PanelTab({
 			{content.kind === "view" && (
 				<ViewTab
 					workspaceId={workspaceId}
-					node={content.node}
+					viewId={content.viewId}
 					chatId={content.chatId}
 				/>
 			)}

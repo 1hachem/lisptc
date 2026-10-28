@@ -783,8 +783,8 @@ describe("panel layout access", () => {
 						split: "here",
 						content: {
 							kind: "view",
-							title: "big",
-							node: "x".repeat(300_000),
+							title: "x".repeat(300_000),
+							viewId: "view:big",
 						},
 					},
 				],
@@ -888,7 +888,7 @@ describe("panel layout access", () => {
 							content: {
 								kind: "view" as const,
 								title: "My Linear Issues",
-								node: { tag: "card", props: {}, children: [] },
+								viewId: "view:My Linear Issues",
 								chatId: "c1",
 							},
 						},
@@ -918,7 +918,7 @@ describe("panel layout access", () => {
 					content: {
 						kind: "view" as const,
 						title: "t",
-						node: null,
+						viewId: "view:t",
 						chatId: "c1",
 					},
 				},

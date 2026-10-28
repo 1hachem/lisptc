@@ -151,14 +151,15 @@ export class UiSurface {
 		this.current = this.owners?.get().find(([at]) => at === action)?.[1];
 	}
 
-	private viewId(node: UiNode): string {
-		let viewId = this.current;
-		if (viewId === undefined) {
-			const n = (this.views?.get() ?? 0) + 1;
-			this.views?.set(n);
-			viewId = `v${n}`;
-			this.current = viewId;
-		}
+	private viewId(): string {
+		if (this.current !== undefined) return this.current;
+		const n = (this.views?.get() ?? 0) + 1;
+		this.views?.set(n);
+		this.current = `v${n}`;
+		return this.current;
+	}
+
+	place(viewId: string, node: UiNode): RenderedView {
 		const owned = actionsOf(node).map(
 			(action) => [action, viewId] as [string, string],
 		);
@@ -168,7 +169,7 @@ export class UiSurface {
 			);
 			this.owners?.set([...kept, ...owned].slice(-MAX_HANDLERS));
 		}
-		return viewId;
+		return { viewId, node: plainNode(node) };
 	}
 
 	reset(): void {
@@ -201,7 +202,7 @@ export class UiSurface {
 	}
 
 	render(node: UiNode): RenderedView {
-		const view = { viewId: this.viewId(node), node: plainNode(node) };
+		const view = this.place(this.viewId(), node);
 		const channels = this.channels;
 		if (channels) rendered.emit(channels, { user: view });
 		return view;
@@ -391,11 +392,13 @@ function registerUi(
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
 			const tab = viewTab(title);
+			const placed = surface.place(tab, view);
+			yield* settled(views.put(placed));
 			yield* emit({
 				op: "open",
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
-				content: { kind: "view", title, node: nodeToJson(view) },
+				content: { kind: "view", title, viewId: placed.viewId },
 			});
 			return tab;
 		},

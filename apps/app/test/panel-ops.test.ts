@@ -57,7 +57,7 @@ describe("the panel ops", () => {
 				op: "open",
 				tab: "b",
 				split: "right",
-				content: { kind: "view", title: "b", node: null },
+				content: { kind: "view", title: "b", viewId: "view:b" },
 			},
 		]);
 		expect(opened.root?.kind).toBe("split");

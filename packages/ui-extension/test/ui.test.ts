@@ -657,15 +657,7 @@ describe("the panel beside the chat", () => {
 			op: "open",
 			tab: "view:counts",
 			split: "right",
-			content: {
-				kind: "view",
-				title: "counts",
-				node: {
-					tag: "kpi",
-					props: { label: "open", value: "3" },
-					children: [],
-				},
-			},
+			content: { kind: "view", title: "counts", viewId: "view:counts" },
 		});
 	});
 
@@ -842,5 +834,23 @@ describe("the view store", () => {
 			children: [{ props: { text: "1" } }, { tag: "button" }],
 		});
 		expect(views.views.get("v2")).toMatchObject({ props: { text: "other" } });
+	});
+
+	it("stores a panel view under its tab, and a click renders back into it", async () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			`(setq n 0)
+			(defun panel () (ui/stack (ui/text (string n))
+				(ui/button "+1" (lambda () (setq n (+ n 1)) (ui/render (panel))))))
+			(ui/open-view "counts" (panel))`,
+		);
+		expect(views.views.get("view:counts")).toMatchObject({ tag: "stack" });
+		surface.enter("a1");
+		await surface.invoke("a1", {});
+		expect(views.views.get("view:counts")).toMatchObject({
+			children: [{ props: { text: "1" } }, { tag: "button" }],
+		});
 	});
 });
