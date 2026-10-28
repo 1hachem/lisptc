@@ -14,4 +14,35 @@ export async function authToken(): Promise<string | undefined> {
 	return data?.token ?? undefined;
 }
 
-export const providerClient = authClient as unknown as AuthClient;
+const TOKEN_REUSE_MS = 5_000;
+
+export function shareRecent<T>(
+	fetch: () => Promise<T>,
+	now: () => number,
+	reuseMs: number,
+): () => Promise<T> {
+	let last: { at: number; result: Promise<T> } | undefined;
+	return () => {
+		if (last !== undefined && now() - last.at < reuseMs) return last.result;
+		const result = fetch();
+		const entry = { at: now(), result };
+		last = entry;
+		result.catch(() => {
+			if (last === entry) last = undefined;
+		});
+		return result;
+	};
+}
+
+const convexToken = shareRecent(
+	() => authClient.convex.token({ fetchOptions: { throw: false } }),
+	Date.now,
+	TOKEN_REUSE_MS,
+);
+
+export const providerClient = new Proxy(authClient, {
+	get(target, key, receiver) {
+		if (key === "convex") return { token: convexToken };
+		return Reflect.get(target, key, receiver);
+	},
+}) as unknown as AuthClient;
