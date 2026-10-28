@@ -84,7 +84,11 @@ describe("the agent the app serves", () => {
 		const online = { value: false };
 		const bridge: DesktopBridge = {
 			connected: (userId) => userId === owner && online.value,
-			open: async () => async () => new Response(),
+			open: async () => ({
+				start: async () => {},
+				send: async () => {},
+				close: async () => {},
+			}),
 			close: async () => {},
 		};
 		const extensions = await workspaceExtensions(WORKSPACE, offline, {

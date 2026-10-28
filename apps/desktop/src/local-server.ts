@@ -1,9 +1,8 @@
-import { randomUUID } from "node:crypto";
 import {
 	getDefaultEnvironment,
 	StdioClientTransport,
 } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { localServerEnv } from "@repo/env/desktop";
 
 export interface LocalServerSpec {
@@ -13,37 +12,45 @@ export interface LocalServerSpec {
 	readonly env: Readonly<Record<string, string>>;
 }
 
+export interface LocalServerEvents {
+	message(message: unknown): void;
+	exited(error?: string): void;
+}
+
 export class LocalServer {
 	private readonly stdio: StdioClientTransport;
-	private readonly http = new WebStandardStreamableHTTPServerTransport({
-		sessionIdGenerator: () => randomUUID(),
-	});
+	private stopping = false;
 
-	constructor(readonly spec: LocalServerSpec) {
+	constructor(
+		readonly spec: LocalServerSpec,
+		events: LocalServerEvents,
+	) {
 		this.stdio = new StdioClientTransport({
 			command: spec.command,
 			args: [...spec.args],
 			env: { ...getDefaultEnvironment(), ...localServerEnv, ...spec.env },
 			stderr: "inherit",
 		});
-		this.stdio.onmessage = (message) => {
-			void this.http.send(message);
+		let failure: string | undefined;
+		this.stdio.onmessage = (message) => events.message(message);
+		this.stdio.onerror = (error) => {
+			failure = String(error);
 		};
-		this.http.onmessage = (message) => {
-			void this.stdio.send(message);
+		this.stdio.onclose = () => {
+			if (!this.stopping) events.exited(failure);
 		};
 	}
 
-	async start(): Promise<void> {
-		await this.stdio.start();
-		await this.http.start();
+	start(): Promise<void> {
+		return this.stdio.start();
 	}
 
-	handle(request: Request): Promise<Response> {
-		return this.http.handleRequest(request);
+	send(message: unknown): Promise<void> {
+		return this.stdio.send(message as JSONRPCMessage);
 	}
 
 	async stop(): Promise<void> {
-		await Promise.allSettled([this.http.close(), this.stdio.close()]);
+		this.stopping = true;
+		await this.stdio.close().catch(() => {});
 	}
 }

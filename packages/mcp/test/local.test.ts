@@ -144,20 +144,24 @@ describe("load-mcp :local", () => {
 		});
 	});
 
-	it("sends the transport's requests through the fetch a handle carries", async () => {
-		const fetch = vi.fn(async () => {
+	it("speaks json-rpc through the transport a handle carries", async () => {
+		const send = vi.fn(async (_message: unknown) => {
 			throw new Error("bridged");
 		});
 		const host: McpHost = {
 			...recordingHost(),
-			ensure: async () => ({ url: "http://desktop.bridge/fx/mcp", fetch }),
+			ensure: async () => ({
+				transport: () => ({
+					start: async () => {},
+					send,
+					close: async () => {},
+				}),
+			}),
 		};
 		const interp = interpOn(host);
 		await settle(interp, '(load-mcp :name "fx" :command "anything" :local t)');
-		expect(fetch).toHaveBeenCalled();
-		expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe(
-			"http://desktop.bridge/fx/mcp",
-		);
+		expect(send).toHaveBeenCalled();
+		expect(send.mock.calls[0]?.[0]).toMatchObject({ method: "initialize" });
 		interp.dispose();
 	});
 });

@@ -31,21 +31,12 @@ function fakeDesktop(registry: DesktopRegistry): DesktopPeer & {
 	function answer(message: ServerMessage): void {
 		if (message.type === "open")
 			registry.receive(peer, { type: "opened", id: message.id, ok: true });
-		if (message.type === "request") {
+		if (message.type === "rpc")
 			registry.receive(peer, {
-				type: "response",
-				id: message.id,
-				status: 200,
-				headers: { "content-type": "text/event-stream" },
+				type: "rpc",
+				server: message.server,
+				message: { echo: message.message },
 			});
-			registry.receive(peer, { type: "chunk", id: message.id, data: "data: " });
-			registry.receive(peer, {
-				type: "chunk",
-				id: message.id,
-				data: message.body ?? "",
-			});
-			registry.receive(peer, { type: "end", id: message.id });
-		}
 	}
 	return peer;
 }
@@ -57,25 +48,50 @@ describe("the desktop registry", () => {
 		);
 	});
 
-	it("opens a server on the user's desktop and streams a request through it", async () => {
+	it("opens a server on the user's desktop and carries json-rpc both ways", async () => {
 		const registry = new DesktopRegistry();
 		const peer = fakeDesktop(registry);
 		registry.attach(user, "m1", peer);
-		const fetch = await registry.open(user, server);
-		const response = await fetch("http://desktop.bridge/fs/mcp", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: '{"jsonrpc":"2.0"}',
+		const channel = await registry.open(user, server);
+		const received: unknown[] = [];
+		channel.onmessage = (message) => received.push(message);
+		await channel.send({ jsonrpc: "2.0", id: 1, method: "ping" });
+		await vi.waitFor(() => expect(received).toHaveLength(1));
+		expect(received[0]).toEqual({
+			echo: { jsonrpc: "2.0", id: 1, method: "ping" },
 		});
-		expect(response.status).toBe(200);
-		expect(response.headers.get("content-type")).toBe("text/event-stream");
-		expect(await response.text()).toBe('data: {"jsonrpc":"2.0"}');
-		expect(peer.sent.map((m) => m.type)).toEqual(["open", "request"]);
-		expect(peer.sent[1]).toMatchObject({
-			server: "fs",
-			method: "POST",
-			path: "/fs/mcp",
-		});
+		expect(peer.sent.map((m) => m.type)).toEqual(["open", "rpc"]);
+		expect(peer.sent[1]).toMatchObject({ server: "fs" });
+	});
+
+	it("tells the client when the server's process exits on the desktop", async () => {
+		const registry = new DesktopRegistry();
+		const peer = fakeDesktop(registry);
+		registry.attach(user, "m1", peer);
+		const channel = await registry.open(user, server);
+		const errors: Error[] = [];
+		let closed = false;
+		channel.onerror = (error) => errors.push(error);
+		channel.onclose = () => {
+			closed = true;
+		};
+		registry.receive(peer, { type: "exited", server: "fs", error: "boom" });
+		expect(errors.map((e) => e.message)).toEqual(["boom"]);
+		expect(closed).toBe(true);
+		await expect(channel.send({})).rejects.toThrow("no desktop connected");
+	});
+
+	it("closes every open channel when the desktop disconnects", async () => {
+		const registry = new DesktopRegistry();
+		const peer = fakeDesktop(registry);
+		registry.attach(user, "m1", peer);
+		const channel = await registry.open(user, server);
+		let closed = false;
+		channel.onclose = () => {
+			closed = true;
+		};
+		registry.detach(peer);
+		expect(closed).toBe(true);
 	});
 
 	it("passes the desktop's refusal to open a server through", async () => {
@@ -178,11 +194,14 @@ describe("the bridge is the account's, not the window's", () => {
 		const fromWindow = new BridgedHost(user, registry, cluster);
 		for (const host of [fromBrowser, fromWindow]) {
 			const handle = await host.ensure({ ...server, local: true });
-			const response = await handle?.fetch?.("http://desktop.bridge/fs/mcp", {
-				method: "POST",
-				body: "ping",
-			});
-			expect(await response?.text()).toBe("data: ping");
+			expect(handle).not.toHaveProperty("url");
+			if (handle === undefined || !("transport" in handle))
+				throw new Error("expected a transport handle");
+			const channel = handle.transport();
+			const received: unknown[] = [];
+			channel.onmessage = (message) => received.push(message);
+			await channel.send("ping");
+			await vi.waitFor(() => expect(received).toEqual([{ echo: "ping" }]));
 		}
 		expect(desktop.sent.filter((m) => m.type === "open")).toHaveLength(2);
 	});

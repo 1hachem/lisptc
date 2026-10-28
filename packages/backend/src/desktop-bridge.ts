@@ -1,7 +1,7 @@
 import type {
 	ConnConfig,
-	HandleFetch,
 	McpHost,
+	McpTransport,
 	ServerHandle,
 	ServerState,
 	StdioConnConfig,
@@ -17,7 +17,7 @@ export interface LocalServer {
 
 export interface DesktopBridge {
 	connected(userId: Id<"users">): boolean;
-	open(userId: Id<"users">, server: LocalServer): Promise<HandleFetch>;
+	open(userId: Id<"users">, server: LocalServer): Promise<McpTransport>;
 	close(userId: Id<"users">, name: string): Promise<void>;
 }
 
@@ -38,17 +38,14 @@ export class BridgedHost implements McpHost {
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
 		const local = localServer(conf);
 		if (local === undefined) return this.fallback.ensure(conf);
-		const fetch = await this.bridge.open(this.owner, {
+		const channel = await this.bridge.open(this.owner, {
 			name: local.name,
 			command: local.command,
 			args: local.args ?? [],
 			env: local.env ?? {},
 		});
 		this.opened.add(local.name);
-		return {
-			url: `http://desktop.bridge/${encodeURIComponent(local.name)}/mcp`,
-			fetch,
-		};
+		return { transport: () => channel };
 	}
 
 	async stop(name: string): Promise<void> {

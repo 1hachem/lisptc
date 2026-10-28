@@ -1,6 +1,7 @@
 import type {
 	ConnConfig,
 	McpHost,
+	McpTransport,
 	ServerState,
 } from "@repo/mcp-extension/ports";
 import { describe, expect, it } from "vitest";
@@ -32,6 +33,12 @@ function fallback(): McpHost & { ensured: string[]; stopped: string[] } {
 	};
 }
 
+const channel: McpTransport = {
+	start: async () => {},
+	send: async () => {},
+	close: async () => {},
+};
+
 function bridge(): DesktopBridge & {
 	opened: [Id<"users">, LocalServer][];
 	closed: string[];
@@ -43,7 +50,7 @@ function bridge(): DesktopBridge & {
 		closed,
 		open: async (userId, server) => {
 			opened.push([userId, server]);
-			return async () => new Response("bridged");
+			return channel;
 		},
 		close: async (_userId, name) => {
 			closed.push(name);
@@ -67,8 +74,8 @@ describe("BridgedHost", () => {
 			[owner, { name: "fs", command: "npx", args: ["fs-mcp"], env: {} }],
 		]);
 		expect(docker.ensured).toEqual([]);
-		expect(handle?.url).toBe("http://desktop.bridge/fs/mcp");
-		expect(await (await handle?.fetch?.(handle.url))?.text()).toBe("bridged");
+		expect(handle).not.toHaveProperty("url");
+		expect(handle && "transport" in handle && handle.transport()).toBe(channel);
 		expect(host.status("fs")).toBe("running");
 	});
 

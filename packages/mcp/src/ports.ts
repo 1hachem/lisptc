@@ -107,16 +107,25 @@ export class AuthorizationRequired extends Error {
 	}
 }
 
-export type HandleFetch = (
-	url: string | URL,
-	init?: RequestInit,
-) => Promise<Response>;
+export interface McpTransport {
+	start(): Promise<void>;
+	send(message: unknown): Promise<void>;
+	close(): Promise<void>;
+	onmessage?: (message: unknown) => void;
+	onclose?: () => void;
+	onerror?: (error: Error) => void;
+}
 
-export interface ServerHandle {
+export interface AddressHandle {
 	url: string;
 	headers?: Record<string, string>;
-	fetch?: HandleFetch;
 }
+
+export interface TransportHandle {
+	transport(): McpTransport;
+}
+
+export type ServerHandle = AddressHandle | TransportHandle;
 
 export type ServerState = "running" | "stopped" | "unknown";
 

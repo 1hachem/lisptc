@@ -6,6 +6,7 @@ import type {
 	DesktopSettings,
 	ServerMessage,
 } from "@repo/desktop-protocol";
+import type { McpTransport } from "@repo/mcp-extension/ports";
 
 export interface DesktopPeer {
 	send(text: string): void;
@@ -15,12 +16,6 @@ export interface DesktopPeer {
 interface Waiting {
 	resolve(): void;
 	reject(error: Error): void;
-}
-
-interface Streaming {
-	resolve(response: Response): void;
-	reject(error: Error): void;
-	controller?: ReadableStreamDefaultController<Uint8Array>;
 }
 
 const OPEN_TIMEOUT_MS = 120_000;
@@ -38,10 +33,43 @@ interface Settling {
 
 const SETTINGS_TIMEOUT_MS = 10_000;
 
+class Channel implements McpTransport {
+	onmessage?: (message: unknown) => void;
+	onclose?: () => void;
+	onerror?: (error: Error) => void;
+	private ended = false;
+
+	constructor(
+		private readonly connection: Connection,
+		readonly server: string,
+	) {}
+
+	async start(): Promise<void> {}
+
+	async send(message: unknown): Promise<void> {
+		if (this.ended || this.connection.dropped) throw noDesktop(this.server);
+		this.connection.send({ type: "rpc", server: this.server, message });
+	}
+
+	async close(): Promise<void> {
+		if (this.ended) return;
+		this.connection.forget(this);
+		this.connection.send({ type: "close", name: this.server });
+		this.end();
+	}
+
+	end(error?: Error): void {
+		if (this.ended) return;
+		this.ended = true;
+		if (error !== undefined) this.onerror?.(error);
+		this.onclose?.();
+	}
+}
+
 class Connection {
 	readonly opening = new Map<string, Waiting>();
 	readonly settling = new Map<string, Settling>();
-	readonly streams = new Map<string, Streaming>();
+	readonly channels = new Map<string, Channel>();
 	dropped = false;
 
 	constructor(readonly peer: DesktopPeer) {}
@@ -59,41 +87,18 @@ class Connection {
 				else waiting?.reject(new Error(message.error ?? "desktop refused"));
 				return;
 			}
-			case "response": {
-				const stream = this.streams.get(message.id);
-				if (stream === undefined) return;
-				const body = new ReadableStream<Uint8Array>({
-					start: (controller) => {
-						stream.controller = controller;
-					},
-					cancel: () => {
-						this.streams.delete(message.id);
-						this.send({ type: "cancel", id: message.id });
-					},
-				});
-				stream.resolve(
-					new Response(nullBody(message.status) ? null : body, {
-						status: message.status,
-						headers: message.headers,
-					}),
+			case "rpc":
+				this.channels.get(message.server)?.onmessage?.(message.message);
+				return;
+			case "exited": {
+				const channel = this.channels.get(message.server);
+				if (channel === undefined) return;
+				this.channels.delete(message.server);
+				channel.end(
+					new Error(
+						message.error ?? `"${message.server}" exited on the desktop`,
+					),
 				);
-				return;
-			}
-			case "chunk":
-				this.streams
-					.get(message.id)
-					?.controller?.enqueue(new TextEncoder().encode(message.data));
-				return;
-			case "end":
-				this.streams.get(message.id)?.controller?.close();
-				this.streams.delete(message.id);
-				return;
-			case "fail": {
-				const stream = this.streams.get(message.id);
-				this.streams.delete(message.id);
-				const error = new Error(message.error);
-				if (stream?.controller) stream.controller.error(error);
-				else stream?.reject(error);
 				return;
 			}
 			case "settings": {
@@ -115,17 +120,31 @@ class Connection {
 		for (const waiting of this.opening.values()) waiting.reject(reason);
 		for (const settling of this.settling.values()) settling.reject(reason);
 		this.settling.clear();
-		for (const stream of this.streams.values()) {
-			if (stream.controller) stream.controller.error(reason);
-			else stream.reject(reason);
-		}
 		this.opening.clear();
-		this.streams.clear();
+		const channels = [...this.channels.values()];
+		this.channels.clear();
+		for (const channel of channels) channel.end(reason);
 	}
-}
 
-function nullBody(status: number): boolean {
-	return status === 204 || status === 205 || status === 304;
+	open(server: string): Channel {
+		const channel = new Channel(this, server);
+		const previous = this.channels.get(server);
+		this.channels.set(server, channel);
+		previous?.end();
+		return channel;
+	}
+
+	forget(channel: Channel): void {
+		if (this.channels.get(channel.server) === channel)
+			this.channels.delete(channel.server);
+	}
+
+	shut(server: string): void {
+		const channel = this.channels.get(server);
+		this.channels.delete(server);
+		this.send({ type: "close", name: server });
+		channel?.end();
+	}
 }
 
 interface Seat {
@@ -183,10 +202,7 @@ export class DesktopRegistry implements DesktopBridge, DesktopSettingsBridge {
 		return [...machines.values()].at(-1);
 	}
 
-	async open(
-		userId: Id<"users">,
-		server: LocalServer,
-	): Promise<(url: string | URL, init?: RequestInit) => Promise<Response>> {
+	async open(userId: Id<"users">, server: LocalServer): Promise<McpTransport> {
 		const connection = this.latest(userId);
 		if (connection === undefined) throw noDesktop(server.name);
 		const id = crypto.randomUUID();
@@ -207,7 +223,7 @@ export class DesktopRegistry implements DesktopBridge, DesktopSettingsBridge {
 			});
 			connection.send({ type: "open", id, ...server });
 		});
-		return (url, init) => this.forward(connection, server.name, url, init);
+		return connection.open(server.name);
 	}
 
 	async settings(
@@ -238,44 +254,7 @@ export class DesktopRegistry implements DesktopBridge, DesktopSettingsBridge {
 
 	async close(userId: Id<"users">, name: string): Promise<void> {
 		for (const connection of this.connections.get(userId)?.values() ?? [])
-			connection.send({ type: "close", name });
-	}
-
-	private async forward(
-		connection: Connection,
-		name: string,
-		url: string | URL,
-		init?: RequestInit,
-	): Promise<Response> {
-		if (connection.dropped) throw noDesktop(name);
-		const request = new Request(url, init);
-		const body =
-			request.method === "GET" || request.method === "HEAD"
-				? undefined
-				: await request.text();
-		const id = crypto.randomUUID();
-		const response = new Promise<Response>((resolve, reject) => {
-			connection.streams.set(id, { resolve, reject });
-		});
-		request.signal.addEventListener("abort", () => {
-			const stream = connection.streams.get(id);
-			if (stream === undefined) return;
-			connection.streams.delete(id);
-			connection.send({ type: "cancel", id });
-			const reason = new Error("aborted");
-			if (stream.controller) stream.controller.error(reason);
-			else stream.reject(reason);
-		});
-		connection.send({
-			type: "request",
-			id,
-			server: name,
-			method: request.method,
-			path: new URL(request.url).pathname,
-			headers: Object.fromEntries(request.headers),
-			...(body === undefined ? {} : { body }),
-		});
-		return response;
+			connection.shut(name);
 	}
 }
 

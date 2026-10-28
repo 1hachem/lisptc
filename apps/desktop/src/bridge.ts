@@ -32,10 +32,6 @@ function socketUrl(origin: string): string {
 
 export class DesktopBridge {
 	private readonly servers = new Map<string, LocalServer>();
-	private readonly reading = new Map<
-		string,
-		ReadableStreamDefaultReader<Uint8Array>
-	>();
 	private socket: WebSocket | undefined;
 	private retryMs = MIN_RETRY_MS;
 	private stopped = false;
@@ -103,8 +99,6 @@ export class DesktopBridge {
 			if (this.socket !== socket) return;
 			this.socket = undefined;
 			this.stopPinging();
-			for (const reader of this.reading.values()) void reader.cancel();
-			this.reading.clear();
 			this.retry();
 		});
 	}
@@ -151,11 +145,13 @@ export class DesktopBridge {
 				return;
 			case "open":
 				return this.open(message);
-			case "request":
-				return this.request(message);
-			case "cancel":
-				await this.reading.get(message.id)?.cancel();
-				this.reading.delete(message.id);
+			case "rpc":
+				await this.servers
+					.get(message.server)
+					?.send(message.message)
+					.catch((error: unknown) =>
+						this.exited(message.server, String(error)),
+					);
 				return;
 			case "close": {
 				const server = this.servers.get(message.name);
@@ -170,11 +166,13 @@ export class DesktopBridge {
 		message: Extract<ServerMessage, { type: "open" }>,
 	): Promise<void> {
 		const { id, ...spec } = message;
-		if (this.servers.has(spec.name)) {
-			this.send({ type: "opened", id, ok: true });
-			return;
-		}
-		const server = new LocalServer(spec);
+		await this.servers.get(spec.name)?.stop();
+		this.servers.delete(spec.name);
+		const server = new LocalServer(spec, {
+			message: (payload) =>
+				this.send({ type: "rpc", server: spec.name, message: payload }),
+			exited: (error) => this.exited(spec.name, error, server),
+		});
 		try {
 			await server.start();
 			this.servers.set(spec.name, server);
@@ -190,51 +188,13 @@ export class DesktopBridge {
 		}
 	}
 
-	private async request(
-		message: Extract<ServerMessage, { type: "request" }>,
-	): Promise<void> {
-		const { id } = message;
-		const server = this.servers.get(message.server);
-		if (server === undefined) {
-			this.send({
-				type: "fail",
-				id,
-				error: `"${message.server}" is not running on the desktop`,
-			});
-			return;
-		}
-		try {
-			const response = await server.handle(
-				new Request(new URL(message.path, "http://desktop.bridge"), {
-					method: message.method,
-					headers: message.headers,
-					...(message.body === undefined ? {} : { body: message.body }),
-				}),
-			);
-			this.send({
-				type: "response",
-				id,
-				status: response.status,
-				headers: Object.fromEntries(response.headers),
-			});
-			if (response.body === null) return this.send({ type: "end", id });
-			const reader = response.body.getReader();
-			this.reading.set(id, reader);
-			const decoder = new TextDecoder();
-			for (;;) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				this.send({
-					type: "chunk",
-					id,
-					data: decoder.decode(value, { stream: true }),
-				});
-			}
-			this.reading.delete(id);
-			this.send({ type: "end", id });
-		} catch (error) {
-			this.reading.delete(id);
-			this.send({ type: "fail", id, error: String(error) });
-		}
+	private exited(name: string, error?: string, server?: LocalServer): void {
+		if (server !== undefined && this.servers.get(name) !== server) return;
+		this.servers.delete(name);
+		this.send({
+			type: "exited",
+			server: name,
+			...(error === undefined ? {} : { error }),
+		});
 	}
 }

@@ -6,6 +6,8 @@ import {
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import {
 	type CallbackServer,
 	StoredOAuthProvider,
@@ -19,11 +21,24 @@ import {
 	type Icon,
 	type McpClient,
 	type McpHost,
+	type McpTransport,
 	type OAuthStore,
 	type ServerHandle,
 	type Tool,
 	type ToolCall,
 } from "./ports.ts";
+
+function sdkTransport(inner: McpTransport): Transport {
+	const outer: Transport = {
+		start: () => inner.start(),
+		send: (message) => inner.send(message),
+		close: () => inner.close(),
+	};
+	inner.onmessage = (message) => outer.onmessage?.(message as JSONRPCMessage);
+	inner.onclose = () => outer.onclose?.();
+	inner.onerror = (error) => outer.onerror?.(error);
+	return outer;
+}
 
 function stdioTransport(conf: ConnConfig): StdioClientTransport {
 	const command = "command" in conf ? conf.command : undefined;
@@ -160,11 +175,14 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		}
 	}
 
-	function plainTransport(conf: ConnConfig, handle: ServerHandle | undefined) {
+	function plainTransport(
+		conf: ConnConfig,
+		handle: ServerHandle | undefined,
+	): Transport {
 		if (!handle) return stdioTransport(conf);
+		if ("transport" in handle) return sdkTransport(handle.transport());
 		return new StreamableHTTPClientTransport(new URL(handle.url), {
 			requestInit: handle.headers ? { headers: handle.headers } : undefined,
-			...(handle.fetch ? { fetch: handle.fetch } : {}),
 		});
 	}
 
@@ -175,7 +193,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	): Promise<ConnectResult> {
 		const http = "url" in conf ? conf : undefined;
 		const handle: ServerHandle | undefined = await ports.host.ensure(conf);
-		if (handle && http?.oauth)
+		if (handle && "url" in handle && http?.oauth)
 			await connectAuthorized(
 				client,
 				conf.name,
@@ -258,7 +276,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			const handle = await ports.host.ensure(conf);
 			const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
 			const { authUrl } = await ensureAuthorized(
-				handle?.url ?? conf.url,
+				handle !== undefined && "url" in handle ? handle.url : conf.url,
 				scope,
 			);
 			return { authUrl };
