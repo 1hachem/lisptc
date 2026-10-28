@@ -1,8 +1,8 @@
 import type { Id } from "@repo/backend/dataModel";
 import { BridgedHost } from "@repo/backend/desktop-bridge";
+import type { ServerMessage } from "@repo/desktop-protocol";
 import type { McpHost } from "@repo/mcp-extension/ports";
 import { describe, expect, it, vi } from "vitest";
-import type { ServerMessage } from "../../server/desktop/protocol.ts";
 import {
 	type DesktopPeer,
 	DesktopRegistry,

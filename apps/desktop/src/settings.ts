@@ -1,13 +1,9 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import type { DesktopSettings } from "@repo/desktop-protocol";
 import { desktopEnv } from "@repo/env/desktop";
 import { app } from "electron";
-
-export interface DesktopSettings {
-	closeToTray: boolean;
-	openAtLogin: boolean;
-}
 
 const DEFAULTS: DesktopSettings = { closeToTray: true, openAtLogin: false };
 

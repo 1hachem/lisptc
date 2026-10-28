@@ -1,13 +1,13 @@
-import { dialog, session } from "electron";
-import { LocalServer, type LocalServerSpec } from "./local-server.ts";
 import {
 	type DesktopMessage,
+	type DesktopSettings,
 	PING_EVERY_MS,
 	PROTOCOL_VERSION,
 	type ServerMessage,
 	SILENT_FOR_TOO_LONG_MS,
-} from "./protocol.ts";
-import type { DesktopSettings } from "./settings.ts";
+} from "@repo/desktop-protocol";
+import { dialog, session } from "electron";
+import { LocalServer, type LocalServerSpec } from "./local-server.ts";
 
 const MIN_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;

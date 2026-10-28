@@ -1,5 +1,5 @@
+import type { DesktopSettings } from "@repo/desktop-protocol";
 import { contextBridge, ipcRenderer } from "electron";
-import type { DesktopSettings } from "./settings.ts";
 
 contextBridge.exposeInMainWorld("lisptcDesktop", {
 	retry: (): void => ipcRenderer.send("desktop:retry"),

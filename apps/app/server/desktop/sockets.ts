@@ -5,7 +5,7 @@ import {
 	parseDesktopMessage,
 	type ServerMessage,
 	SILENT_FOR_TOO_LONG_MS,
-} from "./protocol.ts";
+} from "@repo/desktop-protocol";
 import type { DesktopPeer, DesktopRegistry } from "./registry.ts";
 
 export interface DesktopSocket {

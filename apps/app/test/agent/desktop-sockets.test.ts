@@ -1,10 +1,10 @@
 import type { Id } from "@repo/backend/dataModel";
-import { describe, expect, it, vi } from "vitest";
 import {
 	PROTOCOL_VERSION,
 	type ServerMessage,
 	SILENT_FOR_TOO_LONG_MS,
-} from "../../server/desktop/protocol.ts";
+} from "@repo/desktop-protocol";
+import { describe, expect, it, vi } from "vitest";
 import { DesktopRegistry } from "../../server/desktop/registry.ts";
 import {
 	type DesktopSocket,

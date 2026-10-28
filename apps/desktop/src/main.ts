@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { DesktopSettings } from "@repo/desktop-protocol";
 import { desktopEnv } from "@repo/env/desktop";
 import {
 	app,
@@ -16,7 +17,6 @@ import electronUpdater from "electron-updater";
 import { DesktopBridge } from "./bridge.ts";
 import {
 	applyOpenAtLogin,
-	type DesktopSettings,
 	readSettings,
 	startedHidden,
 	writeSettings,

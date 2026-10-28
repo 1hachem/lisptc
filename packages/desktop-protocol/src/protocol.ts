@@ -4,6 +4,11 @@ export const PING_EVERY_MS = 10_000;
 
 export const SILENT_FOR_TOO_LONG_MS = 25_000;
 
+export interface DesktopSettings {
+	closeToTray: boolean;
+	openAtLogin: boolean;
+}
+
 export type DesktopMessage =
 	| { type: "auth"; token: string; version: number }
 	| { type: "ping" }
@@ -33,8 +38,8 @@ export type ServerMessage =
 			id: string;
 			name: string;
 			command: string;
-			args: string[];
-			env: Record<string, string>;
+			args: readonly string[];
+			env: Readonly<Record<string, string>>;
 	  }
 	| {
 			type: "request";
@@ -50,5 +55,20 @@ export type ServerMessage =
 	| {
 			type: "settings";
 			id: string;
-			change: { closeToTray?: boolean; openAtLogin?: boolean };
+			change: {
+				readonly closeToTray?: boolean;
+				readonly openAtLogin?: boolean;
+			};
 	  };
+
+export function parseDesktopMessage(text: string): DesktopMessage | undefined {
+	try {
+		const value: unknown = JSON.parse(text);
+		if (typeof value !== "object" || value === null) return undefined;
+		return "type" in value && typeof value.type === "string"
+			? (value as DesktopMessage)
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}

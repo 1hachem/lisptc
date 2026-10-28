@@ -4,7 +4,7 @@ import type {
 	DesktopMessage,
 	DesktopSettings,
 	ServerMessage,
-} from "./protocol.ts";
+} from "@repo/desktop-protocol";
 
 export interface DesktopPeer {
 	send(text: string): void;

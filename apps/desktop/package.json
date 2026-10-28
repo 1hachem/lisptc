@@ -25,6 +25,7 @@
     "@hugeicons/core-free-icons": "^4.3.3",
     "@hugeicons/react": "^1.1.10",
     "@repo/components": "workspace:*",
+    "@repo/desktop-protocol": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
