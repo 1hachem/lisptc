@@ -6,9 +6,11 @@ import {
 	Navigate,
 	Outlet,
 	redirect,
+	useLocation,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { AppShell } from "../components/app-shell.tsx";
+import { Landing } from "../components/landing.tsx";
 import { useIdentify } from "../lib/analytics.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
@@ -19,13 +21,18 @@ import { WorkspaceProvider } from "../lib/workspace.tsx";
 
 export const Route = createFileRoute("/_authed")({
 	staticData: { themed: true },
-	beforeLoad: ({ context }) => {
-		if (context.auth.source === "server" && context.auth.token === null) {
+	beforeLoad: ({ context, location }) => {
+		if (
+			context.auth.source === "server" &&
+			context.auth.token === null &&
+			!isLanding(location.pathname)
+		) {
 			throw redirect({ to: "/login" });
 		}
 	},
 	loader: async ({ context }) => {
-		if (context.auth.source === "browser") return;
+		if (context.auth.source === "browser" || context.auth.token === null)
+			return;
 		await Promise.all([
 			context.queryClient.ensureQueryData(convexQuery(api.users.me, {})),
 			context.queryClient.ensureQueryData(convexQuery(api.workspaces.list, {})),
@@ -33,6 +40,10 @@ export const Route = createFileRoute("/_authed")({
 	},
 	component: AuthedLayout,
 });
+
+function isLanding(pathname: string): boolean {
+	return pathname === "/";
+}
 
 function Identify() {
 	const { data } = useQuery(convexQuery(api.users.me, {}));
@@ -43,9 +54,11 @@ function Identify() {
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const departure = useLeaveState();
+	const { pathname } = useLocation();
 
 	if (isLoading) return null;
-	if (!isAuthenticated) return <Navigate to="/login" replace />;
+	if (!isAuthenticated)
+		return isLanding(pathname) ? <Landing /> : <Navigate to="/login" replace />;
 	if (departure.leaving) return null;
 
 	return (

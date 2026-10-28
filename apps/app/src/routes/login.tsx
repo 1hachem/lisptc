@@ -1,5 +1,6 @@
 import {
 	createFileRoute,
+	Link,
 	Navigate,
 	redirect,
 	useNavigate,
@@ -7,6 +8,7 @@ import {
 import { useConvexAuth } from "convex/react";
 import { useState } from "react";
 import { authClient } from "../lib/auth-client.ts";
+import { inDesktopShell } from "../lib/desktop-shell.ts";
 
 export const Route = createFileRoute("/login")({
 	beforeLoad: ({ context }) => {
@@ -56,8 +58,6 @@ function Login() {
 	return (
 		<div className="flex h-full items-center justify-center bg-bg font-mono text-[13px] text-fg">
 			<div className="flex w-[320px] flex-col gap-3.5">
-				<div className="text-orange">ptc</div>
-
 				<form
 					className="flex flex-col gap-2"
 					onSubmit={(event) => {
@@ -153,6 +153,12 @@ function Login() {
 				</button>
 
 				{error ? <div className="text-[11.5px] text-red">{error}</div> : null}
+
+				{inDesktopShell() ? null : (
+					<Link to="/download" className="text-[11.5px] text-dim hover:text-fg">
+						get the desktop app
+					</Link>
+				)}
 			</div>
 		</div>
 	);

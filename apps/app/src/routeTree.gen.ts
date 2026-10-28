@@ -10,11 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as DownloadRouteImport } from './routes/download'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedWorkspaceIdRouteRouteImport } from './routes/_authed/$workspaceId/route'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
+import { Route as ApiReleaseRouteImport } from './routes/api.release'
 import { Route as ApiSymbolsRouteImport } from './routes/api.symbols'
 import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
@@ -27,6 +29,11 @@ import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callbac
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadRoute = DownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthRoute = HealthRouteImport.update({
@@ -52,6 +59,11 @@ const AuthedWorkspaceIdRouteRoute = AuthedWorkspaceIdRouteRouteImport.update({
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiReleaseRoute = ApiReleaseRouteImport.update({
+  id: '/api/release',
+  path: '/api/release',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSymbolsRoute = ApiSymbolsRouteImport.update({
@@ -102,10 +114,12 @@ const ApiOauthCallbackRoute = ApiOauthCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
+  '/download': typeof DownloadRoute
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/release': typeof ApiReleaseRoute
   '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
@@ -117,9 +131,11 @@ export interface FileRoutesByFullPath {
   '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
 }
 export interface FileRoutesByTo {
+  '/download': typeof DownloadRoute
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/release': typeof ApiReleaseRoute
   '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
@@ -134,10 +150,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
+  '/download': typeof DownloadRoute
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/_authed/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/release': typeof ApiReleaseRoute
   '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
   '/oauth/callback': typeof OauthCallbackRoute
@@ -153,10 +171,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/download'
     | '/health'
     | '/login'
     | '/$workspaceId'
     | '/api/chat'
+    | '/api/release'
     | '/api/symbols'
     | '/api/ui-action'
     | '/oauth/callback'
@@ -168,9 +188,11 @@ export interface FileRouteTypes {
     | '/$workspaceId/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/download'
     | '/health'
     | '/login'
     | '/api/chat'
+    | '/api/release'
     | '/api/symbols'
     | '/api/ui-action'
     | '/oauth/callback'
@@ -184,10 +206,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_authed'
+    | '/download'
     | '/health'
     | '/login'
     | '/_authed/$workspaceId'
     | '/api/chat'
+    | '/api/release'
     | '/api/symbols'
     | '/api/ui-action'
     | '/oauth/callback'
@@ -202,9 +226,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
+  DownloadRoute: typeof DownloadRoute
   HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRoute
   ApiChatRoute: typeof ApiChatRouteWithChildren
+  ApiReleaseRoute: typeof ApiReleaseRoute
   ApiSymbolsRoute: typeof ApiSymbolsRoute
   ApiUiActionRoute: typeof ApiUiActionRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
@@ -218,6 +244,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download': {
+      id: '/download'
+      path: '/download'
+      fullPath: '/download'
+      preLoaderRoute: typeof DownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/health': {
@@ -253,6 +286,13 @@ declare module '@tanstack/react-router' {
       path: '/api/chat'
       fullPath: '/api/chat'
       preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/release': {
+      id: '/api/release'
+      path: '/api/release'
+      fullPath: '/api/release'
+      preLoaderRoute: typeof ApiReleaseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/symbols': {
@@ -367,9 +407,11 @@ const ApiChatRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
+  DownloadRoute: DownloadRoute,
   HealthRoute: HealthRoute,
   LoginRoute: LoginRoute,
   ApiChatRoute: ApiChatRouteWithChildren,
+  ApiReleaseRoute: ApiReleaseRoute,
   ApiSymbolsRoute: ApiSymbolsRoute,
   ApiUiActionRoute: ApiUiActionRoute,
   OauthCallbackRoute: OauthCallbackRoute,
