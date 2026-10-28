@@ -211,4 +211,13 @@ export class DesktopRegistry implements DesktopBridge {
 	}
 }
 
-export const desktops = new DesktopRegistry();
+const SHARED_ACROSS_SERVER_CHUNKS = Symbol.for("lisptc.desktop.registry");
+
+type ProcessWide = { [SHARED_ACROSS_SERVER_CHUNKS]?: DesktopRegistry };
+
+const processWide = globalThis as ProcessWide;
+
+processWide[SHARED_ACROSS_SERVER_CHUNKS] ??= new DesktopRegistry();
+
+export const desktops: DesktopRegistry =
+	processWide[SHARED_ACROSS_SERVER_CHUNKS];

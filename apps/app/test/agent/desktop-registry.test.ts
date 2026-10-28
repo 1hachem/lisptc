@@ -1,7 +1,7 @@
 import type { Id } from "@repo/backend/dataModel";
 import { BridgedHost } from "@repo/backend/desktop-bridge";
 import type { McpHost } from "@repo/mcp-extension/ports";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ServerMessage } from "../../server/desktop/protocol.ts";
 import {
 	type DesktopPeer,
@@ -128,6 +128,19 @@ describe("the desktop registry", () => {
 		await registry.open(user, server);
 		expect(first.sent).toEqual([]);
 		expect(second.sent.map((m) => m.type)).toEqual(["open"]);
+	});
+
+	it("shares one registry across every module instance", async () => {
+		vi.resetModules();
+		const first = await import("../../server/desktop/registry.ts");
+		vi.resetModules();
+		const second = await import("../../server/desktop/registry.ts");
+		expect(first.desktops).toBe(second.desktops);
+		const peer = fakeDesktop(first.desktops);
+		first.desktops.attach(user, peer);
+		expect(second.desktops.connected(user)).toBe(true);
+		second.desktops.detach(peer);
+		expect(first.desktops.connected(user)).toBe(false);
 	});
 });
 
