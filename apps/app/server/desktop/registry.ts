@@ -1,6 +1,10 @@
 import type { Id } from "@repo/backend/dataModel";
 import type { DesktopBridge, LocalServer } from "@repo/backend/desktop-bridge";
-import type { DesktopMessage, ServerMessage } from "./protocol.ts";
+import type {
+	DesktopMessage,
+	DesktopSettings,
+	ServerMessage,
+} from "./protocol.ts";
 
 export interface DesktopPeer {
 	send(text: string): void;
@@ -26,8 +30,16 @@ function noDesktop(name: string): Error {
 	);
 }
 
+interface Settling {
+	resolve(settings: DesktopSettings): void;
+	reject(error: Error): void;
+}
+
+const SETTINGS_TIMEOUT_MS = 10_000;
+
 class Connection {
 	readonly opening = new Map<string, Waiting>();
+	readonly settling = new Map<string, Settling>();
 	readonly streams = new Map<string, Streaming>();
 
 	constructor(readonly peer: DesktopPeer) {}
@@ -82,6 +94,15 @@ class Connection {
 				else stream?.reject(error);
 				return;
 			}
+			case "settings": {
+				const settling = this.settling.get(message.id);
+				this.settling.delete(message.id);
+				settling?.resolve({
+					closeToTray: message.closeToTray,
+					openAtLogin: message.openAtLogin,
+				});
+				return;
+			}
 			case "auth":
 				return;
 		}
@@ -89,6 +110,8 @@ class Connection {
 
 	drop(reason: Error): void {
 		for (const waiting of this.opening.values()) waiting.reject(reason);
+		for (const settling of this.settling.values()) settling.reject(reason);
+		this.settling.clear();
 		for (const stream of this.streams.values()) {
 			if (stream.controller) stream.controller.error(reason);
 			else stream.reject(reason);
@@ -162,6 +185,32 @@ export class DesktopRegistry implements DesktopBridge {
 			connection.send({ type: "open", id, ...server });
 		});
 		return (url, init) => this.forward(userId, server.name, url, init);
+	}
+
+	async settings(
+		userId: Id<"users">,
+		change: Partial<DesktopSettings>,
+	): Promise<DesktopSettings | undefined> {
+		const connection = this.connections.get(userId);
+		if (connection === undefined) return undefined;
+		const id = crypto.randomUUID();
+		return new Promise<DesktopSettings>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				connection.settling.delete(id);
+				reject(new Error("desktop did not answer about its settings in time"));
+			}, SETTINGS_TIMEOUT_MS);
+			connection.settling.set(id, {
+				resolve: (settings) => {
+					clearTimeout(timer);
+					resolve(settings);
+				},
+				reject: (error) => {
+					clearTimeout(timer);
+					reject(error);
+				},
+			});
+			connection.send({ type: "settings", id, change });
+		});
 	}
 
 	async close(userId: Id<"users">, name: string): Promise<void> {

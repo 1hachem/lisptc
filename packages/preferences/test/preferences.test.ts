@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { preferencesHost } from "../src/preferences-host.ts";
-import { world } from "./helpers.ts";
+import { desktopMachine, world } from "./helpers.ts";
 
 const HELD = {
 	font: "geist",
@@ -261,5 +261,39 @@ describe("the prompt", () => {
 			"(motions)",
 		])
 			expect(prompt).toContain(form);
+	});
+});
+
+describe("desktop preferences", () => {
+	it("sets the desktop app's preferences while a desktop is connected", async () => {
+		const desktop = desktopMachine(() => true);
+		const { ev } = await world(HELD, desktop);
+		expect(await ev("(desktop-preferences)")).toBe(
+			"(:close-to-tray t :open-at-login nil)",
+		);
+		expect(
+			await ev("(desktop-preferences/set :open-at-login t :close-to-tray nil)"),
+		).toBe("(:close-to-tray nil :open-at-login t)");
+		expect(desktop.held).toEqual({ closeToTray: false, openAtLogin: true });
+	});
+
+	it("refuses desktop preferences when no desktop is connected", async () => {
+		const { ev } = await world(
+			HELD,
+			desktopMachine(() => false),
+		);
+		await expect(ev("(desktop-preferences)")).rejects.toThrow(
+			/no desktop app connected/,
+		);
+		await expect(
+			ev("(desktop-preferences/set :close-to-tray nil)"),
+		).rejects.toThrow(/no desktop app connected/);
+	});
+
+	it("refuses desktop preferences on a host with no desktop at all", async () => {
+		const { ev } = await world(HELD);
+		await expect(ev("(desktop-preferences)")).rejects.toThrow(
+			/no desktop app connected/,
+		);
 	});
 });

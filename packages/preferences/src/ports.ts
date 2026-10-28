@@ -26,10 +26,22 @@ export interface Choice {
 	name: string;
 }
 
+export interface DesktopPreferences {
+	closeToTray: boolean;
+	openAtLogin: boolean;
+}
+
+export interface DesktopPreferencesPort {
+	apply(
+		change: Partial<DesktopPreferences>,
+	): Awaitable<DesktopPreferences | undefined>;
+}
+
 export interface PreferencesHost {
 	store: PreferencesStore;
 	fonts: readonly Choice[];
 	motions: readonly Choice[];
+	desktop?: DesktopPreferencesPort;
 	prompt: PromptSource;
 }
 

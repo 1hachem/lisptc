@@ -12,7 +12,13 @@ import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
-import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
+import type {
+	Choice,
+	DesktopPreferences,
+	Preferences,
+	PreferencesHost,
+	Toggles,
+} from "./ports.ts";
 
 const SET_KEYS = [
 	"font",
@@ -225,6 +231,17 @@ function statusBarSlots(stored: readonly string[] | undefined): string[] {
 	];
 }
 
+const DESKTOP_KEYS = ["close-to-tray", "open-at-login"] as const;
+
+function desktopList(preferences: DesktopPreferences): List {
+	return arrayToList([
+		newLispKeyword("close-to-tray"),
+		preferences.closeToTray ? true : null,
+		newLispKeyword("open-at-login"),
+		preferences.openAtLogin ? true : null,
+	]);
+}
+
 export function registerPreferences(
 	interp: Interp,
 	host: PreferencesHost,
@@ -307,6 +324,54 @@ export function registerPreferences(
 			return preferencesList({ ...current, ...change });
 		},
 		SET_ARGS,
+	);
+
+	function* desktopApplied(
+		change: Partial<DesktopPreferences>,
+	): Eval<DesktopPreferences> {
+		const applied =
+			host.desktop === undefined
+				? undefined
+				: yield* settled(host.desktop.apply(change));
+		if (applied === undefined)
+			throw new EvalException(
+				"no desktop app connected, desktop preferences need lisptc desktop open and signed in",
+				null,
+			);
+		return applied;
+	}
+
+	interp.defGen(
+		"desktop-preferences",
+		0,
+		"(desktop-preferences)",
+		"Return the desktop app's preferences as a plist: (:close-to-tray t :open-at-login nil). They live on the user's machine, so this errors when no desktop app is connected.",
+		z.tuple([]),
+		function* (): Eval {
+			return desktopList(yield* desktopApplied({}));
+		},
+	);
+
+	interp.defGen(
+		"desktop-preferences/set",
+		-1,
+		"(desktop-preferences/set [:close-to-tray t] [:open-at-login t])",
+		"Change the desktop app's preferences. Only the keys given change. Errors when no desktop app is connected. Returns the preferences after the change.",
+		z.tuple([zList]),
+		function* ([rest]): Eval {
+			const options = plistOptions(rest, DESKTOP_KEYS);
+			if (options.size === 0)
+				throw new EvalException(
+					"nothing to set, give one of :close-to-tray :open-at-login",
+					null,
+				);
+			const change: Partial<DesktopPreferences> = {};
+			if (options.has("close-to-tray"))
+				change.closeToTray = options.get("close-to-tray") !== null;
+			if (options.has("open-at-login"))
+				change.openAtLogin = options.get("open-at-login") !== null;
+			return desktopList(yield* desktopApplied(change));
+		},
 	);
 
 	interp.def(

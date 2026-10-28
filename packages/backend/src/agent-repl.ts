@@ -148,6 +148,13 @@ export async function workspaceExtensions(
 			store: new ConvexPreferencesStore(connect),
 			fonts,
 			motions,
+			...(desktop === undefined
+				? {}
+				: {
+						desktop: {
+							apply: (change) => desktop.bridge.settings(desktop.owner, change),
+						},
+					}),
 		}),
 	);
 	const ui = uiExtension(

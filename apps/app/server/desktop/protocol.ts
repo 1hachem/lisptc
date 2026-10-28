@@ -1,6 +1,11 @@
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export const SILENT_FOR_TOO_LONG_MS = 25_000;
+
+export interface DesktopSettings {
+	closeToTray: boolean;
+	openAtLogin: boolean;
+}
 
 export type DesktopMessage =
 	| { type: "auth"; token: string; version: number }
@@ -14,7 +19,13 @@ export type DesktopMessage =
 	  }
 	| { type: "chunk"; id: string; data: string }
 	| { type: "end"; id: string }
-	| { type: "fail"; id: string; error: string };
+	| { type: "fail"; id: string; error: string }
+	| {
+			type: "settings";
+			id: string;
+			closeToTray: boolean;
+			openAtLogin: boolean;
+	  };
 
 export type ServerMessage =
 	| { type: "welcome" }
@@ -38,7 +49,15 @@ export type ServerMessage =
 			body?: string;
 	  }
 	| { type: "cancel"; id: string }
-	| { type: "close"; name: string };
+	| { type: "close"; name: string }
+	| {
+			type: "settings";
+			id: string;
+			change: {
+				readonly closeToTray?: boolean;
+				readonly openAtLogin?: boolean;
+			};
+	  };
 
 export function parseDesktopMessage(text: string): DesktopMessage | undefined {
 	try {
