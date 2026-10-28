@@ -1,6 +1,7 @@
 import type { Id } from "@repo/backend/dataModel";
 import { defineWebSocketHandler } from "nitro";
 import { attachDesktop } from "../../desktop/hello.ts";
+import { announce, type Presence, withdraw } from "../../desktop/presence.ts";
 import {
 	PROTOCOL_VERSION,
 	parseDesktopMessage,
@@ -14,6 +15,7 @@ interface Socket {
 }
 
 const peers = new WeakMap<Socket, DesktopPeer>();
+const present = new WeakMap<DesktopPeer, Promise<Presence>>();
 
 function peerOf(socket: Socket): DesktopPeer {
 	const known = peers.get(socket);
@@ -49,9 +51,12 @@ export default defineWebSocketHandler({
 		const userId: Id<"users"> | null = await attachDesktop(message.token);
 		if (userId === null) return socket.close(4401, "invalid token");
 		desktops.attach(userId, peer);
+		present.set(peer, announce(userId));
 		reply(socket, { type: "welcome" });
 	},
 	close(socket) {
-		desktops.detach(peerOf(socket));
+		const peer = peerOf(socket);
+		desktops.detach(peer);
+		void present.get(peer)?.then(withdraw);
 	},
 });

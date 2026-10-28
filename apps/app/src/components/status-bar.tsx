@@ -8,6 +8,7 @@ import {
 	GAP,
 	placeOf,
 } from "../lib/status-bar-order.ts";
+import { DesktopStatus } from "./desktop-status.tsx";
 
 const TICK_MS = 15_000;
 
@@ -43,7 +44,12 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 	const { order, shown, reorder } = useStatusBarOrder();
 	const drawn: Record<BarSlot, ReactNode> = {
 		panes: indicator,
-		clock: <Clock />,
+		clock: (
+			<>
+				<DesktopStatus />
+				<Clock />
+			</>
+		),
 		gap: null,
 	};
 	return (
