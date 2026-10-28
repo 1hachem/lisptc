@@ -1,10 +1,15 @@
-import { Download01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import {
+	AppleIcon,
+	ComputerTerminal01Icon,
+	WindowsNewIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
 	DESKTOP_DOWNLOADS,
 	type DesktopDownload,
+	type DesktopOs,
 	primaryDownload,
 	visitorPlatform,
 } from "../lib/desktop-downloads.ts";
@@ -13,6 +18,12 @@ import { inDesktopShell } from "../lib/desktop-shell.ts";
 export const Route = createFileRoute("/download")({
 	component: Download,
 });
+
+const OS_ICONS: Record<DesktopOs, IconSvgElement> = {
+	mac: AppleIcon,
+	windows: WindowsNewIcon,
+	linux: ComputerTerminal01Icon,
+};
 
 interface Release {
 	tag: string;
@@ -63,7 +74,10 @@ function Download() {
 								search={{ file: primary.id }}
 								className="flex items-center gap-2 bg-bg2 px-2.5 py-1 text-blue hover:brightness-125"
 							>
-								<HugeiconsIcon icon={Download01Icon} className="size-icon-sm" />
+								<HugeiconsIcon
+									icon={OS_ICONS[primary.os]}
+									className="size-icon-sm"
+								/>
 								download for {primary.label}
 							</Link>
 						) : null}
@@ -73,8 +87,12 @@ function Download() {
 									key={download.id}
 									to="/download/thanks"
 									search={{ file: download.id }}
-									className="text-dim hover:text-fg"
+									className="flex items-center gap-2 text-dim hover:text-fg"
 								>
+									<HugeiconsIcon
+										icon={OS_ICONS[download.os]}
+										className="size-icon-sm"
+									/>
 									{download.label}
 								</Link>
 							))}
