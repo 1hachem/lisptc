@@ -1,5 +1,5 @@
 import { createMiddleware } from "@tanstack/react-start";
-import { verifyToken as verify } from "../token.ts";
+import { verifyToken } from "../token.ts";
 import { edge } from "./edge.ts";
 import { HttpError } from "./error.ts";
 
@@ -13,8 +13,8 @@ function bearer(header: string | null): string {
 	return header.slice(7).trim();
 }
 
-export async function verifyToken(token: string): Promise<Session | null> {
-	const verdict = await verify(token);
+export async function sessionOf(token: string): Promise<Session | null> {
+	const verdict = await verifyToken(token);
 	if (!verdict.signed || verdict.subject === undefined) return null;
 	return { token, subject: verdict.subject };
 }
@@ -25,7 +25,7 @@ const session = createMiddleware({ type: "request" }).server(
 		if (token === "") {
 			throw new HttpError(401, "missing bearer token");
 		}
-		const current = await verifyToken(token);
+		const current = await sessionOf(token);
 		if (current === null) {
 			throw new HttpError(401, "invalid bearer token");
 		}
