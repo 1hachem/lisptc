@@ -132,6 +132,17 @@ export default defineSchema({
 		image: v.optional(v.string()),
 	}).index("by_auth", ["authId"]),
 
+	desktops: defineTable({
+		userId: v.id("users"),
+		connection: v.string(),
+		instance: v.string(),
+		connectedAt: v.number(),
+		seenAt: v.number(),
+	})
+		.index("by_user", ["userId"])
+		.index("by_instance", ["instance"])
+		.index("by_seen", ["seenAt"]),
+
 	preferences: defineTable({
 		userId: v.id("users"),
 		font: v.optional(v.string()),
