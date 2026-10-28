@@ -421,32 +421,36 @@ function connConfigFromArgs(
 			false,
 		);
 	const name = asName(rawName);
-	if (opts.has("url")) {
-		const url = opts.get("url");
-		if (typeof url !== "string")
-			throw new EvalException("load-mcp :url must be a string", url);
-		const headers = opts.has("headers")
-			? (lispToJson(opts.get("headers")) as Record<string, string>)
-			: undefined;
-		const oauth = opts.has("oauth") ? opts.get("oauth") !== null : undefined;
-		const scopes = opts.has("scopes")
-			? listToArray(opts.get("scopes") as List).map(String)
-			: undefined;
-		return { name, url, headers, oauth, scopes };
-	}
-	if (opts.has("command")) {
-		const command = opts.get("command");
-		if (typeof command !== "string")
-			throw new EvalException("load-mcp :command must be a string", command);
-		const cmdArgs = opts.has("args")
-			? listToArray(opts.get("args") as List).map(String)
-			: [];
-		const env = opts.has("env")
-			? (lispToJson(opts.get("env")) as Record<string, string>)
-			: undefined;
-		return { name, command, args: cmdArgs, env };
-	}
+	if (opts.has("url")) return urlConfig(name, opts);
+	if (opts.has("command")) return commandConfig(name, opts);
 	return withLaunchFlags(lookupPredefined(predefined, name), opts);
+}
+
+function urlConfig(name: string, opts: Map<string, unknown>): ConnConfig {
+	const url = opts.get("url");
+	if (typeof url !== "string")
+		throw new EvalException("load-mcp :url must be a string", url);
+	const headers = opts.has("headers")
+		? (lispToJson(opts.get("headers")) as Record<string, string>)
+		: undefined;
+	const oauth = opts.has("oauth") ? opts.get("oauth") !== null : undefined;
+	const scopes = opts.has("scopes")
+		? listToArray(opts.get("scopes") as List).map(String)
+		: undefined;
+	return { name, url, headers, oauth, scopes };
+}
+
+function commandConfig(name: string, opts: Map<string, unknown>): ConnConfig {
+	const command = opts.get("command");
+	if (typeof command !== "string")
+		throw new EvalException("load-mcp :command must be a string", command);
+	const cmdArgs = opts.has("args")
+		? listToArray(opts.get("args") as List).map(String)
+		: [];
+	const env = opts.has("env")
+		? (lispToJson(opts.get("env")) as Record<string, string>)
+		: undefined;
+	return { name, command, args: cmdArgs, env };
 }
 
 function parseFlags(args: unknown[]): Map<string, unknown> {
