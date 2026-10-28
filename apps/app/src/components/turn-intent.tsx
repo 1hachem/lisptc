@@ -1,19 +1,12 @@
 import {
 	AiBrain01Icon,
-	Atom02Icon,
 	Cancel01Icon,
 	CheckmarkCircle02Icon,
-	CodeIcon,
 	FileEditIcon,
 	FileViewIcon,
 	FirstBracketIcon,
-	FlowIcon,
-	FunctionIcon,
-	GitForkIcon,
 	PlugSocketIcon,
-	SigmaIcon,
 	SquareIcon,
-	TerminalIcon,
 	UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
@@ -22,7 +15,8 @@ import type {
 	ActivityImage,
 	Progress,
 } from "@repo/interpreter/annotations";
-import { useEffect, useState } from "react";
+import { GlyphCycle } from "@repo/components";
+import { useState } from "react";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 
 export function ProgressBar({ progress }: { progress: Progress }) {
@@ -66,29 +60,6 @@ const ACTIVITY_ICON: Record<ActivityIcon, IconSvgElement> = {
 	read: FileViewIcon,
 	write: FileEditIcon,
 };
-
-const RUNNING_GLYPHS: IconSvgElement[] = [
-	FirstBracketIcon,
-	FunctionIcon,
-	SigmaIcon,
-	TerminalIcon,
-	CodeIcon,
-	GitForkIcon,
-	FlowIcon,
-	Atom02Icon,
-];
-
-const GLYPH_BEAT_MS = 110;
-
-function useGlyphBeat(active: boolean) {
-	const [beat, setBeat] = useState(0);
-	useEffect(() => {
-		if (!active) return;
-		const timer = setInterval(() => setBeat((b) => b + 1), GLYPH_BEAT_MS);
-		return () => clearInterval(timer);
-	}, [active]);
-	return RUNNING_GLYPHS[beat % RUNNING_GLYPHS.length];
-}
 
 function markOf(entry: TimelineEntry, live: boolean) {
 	if (entry.kind === "intent") return undefined;
@@ -141,7 +112,6 @@ function ImageMark({
 function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 	const mark = markOf(entry, live);
 	const cycling = mark === STATE_MARK.running;
-	const glyph = useGlyphBeat(cycling);
 	const [broken, setBroken] = useState(false);
 	const images =
 		entry.state === "done" && Array.isArray(entry.icon) && !broken
@@ -161,13 +131,19 @@ function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 				{mark && images ? (
 					<ImageMark images={images} onBroken={() => setBroken(true)} />
 				) : (
-					mark && (
+					mark &&
+					(cycling ? (
+						<GlyphCycle
+							label={entry.state}
+							className={`absolute left-0 size-icon flex-none ${mark.tone}`}
+						/>
+					) : (
 						<HugeiconsIcon
-							icon={cycling ? glyph : mark.icon}
+							icon={mark.icon}
 							aria-label={entry.state}
 							className={`absolute left-0 size-icon flex-none ${mark.tone}`}
 						/>
-					)
+					))
 				)}
 				<span
 					className={`min-w-0 truncate ${entry.state === "failed" ? "text-red" : "text-fg"}`}

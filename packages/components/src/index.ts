@@ -15,6 +15,11 @@ export {
 } from "./file-tree.tsx";
 export type { FiredMemory } from "./memories.ts";
 export { firedMemories } from "./memories.ts";
+export {
+	GlyphCycle,
+	type GlyphCycleProps,
+	RUNNING_GLYPHS,
+} from "./glyph-cycle.tsx";
 export { MessageFeedback } from "./message-feedback.tsx";
 export { MessageMemories } from "./message-memories.tsx";
 export { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
