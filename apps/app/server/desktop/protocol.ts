@@ -1,7 +1,12 @@
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
+
+export const PING_EVERY_MS = 10_000;
+
+export const SILENT_FOR_TOO_LONG_MS = 25_000;
 
 export type DesktopMessage =
 	| { type: "auth"; token: string; version: number }
+	| { type: "ping" }
 	| { type: "opened"; id: string; ok: boolean; error?: string }
 	| {
 			type: "response";
@@ -15,6 +20,7 @@ export type DesktopMessage =
 
 export type ServerMessage =
 	| { type: "welcome" }
+	| { type: "pong" }
 	| { type: "upgrade"; version: number }
 	| {
 			type: "open";

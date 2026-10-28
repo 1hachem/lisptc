@@ -22,7 +22,7 @@ const OPEN_TIMEOUT_MS = 120_000;
 
 function noDesktop(name: string): Error {
 	return new Error(
-		`no desktop connected for this user: open the lisptc desktop app, then run (load-mcp :name "${name}" ... :local t) again`,
+		`no desktop connected for this user on this server: open or restart the lisptc desktop app, then run (load-mcp :name "${name}" ... :local t) again`,
 	);
 }
 
@@ -137,7 +137,7 @@ export class DesktopRegistry implements DesktopBridge {
 		connection.drop(new Error("desktop disconnected"));
 	}
 
-	connected(userId: Id<"users">): boolean {
+	holds(userId: Id<"users">): boolean {
 		return this.connections.has(userId);
 	}
 

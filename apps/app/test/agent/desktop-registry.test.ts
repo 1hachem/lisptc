@@ -111,11 +111,11 @@ describe("the desktop registry", () => {
 	it("knows whether a user's desktop is connected right now", () => {
 		const registry = new DesktopRegistry();
 		const peer: DesktopPeer = { send() {}, close() {} };
-		expect(registry.connected(user)).toBe(false);
+		expect(registry.holds(user)).toBe(false);
 		registry.attach(user, peer);
-		expect(registry.connected(user)).toBe(true);
+		expect(registry.holds(user)).toBe(true);
 		registry.detach(peer);
-		expect(registry.connected(user)).toBe(false);
+		expect(registry.holds(user)).toBe(false);
 	});
 
 	it("keeps the newest connection and closes the one it replaces", async () => {
@@ -138,9 +138,9 @@ describe("the desktop registry", () => {
 		expect(first.desktops).toBe(second.desktops);
 		const peer = fakeDesktop(first.desktops);
 		first.desktops.attach(user, peer);
-		expect(second.desktops.connected(user)).toBe(true);
+		expect(second.desktops.holds(user)).toBe(true);
 		second.desktops.detach(peer);
-		expect(first.desktops.connected(user)).toBe(false);
+		expect(first.desktops.holds(user)).toBe(false);
 	});
 });
 

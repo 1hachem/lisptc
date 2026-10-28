@@ -1,62 +1,34 @@
-import type { Id } from "@repo/backend/dataModel";
 import { defineWebSocketHandler } from "nitro";
 import { authenticate } from "../../desktop/auth.ts";
-import { announce, type Presence, withdraw } from "../../desktop/presence.ts";
-import {
-	PROTOCOL_VERSION,
-	parseDesktopMessage,
-	type ServerMessage,
-} from "../../desktop/protocol.ts";
-import { type DesktopPeer, desktops } from "../../desktop/registry.ts";
+import { announce, seen, withdraw } from "../../desktop/presence.ts";
+import { desktops } from "../../desktop/registry.ts";
+import { DesktopSockets } from "../../desktop/sockets.ts";
 
-interface Socket {
-	send(data: string): unknown;
-	close(code?: number, reason?: string): void;
-}
+const SILENCE_SWEEP_MS = 5_000;
 
-const peers = new WeakMap<Socket, DesktopPeer>();
-const present = new WeakMap<DesktopPeer, Promise<Presence>>();
+const sockets = new DesktopSockets({
+	registry: desktops,
+	authenticate,
+	announce,
+	seen,
+	withdraw,
+	now: Date.now,
+});
 
-function peerOf(socket: Socket): DesktopPeer {
-	const known = peers.get(socket);
-	if (known !== undefined) return known;
-	const peer: DesktopPeer = {
-		send: (text) => {
-			socket.send(text);
-		},
-		close: () => socket.close(),
-	};
-	peers.set(socket, peer);
-	return peer;
-}
+let sweeping: ReturnType<typeof setInterval> | undefined;
 
-function reply(socket: Socket, message: ServerMessage): void {
-	socket.send(JSON.stringify(message));
+function sweepSilentDesktops(): void {
+	if (sweeping !== undefined) return;
+	sweeping = setInterval(() => sockets.sweep(), SILENCE_SWEEP_MS);
+	sweeping.unref?.();
 }
 
 export default defineWebSocketHandler({
-	async message(socket, raw) {
-		const peer = peerOf(socket);
-		const message = parseDesktopMessage(raw.text());
-		if (message === undefined) return;
-		if (desktops.attached(peer)) {
-			desktops.receive(peer, message);
-			return;
-		}
-		if ("version" in message && message.version !== PROTOCOL_VERSION) {
-			reply(socket, { type: "upgrade", version: PROTOCOL_VERSION });
-			return socket.close(4426, "upgrade the desktop app");
-		}
-		if (message.type !== "auth") return socket.close(4401, "auth first");
-		const userId: Id<"users"> | null = await authenticate(message.token);
-		if (userId === null) return socket.close(4401, "invalid token");
-		desktops.attach(userId, peer);
-		present.set(peer, announce(userId));
-		reply(socket, { type: "welcome" });
+	message(socket, raw) {
+		sweepSilentDesktops();
+		return sockets.message(socket, raw.text());
 	},
 	close(socket) {
-		const peer = peerOf(socket);
-		desktops.detach(peer);
-		void present.get(peer)?.then(withdraw);
+		sockets.close(socket);
 	},
 });
