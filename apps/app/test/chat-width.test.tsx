@@ -80,7 +80,7 @@ function storeView(viewId: string, node: unknown): { viewId: string } {
 	offline.setQueryData(
 		convexQuery(api.views.get, { chatId: "c1" as Id<"chats">, viewId })
 			.queryKey,
-		{ node, rev: 1 },
+		{ node, rev: 1, expired: false },
 	);
 	return { viewId };
 }

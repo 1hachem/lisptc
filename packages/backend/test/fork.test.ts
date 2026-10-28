@@ -123,7 +123,7 @@ describe("forking a chat at a message", () => {
 		});
 		expect(
 			await alice.as.query(api.views.get, { chatId: forked, viewId: "v1" }),
-		).toEqual({ node, rev: 1 });
+		).toEqual({ node, rev: 1, expired: false });
 	});
 
 	it("leaves the original chat as it was", async () => {

@@ -63,6 +63,17 @@ export class ConvexViewStore implements ViewStore {
 		});
 	}
 
+	async expire(viewId: string): Promise<void> {
+		const slot = this.slot(viewId);
+		slot.pending = undefined;
+		slot.written = undefined;
+		slot.writtenAt = Number.NEGATIVE_INFINITY;
+		await this.connect().mutation(api.views.expire, {
+			chatId: this.chatId,
+			viewId,
+		});
+	}
+
 	private slot(viewId: string): Slot {
 		const held = this.slots.get(viewId);
 		if (held !== undefined) return held;

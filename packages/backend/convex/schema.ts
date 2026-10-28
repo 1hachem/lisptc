@@ -269,6 +269,7 @@ export default defineSchema({
 		viewId: v.string(),
 		node: v.any(),
 		rev: v.number(),
+		expired: v.optional(v.boolean()),
 	})
 		.index("by_chat_view", ["chatId", "viewId"])
 		.index("by_workspace", ["workspaceId"]),

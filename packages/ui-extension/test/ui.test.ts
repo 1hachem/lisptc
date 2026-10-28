@@ -481,7 +481,7 @@ describe("actions", () => {
 			(ui/render view)
 		`);
 		expect(str(runSync(interp, "(ui/forget view)"))).toBe("2");
-		await expect(surface.invoke("a1", {})).rejects.toThrow(/no such ui action/);
+		expect(surface.hasAction("a1")).toBe(false);
 		expect(str(runSync(interp, "(ui/forget view)"))).toBe("0");
 	});
 
@@ -852,5 +852,45 @@ describe("the view store", () => {
 		expect(views.views.get("view:counts")).toMatchObject({
 			children: [{ props: { text: "1" } }, { tag: "button" }],
 		});
+	});
+
+	it("marks a view expired when ui/forget drops its handlers", () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			'(setq view (ui/stack (ui/button "a" (lambda () 1)))) (ui/render view)',
+		);
+		surface.beginStep();
+		runSync(interp, "(ui/forget view)");
+		expect([...views.expired]).toEqual(["v1"]);
+	});
+
+	it("marks a view expired when a click finds its handler gone", async () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/button "a" (lambda () 1)))');
+		surface.reset();
+		await expect(surface.invoke("a1", {})).resolves.toBeDefined();
+		expect([...views.expired]).toEqual(["v1"]);
+	});
+
+	it("still reports an id no view ever carried", async () => {
+		const { surface } = stored();
+		await expect(surface.invoke("a99", {})).rejects.toThrow(
+			/no such ui action/,
+		);
+	});
+
+	it("clears the expired mark when the view is drawn again", () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			'(setq view (ui/stack (ui/button "a" (lambda () 1)))) (ui/render view) (ui/forget view)',
+		);
+		expect([...views.expired]).toEqual(["v1"]);
+		runSync(interp, "(ui/render view)");
+		expect(views.expired.size).toBe(0);
 	});
 });

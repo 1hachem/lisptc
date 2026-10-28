@@ -286,17 +286,25 @@ export function GenerativeUI({
 	const { data } = useQuery(convexQuery(api.views.get, { chatId, viewId }));
 	const node = viewNode.safeParse(data?.node).data;
 	if (node === undefined) return null;
-	return <View chatId={chatId} node={node} />;
+	return <View chatId={chatId} node={node} expired={data?.expired === true} />;
 }
 
-function View({ chatId, node }: { chatId: Id<"chats">; node: ViewNode }) {
+function View({
+	chatId,
+	node,
+	expired,
+}: {
+	chatId: Id<"chats">;
+	node: ViewNode;
+	expired: boolean;
+}) {
 	const send = useChatSession((state) => state.send);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
 	const [busy, setBusy] = useState(false);
 
 	const fire: Fire = (action, values) => {
-		if (!action || busy) return;
+		if (!action || busy || expired) return;
 		setBusy(true);
 		void (async () => {
 			try {
@@ -316,8 +324,13 @@ function View({ chatId, node }: { chatId: Id<"chats">; node: ViewNode }) {
 
 	return (
 		<div className="min-w-0 border-accent/40 border-l pl-3">
-			<Node node={node} fire={fire} busy={busy} />
-			{output && (
+			<Node node={node} fire={fire} busy={busy || expired} />
+			{expired && (
+				<div className="mt-2 text-dim">
+					this view expired, ask the agent to redraw it
+				</div>
+			)}
+			{output && !expired && (
 				<div
 					className={`mt-2 whitespace-pre-wrap break-words ${failed ? "text-red" : "text-dim"}`}
 				>

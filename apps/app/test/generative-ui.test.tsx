@@ -43,14 +43,25 @@ afterEach(() => {
 	vi.mocked(postUiAction).mockClear();
 });
 
-function render(node: ViewNode) {
-	stored.row = { node, rev: 1 };
+function render(node: ViewNode, expired = false) {
+	stored.row = { node, rev: 1, expired };
 	act(() =>
 		root.render(<GenerativeUI chatId={"c1" as Id<"chats">} viewId="v1" />),
 	);
 }
 
 describe("GenerativeUI", () => {
+	it("shows an expired view with its controls disabled", () => {
+		render(view("button", { label: "go", action: "a1" }), true);
+		expect(host.textContent).toContain(
+			"this view expired, ask the agent to redraw it",
+		);
+		const button = host.querySelector("button") as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		act(() => button.click());
+		expect(postUiAction).not.toHaveBeenCalled();
+	});
+
 	it("draws nothing until the view is stored", () => {
 		stored.row = null;
 		act(() =>

@@ -260,6 +260,21 @@ describe("the convex view store", () => {
 		]);
 	});
 
+	it("expires a view and writes it again even when unchanged", async () => {
+		const { client, sent } = spyClient({});
+		const chatId = "chat-1" as Id<"chats">;
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		const store = new ConvexViewStore(chatId, () => client);
+		await store.put({ viewId: "v1", node });
+		await store.expire("v1");
+		await store.put({ viewId: "v1", node });
+		expect(sent).toEqual([
+			[named(api.views.put), { chatId, viewId: "v1", node }],
+			[named(api.views.expire), { chatId, viewId: "v1" }],
+			[named(api.views.put), { chatId, viewId: "v1", node }],
+		]);
+	});
+
 	function manualClock(): ViewClock & { advance(ms: number): void } {
 		let now = 0;
 		let due: Array<[number, () => void]> = [];

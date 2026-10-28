@@ -10,7 +10,10 @@ const encoder = new TextEncoder();
 
 export const get = query({
 	args: { chatId: v.id("chats"), viewId: v.string() },
-	returns: v.union(v.object({ node: v.any(), rev: v.number() }), v.null()),
+	returns: v.union(
+		v.object({ node: v.any(), rev: v.number(), expired: v.boolean() }),
+		v.null(),
+	),
 	handler: async (ctx, { chatId, viewId }) => {
 		await requireChat(ctx, chatId);
 		const row = await ctx.db
@@ -19,7 +22,9 @@ export const get = query({
 				q.eq("chatId", chatId).eq("viewId", viewId),
 			)
 			.unique();
-		return row === null ? null : { node: row.node, rev: row.rev };
+		return row === null
+			? null
+			: { node: row.node, rev: row.rev, expired: row.expired === true };
 	},
 });
 
@@ -46,7 +51,24 @@ export const put = mutation({
 			});
 			return null;
 		}
-		await ctx.db.patch(row._id, { node, rev: row.rev + 1 });
+		await ctx.db.patch(row._id, { node, rev: row.rev + 1, expired: undefined });
+		return null;
+	},
+});
+
+export const expire = mutation({
+	args: { chatId: v.id("chats"), viewId: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { chatId, viewId }) => {
+		await requireChat(ctx, chatId);
+		const row = await ctx.db
+			.query("views")
+			.withIndex("by_chat_view", (q) =>
+				q.eq("chatId", chatId).eq("viewId", viewId),
+			)
+			.unique();
+		if (row === null || row.expired === true) return null;
+		await ctx.db.patch(row._id, { expired: true, rev: row.rev + 1 });
 		return null;
 	},
 });

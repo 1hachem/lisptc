@@ -359,7 +359,7 @@ describe("chat access", () => {
 		const node = { tag: "text", props: { text: "hi" }, children: [] };
 		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
 		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
-			{ node, rev: 1 },
+			{ node, rev: 1, expired: false },
 		);
 		await expect(
 			alice.as.query(api.views.get, { chatId, viewId: "v1" }),
@@ -367,6 +367,27 @@ describe("chat access", () => {
 		await expect(
 			alice.as.mutation(api.views.put, { chatId, viewId: "v1", node }),
 		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.views.expire, { chatId, viewId: "v1" }),
+		).rejects.toThrow();
+	});
+
+	it("marks a view expired until it is written again", async () => {
+		const t = harness();
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		await bob.as.mutation(api.views.expire, { chatId, viewId: "v1" });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 2, expired: true },
+		);
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 3, expired: false },
+		);
 	});
 
 	it("refuses appending to another user's chat", async () => {

@@ -402,6 +402,7 @@ export const fork = mutation({
 				viewId: view.viewId,
 				node: view.node,
 				rev: view.rev,
+				expired: view.expired,
 			});
 		return forked;
 	},

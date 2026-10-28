@@ -111,11 +111,26 @@ describe("a step that opens panel tabs", () => {
 	});
 });
 
+describe("a view whose handlers are gone", () => {
+	it("is marked expired, and a click on it fails nothing", async () => {
+		const views = new MemoryViewStore();
+		const r = memoryRepl(modelFacing(undefined, undefined, undefined, views));
+		await r.evalOutput(
+			'(setq view (ui/button "go" (lambda () 1))) (ui/render view)',
+		);
+		await r.evalOutput("(ui/forget view)");
+		expect([...views.expired]).toEqual(["v1"]);
+		const out = await r.invokeUi("a1", {});
+		expect(out.failed).toBe(false);
+	});
+});
+
 describe("a view while its step runs", () => {
 	it("reaches the caller live as a reference, never as the tree", async () => {
 		const pushed: unknown[] = [];
 		const slow = {
 			put: () => new Promise<void>((resolve) => setTimeout(resolve, 300)),
+			expire: () => undefined,
 		};
 		const r = agentRepl(modelFacing(undefined, undefined, undefined, slow));
 		await r.evalOutput(

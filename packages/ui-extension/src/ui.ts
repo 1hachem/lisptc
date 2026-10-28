@@ -113,9 +113,11 @@ export class UiSurface {
 	private current: string | undefined;
 	private interp: Interp | undefined;
 	private channels: Channels | undefined;
+	private store: ViewStore | undefined;
 
-	bind(interp: Interp): void {
+	bind(interp: Interp, store?: ViewStore): void {
 		this.interp = interp;
+		this.store = store;
 		this.channels = interp.channels;
 		this.handlers = interp.state(
 			"ui/handlers",
@@ -148,7 +150,7 @@ export class UiSurface {
 	}
 
 	enter(action: string): void {
-		this.current = this.owners?.get().find(([at]) => at === action)?.[1];
+		this.current = this.ownerOf(action);
 	}
 
 	private viewId(): string {
@@ -197,6 +199,17 @@ export class UiSurface {
 		return held.length - kept.length;
 	}
 
+	private ownerOf(id: string): string | undefined {
+		return this.owners?.get().find(([at]) => at === id)?.[1];
+	}
+
+	*expireOwners(ids: readonly string[]): Eval<void> {
+		const store = this.store;
+		if (store === undefined) return;
+		const owned = new Set(ids.flatMap((id) => this.ownerOf(id) ?? []));
+		for (const viewId of owned) yield* settled(store.expire(viewId));
+	}
+
 	private handler(id: string): unknown {
 		return this.handlers?.get().find(([at]) => at === id)?.[1];
 	}
@@ -219,8 +232,13 @@ export class UiSurface {
 
 	async invoke(id: string, values: Record<string, unknown>): Promise<unknown> {
 		const fn = this.handler(id);
-		if (fn === undefined)
-			throw new EvalException("no such ui action", id, false);
+		if (fn === undefined) {
+			const owner = this.ownerOf(id);
+			if (owner === undefined || this.store === undefined)
+				throw new EvalException("no such ui action", id, false);
+			await this.store.expire(owner);
+			return Unspecified;
+		}
 		const interp = this.interp;
 		if (interp === undefined)
 			throw new EvalException("ui surface is not bound to an interpreter", id);
@@ -348,7 +366,7 @@ function registerUi(
 	panel: PanelStore,
 	views: ViewStore,
 ): void {
-	surface.bind(interp);
+	surface.bind(interp, views);
 	surface.reset();
 	interp.recovery.kind({
 		name: UI_TAG,
@@ -476,16 +494,19 @@ function registerUi(
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"ui/forget",
 		1,
 		"(ui/forget view)",
-		"Drop the handlers behind every control in `view`, so clicking them runs nothing any more. Use it on a view you replaced or closed. Returns how many were dropped.",
+		"Drop the handlers behind every control in `view`, so clicking them runs nothing any more and the view it was rendered in shows as expired. Use it on a view you replaced or closed. Returns how many were dropped.",
 		z.tuple([zAny]),
-		([view]) => {
+		function* ([view]): Eval {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
-			return BigInt(surface.drop(actionsOf(view)));
+			const ids = actionsOf(view);
+			const dropped = surface.drop(ids);
+			if (dropped > 0) yield* surface.expireOwners(ids);
+			return BigInt(dropped);
 		},
 	);
 
