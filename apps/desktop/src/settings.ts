@@ -58,7 +58,7 @@ function linuxAutostartFile(): string {
 		xdg !== undefined && path.isAbsolute(xdg)
 			? xdg
 			: path.join(homedir(), ".config");
-	return path.join(config, "autostart", "lisptc.desktop");
+	return path.join(config, "autostart", "salsal.desktop");
 }
 
 export function applyOpenAtLogin(enabled: boolean): void {
@@ -79,7 +79,7 @@ export function applyOpenAtLogin(enabled: boolean): void {
 		[
 			"[Desktop Entry]",
 			"Type=Application",
-			"Name=lisptc",
+			"Name=salsal",
 			`Exec="${executable}" --hidden`,
 			"X-GNOME-Autostart-enabled=true",
 			"",

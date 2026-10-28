@@ -1,6 +1,7 @@
 {
   "name": "@lisptc/desktop",
   "version": "0.0.0",
+  "description": "malleable AI agents workspaces",
   "type": "module",
   "private": true,
   "main": "dist/main.cjs",
@@ -39,16 +40,16 @@
     "typescript": "^5.9.3"
   },
   "build": {
-    "appId": "io.lisptc.desktop",
-    "productName": "lisptc",
+    "appId": "xyz.salsal.desktop",
+    "productName": "salsal",
     "files": [
       "dist/**"
     ],
     "protocols": [
       {
-        "name": "lisptc",
+        "name": "salsal",
         "schemes": [
-          "lisptc"
+          "salsal"
         ]
       }
     ],
@@ -79,14 +80,14 @@
           ]
         }
       ],
-      "artifactName": "lisptc-${arch}.${ext}",
+      "artifactName": "salsal-${arch}.${ext}",
       "category": "public.app-category.developer-tools"
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "artifactName": "lisptc-setup.${ext}"
+      "artifactName": "salsal-setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -95,13 +96,13 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true,
-      "shortcutName": "lisptc"
+      "shortcutName": "salsal"
     },
     "linux": {
       "target": [
         "AppImage"
       ],
-      "artifactName": "lisptc.${ext}",
+      "artifactName": "salsal.${ext}",
       "category": "Development"
     }
   }

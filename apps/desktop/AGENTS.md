@@ -1,7 +1,7 @@
 # @lisptc/desktop
 
 The desktop shell. An Electron window over the served app, plus what only a
-native process can do: open links in the system browser, own the lisptc://
+native process can do: open links in the system browser, own the salsal://
 scheme, and update itself.
 
 Turbo tag: `product`.

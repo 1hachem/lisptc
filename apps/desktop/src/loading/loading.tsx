@@ -42,7 +42,7 @@ function Unreachable() {
 		<main className="loading">
 			<HugeiconsIcon icon={Unlink04Icon} className="glyph" strokeWidth={1.5} />
 			<p className="title">
-				{online ? "cannot reach lisptc" : "no internet connection"}
+				{online ? "cannot reach salsal" : "no internet connection"}
 			</p>
 			<p className="detail">
 				{online
@@ -61,7 +61,7 @@ function Loading() {
 	return (
 		<main className="loading">
 			<GlyphCycle label="loading" className="glyph" />
-			<p className="title">lisptc</p>
+			<p className="title">salsal</p>
 		</main>
 	);
 }

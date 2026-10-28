@@ -77,7 +77,7 @@ function showLoading(window: BrowserWindow, state: "loading" | "retry"): void {
 }
 
 function loadTarget(window: BrowserWindow): void {
-	console.log(`lisptc desktop on ${target()}`);
+	console.log(`salsal desktop on ${target()}`);
 	bridgeTo(originOf(target()));
 	void window.loadURL(target()).catch(() => undefined);
 }
@@ -149,7 +149,7 @@ async function outdated(): Promise<void> {
 			buttons: ["Restart to update", "Later"],
 			defaultId: 0,
 			cancelId: 1,
-			message: "Update lisptc",
+			message: "Update salsal",
 			detail: `This version of the desktop app can no longer run local MCP servers. Version ${state.version} is ready.`,
 		});
 		if (response === 0) updates?.install();
@@ -158,7 +158,7 @@ async function outdated(): Promise<void> {
 	updates?.check();
 	await dialog.showMessageBox({
 		type: "info",
-		message: "Update lisptc",
+		message: "Update salsal",
 		detail:
 			"This version of the desktop app can no longer run local MCP servers. The new version is downloading, and the bottom bar shows when it is ready to install.",
 	});
@@ -190,13 +190,13 @@ function serveSettings(): void {
 function buildTray(): void {
 	if (tray === undefined) {
 		tray = new Tray(nativeImage.createFromPath(TRAY_ICON));
-		tray.setToolTip("lisptc");
+		tray.setToolTip("salsal");
 		tray.on("click", reveal);
 	}
 	const ready = updates?.state();
 	tray.setContextMenu(
 		Menu.buildFromTemplate([
-			{ label: "Open lisptc", click: reveal },
+			{ label: "Open salsal", click: reveal },
 			...(ready?.status === "downloaded"
 				? [
 						{
@@ -229,7 +229,7 @@ function open(visible: boolean): BrowserWindow {
 	const window = new BrowserWindow({
 		width: 1280,
 		height: 840,
-		title: "lisptc",
+		title: "salsal",
 		show: false,
 		backgroundColor: nativeTheme.shouldUseDarkColors ? "#1d2021" : "#f9f5d7",
 		webPreferences: {
@@ -283,7 +283,7 @@ function open(visible: boolean): BrowserWindow {
 
 if (!app.requestSingleInstanceLock()) app.quit();
 
-app.setAsDefaultProtocolClient("lisptc");
+app.setAsDefaultProtocolClient("salsal");
 
 app.on("second-instance", reveal);
 
