@@ -954,6 +954,7 @@ export function registerMcp(
 					),
 					label: `load-mcp · ${name}`,
 					state,
+					...(state === "held" ? { detail: "requires auth" } : {}),
 					...(error === undefined ? {} : { error: messageOf(error) }),
 					id: `mcp-load-${n}`,
 					startedAt,
@@ -974,7 +975,8 @@ export function registerMcp(
 			},
 			(error: unknown) => {
 				forget();
-				report("failed", error);
+				if (error instanceof StepHold) report("held");
+				else report("failed", error);
 			},
 		);
 		return promise;
