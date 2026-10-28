@@ -6,6 +6,14 @@ export const FOLDERS = ["attachments", "knowledge"] as const;
 
 const actionId = z.string();
 
+const tone = z.enum(TONES, {
+	error: `unknown tone; expected one of ${TONES.join(" ")}`,
+});
+
+const folder = z.enum(FOLDERS, {
+	error: `unknown folder; expected one of ${FOLDERS.join(" ")}`,
+});
+
 function widget<const Shape extends z.ZodRawShape>(
 	shape: Shape,
 	options: {
@@ -27,10 +35,10 @@ export const catalog = {
 	link: widget({ text: z.string(), href: z.string() }),
 	"file-link": widget({
 		text: z.string(),
-		folder: z.enum(FOLDERS),
+		folder,
 		name: z.string(),
 	}),
-	badge: widget({ text: z.string(), tone: z.enum(TONES).optional() }),
+	badge: widget({ text: z.string(), tone: tone.optional() }),
 	kpi: widget({
 		label: z.string(),
 		value: z.string(),
