@@ -10,6 +10,7 @@ import {
 	FlowIcon,
 	FunctionIcon,
 	GitForkIcon,
+	LockKeyIcon,
 	PlugSocketIcon,
 	SigmaIcon,
 	SquareIcon,
@@ -55,6 +56,7 @@ const STATE_MARK = {
 	running: { icon: FirstBracketIcon, tone: "text-dim" },
 	done: { icon: CheckmarkCircle02Icon, tone: "text-green" },
 	failed: { icon: Cancel01Icon, tone: "text-red" },
+	held: { icon: LockKeyIcon, tone: "text-dim" },
 } as const;
 
 const STALLED_MARK = { icon: SquareIcon, tone: "text-dim" } as const;
@@ -170,7 +172,7 @@ function TimelineRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
 					)
 				)}
 				<span
-					className={`min-w-0 truncate ${entry.state === "failed" ? "text-red" : "text-fg"}`}
+					className={`min-w-0 truncate ${entry.state === "failed" ? "text-red" : entry.state === "held" ? "text-dim" : "text-fg"}`}
 				>
 					{entry.label}
 				</span>

@@ -149,7 +149,7 @@ const activityEntry = z.object({
 		.optional(),
 	label: z.string(),
 	detail: z.string().optional(),
-	state: z.enum(["started", "done", "failed"]),
+	state: z.enum(["started", "done", "failed", "held"]),
 	error: z.string().optional(),
 	id: z.string(),
 	startedAt: z.number().optional(),

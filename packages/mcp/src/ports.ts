@@ -105,6 +105,7 @@ export type ContainerConnConfig = ConnMeta & {
 	path?: string;
 	command?: string;
 	args?: string[];
+	headless?: string[];
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
 	secret?: SecretRef;
@@ -119,6 +120,7 @@ export type StdioConnConfig = ConnMeta & {
 	name: string;
 	command: string;
 	args?: string[];
+	headless?: string[];
 	env?: Record<string, string>;
 	resources?: Resources;
 };

@@ -531,4 +531,169 @@ export const prelude = `
                          (t (error (concat "format: unknown directive ~" d))))
                    (setq i (+ i 2)))))))
     out))
+(defun reverse (xs)
+  "Return a new list of the elements of xs in reverse order; xs is unchanged."
+  (let ((out nil))
+    (dolist (x xs out)
+      (setq out (cons x out)))))
+
+(defun copy-list (xs)
+  "Return a new list of the elements of xs."
+  (nreverse (reverse xs)))
+
+(defun nthcdr (n xs)
+  "Return the tail of xs after dropping its first n elements."
+  (if (or (< n 1) (null xs))
+      xs
+    (nthcdr (- n 1) (cdr xs))))
+
+(defun butlast (xs &rest n)
+  "Return a new list of xs without its last n elements (default 1)."
+  (let ((keep (- (length xs) (if n (car n) 1))))
+    (if (< keep 1)
+        nil
+      (subseq xs 0 keep))))
+
+(defun mapc (f xs)
+  "Call f on each element of xs for its effect; return xs."
+  (dolist (x xs xs)
+    (f x)))
+
+(defun remove-if (f xs)
+  "Return a new list of the elements of xs for which f returns nil."
+  (filter (lambda (x) (not (f x))) xs))
+
+(defun remove (item xs)
+  "Return a new list of xs without the elements equal to item."
+  (remove-if (lambda (x) (equal item x)) xs))
+
+(defun find-if (f xs)
+  "Return the first element of xs for which f returns non-nil, or nil."
+  (dolist (x xs)
+    (when (f x)
+      (return x))))
+
+(defun find (item xs)
+  "Return the first element of xs equal to item, or nil."
+  (find-if (lambda (x) (equal item x)) xs))
+
+(defun position-if (f xs)
+  "Return the index of the first element of xs for which f returns non-nil, or nil."
+  (let ((i 0))
+    (dolist (x xs)
+      (when (f x)
+        (return i))
+      (setq i (+ i 1)))))
+
+(defun position (item xs)
+  "Return the index of the first element of xs equal to item, or nil."
+  (position-if (lambda (x) (equal item x)) xs))
+
+(defun count-if (f xs)
+  "Return how many elements of xs f returns non-nil for."
+  (let ((n 0))
+    (dolist (x xs n)
+      (when (f x)
+        (setq n (+ n 1))))))
+
+(defun count (item xs)
+  "Return how many elements of xs are equal to item."
+  (count-if (lambda (x) (equal item x)) xs))
+
+(defun some (f xs)
+  "Return the first non-nil value of f over the elements of xs, or nil."
+  (dolist (x xs)
+    (let ((v (f x)))
+      (when v
+        (return v)))))
+
+(defun every (f xs)
+  "Return t if f returns non-nil for every element of xs, nil otherwise."
+  (dolist (x xs t)
+    (unless (f x)
+      (return nil))))
+
+(defun remove-duplicates (xs)
+  "Return a new list of xs with later duplicates (by equal) dropped, first occurrences kept in order."
+  (let ((seen (make-hash-table))
+        (out nil))
+    (dolist (x xs (nreverse out))
+      (unless (hash-has-key x seen)
+        (puthash x t seen)
+        (setq out (cons x out))))))
+
+(defun _merge (a b pred)
+  (let ((out nil))
+    (while (and a b)
+      (if (pred (car b) (car a))
+          (progn (setq out (cons (car b) out))
+                 (setq b (cdr b)))
+        (setq out (cons (car a) out))
+        (setq a (cdr a))))
+    (nconc (nreverse out) (or a b))))
+(defun _sort (xs n pred)
+  (cond ((< n 1) nil)
+        ((= n 1) (list (car xs)))
+        (t (let ((half (truncate n 2)))
+             (_merge (_sort xs half pred)
+                     (_sort (nthcdr half xs) (- n half) pred)
+                     pred)))))
+(defun sort (xs pred)
+  "Return a new list of the elements of xs ordered by pred, a less-than test such as < or string<. Stable; xs is unchanged. (sort '(3 1 2) <) gives (1 2 3)."
+  (_sort xs (length xs) pred))
+
+(defun _setf-expand (place value)
+  (let ((head (if (consp place) (car place))))
+    (cond ((atom place) \`(setq ,place ,value))
+          ((eq head 'car) \`(rplaca ,(cadr place) ,value))
+          ((eq head 'cdr) \`(rplacd ,(cadr place) ,value))
+          ((eq head 'nth) \`(rplaca (nthcdr ,(cadr place) ,(caddr place)) ,value))
+          ((eq head 'aref) \`(aset ,(cadr place) ,(caddr place) ,value))
+          ((eq head 'gethash) \`(puthash ,(cadr place) ,value ,(caddr place)))
+          ((eq head 'get-in) (_setf-expand (cadr place) \`(set-in ,(cadr place) ,value ,@(cddr place))))
+          (t (error (concat "setf: not a place: " (string place)))))))
+(defmacro setf (place value &rest more)
+  "Store value in place and return it. A place is a variable, (car x), (cdr x), (nth n xs), (aref v i), (gethash key table), or (get-in record key...), which rebinds record to an updated copy. More place value pairs may follow."
+  (if more
+      \`(progn ,(_setf-expand place value) (setf ,@more))
+    (_setf-expand place value)))
+
+(defmacro push (x place)
+  "Put x on the front of the list in place, as (setf place (cons x place)); return the new list."
+  \`(setf ,place (cons ,x ,place)))
+
+(defmacro pop (place)
+  "Remove the first element of the list in place and return it."
+  (let ((head (gensym)))
+    \`(let ((,head ,place))
+       (setf ,place (cdr ,head))
+       (car ,head))))
+
+(defmacro incf (place &rest delta)
+  "Add delta (default 1) to the number in place; return the new value."
+  \`(setf ,place (+ ,place ,(if delta (car delta) 1))))
+
+(defmacro decf (place &rest delta)
+  "Subtract delta (default 1) from the number in place; return the new value."
+  \`(setf ,place (- ,place ,(if delta (car delta) 1))))
+
+(defmacro block (name &rest body)
+  "Evaluate body; a (return-from name value) inside it ends the block early with value."
+  \`(_catch :block ',name (lambda () ,@body)))
+
+(defmacro return-from (name &rest value)
+  "Leave the enclosing (block name ...) at once with value, default nil."
+  \`(_throw :block ',name ,(car value)))
+
+(defmacro catch (tag &rest body)
+  "Evaluate body; a (throw tag value) inside it, at any call depth, ends the catch with value. tag is evaluated and matched by eq. Not to be confused with the catch clause of try, which handles errors."
+  \`(_catch :throw ,tag (lambda () ,@body)))
+
+(defun throw (tag &rest value)
+  "Unwind to the nearest dynamically enclosing (catch tag ...) with value, default nil. Errors if none is active."
+  (_throw :throw tag (car value)))
+
+(defmacro unwind-protect (form &rest cleanup)
+  "Evaluate form and return its value, then run cleanup forms however form exits: normally, by an error, a throw, a return-from or a loop break."
+  \`(_unwind-protect (lambda () ,form) (lambda () ,@cleanup)))
 `;

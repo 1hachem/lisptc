@@ -7,7 +7,7 @@ import type {
 } from "@repo/interpreter/annotations";
 import type { TurnShape } from "./turn-groups.ts";
 
-export type TimelineState = "running" | "done" | "failed";
+export type TimelineState = "running" | "done" | "failed" | "held";
 
 export interface TimelineEntry {
 	id: string;
@@ -25,6 +25,7 @@ const ACTIVITY_STATE: Record<ActivityEntry["state"], TimelineState> = {
 	started: "running",
 	done: "done",
 	failed: "failed",
+	held: "held",
 };
 
 function activityEntry(entry: ActivityEntry): TimelineEntry {
