@@ -2,12 +2,13 @@ import {
 	createFileRoute,
 	Link,
 	Navigate,
-	useNavigate,
+	useRouter,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authClient } from "../lib/auth-client.ts";
 import { inDesktopShell } from "../lib/desktop-shell.ts";
+import { landInApp, preloadAppChunks } from "../lib/land.ts";
 
 export const Route = createFileRoute("/login")({
 	component: Login,
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/login")({
 type Mode = "sign-in" | "sign-up";
 
 function Login() {
-	const navigate = useNavigate();
+	const router = useRouter();
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const [mode, setMode] = useState<Mode>("sign-in");
 	const [name, setName] = useState("");
@@ -25,23 +26,26 @@ function Login() {
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 
-	const land = () => navigate({ to: "/", replace: true });
+	useEffect(() => {
+		preloadAppChunks(router, "idle");
+	}, [router]);
 
 	const run = async (
 		attempt: () => Promise<{ error?: { message?: string } | null }>,
 	) => {
 		setBusy(true);
 		setError(null);
+		preloadAppChunks(router, "now");
 		try {
 			const { error: failure } = await attempt();
 			if (failure) {
 				setError(failure.message ?? "that did not work");
+				setBusy(false);
 				return;
 			}
-			await land();
+			landInApp(window.location);
 		} catch (ex) {
 			setError(ex instanceof Error ? ex.message : String(ex));
-		} finally {
 			setBusy(false);
 		}
 	};
