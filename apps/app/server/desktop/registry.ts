@@ -20,7 +20,7 @@ interface Streaming {
 
 const OPEN_TIMEOUT_MS = 120_000;
 
-export function noDesktop(name: string): Error {
+function noDesktop(name: string): Error {
 	return new Error(
 		`no desktop connected for this user: open the lisptc desktop app, then run (load-mcp :name "${name}" ... :local t) again`,
 	);
