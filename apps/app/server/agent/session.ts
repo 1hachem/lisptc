@@ -1,12 +1,7 @@
-import { webEnv } from "@repo/env/web";
 import { createMiddleware } from "@tanstack/react-start";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { verifyToken as verify } from "../token.ts";
 import { edge } from "./edge.ts";
 import { HttpError } from "./error.ts";
-
-const jwks = createRemoteJWKSet(
-	new URL("/api/auth/convex/jwks", webEnv.CONVEX_SITE_URL),
-);
 
 export interface Session {
 	token: string;
@@ -19,13 +14,9 @@ function bearer(header: string | null): string {
 }
 
 export async function verifyToken(token: string): Promise<Session | null> {
-	const verified = await jwtVerify(token, jwks, {
-		issuer: webEnv.CONVEX_SITE_URL,
-		audience: "convex",
-	}).catch(() => null);
-	if (verified === null || typeof verified.payload.sub !== "string")
-		return null;
-	return { token, subject: verified.payload.sub };
+	const verdict = await verify(token);
+	if (!verdict.signed || verdict.subject === undefined) return null;
+	return { token, subject: verdict.subject };
 }
 
 const session = createMiddleware({ type: "request" }).server(

@@ -61,6 +61,8 @@ DATA TYPES
 - Keyword — :foo, self-evaluating.
 - String — text; no char type.
 - Number — exact bigint integer or inexact float.
+- Hash table — mutable map, keys compare by equal. Prints #<hash-table n>.
+- Vector — mutable indexed sequence. Prints #<vector 1 2 3>.
 - Function / closure / macro — from lambda, defun, defmacro.
 - Secret — tainted string wrapper, only when secrets extension loaded.
 
@@ -87,8 +89,8 @@ Evaluated specially, not as function calls. Complete list:
 
 if, when, unless, and, or,
 let, let*, letrec, while, dolist, dotimes, case, defun,
-defmacro are prelude macros, not special forms; use the same way. No setf, no
-block and return-from, no unwind-protect, no throw and catch pair.
+defmacro, setf, push, pop, incf, decf, block, return-from, catch and
+unwind-protect are prelude macros, not special forms; use the same way.
 
 Tail calls optimized: tail recursion and loop macros never overflow the stack.
 Iterate with tail-recursive helpers or loop macros.
@@ -116,9 +118,14 @@ Arithmetic built-ins:
 (truncate x [y]) toward zero, gives bigint.
 - (< x y) primitive less-than. Prelude adds (> x y) , (>= x y) , (<= x y) ,
 (/= x y) and (= x y) .
-- (numberp x) only numeric predicate. There are NO zerop, evenp,
-  abs, min, max, floor, ceiling, round, expt, sqrt or gcd — build them:
-  even is (= 0 (% n 2)) , abs is (if (< n 0) (- n) n) .
+- Predicates: (numberp x) · (zerop n) · (plusp n) · (minusp n) ·
+(evenp n) · (oddp n) , last two integers only.
+- (abs n) · (min n m...) · (max n m...) · (1+ n) · (1- n) , keep exactness.
+- (floor x [y]) · (ceiling x [y]) · (round x [y]) give bigint, like
+  truncate. round takes tie to even: (round 2.5) is 2.
+- (expt b p) exact for integer b and p >= 0, else float · (sqrt n) float ·
+(gcd n...) · (lcm n...) .
+- (parse-integer s) decimal string to bigint, error otherwise.
 
 PRIMITIVE BUILT-INS, DEFINED IN THE INTERPRETER CORE
 
@@ -136,9 +143,28 @@ Symbols
 - (gensym) fresh uninterned symbol · (make-symbol name) · (intern name) ·
 (symbol-name sym) .
 
+Hash tables & vectors
+- (make-hash-table) · (gethash key table [default]) · (puthash key value table)
+  · (remhash key table) · (clrhash table) · (hash-has-key key table) ·
+(hash-table-count table) · (hash-table-keys table) ·
+(hash-table-values table) · (hash-table-alist table) · (hash-table-p x) .
+  Keys by equal: "a", 2 and 2.0, (list 1 2) all work. Order is insertion.
+- (vector x...) · (make-vector n [init]) · (aref v i) · (aset v i x) ·
+(vector-push x v) appends, returns index · (vector-to-list v) ·
+(list-to-vector list) · (vectorp x) . Index past end errors.
+- (length x) , (elt seq i) and (subseq seq start [end]) take list, string or
+  vector.
+
 Strings
 - (char s i) one-char string at i, or nil · (concat s...) concatenate
   · (string-upcase s) · (string-downcase s) .
+- (string< a b) · (string> a b) order by code point · (string-equal a b)
+  ignores case · (string-pad-left s width [pad]) ·
+(string-pad-right s width [pad]) · (number-to-string n digits) fixed digits:
+(number-to-string 3.14159 2) is "3.14".
+- Character = one-char string: (char-code c) · (code-char n) ·
+(digit-char-p c) digit value or nil · (alpha-char-p c) ·
+(whitespace-char-p c) .
 - (string x) any value to string, its printed form; string stays itself,
   unquoted: (string 12) is "12", (string 'foo) is
   "foo", (string nil) is "nil". concat takes strings only, so number goes
@@ -199,7 +225,15 @@ List building / manipulation
 - (reduce f list [initial]) fold left: f takes accumulator and element.
   No initial: first element starts; empty list gives nil.
   (reduce + '(1 2 3)) is 6. List SECOND, initial last.
-- No mapc, remove, elt or sort. Build with filter, mapcar or dolist.
+- (sort list pred) new sorted list, stable, list unchanged:
+(sort '(3 1 2) <) gives (1 2 3) ; strings use string< .
+- (reverse list) · (copy-list list) · (nthcdr n list) ·
+(butlast list [n]) · (mapc f list) for effect, returns list.
+- (find item list) · (find-if f list) · (position item list) ·
+(position-if f list) · (count item list) · (count-if f list) ·
+(remove item list) · (remove-if f list) · (remove-duplicates list) . Item
+  matched by equal.
+- (some f list) first non-nil (f x) · (every f list) t if all pass.
 
 Predicates
 - (not x) and (null x) true if nil · (consp x) true if cons ·
@@ -270,6 +304,12 @@ Strings
   (format "The sum was ~a" n) writes a sentence around a value. Prints
   nothing: echo result.
 
+Places
+- (setf place value ...) store, return value. Place: variable, (car x) ,
+(cdr x) , (nth n xs) , (aref v i) , (gethash key table) , or
+(get-in record key...) , which rebinds record to updated copy.
+- (push x place) · (pop place) · (incf place [n]) · (decf place [n]) .
+
 Misc
 - (identity x) return x.
 - (think part...) echo reasoning as narration: parts print literally, ,x part
@@ -294,7 +334,7 @@ ERRORS & CONTROL FLOW
   expr
   (catch (e)
     handler...)) evaluates expr; on raise, e bound to raised value, handler
-  runs. ONLY error mechanism — no condition system, no unwind-protect.
+  runs. ONLY error mechanism — no condition system.
 
 (try
   (error "boom")
@@ -303,17 +343,30 @@ ERRORS & CONTROL FLOW
 
 - (break) and (return value) escape nearest while, dolist or dotimes. Outside
   a loop: error.
+- (block name body...) with (return-from name [value]) leaves named block
+  from any depth.
+- (catch tag body...) with (throw tag [value]) unwinds to catch with eq tag,
+  across calls. Not try's catch clause, which handles errors. throw or
+  return-from with nothing to reach: error, try catches it.
+- (unwind-protect form cleanup...) returns form's value, runs cleanup
+  however form exits: normal, error, throw, return-from, break.
 
 GOTCHAS
 
 - Only nil is false — 0, 0.0, "" all TRUE.
 - / gives float; truncate for exact integer.
 - Output shows 3 vs 3.0.
-- No mapc or math library — write them with reduce, filter, mapcar, dolist or
-  recursion.
 - read parses LISP, json-parse parses JSON. read on JSON returns junk, no error.
 - JSON numbers are floats: integer id prints 7.0; = and eql still equal 7.
-- No character type: one-character strings.
+- No character type: one-character strings; char-code and friends take them.
+- Check prelude before writing helper: sort, find, position, count, some,
+  every, remove, reverse, min, max, abs, floor, round exist.
+- Many lookups by key: hash table, not alist. gethash key comes FIRST,
+  table second; puthash is key value table.
+- sort returns new list, never sorts in place: keep result,
+  (setq xs (sort xs <)) .
+- try catches errors only. catch and throw are separate pair; block and
+  return-from for early exit from function body.
 - No comment syntax: remarks in prose around forms, never inside one.
 - No print, princ, terpri or view — echo does all.
 - Hash-and-angle-brackets printout — closure, live value reader cannot read
