@@ -2,7 +2,7 @@ const LATEST = "https://github.com/1hachem/lisptc/releases/latest/download";
 
 export type DesktopOs = "mac" | "windows" | "linux";
 
-export const DESKTOP_DOWNLOAD_IDS = [
+const DESKTOP_DOWNLOAD_IDS = [
 	"mac-arm64",
 	"mac-x64",
 	"windows",
