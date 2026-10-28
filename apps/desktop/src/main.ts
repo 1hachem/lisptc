@@ -6,7 +6,7 @@ import { DesktopBridge } from "./bridge.ts";
 
 const ERR_ABORTED = -3;
 const RETRY_MS = 4000;
-const LOADING_PAGE = path.join(__dirname, "..", "static", "loading.html");
+const LOADING_PAGE = path.join(__dirname, "loading.html");
 
 function originOf(url: string): string | undefined {
 	try {

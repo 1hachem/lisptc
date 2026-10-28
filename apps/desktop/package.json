@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm build:main && pnpm build:loading",
     "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/main.cjs",
-    "build:loading": "esbuild src/loading/loading.tsx --bundle --platform=browser --format=iife --minify --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\" --outfile=dist/loading.js",
+    "build:loading": "esbuild src/loading/loading.tsx --bundle --platform=browser --format=iife --minify --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\" --outfile=dist/loading.js && node -e \"require('node:fs').copyFileSync('src/loading/loading.html', 'dist/loading.html')\"",
     "dev": "pnpm build && electron .",
     "dist": "pnpm build && electron-builder",
     "typecheck": "tsc --noEmit"
@@ -37,8 +37,7 @@
     "appId": "io.lisptc.desktop",
     "productName": "lisptc",
     "files": [
-      "dist/**",
-      "static/**"
+      "dist/**"
     ],
     "protocols": [
       {
