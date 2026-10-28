@@ -136,6 +136,7 @@ Everything else:
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
+- `packages/ui-catalog` (`@repo/ui-catalog`) — the widgets a view may hold, which the UI extension builds against and the frontend draws against.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
