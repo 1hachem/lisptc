@@ -170,7 +170,9 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
-				desktop: desktop !== undefined,
+				...(desktop === undefined
+					? {}
+					: { desktop: () => desktop.bridge.connected(desktop.owner) }),
 				host:
 					desktop === undefined
 						? new DockerHost()

@@ -137,6 +137,10 @@ export class DesktopRegistry implements DesktopBridge {
 		connection.drop(new Error("desktop disconnected"));
 	}
 
+	connected(userId: Id<"users">): boolean {
+		return this.connections.has(userId);
+	}
+
 	async open(
 		userId: Id<"users">,
 		server: LocalServer,

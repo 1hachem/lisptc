@@ -127,6 +127,11 @@ export interface McpHost {
 	logs(name: string): string;
 }
 
+export interface UserMachine {
+	connected(): boolean;
+	servers(): readonly string[];
+}
+
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
 }

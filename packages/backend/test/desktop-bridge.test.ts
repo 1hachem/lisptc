@@ -41,6 +41,7 @@ function bridge(): DesktopBridge & {
 	return {
 		opened,
 		closed,
+		connected: () => true,
 		open: async (userId, server) => {
 			opened.push([userId, server]);
 			return async () => new Response("bridged");
@@ -97,6 +98,7 @@ describe("BridgedHost", () => {
 		const host = new BridgedHost(
 			owner,
 			{
+				connected: () => false,
 				open: async () => {
 					throw new Error("no desktop connected for this user");
 				},

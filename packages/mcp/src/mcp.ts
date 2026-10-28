@@ -46,6 +46,7 @@ import {
 	openPolicy,
 	type Tool,
 	type ToolkitRegistry,
+	type UserMachine,
 } from "./ports.ts";
 
 const CALL_TIMEOUT_MS = 30_000;
@@ -105,6 +106,33 @@ function iconOf(
 
 function manifestIcons(conf: ConnConfig): Icon[] | undefined {
 	return conf.icon === undefined ? undefined : [{ src: conf.icon }];
+}
+
+export function machineNotice(
+	machine: UserMachine,
+	connected: boolean,
+): string {
+	const names = machine.servers().join(", ");
+	return connected
+		? `desktop app connected: local servers now loadable: ${names}`
+		: `desktop app disconnected: local servers gone: ${names}`;
+}
+
+function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
+	let known = false;
+	hooks.beginStep.use(function* (ctx, next) {
+		const now = machine.connected();
+		if (now !== known && machine.servers().length > 0)
+			ctx.emit(machineNotice(machine, now));
+		known = now;
+		yield* next(ctx);
+	});
+}
+
+function whereRuns(conf: ConnConfig): LispKeyword[] {
+	return "local" in conf && conf.local === true
+		? [newLispKeyword("local")]
+		: [];
 }
 
 function reportActivity(hooks: SessionHooks): void {
@@ -297,6 +325,7 @@ export interface McpExtensionHost {
 	prompt: PromptSource;
 	clock: Clock;
 	policy?: McpPolicy;
+	machine?: UserMachine;
 }
 
 function extractAuthCode(raw: string): string {
@@ -737,6 +766,7 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 		session(hooks: SessionHooks): void {
 			answerAuthorization(hooks);
 			reportActivity(hooks);
+			if (host.machine !== undefined) announceMachine(hooks, host.machine);
 		},
 	});
 }
@@ -1022,7 +1052,7 @@ export function registerMcp(
 		"list-toolkit",
 		0,
 		"(list-toolkit)",
-		'Return the ready-to-use MCP servers from the toolkit, each as (name description keywords :loaded|:unloaded). Load one by bare name with (load-mcp name); search the same keywords with (search-mcps "query").',
+		'Return the ready-to-use MCP servers from the toolkit, each as (name description keywords :loaded|:unloaded), ending :local when it runs on the user machine. Load one by bare name with (load-mcp name); search the same keywords with (search-mcps "query").',
 		z.tuple([]),
 		() => {
 			const rows = [...shown().entries()].map(([name, conf]) =>
@@ -1031,6 +1061,7 @@ export function registerMcp(
 					conf.description ?? "",
 					arrayToList(conf.keywords ?? []),
 					statusOf(servers, name),
+					...whereRuns(conf),
 				]),
 			);
 			return arrayToList(rows);
@@ -1041,7 +1072,7 @@ export function registerMcp(
 		"search-mcps",
 		1,
 		'(search-mcps "query")',
-		"Search the toolkit's MCP servers by name, keywords and description, best match first; each row is (name score description :loaded|:unloaded). Load a match by bare name with (load-mcp name); (list-toolkit) shows every server's keywords.",
+		"Search the toolkit's MCP servers by name, keywords and description, best match first; each row is (name score description :loaded|:unloaded), ending :local when it runs on the user machine. Load a match by bare name with (load-mcp name); (list-toolkit) shows every server's keywords.",
 		z.tuple([zName]),
 		([rawQuery]) => {
 			const scored = searchDocuments(
@@ -1064,6 +1095,7 @@ export function registerMcp(
 						BigInt(Math.round(score)),
 						firstLine(conf.description),
 						statusOf(servers, conf.name),
+						...whereRuns(conf),
 					]),
 				),
 			);

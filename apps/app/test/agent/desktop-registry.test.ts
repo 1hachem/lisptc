@@ -106,6 +106,16 @@ describe("the desktop registry", () => {
 		await expect(opening).rejects.toThrow("desktop disconnected");
 	});
 
+	it("knows whether a user's desktop is connected right now", () => {
+		const registry = new DesktopRegistry();
+		const peer: DesktopPeer = { send() {}, close() {} };
+		expect(registry.connected(user)).toBe(false);
+		registry.attach(user, peer);
+		expect(registry.connected(user)).toBe(true);
+		registry.detach(peer);
+		expect(registry.connected(user)).toBe(false);
+	});
+
 	it("keeps the newest connection and closes the one it replaces", async () => {
 		const registry = new DesktopRegistry();
 		const first = fakeDesktop(registry);

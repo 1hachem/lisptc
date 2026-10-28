@@ -61,16 +61,25 @@ export function localToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
 	return fileToolkit(LOCAL_TOOLKIT_URL, env);
 }
 
-export function desktopToolkit(
+export function bridgedEntries(
 	bundled: ToolkitRegistry,
 	local: ToolkitRegistry,
-): ToolkitRegistry {
+): ConnConfig[] {
 	const taken = new Set(bundled.all().map((conf) => conf.name));
-	const bridged: ConnConfig[] = local
+	return local
 		.all()
 		.filter((conf) => !taken.has(conf.name))
 		.flatMap((conf) =>
 			"url" in conf || "image" in conf ? [] : [{ ...conf, local: true }],
 		);
-	return { all: () => [...bundled.all(), ...bridged] };
+}
+
+export function desktopToolkit(
+	bundled: ToolkitRegistry,
+	bridged: readonly ConnConfig[],
+	connected: () => boolean,
+): ToolkitRegistry {
+	return {
+		all: () => (connected() ? [...bundled.all(), ...bridged] : bundled.all()),
+	};
 }

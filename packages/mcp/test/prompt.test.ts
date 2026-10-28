@@ -49,6 +49,12 @@ describe("the prompt the extension carries", () => {
 		);
 		expect(PROMPT).toMatch(/tell user approve dialog on\s+their machine/);
 		expect(PROMPT).toMatch(/desktop app not open or user declined/);
+		expect(PROMPT).toMatch(
+			/Listed only while desktop app connected\. Row ends :local/,
+		);
+		expect(PROMPT).toMatch(
+			/"desktop app connected: local servers now\s+loadable: …"/,
+		);
 	});
 
 	it("teaches the <server>/<tool> keyword calling convention", () => {

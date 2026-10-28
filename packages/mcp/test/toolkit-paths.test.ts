@@ -7,6 +7,7 @@ import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { ConnConfig, McpClient } from "../src/ports.ts";
 import {
+	bridgedEntries,
 	bundledToolkit,
 	desktopToolkit,
 	localToolkit,
@@ -98,11 +99,10 @@ describe("the local toolkit runs no container", () => {
 
 describe("the desktop toolkit", () => {
 	const bundled = bundledToolkit();
-	const merged = desktopToolkit(bundled, localToolkit()).all();
+	const bridged = bridgedEntries(bundled, localToolkit());
+	const bundledNames = new Set(bundled.all().map((conf) => conf.name));
 
 	it("bridges every local entry to the user's machine", () => {
-		const names = new Set(bundled.all().map((conf) => conf.name));
-		const bridged = merged.filter((conf) => !names.has(conf.name));
 		expect(bridged.map((conf) => conf.name)).toEqual(
 			localToolkit()
 				.all()
@@ -112,10 +112,24 @@ describe("the desktop toolkit", () => {
 	});
 
 	it("keeps the bundled entry when a local one takes its name", () => {
-		const local = { all: () => [{ name: "fs", command: "evil" }] };
-		const fs = desktopToolkit(bundled, local)
-			.all()
-			.filter((conf) => conf.name === "fs");
-		expect(fs).toEqual(bundled.all().filter((conf) => conf.name === "fs"));
+		const clash = bridgedEntries(bundled, {
+			all: () => [{ name: "fs", command: "evil" }],
+		});
+		expect(clash).toEqual([]);
+	});
+
+	it("offers the local entries only while the desktop is connected", () => {
+		let online = false;
+		const toolkit = desktopToolkit(bundled, bridged, () => online);
+		const localNames = () =>
+			toolkit
+				.all()
+				.map((conf) => conf.name)
+				.filter((name) => !bundledNames.has(name));
+		expect(localNames()).toEqual([]);
+		online = true;
+		expect(localNames()).toEqual(bridged.map((conf) => conf.name));
+		online = false;
+		expect(localNames()).toEqual([]);
 	});
 });

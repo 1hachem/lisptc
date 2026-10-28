@@ -8,13 +8,18 @@ import { completeAuthorization } from "./mcp-oauth.ts";
 import { MemoryOAuthStore } from "./oauth-host.ts";
 import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
 import { miniSearchEngine } from "./search.ts";
-import { bundledToolkit, desktopToolkit, localToolkit } from "./toolkit.ts";
+import {
+	bridgedEntries,
+	bundledToolkit,
+	desktopToolkit,
+	localToolkit,
+} from "./toolkit.ts";
 
 export interface McpHostOptions {
 	scope?: string;
 	oauth: OAuthStore;
 	host?: McpHost;
-	desktop?: boolean;
+	desktop?: () => boolean;
 }
 
 export function localMcpClient(options: McpHostOptions): McpClient {
@@ -42,12 +47,23 @@ export function finishAuthorization(
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
+function desktopParts(
+	connected: () => boolean,
+): Pick<McpExtensionHost, "toolkit" | "machine"> {
+	const bundled = bundledToolkit();
+	const bridged = bridgedEntries(bundled, localToolkit());
+	return {
+		toolkit: desktopToolkit(bundled, bridged, connected),
+		machine: { connected, servers: () => bridged.map((conf) => conf.name) },
+	};
+}
+
 export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 	return {
 		client: localMcpClient(options),
-		toolkit: options.desktop
-			? desktopToolkit(bundledToolkit(), localToolkit())
-			: bundledToolkit(),
+		...(options.desktop === undefined
+			? { toolkit: bundledToolkit() }
+			: desktopParts(options.desktop)),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
 		clock: systemClock,
