@@ -3,12 +3,12 @@ const LATEST_RELEASE =
 
 const KEEP_FOR_MS = 10 * 60_000;
 
-export interface DesktopRelease {
+interface DesktopRelease {
 	readonly tag: string;
 	readonly publishedAt: string;
 }
 
-interface ReleasePorts {
+export interface ReleasePorts {
 	fetch(url: string): Promise<Response>;
 	now(): number;
 }
