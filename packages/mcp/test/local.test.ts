@@ -203,6 +203,16 @@ describe("load-mcp flags a toolkit entry declares", () => {
 		interp.dispose();
 	});
 
+	it("takes a trailing flag without a value as set", async () => {
+		const host = recordingHost();
+		const interp = interpWith(host);
+		await settle(interp, '(load-mcp "pw" :local t :headless)');
+		expect(host.ensured[0]).toMatchObject({
+			args: ["pw-mcp", "--headless"],
+		});
+		interp.dispose();
+	});
+
 	it("leaves the arguments alone when the flag is nil or absent", async () => {
 		const host = recordingHost();
 		const interp = interpWith(host);

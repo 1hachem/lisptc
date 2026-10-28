@@ -503,11 +503,8 @@ type Plist = ReturnType<typeof parsePlist>;
 
 function loadOptions(items: unknown[]): Plist {
 	const last = items.at(-1);
-	const bareLocal =
-		items.length % 2 === 1 &&
-		last instanceof LispKeyword &&
-		last.name === "local";
-	return parsePlist(arrayToList(bareLocal ? [...items, true] : items));
+	const bareFlag = items.length % 2 === 1 && last instanceof LispKeyword;
+	return parsePlist(arrayToList(bareFlag ? [...items, true] : items));
 }
 
 function isLocal(opts: Plist): boolean {
