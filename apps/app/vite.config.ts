@@ -30,6 +30,7 @@ export default defineConfig({
 		nitro({
 			serverDir: "server",
 			features: { websocket: true },
+			compressPublicAssets: { gzip: true, brotli: true },
 			hooks: {
 				compiled: (built) => copyRuntimeAssets(built.options.output.serverDir),
 			},
