@@ -207,6 +207,24 @@ function ordered(
 	return [...named, ...(known ?? []).filter((name) => !named.includes(name))];
 }
 
+const STATUS_BAR_SLOTS = [
+	"panes",
+	"gap-1",
+	"gap-2",
+	"gap-3",
+	"gap-4",
+	"desktop",
+	"clock",
+];
+
+function statusBarSlots(stored: readonly string[] | undefined): string[] {
+	const kept = (stored ?? []).filter((name) => STATUS_BAR_SLOTS.includes(name));
+	return [
+		...new Set(kept),
+		...STATUS_BAR_SLOTS.filter((name) => !kept.includes(name)),
+	];
+}
+
 export function registerPreferences(
 	interp: Interp,
 	host: PreferencesHost,
@@ -268,14 +286,14 @@ export function registerPreferences(
 					"status-bar",
 					"status bar item",
 					options.get("status-bar"),
-					current.statusBar,
+					statusBarSlots(current.statusBar),
 				);
 			if (options.has("status-bar-hidden"))
 				change.statusBarHidden = names(
 					"status-bar-hidden",
 					"status bar item",
 					options.get("status-bar-hidden"),
-					current.statusBar,
+					statusBarSlots(current.statusBar),
 				);
 			if (options.has("motion"))
 				change.motion = chosen("motion", options.get("motion"), host.motions);

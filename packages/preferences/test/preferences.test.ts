@@ -16,6 +16,23 @@ const HELD = {
 	traceLink: true,
 };
 
+describe("a stored bottom bar from before seven slots", () => {
+	it("still accepts the desktop item and every gap", async () => {
+		const { ev } = await world({
+			...HELD,
+			statusBar: ["panes", "gap", "clock"],
+		});
+		await ev('(preferences/set :status-bar \'("desktop" "gap-4" "panes"))');
+		expect(await ev("(preferences)")).toContain(
+			':status-bar ("desktop" "gap-4" "panes" "clock" "gap-1" "gap-2" "gap-3")',
+		);
+		await ev('(preferences/set :status-bar-hidden \'("desktop"))');
+		expect(await ev("(preferences)")).toContain(
+			':status-bar-hidden ("desktop")',
+		);
+	});
+});
+
 describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
