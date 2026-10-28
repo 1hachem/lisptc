@@ -14,6 +14,7 @@ import { Landing } from "../components/landing.tsx";
 import { useIdentify } from "../lib/analytics.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
+import { inDesktopShell } from "../lib/desktop-shell.ts";
 import { LeaveProvider, useLeaveState } from "../lib/leave.tsx";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
 import { UIProvider } from "../lib/ui.tsx";
@@ -58,7 +59,11 @@ function AuthedLayout() {
 
 	if (isLoading) return null;
 	if (!isAuthenticated)
-		return isLanding(pathname) ? <Landing /> : <Navigate to="/login" replace />;
+		return isLanding(pathname) && !inDesktopShell() ? (
+			<Landing />
+		) : (
+			<Navigate to="/login" replace />
+		);
 	if (departure.leaving) return null;
 
 	return (
