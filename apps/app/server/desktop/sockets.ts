@@ -19,10 +19,7 @@ export interface Presence {
 }
 
 export interface SocketPorts {
-	readonly registry: Pick<
-		DesktopRegistry,
-		"attach" | "attached" | "receive" | "detach"
-	>;
+	readonly registry: Pick<DesktopRegistry, "attach" | "receive" | "detach">;
 	authenticate(token: string): Promise<Id<"users"> | null>;
 	announce(userId: Id<"users">): Promise<Presence>;
 	seen(presence: Presence): Promise<void>;
@@ -56,7 +53,7 @@ export class DesktopSockets {
 			this.refresh(entry);
 			return;
 		}
-		if (this.ports.registry.attached(entry.peer)) {
+		if (entry.presence !== undefined) {
 			this.ports.registry.receive(entry.peer, message);
 			return;
 		}

@@ -117,10 +117,6 @@ export class DesktopRegistry implements DesktopBridge {
 		this.owners.set(peer, userId);
 	}
 
-	attached(peer: DesktopPeer): boolean {
-		return this.owners.has(peer);
-	}
-
 	receive(peer: DesktopPeer, message: DesktopMessage): void {
 		const userId = this.owners.get(peer);
 		if (userId === undefined) return;
