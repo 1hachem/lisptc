@@ -5,7 +5,7 @@ of them are action ids, and whether it takes children. The UI extension builds
 views against it and the frontend draws them against it, so the two agree
 without naming each other.
 
-Turbo tag: `foundation`.
+Turbo tag: `static`.
 
 ## Shape
 
@@ -13,8 +13,9 @@ Turbo tag: `foundation`.
 
 ## Rules
 
-This package carries zod and no other dependency, so the interpreter, an
-extension and the browser can all load it. It reaches nothing at runtime.
+This package is data. **A `static` package depends on zod or a `foundation`
+package at most**, and any package or app may depend on it. It reaches nothing
+at runtime, so it loads in the browser.
 
 A widget is added here first. The extension's form and the frontend's renderer
 follow it, and the frontend's typecheck fails until a renderer exists.
