@@ -1,4 +1,6 @@
 import type { Id } from "@repo/backend/dataModel";
+import { BridgedHost } from "@repo/backend/desktop-bridge";
+import type { McpHost } from "@repo/mcp-extension/ports";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../server/desktop/protocol.ts";
 import {
@@ -126,5 +128,43 @@ describe("the desktop registry", () => {
 		await registry.open(user, server);
 		expect(first.sent).toEqual([]);
 		expect(second.sent.map((m) => m.type)).toEqual(["open"]);
+	});
+});
+
+describe("the bridge is the account's, not the window's", () => {
+	const cluster: McpHost = {
+		ensure: async () => undefined,
+		stop: async () => {},
+		stopAll: async () => {},
+		status: () => "unknown",
+		logs: () => "",
+	};
+
+	it("reaches the account's desktop for a chat driven from any client", async () => {
+		const registry = new DesktopRegistry();
+		const desktop = fakeDesktop(registry);
+		registry.attach(user, desktop);
+		const fromBrowser = new BridgedHost(user, registry, cluster);
+		const fromWindow = new BridgedHost(user, registry, cluster);
+		for (const host of [fromBrowser, fromWindow]) {
+			const handle = await host.ensure({ ...server, local: true });
+			const response = await handle?.fetch?.("http://desktop.bridge/fs/mcp", {
+				method: "POST",
+				body: "ping",
+			});
+			expect(await response?.text()).toBe("data: ping");
+		}
+		expect(desktop.sent.filter((m) => m.type === "open")).toHaveLength(2);
+	});
+
+	it("never reaches another account's desktop", async () => {
+		const registry = new DesktopRegistry();
+		registry.attach("user-2" as Id<"users">, fakeDesktop(registry));
+		await expect(
+			new BridgedHost(user, registry, cluster).ensure({
+				...server,
+				local: true,
+			}),
+		).rejects.toThrow("no desktop connected for this user");
 	});
 });
