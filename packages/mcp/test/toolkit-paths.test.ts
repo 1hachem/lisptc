@@ -6,7 +6,11 @@ import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { ConnConfig, McpClient } from "../src/ports.ts";
-import { bundledToolkit } from "../src/toolkit.ts";
+import {
+	bundledToolkit,
+	desktopToolkit,
+	localToolkit,
+} from "../src/toolkit.ts";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
 	const seen: ConnConfig[] = [];
@@ -79,5 +83,39 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 				],
 			},
 		);
+	});
+});
+
+describe("the local toolkit runs no container", () => {
+	for (const conf of localToolkit().all()) {
+		it(`runs ${conf.name} as a command on the machine`, () => {
+			expect("image" in conf).toBe(false);
+			expect("url" in conf).toBe(false);
+			expect("command" in conf).toBe(true);
+		});
+	}
+});
+
+describe("the desktop toolkit", () => {
+	const bundled = bundledToolkit();
+	const merged = desktopToolkit(bundled, localToolkit()).all();
+
+	it("bridges every local entry to the user's machine", () => {
+		const names = new Set(bundled.all().map((conf) => conf.name));
+		const bridged = merged.filter((conf) => !names.has(conf.name));
+		expect(bridged.map((conf) => conf.name)).toEqual(
+			localToolkit()
+				.all()
+				.map((conf) => conf.name),
+		);
+		for (const conf of bridged) expect(conf).toMatchObject({ local: true });
+	});
+
+	it("keeps the bundled entry when a local one takes its name", () => {
+		const local = { all: () => [{ name: "fs", command: "evil" }] };
+		const fs = desktopToolkit(bundled, local)
+			.all()
+			.filter((conf) => conf.name === "fs");
+		expect(fs).toEqual(bundled.all().filter((conf) => conf.name === "fs"));
 	});
 });

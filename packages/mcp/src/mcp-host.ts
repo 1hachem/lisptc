@@ -8,12 +8,13 @@ import { completeAuthorization } from "./mcp-oauth.ts";
 import { MemoryOAuthStore } from "./oauth-host.ts";
 import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
 import { miniSearchEngine } from "./search.ts";
-import { bundledToolkit } from "./toolkit.ts";
+import { bundledToolkit, desktopToolkit, localToolkit } from "./toolkit.ts";
 
 export interface McpHostOptions {
 	scope?: string;
 	oauth: OAuthStore;
 	host?: McpHost;
+	desktop?: boolean;
 }
 
 export function localMcpClient(options: McpHostOptions): McpClient {
@@ -44,7 +45,9 @@ export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 	return {
 		client: localMcpClient(options),
-		toolkit: bundledToolkit(),
+		toolkit: options.desktop
+			? desktopToolkit(bundledToolkit(), localToolkit())
+			: bundledToolkit(),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
 		clock: systemClock,

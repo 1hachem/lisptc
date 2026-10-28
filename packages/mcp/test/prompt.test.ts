@@ -43,6 +43,14 @@ describe("the prompt the extension carries", () => {
 		);
 	});
 
+	it("teaches the predefined local servers and the consent dialog", () => {
+		expect(PROMPT).toMatch(
+			/\(load-mcp "local-files"\) , \(load-mcp "local-git"\)/,
+		);
+		expect(PROMPT).toMatch(/tell user approve dialog on\s+their machine/);
+		expect(PROMPT).toMatch(/desktop app not open or user declined/);
+	});
+
 	it("teaches the <server>/<tool> keyword calling convention", () => {
 		expect(PROMPT).toMatch(
 			/global named <server>\/<tool>, called with keyword args/,

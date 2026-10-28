@@ -170,6 +170,7 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
+				desktop: desktop !== undefined,
 				host:
 					desktop === undefined
 						? new DockerHost()
