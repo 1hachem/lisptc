@@ -16,7 +16,6 @@ export interface LocalServer {
 }
 
 export interface DesktopBridge {
-	connected(userId: Id<"users">): boolean;
 	open(userId: Id<"users">, server: LocalServer): Promise<HandleFetch>;
 	close(userId: Id<"users">, name: string): Promise<void>;
 }

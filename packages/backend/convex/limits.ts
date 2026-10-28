@@ -52,6 +52,6 @@ export const MAX_SPLITS = 3;
 
 export const MAX_SPAWN_DEPTH = 1;
 
-export const DESKTOP_HEARTBEAT_MS = 30_000;
+export const DESKTOP_SEEN_REFRESH_MS = 30_000;
 
 export const DESKTOP_STALE_MS = 90_000;

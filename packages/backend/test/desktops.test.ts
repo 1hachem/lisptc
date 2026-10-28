@@ -67,7 +67,48 @@ describe("a user's desktop presence", () => {
 		});
 	});
 
-	it("forgets a desktop whose server stopped beating, and keeps a beating one", async () => {
+	it("keeps one row per account however often its desktop reconnects", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		for (const connection of ["c1", "c2", "c3"]) {
+			await t.mutation(internal.desktops.attach, {
+				userId: alice.user,
+				connection,
+				instance: "i1",
+			});
+			await t.mutation(internal.desktops.detach, {
+				userId: alice.user,
+				connection,
+			});
+		}
+		await t.mutation(internal.desktops.attach, {
+			userId: alice.user,
+			connection: "c4",
+			instance: "i1",
+		});
+		const rows = await t.run((ctx) => ctx.db.query("desktops").collect());
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ connection: "c4", connected: true });
+	});
+
+	it("answers the workspace owner's presence to a thread acting in that workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		expect(await alice.as.query(api.desktops.owner, { workspaceId })).toEqual({
+			connected: false,
+		});
+		await t.mutation(internal.desktops.attach, {
+			userId: alice.user,
+			connection: "c1",
+			instance: "i1",
+		});
+		expect(await alice.as.query(api.desktops.owner, { workspaceId })).toEqual({
+			connected: true,
+		});
+	});
+
+	it("marks a desktop gone when its connection stopped pinging, and keeps a pinging one", async () => {
 		vi.useFakeTimers();
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -83,7 +124,10 @@ describe("a user's desktop presence", () => {
 			instance: "alive",
 		});
 		vi.advanceTimersByTime(DESKTOP_STALE_MS + 1);
-		await t.mutation(internal.desktops.heartbeat, { instance: "alive" });
+		await t.mutation(internal.desktops.seen, {
+			userId: bob.user,
+			connection: "b",
+		});
 		await t.mutation(internal.desktops.sweep, {});
 		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
 			connected: false,

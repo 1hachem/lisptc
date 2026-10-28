@@ -1,21 +1,46 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "./_generated/server.js";
-import { requireUser } from "./lib/auth.js";
+import type { Id } from "./_generated/dataModel.js";
+import {
+	internalMutation,
+	type MutationCtx,
+	type QueryCtx,
+	query,
+} from "./_generated/server.js";
+import { requireUser, requireWorkspace } from "./lib/auth.js";
 import { DESKTOP_STALE_MS } from "./limits.js";
 
 const SWEEP_BATCH = 128;
 
+const presence = v.object({ connected: v.boolean() });
+
+function rowOf(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
+	return ctx.db
+		.query("desktops")
+		.withIndex("by_user", (q) => q.eq("userId", userId))
+		.unique();
+}
+
+async function connectedOf(
+	ctx: QueryCtx,
+	userId: Id<"users">,
+): Promise<{ connected: boolean }> {
+	return { connected: (await rowOf(ctx, userId))?.connected === true };
+}
+
 export const mine = query({
 	args: {},
-	returns: v.object({ connected: v.boolean() }),
-	handler: async (ctx) => {
-		const user = await requireUser(ctx);
-		const row = await ctx.db
-			.query("desktops")
-			.withIndex("by_user", (q) => q.eq("userId", user._id))
-			.first();
-		return { connected: row !== null };
-	},
+	returns: presence,
+	handler: async (ctx) => connectedOf(ctx, (await requireUser(ctx))._id),
+});
+
+export const owner = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: presence,
+	handler: async (ctx, { workspaceId }) =>
+		connectedOf(
+			ctx,
+			(await requireWorkspace(ctx, workspaceId)).workspace.ownerId,
+		),
 });
 
 export const attach = internalMutation({
@@ -26,19 +51,17 @@ export const attach = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { userId, connection, instance }) => {
-		const previous = await ctx.db
-			.query("desktops")
-			.withIndex("by_user", (q) => q.eq("userId", userId))
-			.collect();
-		for (const row of previous) await ctx.db.delete(row._id);
 		const now = Date.now();
-		await ctx.db.insert("desktops", {
-			userId,
+		const fields = {
 			connection,
 			instance,
+			connected: true,
 			connectedAt: now,
 			seenAt: now,
-		});
+		};
+		const row = await rowOf(ctx, userId);
+		if (row === null) await ctx.db.insert("desktops", { userId, ...fields });
+		else await ctx.db.patch(row._id, fields);
 		return null;
 	},
 });
@@ -47,26 +70,20 @@ export const detach = internalMutation({
 	args: { userId: v.id("users"), connection: v.string() },
 	returns: v.null(),
 	handler: async (ctx, { userId, connection }) => {
-		const rows = await ctx.db
-			.query("desktops")
-			.withIndex("by_user", (q) => q.eq("userId", userId))
-			.collect();
-		for (const row of rows)
-			if (row.connection === connection) await ctx.db.delete(row._id);
+		const row = await rowOf(ctx, userId);
+		if (row?.connection === connection && row.connected === true)
+			await ctx.db.patch(row._id, { connected: false });
 		return null;
 	},
 });
 
-export const heartbeat = internalMutation({
-	args: { instance: v.string() },
+export const seen = internalMutation({
+	args: { userId: v.id("users"), connection: v.string() },
 	returns: v.null(),
-	handler: async (ctx, { instance }) => {
-		const rows = await ctx.db
-			.query("desktops")
-			.withIndex("by_instance", (q) => q.eq("instance", instance))
-			.collect();
-		const now = Date.now();
-		for (const row of rows) await ctx.db.patch(row._id, { seenAt: now });
+	handler: async (ctx, { userId, connection }) => {
+		const row = await rowOf(ctx, userId);
+		if (row?.connection === connection && row.connected === true)
+			await ctx.db.patch(row._id, { seenAt: Date.now() });
 		return null;
 	},
 });
@@ -78,10 +95,10 @@ export const sweep = internalMutation({
 		const stale = await ctx.db
 			.query("desktops")
 			.withIndex("by_seen", (q) =>
-				q.lt("seenAt", Date.now() - DESKTOP_STALE_MS),
+				q.eq("connected", true).lt("seenAt", Date.now() - DESKTOP_STALE_MS),
 			)
 			.take(SWEEP_BATCH);
-		for (const row of stale) await ctx.db.delete(row._id);
+		for (const row of stale) await ctx.db.patch(row._id, { connected: false });
 		return null;
 	},
 });

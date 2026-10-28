@@ -136,12 +136,12 @@ export default defineSchema({
 		userId: v.id("users"),
 		connection: v.string(),
 		instance: v.string(),
+		connected: v.optional(v.boolean()),
 		connectedAt: v.number(),
 		seenAt: v.number(),
 	})
 		.index("by_user", ["userId"])
-		.index("by_instance", ["instance"])
-		.index("by_seen", ["seenAt"]),
+		.index("by_seen", ["connected", "seenAt"]),
 
 	preferences: defineTable({
 		userId: v.id("users"),
