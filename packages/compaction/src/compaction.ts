@@ -301,10 +301,10 @@ export class Compactor {
 	error(text: string): Bounded {
 		const spans = wordSpans(text);
 		const s = sliceWords(text, spans, 0, this.limit, this.charBudget);
-		if (s.below === 0 && !s.cut) return { model: text, user: "" };
+		if (s.below === 0 && !s.cut) return { model: text, user: text };
 		return {
 			model: `${s.text}\n... ${position(s)} (error message truncated)\n`,
-			user: "",
+			user: text,
 		};
 	}
 
