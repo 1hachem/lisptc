@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useEffect } from "react";
+import { AppLoading } from "../components/app-loading.tsx";
 import { AppShell } from "../components/app-shell.tsx";
 import { Landing } from "../components/landing.tsx";
 import { useIdentify } from "../lib/analytics.tsx";
@@ -69,7 +70,7 @@ function AuthedLayout() {
 	const departure = useLeaveState();
 	const { pathname } = useLocation();
 
-	if (isLoading) return null;
+	if (isLoading) return <AppLoading />;
 	if (!isAuthenticated)
 		return signedOutPage(pathname, inDesktopShell()) === "landing" ? (
 			<Landing />
