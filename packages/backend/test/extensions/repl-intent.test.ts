@@ -23,8 +23,8 @@ describe("a step that says its intent", () => {
 				{ label: "show", done: false },
 			],
 		});
-		expect(readAnnotation(out.annotations.output, viewKey)).toMatchObject({
-			tag: "text",
+		expect(readAnnotation(out.annotations.output, viewKey)).toEqual({
+			viewId: "v1",
 		});
 		expect(out.effects).not.toContainEqual({ type: "end" });
 	});

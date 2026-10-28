@@ -20,6 +20,7 @@ import {
 	viewTab,
 } from "../src/ui.ts";
 import { uiHostFor } from "../src/ui-host.ts";
+import { MemoryViewStore } from "../src/view-store.ts";
 import { WIDGET_FORMS } from "../src/widgets.ts";
 
 function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
@@ -53,7 +54,7 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 function collector(interp: Interp) {
 	let view: UiNode | undefined;
 	let messages: string[] = [];
-	rendered.on(interp.channels, (node) => {
+	rendered.on(interp.channels, ({ node }) => {
 		view = node;
 	});
 	sent.on(interp.channels, (text) => {
@@ -799,5 +800,47 @@ describe("the widget form table", () => {
 		expect(prompt).not.toContain("{{widgets}}");
 		for (const tag of TAGS)
 			expect(prompt).toContain(WIDGET_FORMS[tag].signature);
+	});
+});
+
+describe("the view store", () => {
+	function stored() {
+		const surface = new UiSurface();
+		const views = new MemoryViewStore();
+		const host = uiHostFor({ panel: panelOf([]).panel, views });
+		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
+		runSync(interp, prelude);
+		return { surface, views, interp };
+	}
+
+	it("writes every render of a step into one view", () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/text "a")) (ui/render (ui/text "b"))');
+		expect([...views.views.keys()]).toEqual(["v1"]);
+		expect(views.views.get("v1")).toMatchObject({ props: { text: "b" } });
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/text "c"))');
+		expect([...views.views.keys()]).toEqual(["v1", "v2"]);
+	});
+
+	it("renders a click back into the view the control was in", async () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			`(setq n 0)
+			(defun panel () (ui/stack (ui/text (string n))
+				(ui/button "+1" (lambda () (setq n (+ n 1)) (ui/render (panel))))))
+			(ui/render (panel))`,
+		);
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/text "other"))');
+		surface.enter("a1");
+		await surface.invoke("a1", {});
+		expect(views.views.get("v1")).toMatchObject({
+			children: [{ props: { text: "1" } }, { tag: "button" }],
+		});
+		expect(views.views.get("v2")).toMatchObject({ props: { text: "other" } });
 	});
 });

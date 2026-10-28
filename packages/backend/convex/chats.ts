@@ -391,6 +391,18 @@ export const fork = mutation({
 				layerId: message.layerId,
 			});
 		}
+		const views = await ctx.db
+			.query("views")
+			.withIndex("by_chat_view", (q) => q.eq("chatId", chatId))
+			.collect();
+		for (const view of views)
+			await ctx.db.insert("views", {
+				workspaceId: view.workspaceId,
+				chatId: forked,
+				viewId: view.viewId,
+				node: view.node,
+				rev: view.rev,
+			});
 		return forked;
 	},
 });

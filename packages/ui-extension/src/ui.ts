@@ -1,8 +1,4 @@
-import {
-	annotate,
-	type ViewNode,
-	viewKey,
-} from "@repo/interpreter/annotations";
+import { annotate, viewKey } from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -73,7 +69,12 @@ export function joinMessages(parts: readonly string[]): string | undefined {
 	return `${text.slice(0, MAX_MESSAGE_CHARS)}\n… (message truncated)`;
 }
 
-export const rendered = topic<UiNode>("ui");
+export interface RenderedView {
+	viewId: string;
+	node: UiNode;
+}
+
+export const rendered = topic<RenderedView>("ui");
 
 export const sent = topic<string>("ui-send");
 
@@ -92,11 +93,24 @@ const seqCodec: StateCodec<number> = {
 	fromLisp: (x) => Number(x),
 };
 
+const ownerCodec: StateCodec<[string, string][]> = {
+	toLisp: (owners) =>
+		arrayToList(owners.map(([action, view]) => new Cell(action, view))),
+	fromLisp: (list) =>
+		listToArray(list as List).map((pair) => [
+			(pair as Cell).car as string,
+			(pair as Cell).cdr as string,
+		]),
+};
+
 const UI_TAG = "ui/element";
 
 export class UiSurface {
 	private handlers: State<[string, unknown][]> | undefined;
 	private seq: State<number> | undefined;
+	private views: State<number> | undefined;
+	private owners: State<[string, string][]> | undefined;
+	private current: string | undefined;
 	private interp: Interp | undefined;
 	private channels: Channels | undefined;
 
@@ -115,6 +129,46 @@ export class UiSurface {
 			0,
 			"The number of the last action id handed out.",
 		);
+		this.views = interp.state(
+			"ui/views",
+			seqCodec,
+			0,
+			"The number of the last view id handed out.",
+		);
+		this.owners = interp.state(
+			"ui/owners",
+			ownerCodec,
+			[],
+			"The view id each action id was rendered in, so a click renders back into the view it came from. The oldest are dropped past 500.",
+		);
+	}
+
+	beginStep(): void {
+		this.current = undefined;
+	}
+
+	enter(action: string): void {
+		this.current = this.owners?.get().find(([at]) => at === action)?.[1];
+	}
+
+	private viewId(node: UiNode): string {
+		let viewId = this.current;
+		if (viewId === undefined) {
+			const n = (this.views?.get() ?? 0) + 1;
+			this.views?.set(n);
+			viewId = `v${n}`;
+			this.current = viewId;
+		}
+		const owned = actionsOf(node).map(
+			(action) => [action, viewId] as [string, string],
+		);
+		if (owned.length > 0) {
+			const kept = (this.owners?.get() ?? []).filter(
+				([at]) => !owned.some(([action]) => action === at),
+			);
+			this.owners?.set([...kept, ...owned].slice(-MAX_HANDLERS));
+		}
+		return viewId;
 	}
 
 	reset(): void {
@@ -146,9 +200,11 @@ export class UiSurface {
 		return this.handlers?.get().find(([at]) => at === id)?.[1];
 	}
 
-	render(node: UiNode): void {
+	render(node: UiNode): RenderedView {
+		const view = { viewId: this.viewId(node), node: plainNode(node) };
 		const channels = this.channels;
-		if (channels) rendered.emit(channels, { user: node });
+		if (channels) rendered.emit(channels, { user: view });
+		return view;
 	}
 
 	send(text: string): void {
@@ -183,11 +239,11 @@ function quoted(x: unknown): unknown {
 	return new Cell(newSym("quote"), new Cell(x, null));
 }
 
-function viewOf(node: UiNode): ViewNode {
+function plainNode(node: UiNode): UiNode {
 	return {
 		tag: node.tag,
 		props: node.props,
-		children: node.children.map(viewOf),
+		children: node.children.map(plainNode),
 	};
 }
 
@@ -289,6 +345,7 @@ function registerUi(
 	interp: Interp,
 	surface: UiSurface,
 	panel: PanelStore,
+	views: ViewStore,
 ): void {
 	surface.bind(interp);
 	surface.reset();
@@ -397,16 +454,22 @@ function registerUi(
 		},
 	);
 
-	interp.def(
+	function* renderView(view: UiElement): Eval<string> {
+		yield* settled(views.put(surface.render(view)));
+		const { elements, actions } = summarize(view);
+		return `rendered ${view.tag}, ${elements} element${elements === 1 ? "" : "s"}, ${actions} action${actions === 1 ? "" : "s"}`;
+	}
+
+	interp.defGen(
 		"ui/render",
 		1,
 		"(ui/render view)",
 		"Put a widget on the user's screen, replacing whatever this step rendered before. Returns a one-line summary, because the view is for the USER to read — describing it back to yourself would spend the context the widget just saved.",
 		z.tuple([zAny]),
-		([view]) => {
+		function* ([view]): Eval {
 			if (!(view instanceof UiElement))
 				throw new EvalException("ui element expected", view);
-			return renderView(surface, view);
+			return yield* renderView(view);
 		},
 	);
 
@@ -431,20 +494,19 @@ function registerUi(
 		textEchoDoc === undefined
 	)
 		throw new Error("ui extension wraps a plain echo builtin");
-	interp.def(
+	interp.defGen(
 		"echo",
 		-1,
 		textEchoDoc.signature,
 		`${textEchoDoc.doc} When any argument is a widget, the whole echo is rendered instead, as \`ui/render\` would: the widget alone, or a \`ui/stack\` of every argument in order with the rest as \`ui/text\`, and it returns the one-line summary \`ui/render\` returns.`,
 		z.tuple([zList]),
-		([rest]) => {
+		function* ([rest]): Eval {
 			const args = listElements(rest) ?? [];
 			if (!args.some((x) => x instanceof UiElement))
 				return textEcho.call([rest]);
 			const nodes = args.map((x) => (x instanceof UiElement ? x : textOf(x)));
 			const [only] = nodes;
-			return renderView(
-				surface,
+			return yield* renderView(
 				nodes.length === 1 && only !== undefined
 					? only
 					: element("stack", {}, nodes),
@@ -452,12 +514,6 @@ function registerUi(
 		},
 		textEchoDoc.args,
 	);
-}
-
-function renderView(surface: UiSurface, view: UiElement): string {
-	surface.render(view);
-	const { elements, actions } = summarize(view);
-	return `rendered ${view.tag}, ${elements} element${elements === 1 ? "" : "s"}, ${actions} action${actions === 1 ? "" : "s"}`;
 }
 
 export interface UiHost {
@@ -478,19 +534,27 @@ export function uiExtension(
 ): UiExtension {
 	const surface = options.surface ?? new UiSurface();
 	return Object.assign(
-		(interp: Interp): void => registerUi(interp, surface, host.panel),
+		(interp: Interp): void =>
+			registerUi(interp, surface, host.panel, host.views),
 		{
 			surface,
 			prompt: host.prompt().replace("{{widgets}}", widgetPromptSection()),
 			session(hooks: SessionHooks): void {
+				hooks.evalStep.use(async (ctx, next) => {
+					surface.beginStep();
+					await next(ctx);
+				});
 				hooks.invoke.use(async (ctx) => {
+					surface.enter(ctx.action);
 					await surface.invoke(ctx.action, ctx.values);
 				});
 				hooks.annotate.use((buffer, into, next) => {
 					const view = buffer.collect(rendered).at(-1);
 					return next(
 						buffer,
-						view === undefined ? into : annotate(into, viewKey, viewOf(view)),
+						view === undefined
+							? into
+							: annotate(into, viewKey, { viewId: view.viewId }),
 					);
 				});
 				hooks.message.use(
