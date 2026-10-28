@@ -44,6 +44,7 @@ import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
+import { BridgedHost, type DesktopBridge } from "./desktop-bridge.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -53,7 +54,6 @@ import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 import { ConvexSourceFolder } from "./source-folder.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
-import { BridgedHost, type DesktopBridge } from "./desktop-bridge.ts";
 
 export type WorkspaceClient = Pick<
 	ConvexHttpClient,

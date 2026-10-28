@@ -22,9 +22,9 @@ import {
 	type WorkspaceClient,
 	workspaceExtensions,
 } from "./agent-repl.ts";
+import type { DesktopBridge } from "./desktop-bridge.ts";
 import { ConvexImageStore } from "./image-store.ts";
 import type { Owner, ServerClient } from "./server-client.ts";
-import type { DesktopBridge } from "./desktop-bridge.ts";
 
 export type RecordLineage = FunctionReturnType<
 	typeof internal.threads.record
