@@ -18,10 +18,12 @@ workspace. App applies change at once, while they watch.
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
   '() shows all. Attachments and bin hidden until user
   shows them.
-- :status-bar is bottom bar's three slots: left, centre, right. Empty slot
-  has name too, read it from plist. (preferences/set :status-bar '("clock"
-  "panes")) puts clock left, panes centre, keeps rest in order. User also
-  drags them on bar or in preferences.
+- :status-bar is bottom bar's seven slots, left to right. Items: "panes",
+  "desktop" (desktop app status, shows only while connected), "clock". Each
+  empty slot is gap with own name: "gap-1" "gap-2" ... read them from plist.
+  (preferences/set :status-bar '("desktop" "gap-1" "panes")) puts desktop
+  first, gap second, panes third, keeps rest in order. User also drags them
+  on bar or in preferences.
 - :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
   (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
 - :motion is how sidebar animates that drag. (motions) gives alist of

@@ -68,7 +68,7 @@ const SET_ARGS = [
 		type: "list",
 		required: false,
 		description:
-			'the bottom bar\'s three slots, left, centre and right, as ("name" ...); an empty slot is named like an item; slots not named follow in their current order',
+			'the bottom bar\'s seven slots, first to last, left to right, as ("name" ...); each empty slot is a gap named like an item ("gap-1" ...); slots not named follow in their current order',
 	},
 	{
 		name: "status-bar-hidden",

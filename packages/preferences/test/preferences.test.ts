@@ -8,7 +8,7 @@ const HELD = {
 	input: { lisp: true },
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
-	statusBar: ["gap", "panes", "clock"],
+	statusBar: ["panes", "gap-1", "gap-2", "gap-3", "gap-4", "desktop", "clock"],
 	statusBarHidden: [],
 	motion: "slide",
 	panelMotion: true,
@@ -20,7 +20,7 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("gap" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
+			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
 		);
 	});
 
@@ -136,8 +136,34 @@ describe("changing preferences", () => {
 		const { ev, store } = await world(HELD);
 		expect(
 			await ev('(preferences/set :status-bar \'("clock" "panes"))'),
-		).toContain(':status-bar ("clock" "panes" "gap")');
-		expect(store.read().statusBar).toEqual(["clock", "panes", "gap"]);
+		).toContain(
+			':status-bar ("clock" "panes" "gap-1" "gap-2" "gap-3" "gap-4" "desktop")',
+		);
+		expect(store.read().statusBar).toEqual([
+			"clock",
+			"panes",
+			"gap-1",
+			"gap-2",
+			"gap-3",
+			"gap-4",
+			"desktop",
+		]);
+	});
+
+	it("places the desktop status anywhere, apart from the clock, with gaps between", async () => {
+		const { ev, store } = await world(HELD);
+		await ev(
+			'(preferences/set :status-bar \'("desktop" "gap-3" "gap-1" "panes"))',
+		);
+		expect(store.read().statusBar).toEqual([
+			"desktop",
+			"gap-3",
+			"gap-1",
+			"panes",
+			"gap-2",
+			"gap-4",
+			"clock",
+		]);
 	});
 
 	it("hides bottom bar items and shows them again", async () => {
@@ -153,7 +179,7 @@ describe("changing preferences", () => {
 		await expect(
 			ev('(preferences/set :status-bar-hidden \'("weather"))'),
 		).rejects.toThrow(
-			/unknown status bar item, there are "gap" "panes" "clock"/,
+			/unknown status bar item, there are "panes" "gap-1" "gap-2" "gap-3" "gap-4" "desktop" "clock"/,
 		);
 		expect(store.read()).toEqual(HELD);
 	});
