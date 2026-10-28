@@ -43,6 +43,7 @@ import {
 	viewTab,
 } from "./panel.ts";
 import type { UiNode } from "./view.ts";
+import type { ViewStore } from "./view-store.ts";
 import { WIDGET_FORMS, widgetPromptSection, zString } from "./widgets.ts";
 
 export { nodeToJson } from "./element.ts";
@@ -55,6 +56,11 @@ export {
 	viewTab,
 } from "./panel.ts";
 export type { UiNode, UiValue } from "./view.ts";
+export {
+	MemoryViewStore,
+	type StoredView,
+	type ViewStore,
+} from "./view-store.ts";
 
 const MAX_HANDLERS = 500;
 
@@ -457,6 +463,7 @@ function renderView(surface: UiSurface, view: UiElement): string {
 export interface UiHost {
 	prompt: PromptSource;
 	panel: PanelStore;
+	views: ViewStore;
 }
 
 export interface UiOptions {

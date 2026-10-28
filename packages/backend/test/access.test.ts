@@ -349,6 +349,26 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
+	it("refuses reading or writing a view of another user's chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 1 },
+		);
+		await expect(
+			alice.as.query(api.views.get, { chatId, viewId: "v1" }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.views.put, { chatId, viewId: "v1", node }),
+		).rejects.toThrow();
+	});
+
 	it("refuses appending to another user's chat", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

@@ -45,6 +45,7 @@ import type * as sources from "../sources.js";
 import type * as threads from "../threads.js";
 import type * as uploads from "../uploads.js";
 import type * as users from "../users.js";
+import type * as views from "../views.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -91,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   threads: typeof threads;
   uploads: typeof uploads;
   users: typeof users;
+  views: typeof views;
   workspaces: typeof workspaces;
 }>;
 

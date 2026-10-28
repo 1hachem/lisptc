@@ -11,6 +11,7 @@ import {
 	ConvexPreferencesStore,
 	type PreferencesClient,
 } from "../src/preferences-store.ts";
+import { ConvexViewStore } from "../src/view-store.ts";
 import {
 	ConvexWorkspaceStore,
 	OFFERED_MODELS,
@@ -237,6 +238,18 @@ describe("the convex panel reader", () => {
 		const { client } = spyClient({});
 		const reader = new ConvexLayoutStore(WORKSPACE, () => client);
 		expect(await reader.tabs()).toEqual([]);
+	});
+});
+
+describe("the convex view store", () => {
+	it("writes a view into the chat it was opened for", async () => {
+		const { client, sent } = spyClient({});
+		const chatId = "chat-1" as Id<"chats">;
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await new ConvexViewStore(chatId, () => client).put({ viewId: "v1", node });
+		expect(sent).toEqual([
+			[named(api.views.put), { chatId, viewId: "v1", node }],
+		]);
 	});
 });
 

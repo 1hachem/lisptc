@@ -52,6 +52,7 @@ import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 import { ConvexSourceFolder } from "./source-folder.ts";
+import { ConvexViewStore } from "./view-store.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
 export type WorkspaceClient = Pick<
@@ -145,7 +146,12 @@ export async function workspaceExtensions(
 		}),
 	);
 	const ui = uiExtension(
-		uiHostFor({ panel: new ConvexLayoutStore(workspaceId, connect, chatId) }),
+		uiHostFor({
+			panel: new ConvexLayoutStore(workspaceId, connect, chatId),
+			...(chatId === undefined
+				? {}
+				: { views: new ConvexViewStore(chatId, connect) }),
+		}),
 	);
 	const exports = subAgentExtension(subAgentHost());
 	const rootOnly: InterpExtension[] = subAgent
