@@ -4,9 +4,10 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
+import { GlyphCycle } from "@repo/components";
 import { viewKey } from "@repo/interpreter/annotations";
 import { Button } from "@repo/ui";
-import { type ReactNode, useMemo } from "react";
+import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { AgentProvider } from "../lib/agent.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
 import { ForkPickerProvider } from "../lib/fork-picker.tsx";
@@ -33,11 +34,14 @@ import { GenerativeUI } from "./generative-ui.tsx";
 import { MemoryPage } from "./memory-page.tsx";
 import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
-import { ReadmePage } from "./readme-page.tsx";
 import { SettingsPage } from "./settings-page.tsx";
 import { SourcePage } from "./source-page.tsx";
 import { FilePreview } from "./stored-file.tsx";
 import { TraceView } from "./trace-view.tsx";
+
+const ReadmePage = lazy(async () => ({
+	default: (await import("./readme-page.tsx")).ReadmePage,
+}));
 
 function Column({ children }: { children: ReactNode }) {
 	return <div className="flex h-full min-h-0 flex-col">{children}</div>;
@@ -185,7 +189,17 @@ const PAGE_TABS: Record<
 	permission: (workspaceId, id) => (
 		<PermissionPage workspaceId={workspaceId} rule={Number(id)} />
 	),
-	readme: (workspaceId) => <ReadmePage workspaceId={workspaceId} />,
+	readme: (workspaceId) => (
+		<Suspense
+			fallback={
+				<div className="flex flex-1 items-center justify-center text-dim">
+					<GlyphCycle className="size-icon" />
+				</div>
+			}
+		>
+			<ReadmePage workspaceId={workspaceId} />
+		</Suspense>
+	),
 	settings: (workspaceId) => <SettingsPage workspaceId={workspaceId} />,
 	preferences: () => <PreferencesPage />,
 	account: () => <AccountPage />,
