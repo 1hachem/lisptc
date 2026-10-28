@@ -7,6 +7,7 @@ import { isNumeric } from "@repo/interpreter/arith";
 import { type Ask, asking } from "@repo/interpreter/asks";
 import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
+import { settled } from "@repo/interpreter/drive";
 import {
 	EvalException,
 	messageOf,
@@ -121,7 +122,7 @@ export function machineNotice(
 function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
 	let known = false;
 	hooks.beginStep.use(function* (ctx, next) {
-		const now = machine.connected();
+		const now = yield* settled(machine.refresh());
 		if (now !== known && machine.servers().length > 0)
 			ctx.emit(machineNotice(machine, now));
 		known = now;
@@ -1078,7 +1079,7 @@ export function registerMcp(
 		"desktop-connected-p",
 		0,
 		"(desktop-connected-p)",
-		"Return t if the user's desktop app is connected right now, so the :local servers in (list-toolkit) can load; nil otherwise.",
+		"Return t if the user's desktop app was connected when this step began, so the :local servers in (list-toolkit) can load; nil otherwise.",
 		z.tuple([]),
 		() => (host.machine?.connected() ? true : null),
 	);

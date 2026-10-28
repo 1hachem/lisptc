@@ -39,7 +39,7 @@ describe("the prompt the extension carries", () => {
 
 	it("teaches desktop-connected-p", () => {
 		expect(PROMPT).toMatch(
-			/\(desktop-connected-p\) : t if desktop app connected now, else nil\./,
+			/\(desktop-connected-p\) : t if desktop app connected as of this step, else nil\./,
 		);
 	});
 

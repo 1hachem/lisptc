@@ -4,9 +4,10 @@ import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
+import { cachedMachine } from "../src/machine.ts";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
-import type { ConnConfig, UserMachine } from "../src/ports.ts";
+import type { ConnConfig } from "../src/ports.ts";
 import { desktopToolkit } from "../src/toolkit.ts";
 
 const CLUSTER: ConnConfig = { name: "remote", url: "https://example.com/mcp" };
@@ -19,11 +20,15 @@ const LOCAL: ConnConfig = {
 };
 
 function session(online: { value: boolean }) {
-	const connected = () => online.value;
-	const machine: UserMachine = { connected, servers: () => ["local-git"] };
+	const machine = cachedMachine(
+		async () => online.value,
+		() => ["local-git"],
+	);
 	const extension = mcpExtension({
 		...mcpHost,
-		toolkit: desktopToolkit({ all: () => [CLUSTER] }, [LOCAL], connected),
+		toolkit: desktopToolkit({ all: () => [CLUSTER] }, [LOCAL], () =>
+			machine.connected(),
+		),
 		machine,
 	});
 	const interp = new Interp({ extensions: [extension] });
@@ -47,14 +52,27 @@ function session(online: { value: boolean }) {
 }
 
 describe("the user's machine", () => {
-	it("answers desktop-connected-p live from the machine", () => {
+	it("answers desktop-connected-p from the presence read when the step began", async () => {
 		const online = { value: false };
-		const { asked } = session(online);
+		const { step, asked } = session(online);
+		await step();
 		expect(asked()).toBe("nil");
 		online.value = true;
+		expect(asked()).toBe("nil");
+		await step();
 		expect(asked()).toBe("t");
 		online.value = false;
+		await step();
 		expect(asked()).toBe("nil");
+	});
+
+	it("counts a presence it cannot read as disconnected", async () => {
+		const machine = cachedMachine(
+			() => Promise.reject(new Error("convex down")),
+			() => [],
+		);
+		expect(await machine.refresh()).toBe(false);
+		expect(machine.connected()).toBe(false);
 	});
 
 	it("answers nil to desktop-connected-p without a machine", () => {
@@ -63,11 +81,13 @@ describe("the user's machine", () => {
 		expect(str(runSync(interp, "(desktop-connected-p)"))).toBe("nil");
 	});
 
-	it("lists local servers only while the desktop is connected, marked :local", () => {
+	it("lists local servers only while the desktop is connected, marked :local", async () => {
 		const online = { value: false };
-		const { listed } = session(online);
+		const { step, listed } = session(online);
+		await step();
 		expect(listed()).not.toMatch(/local-git/);
 		online.value = true;
+		await step();
 		expect(listed()).toMatch(
 			/"local-git" "git on the machine" nil :unloaded :local\)/,
 		);
