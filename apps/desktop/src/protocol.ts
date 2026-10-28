@@ -1,7 +1,7 @@
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export type DesktopMessage =
-	| { type: "hello"; token: string; version: number }
+	| { type: "auth"; token: string; version: number }
 	| { type: "opened"; id: string; ok: boolean; error?: string }
 	| {
 			type: "response";

@@ -67,7 +67,7 @@ export class DesktopBridge {
 		const socket = new WebSocket(socketUrl(this.origin));
 		this.socket = socket;
 		socket.addEventListener("open", () => {
-			this.send({ type: "hello", token, version: PROTOCOL_VERSION });
+			this.send({ type: "auth", token, version: PROTOCOL_VERSION });
 		});
 		socket.addEventListener("message", (event) => {
 			if (typeof event.data !== "string") return;

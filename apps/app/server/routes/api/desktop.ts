@@ -1,6 +1,6 @@
 import type { Id } from "@repo/backend/dataModel";
 import { defineWebSocketHandler } from "nitro";
-import { attachDesktop } from "../../desktop/hello.ts";
+import { authenticate } from "../../desktop/auth.ts";
 import { announce, type Presence, withdraw } from "../../desktop/presence.ts";
 import {
 	PROTOCOL_VERSION,
@@ -43,12 +43,12 @@ export default defineWebSocketHandler({
 			desktops.receive(peer, message);
 			return;
 		}
-		if (message.type !== "hello") return socket.close(4401, "hello first");
-		if (message.version !== PROTOCOL_VERSION) {
+		if ("version" in message && message.version !== PROTOCOL_VERSION) {
 			reply(socket, { type: "upgrade", version: PROTOCOL_VERSION });
 			return socket.close(4426, "upgrade the desktop app");
 		}
-		const userId: Id<"users"> | null = await attachDesktop(message.token);
+		if (message.type !== "auth") return socket.close(4401, "auth first");
+		const userId: Id<"users"> | null = await authenticate(message.token);
 		if (userId === null) return socket.close(4401, "invalid token");
 		desktops.attach(userId, peer);
 		present.set(peer, announce(userId));

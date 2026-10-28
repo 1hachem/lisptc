@@ -82,7 +82,7 @@ class Connection {
 				else stream?.reject(error);
 				return;
 			}
-			case "hello":
+			case "auth":
 				return;
 		}
 	}
