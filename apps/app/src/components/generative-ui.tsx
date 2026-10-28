@@ -1,5 +1,6 @@
 import type { ViewNode } from "@repo/interpreter/annotations";
 import { viewKey } from "@repo/interpreter/annotations";
+import { type PropsOf, type Tag, widgetOf } from "@repo/ui-catalog";
 import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
@@ -7,16 +8,6 @@ import { startPanelDrag } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
 import { Markdown } from "./markdown.tsx";
-
-function text(props: Record<string, unknown>, key: string): string {
-	const value = props[key];
-	return typeof value === "string" ? value : "";
-}
-
-function strings(props: Record<string, unknown>, key: string): string[] {
-	const value = props[key];
-	return Array.isArray(value) ? value.map((v) => String(v ?? "")) : [];
-}
 
 type FieldValue = string | boolean;
 
@@ -47,7 +38,7 @@ function controlValues(
 
 type Fire = (action: string, values: Record<string, FieldValue>) => void;
 
-const TONE_CLASSES: Record<string, string> = {
+const TONE_CLASSES: Record<NonNullable<PropsOf<"badge">["tone"]>, string> = {
 	ok: "border-green/50 text-green",
 	warn: "border-yellow/50 text-yellow",
 	bad: "border-red/50 text-red",
@@ -56,54 +47,39 @@ const TONE_CLASSES: Record<string, string> = {
 };
 
 function changed(
-	node: ViewNode,
+	action: string | undefined,
 	fire: Fire,
 	el: HTMLInputElement | HTMLSelectElement,
 ): void {
-	const action = text(node.props, "on-change");
 	if (action) fire(action, controlValues(el));
 }
 
-type WidgetProps = {
-	node: ViewNode;
+type WidgetProps<T extends Tag> = {
+	props: PropsOf<T>;
 	kids: ReactNode;
 	fire: Fire;
 	busy: boolean;
 };
 
+type Renderers = { [T in Tag]: (props: WidgetProps<T>) => ReactNode };
+
 const BUTTON =
 	"border border-dim/50 px-2 py-px text-fg hover:border-accent hover:text-accent disabled:opacity-40";
 
 function FieldLabel({
-	node,
+	label,
 	className = "text-dim",
 }: {
-	node: ViewNode;
+	label: string | undefined;
 	className?: string;
 }) {
-	if (node.props.label === undefined) return null;
-	return <span className={className}>{text(node.props, "label")}</span>;
+	if (label === undefined) return null;
+	return <span className={className}>{label}</span>;
 }
 
-function Link({ node }: WidgetProps) {
-	return (
-		<a
-			href={text(node.props, "href")}
-			target="_blank"
-			rel="noreferrer"
-			className="text-accent underline decoration-dim/50 hover:decoration-accent"
-		>
-			{text(node.props, "text") || text(node.props, "href")}
-		</a>
-	);
-}
-
-function FileLink({ node }: WidgetProps) {
+function FileLink({ props }: WidgetProps<"file-link">) {
 	const { openFile } = usePanels();
-	const folder = text(node.props, "folder");
-	const name = text(node.props, "name");
-	if (folder !== "knowledge" && folder !== "attachments")
-		return <span className="text-dim">{text(node.props, "text") || name}</span>;
+	const { folder, name } = props;
 	return (
 		<button
 			type="button"
@@ -115,189 +91,13 @@ function FileLink({ node }: WidgetProps) {
 			onClick={() => openFile(folder, name)}
 			className="w-fit cursor-pointer text-left text-accent underline decoration-dim/50 hover:decoration-accent"
 		>
-			{text(node.props, "text") || name}
+			{props.text || name}
 		</button>
 	);
 }
 
-function Badge({ node }: WidgetProps) {
-	const tone =
-		TONE_CLASSES[text(node.props, "tone")] ?? "border-dim/50 text-dim";
-	return (
-		<span className={`w-fit border px-1 ${tone}`}>
-			{text(node.props, "text")}
-		</span>
-	);
-}
-
-function Kpi({ node }: WidgetProps) {
-	return (
-		<div className="flex min-w-0 flex-col">
-			<span className="text-dim">{text(node.props, "label")}</span>
-			<span className="font-bold text-2xl text-fg leading-tight">
-				{text(node.props, "value")}
-			</span>
-			{node.props.hint !== undefined && (
-				<span className="text-dim">{text(node.props, "hint")}</span>
-			)}
-		</div>
-	);
-}
-
-function Button({ node, fire, busy }: WidgetProps) {
-	return (
-		<button
-			type="button"
-			disabled={busy}
-			onClick={(e) =>
-				fire(text(node.props, "action"), formValues(e.currentTarget))
-			}
-			className={BUTTON}
-		>
-			{text(node.props, "label")}
-		</button>
-	);
-}
-
-function Input({ node, busy }: WidgetProps) {
-	return (
-		<label className="flex min-w-0 flex-col gap-px">
-			<FieldLabel node={node} />
-			<input
-				name={text(node.props, "name")}
-				defaultValue={text(node.props, "value")}
-				placeholder={text(node.props, "placeholder")}
-				disabled={busy}
-				className="border border-dim/50 bg-transparent px-2 py-px text-fg outline-none placeholder:text-dim/60 focus:border-accent"
-			/>
-		</label>
-	);
-}
-
-function Select({ node, fire, busy }: WidgetProps) {
-	return (
-		<label className="flex min-w-0 flex-col gap-px">
-			<FieldLabel node={node} />
-			<select
-				name={text(node.props, "name")}
-				defaultValue={text(node.props, "value")}
-				disabled={busy}
-				onChange={(e) => changed(node, fire, e.currentTarget)}
-				className="border border-dim/50 bg-bg px-2 py-px text-fg outline-none focus:border-accent"
-			>
-				{strings(node.props, "options").map((option) => (
-					<option key={option} value={option}>
-						{option}
-					</option>
-				))}
-			</select>
-		</label>
-	);
-}
-
-function Checkbox({ node, fire, busy }: WidgetProps) {
-	return (
-		<label className="flex min-w-0 items-center gap-2">
-			<input
-				type="checkbox"
-				name={text(node.props, "name")}
-				defaultChecked={node.props.checked === true}
-				disabled={busy}
-				onChange={(e) => changed(node, fire, e.currentTarget)}
-			/>
-			<FieldLabel node={node} className="text-fg" />
-		</label>
-	);
-}
-
-function Form({ node, kids, fire, busy }: WidgetProps) {
-	return (
-		<form
-			onSubmit={(e) => {
-				e.preventDefault();
-				fire(text(node.props, "action"), formValues(e.currentTarget));
-			}}
-			className="flex min-w-0 flex-col items-start gap-2"
-		>
-			{kids}
-			<button type="submit" disabled={busy} className={BUTTON}>
-				{text(node.props, "submit") || "submit"}
-			</button>
-		</form>
-	);
-}
-
-const WIDGETS = new Map<string, (props: WidgetProps) => ReactNode>([
-	[
-		"stack",
-		({ kids }) => <div className="flex min-w-0 flex-col gap-2">{kids}</div>,
-	],
-	[
-		"row",
-		({ kids }) => (
-			<div className="flex min-w-0 flex-wrap items-end gap-3">{kids}</div>
-		),
-	],
-	[
-		"card",
-		({ node, kids }) => (
-			<div className="flex min-w-0 flex-col gap-2 border border-dim/40 p-2">
-				<div className="font-bold text-accent">{text(node.props, "title")}</div>
-				{kids}
-			</div>
-		),
-	],
-	[
-		"heading",
-		({ node }) => (
-			<div className="font-bold text-accent">{text(node.props, "text")}</div>
-		),
-	],
-	[
-		"text",
-		({ node }) => (
-			<div className="whitespace-pre-wrap break-words">
-				{text(node.props, "text")}
-			</div>
-		),
-	],
-	["markdown", ({ node }) => <Markdown>{text(node.props, "text")}</Markdown>],
-	["link", Link],
-	["file-link", FileLink],
-	["badge", Badge],
-	["kpi", Kpi],
-	["button", Button],
-	["input", Input],
-	["select", Select],
-	["checkbox", Checkbox],
-	["form", Form],
-	["table", ({ node }) => <Table node={node} />],
-]);
-
-function Unknown({ node }: WidgetProps) {
-	return <div className="text-yellow">unknown widget: {node.tag}</div>;
-}
-
-function Node({
-	node,
-	fire,
-	busy,
-}: {
-	node: ViewNode;
-	fire: Fire;
-	busy: boolean;
-}) {
-	const kids = node.children.map((child, i) => (
-		// biome-ignore lint/suspicious/noArrayIndexKey: no stable id in the tree
-		<Node key={i} node={child} fire={fire} busy={busy} />
-	));
-	const Widget = WIDGETS.get(node.tag) ?? Unknown;
-	return <Widget node={node} kids={kids} fire={fire} busy={busy} />;
-}
-
-function Table({ node }: { node: ViewNode }) {
-	const columns = strings(node.props, "columns");
-	const rows = Array.isArray(node.props.rows) ? node.props.rows : [];
+function Table({ props }: WidgetProps<"table">) {
+	const { columns, rows } = props;
 	return (
 		<div className="min-w-0 overflow-x-auto">
 			<table className="w-max min-w-full text-left">
@@ -315,7 +115,10 @@ function Table({ node }: { node: ViewNode }) {
 						// biome-ignore lint/suspicious/noArrayIndexKey: rows carry no id
 						<tr key={i} className="align-top">
 							{columns.map((column) => {
-								const cell = (row as Record<string, unknown>)?.[column];
+								const cell =
+									row !== null && typeof row === "object" && !Array.isArray(row)
+										? row[column]
+										: undefined;
 								return (
 									<td key={column} className="pr-4">
 										<div className="max-w-80 wrap-anywhere">
@@ -330,6 +133,144 @@ function Table({ node }: { node: ViewNode }) {
 			</table>
 		</div>
 	);
+}
+
+const WIDGETS: Renderers = {
+	stack: ({ kids }) => (
+		<div className="flex min-w-0 flex-col gap-2">{kids}</div>
+	),
+	row: ({ kids }) => (
+		<div className="flex min-w-0 flex-wrap items-end gap-3">{kids}</div>
+	),
+	card: ({ props, kids }) => (
+		<div className="flex min-w-0 flex-col gap-2 border border-dim/40 p-2">
+			<div className="font-bold text-accent">{props.title}</div>
+			{kids}
+		</div>
+	),
+	heading: ({ props }) => (
+		<div className="font-bold text-accent">{props.text}</div>
+	),
+	text: ({ props }) => (
+		<div className="whitespace-pre-wrap break-words">{props.text}</div>
+	),
+	markdown: ({ props }) => <Markdown>{props.text}</Markdown>,
+	link: ({ props }) => (
+		<a
+			href={props.href}
+			target="_blank"
+			rel="noreferrer"
+			className="text-accent underline decoration-dim/50 hover:decoration-accent"
+		>
+			{props.text || props.href}
+		</a>
+	),
+	"file-link": FileLink,
+	badge: ({ props }) => (
+		<span
+			className={`w-fit border px-1 ${props.tone ? TONE_CLASSES[props.tone] : "border-dim/50 text-dim"}`}
+		>
+			{props.text}
+		</span>
+	),
+	kpi: ({ props }) => (
+		<div className="flex min-w-0 flex-col">
+			<span className="text-dim">{props.label}</span>
+			<span className="font-bold text-2xl text-fg leading-tight">
+				{props.value}
+			</span>
+			{props.hint !== undefined && (
+				<span className="text-dim">{props.hint}</span>
+			)}
+		</div>
+	),
+	button: ({ props, fire, busy }) => (
+		<button
+			type="button"
+			disabled={busy}
+			onClick={(e) => fire(props.action, formValues(e.currentTarget))}
+			className={BUTTON}
+		>
+			{props.label}
+		</button>
+	),
+	input: ({ props, busy }) => (
+		<label className="flex min-w-0 flex-col gap-px">
+			<FieldLabel label={props.label} />
+			<input
+				name={props.name}
+				defaultValue={props.value ?? ""}
+				placeholder={props.placeholder ?? ""}
+				disabled={busy}
+				className="border border-dim/50 bg-transparent px-2 py-px text-fg outline-none placeholder:text-dim/60 focus:border-accent"
+			/>
+		</label>
+	),
+	select: ({ props, fire, busy }) => (
+		<label className="flex min-w-0 flex-col gap-px">
+			<FieldLabel label={props.label} />
+			<select
+				name={props.name}
+				defaultValue={props.value ?? ""}
+				disabled={busy}
+				onChange={(e) => changed(props["on-change"], fire, e.currentTarget)}
+				className="border border-dim/50 bg-bg px-2 py-px text-fg outline-none focus:border-accent"
+			>
+				{props.options.map((option) => (
+					<option key={option} value={option}>
+						{option}
+					</option>
+				))}
+			</select>
+		</label>
+	),
+	checkbox: ({ props, fire, busy }) => (
+		<label className="flex min-w-0 items-center gap-2">
+			<input
+				type="checkbox"
+				name={props.name}
+				defaultChecked={props.checked === true}
+				disabled={busy}
+				onChange={(e) => changed(props["on-change"], fire, e.currentTarget)}
+			/>
+			<FieldLabel label={props.label} className="text-fg" />
+		</label>
+	),
+	form: ({ props, kids, fire, busy }) => (
+		<form
+			onSubmit={(e) => {
+				e.preventDefault();
+				fire(props.action, formValues(e.currentTarget));
+			}}
+			className="flex min-w-0 flex-col items-start gap-2"
+		>
+			{kids}
+			<button type="submit" disabled={busy} className={BUTTON}>
+				{props.submit || "submit"}
+			</button>
+		</form>
+	),
+	table: Table,
+};
+
+function Node({
+	node,
+	fire,
+	busy,
+}: {
+	node: ViewNode;
+	fire: Fire;
+	busy: boolean;
+}) {
+	const kids = node.children.map((child, i) => (
+		// biome-ignore lint/suspicious/noArrayIndexKey: no stable id in the tree
+		<Node key={i} node={child} fire={fire} busy={busy} />
+	));
+	const widget = widgetOf(node);
+	if (widget === undefined)
+		return <div className="text-yellow">unknown widget: {node.tag}</div>;
+	const Widget = WIDGETS[widget.tag] as (props: WidgetProps<Tag>) => ReactNode;
+	return <Widget props={widget.props} kids={kids} fire={fire} busy={busy} />;
 }
 
 export function GenerativeUI({ node }: { node: ViewNode }) {

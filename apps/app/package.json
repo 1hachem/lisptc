@@ -54,6 +54,7 @@
     "@repo/syntax": "workspace:*",
     "@repo/toolkit": "workspace:*",
     "@repo/ui": "workspace:*",
+    "@repo/ui-catalog": "workspace:*",
     "@repo/ui-extension": "workspace:*",
     "@repo/workspace-extension": "workspace:*",
     "@tanstack/highlight": "^0.1.0",

@@ -48,7 +48,7 @@ describe("GenerativeUI", () => {
 				view("card", { title: "Report" }, [
 					view("heading", { text: "Totals" }),
 					view("text", { text: "plain words" }),
-					view("link", { href: "https://example.com" }),
+					view("link", { text: "", href: "https://example.com" }),
 					view("badge", { text: "ok", tone: "ok" }),
 					view("kpi", { label: "users", value: "42", hint: "this week" }),
 				]),
