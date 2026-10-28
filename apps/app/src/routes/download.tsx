@@ -1,6 +1,6 @@
 import { Download01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
 	DESKTOP_DOWNLOADS,
@@ -58,23 +58,25 @@ function Download() {
 				) : (
 					<>
 						{primary ? (
-							<a
-								href={primary.url}
+							<Link
+								to="/download/thanks"
+								search={{ file: primary.id }}
 								className="flex items-center gap-2 bg-bg2 px-2.5 py-1 text-blue hover:brightness-125"
 							>
 								<HugeiconsIcon icon={Download01Icon} className="size-icon-sm" />
 								download for {primary.label}
-							</a>
+							</Link>
 						) : null}
 						<div className="flex flex-col gap-1">
 							{others.map((download) => (
-								<a
-									key={download.url}
-									href={download.url}
+								<Link
+									key={download.id}
+									to="/download/thanks"
+									search={{ file: download.id }}
 									className="text-dim hover:text-fg"
 								>
 									{download.label}
-								</a>
+								</Link>
 							))}
 						</div>
 					</>

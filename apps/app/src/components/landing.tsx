@@ -13,10 +13,10 @@ export function Landing() {
 						sign in
 					</Link>
 					<Link
-						to="/download"
+						to="/download/thanks"
 						className="flex-1 bg-bg2 px-2.5 py-1 text-center text-dim hover:text-fg"
 					>
-						download the desktop app
+						download
 					</Link>
 				</div>
 			</div>

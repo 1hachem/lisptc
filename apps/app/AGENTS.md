@@ -12,7 +12,8 @@ Turbo tag: `product`.
 Never edit the generated file. `__root.tsx` sets up auth, the Convex client and
 analytics; `_authed.tsx` is the layout that loads the current user and the
 workspace list, and everything under `_authed/$workspaceId/` is the product.
-`login.tsx` and `download.tsx` are the only unauthenticated pages, beside the
+`login.tsx`, `download.tsx` and `download_.thanks.tsx` are the only
+unauthenticated pages, beside the
 landing page a signed-out browser sees at `/`. The desktop shell never shows
 the landing page, and any other signed-out visit lands on login.
 
