@@ -39,6 +39,27 @@ describe("load-mcp :local", () => {
 		interp.dispose();
 	});
 
+	it("guards a :local load as the call local/<name>, and only a :local one", async () => {
+		const host = recordingHost();
+		const interp = interpOn(host);
+		const guarded: string[] = [];
+		interp.hooks.call.use((i, name, args, next) => {
+			guarded.push(name);
+			return next(i, name, args);
+		});
+		await settle(
+			interp,
+			'(load-mcp :name "fx" :command "definitely-not-a-binary" :local t)',
+		);
+		await settle(
+			interp,
+			'(load-mcp :name "gx" :command "definitely-not-a-binary")',
+		);
+		expect(guarded).toContain("local/fx");
+		expect(guarded).not.toContain("local/gx");
+		interp.dispose();
+	});
+
 	it("leaves a command server without :local unmarked", async () => {
 		const host = recordingHost();
 		const interp = interpOn(host);

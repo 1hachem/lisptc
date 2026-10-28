@@ -1,7 +1,11 @@
-import { mcpExtension } from "@repo/mcp-extension";
+import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import { permissionsExtension } from "@repo/permissions-extension";
-import { textPermissionsHost } from "@repo/permissions-extension/host";
+import {
+	permissionsHostFor,
+	textPermissionsHost,
+} from "@repo/permissions-extension/host";
+import { MemoryPermissionsStore } from "@repo/permissions-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { MemoryRepl } from "@repo/repl/repl";
@@ -170,5 +174,41 @@ describe("permissions over a loaded MCP server", () => {
 		const again = await repl.evalOutput('(fx/send_mail :message "hello")');
 		expect(again.held).toBe(true);
 		expect(client.calls.map((c) => c.tool)).toEqual(["send_mail"]);
+	});
+
+	it("asks before a :local load as local/<name>, and an always allow saves the rule", async () => {
+		const store = new MemoryPermissionsStore("");
+		const client = mockMcpClient({ fx: { tools: ["echo"] } });
+		const permissions = permissionsExtension(
+			permissionsHostFor({ store, asks: LOCAL_ASKS }),
+		);
+		const repl = new MemoryRepl({
+			extensions: [
+				permissions,
+				promisesExtension(promisesHost),
+				mcpExtension({
+					...mcpHost,
+					commands: true,
+					client,
+					policy: permissions.rules,
+				}),
+			],
+		});
+		const asked = await repl.evalOutput(
+			'(echo (await (load-mcp :name "fx" :command "node" :local t)))',
+		);
+		expect(asked.held).toBe(true);
+		const { open: requests } = asked.annotations.output.asks as {
+			open: { id: string; title: string }[];
+		};
+		expect(requests.map((r) => r.title)).toEqual(["local/fx"]);
+
+		const decided = await repl.invokeUi("permissions/decide", {
+			id: requests[0].id,
+			approved: true,
+			scope: "always",
+		});
+		expect(decided.failed).toBe(false);
+		expect(store.source()).toContain("(permission/allow local/fx)");
 	});
 });

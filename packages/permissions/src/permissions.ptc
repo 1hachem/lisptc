@@ -24,7 +24,7 @@ way. Say what you could not do.
 
 Ask call fails too; user sees request. Stop step. Say in one line why you
 wanted it, then wait. You get told the answer. Approved: rerun exactly as
-before.
+before. Always allow saves (permission/allow name) to config; no more asks.
 
 Tool hidden by config, or left out of partly shown server, never loaded: not in
 (list-tools), not callable.

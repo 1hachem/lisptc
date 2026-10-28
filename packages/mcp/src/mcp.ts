@@ -851,6 +851,10 @@ function toolRows(entry: ServerEntry, policy: McpPolicy): List[] {
 	return shownTools(entry, policy).map((tool) => toolRow(entry, tool));
 }
 
+export const LOCAL_GATE = "local/";
+
+export const LOCAL_ASKS: readonly string[] = [`${LOCAL_GATE}*`];
+
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
@@ -1028,14 +1032,16 @@ export function registerMcp(
 		clock,
 	};
 
-	interp.def(
+	interp.defGen(
 		"load-mcp",
 		-1,
-		'(load-mcp "server" [:local t]) | (load-mcp :name "server")',
+		'(load-mcp "server" [:local t] [:flag t]...) | (load-mcp :name "server")',
 		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); add :local t to run a toolkit server marked :also-local on the user machine through their desktop app; pass :url to load a remote server instead. :command is not supported.',
 		z.tuple([zList]),
-		([rest]) => {
+		function* ([rest]) {
 			const conf = connConfigFromArgs(rest, shown(), toolkit.local, commands);
+			if ("local" in conf && conf.local === true)
+				yield* interp.guard(`${LOCAL_GATE}${conf.name}`, []);
 			if (entryOf(servers, conf.name))
 				doUnload(interp, client, servers, conf.name);
 			return startLoad(rest);

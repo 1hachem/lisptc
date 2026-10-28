@@ -48,12 +48,12 @@ describe("the prompt the extension carries", () => {
 		expect(PROMPT).toMatch(/\(load-mcp "acme" :local t\)/);
 	});
 
-	it("teaches the predefined local servers and the consent dialog", () => {
+	it("teaches the predefined local servers and the local/<name> gate", () => {
 		expect(PROMPT).toMatch(
 			/\(load-mcp "local-files"\) , \(load-mcp "local-git"\)/,
 		);
-		expect(PROMPT).toMatch(/tell user approve dialog on\s+their machine/);
-		expect(PROMPT).toMatch(/desktop app not open or user declined/);
+		expect(PROMPT).toMatch(/\(permission\/allow local\/\*\)/);
+		expect(PROMPT).toMatch(/desktop app not open or user denied/);
 		expect(PROMPT).toMatch(
 			/Listed only while desktop app connected\. Row ends :local/,
 		);

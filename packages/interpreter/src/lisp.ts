@@ -429,7 +429,7 @@ export class Interp {
 		this.hooks.dispose.run(() => this.async.abortAll());
 	}
 
-	private *guardCall(name: string, args: readonly unknown[]): Eval<void> {
+	*guard(name: string, args: readonly unknown[]): Eval<void> {
 		yield* settled(this.hooks.call.run(() => undefined, this, name, args));
 	}
 
@@ -492,7 +492,7 @@ export class Interp {
 
 	private *evalSpecial(fn: Keyword, x: Cell, env: List): Eval {
 		const arg = cdrCell(x);
-		if (!this.hooks.call.isEmpty) yield* this.guardCall(fn.name, []);
+		if (!this.hooks.call.isEmpty) yield* this.guard(fn.name, []);
 		switch (fn) {
 			case quoteSym:
 				if (arg !== null && arg.cdr === null) return arg.car;
@@ -570,12 +570,12 @@ export class Interp {
 
 	private *guardMacro(x: Cell): Eval<void> {
 		if (!this.hooks.call.isEmpty && x.car instanceof Sym)
-			yield* this.guardCall(x.car.name, []);
+			yield* this.guard(x.car.name, []);
 	}
 
 	private *callBuiltIn(fn: BuiltInFunc, frame: unknown[]): Eval {
 		if (!this.hooks.call.isEmpty)
-			yield* this.guardCall(fn.callName as string, frame);
+			yield* this.guard(fn.callName as string, frame);
 		if (fn.kind === "generator") return yield* fn.callGen(frame);
 		const value = fn.call(frame);
 		if (!(value instanceof Promise)) return value;

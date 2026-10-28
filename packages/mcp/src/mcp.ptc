@@ -30,9 +30,10 @@ MCP SERVERS
     (load-mcp "acme" :local t :quiet t) . Only listed flags; others error.
   - Notice says when it changes: "desktop app connected: local servers now
     loadable: …" or "desktop app disconnected: local servers gone: …" .
-  - Desktop app asks user consent before start: tell user approve dialog on
-    their machine, then await load.
-  - Load fails with message if desktop app not open or user declined: say so,
+  - Local load asks user as call local/<name> , e.g. local/local-files ,
+    unless config allows it: (permission/allow local/local-files) or
+    (permission/allow local/*) .
+  - Load fails with message if desktop app not open or user denied: say so,
     don't retry.
 - OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
 - Several concurrently:

@@ -6,8 +6,8 @@ import {
 	type ServerMessage,
 	SILENT_FOR_TOO_LONG_MS,
 } from "@repo/desktop-protocol";
-import { dialog, session } from "electron";
-import { LocalServer, type LocalServerSpec } from "./local-server.ts";
+import { session } from "electron";
+import { LocalServer } from "./local-server.ts";
 
 const MIN_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
@@ -29,17 +29,12 @@ function socketUrl(origin: string): string {
 	return url.href;
 }
 
-function commandLine(spec: LocalServerSpec): string {
-	return [spec.command, ...spec.args].join(" ");
-}
-
 export class DesktopBridge {
 	private readonly servers = new Map<string, LocalServer>();
 	private readonly reading = new Map<
 		string,
 		ReadableStreamDefaultReader<Uint8Array>
 	>();
-	private readonly allowed = new Set<string>();
 	private socket: WebSocket | undefined;
 	private retryMs = MIN_RETRY_MS;
 	private stopped = false;
@@ -50,6 +45,7 @@ export class DesktopBridge {
 	constructor(
 		readonly origin: string,
 		private readonly settings: (change: unknown) => DesktopSettings,
+		private readonly outdated: () => Promise<void>,
 	) {}
 
 	start(): void {
@@ -137,12 +133,7 @@ export class DesktopBridge {
 				return;
 			case "upgrade":
 				this.stopped = true;
-				await dialog.showMessageBox({
-					type: "info",
-					message: "Update lisptc",
-					detail:
-						"This version of the desktop app can no longer run local MCP servers. Install the latest version.",
-				});
+				await this.outdated();
 				return;
 			case "settings":
 				this.send({
@@ -168,36 +159,12 @@ export class DesktopBridge {
 		}
 	}
 
-	private async consent(spec: LocalServerSpec): Promise<boolean> {
-		const line = commandLine(spec);
-		if (this.allowed.has(line)) return true;
-		const { response } = await dialog.showMessageBox({
-			type: "question",
-			buttons: ["Allow once", "Always allow", "Deny"],
-			defaultId: 2,
-			cancelId: 2,
-			message: `Run the MCP server "${spec.name}" on this computer?`,
-			detail: `The agent asks to start:\n\n${line}`,
-		});
-		if (response === 1) this.allowed.add(line);
-		return response !== 2;
-	}
-
 	private async open(
 		message: Extract<ServerMessage, { type: "open" }>,
 	): Promise<void> {
 		const { id, ...spec } = message;
 		if (this.servers.has(spec.name)) {
 			this.send({ type: "opened", id, ok: true });
-			return;
-		}
-		if (!(await this.consent(spec))) {
-			this.send({
-				type: "opened",
-				id,
-				ok: false,
-				error: `the user declined to run "${spec.name}" on their computer`,
-			});
 			return;
 		}
 		const server = new LocalServer(spec);

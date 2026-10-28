@@ -15,7 +15,7 @@ import { knowledgeExtension } from "@repo/knowledge-extension";
 import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
-import { mcpExtension } from "@repo/mcp-extension";
+import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
 import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
@@ -139,6 +139,7 @@ export async function workspaceExtensions(
 				...workspace.asks,
 				...knowledge.asks,
 				...agents.asks,
+				...LOCAL_ASKS,
 			],
 			...(bounds === undefined ? {} : { bounds }),
 		}),
