@@ -17,7 +17,8 @@ its wire, the mirror of `apps/app/server/desktop/protocol.ts`.
 
 ## Rules
 
-The window loads the served app and draws nothing of its own. A screen belongs
+The window loads the served app and draws nothing of its own, except the
+loading screen shown while the app cannot be reached yet. A screen belongs
 in `apps/app`, which every desktop user gets on the next load without a
 release. A release is for a native change only.
 
