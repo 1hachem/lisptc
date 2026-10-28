@@ -37,6 +37,12 @@ describe("the prompt the extension carries", () => {
 		);
 	});
 
+	it("teaches desktop-connected-p", () => {
+		expect(PROMPT).toMatch(
+			/\(desktop-connected-p\) : t if desktop app connected now, else nil\./,
+		);
+	});
+
 	it("teaches :local runs a command server on the user's machine", () => {
 		expect(PROMPT).toMatch(
 			/Add :local t to run it on user's own machine, through their desktop app/,

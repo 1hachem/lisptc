@@ -22,6 +22,7 @@ MCP SERVERS
 - User's own machine: predefined local servers, names start local- , e.g.
   (load-mcp "local-files") , (load-mcp "local-git") . Run on user's machine
   through desktop app, same as :local t .
+  - (desktop-connected-p) : t if desktop app connected now, else nil.
   - Listed only while desktop app connected. Row ends :local , e.g.
     ("local-git" "…" ("git" …) :unloaded :local) . No :local = runs on server.
   - Notice says when it changes: "desktop app connected: local servers now

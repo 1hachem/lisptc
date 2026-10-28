@@ -42,10 +42,27 @@ function session(online: { value: boolean }) {
 		return emitted;
 	};
 	const listed = () => str(runSync(interp, "(list-toolkit)"));
-	return { step, listed };
+	const asked = () => str(runSync(interp, "(desktop-connected-p)"));
+	return { step, listed, asked };
 }
 
 describe("the user's machine", () => {
+	it("answers desktop-connected-p live from the machine", () => {
+		const online = { value: false };
+		const { asked } = session(online);
+		expect(asked()).toBe("nil");
+		online.value = true;
+		expect(asked()).toBe("t");
+		online.value = false;
+		expect(asked()).toBe("nil");
+	});
+
+	it("answers nil to desktop-connected-p without a machine", () => {
+		const interp = new Interp({ extensions: [mcpExtension(mcpHost)] });
+		runSync(interp, prelude);
+		expect(str(runSync(interp, "(desktop-connected-p)"))).toBe("nil");
+	});
+
 	it("lists local servers only while the desktop is connected, marked :local", () => {
 		const online = { value: false };
 		const { listed } = session(online);

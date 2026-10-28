@@ -781,7 +781,7 @@ export function registerMcp(
 	interp: Interp,
 	host: Pick<
 		McpExtensionHost,
-		"client" | "toolkit" | "search" | "policy" | "clock"
+		"client" | "toolkit" | "search" | "policy" | "clock" | "machine"
 	>,
 ): void {
 	const { client, toolkit, search, clock } = host;
@@ -1072,6 +1072,15 @@ export function registerMcp(
 			);
 			return arrayToList(rows);
 		},
+	);
+
+	interp.def(
+		"desktop-connected-p",
+		0,
+		"(desktop-connected-p)",
+		"Return t if the user's desktop app is connected right now, so the :local servers in (list-toolkit) can load; nil otherwise.",
+		z.tuple([]),
+		() => (host.machine?.connected() ? true : null),
 	);
 
 	interp.def(
