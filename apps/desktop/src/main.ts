@@ -1,6 +1,13 @@
 import path from "node:path";
 import { desktopEnv } from "@repo/env/desktop";
-import { app, BrowserWindow, Menu, nativeTheme, shell } from "electron";
+import {
+	app,
+	BrowserWindow,
+	Menu,
+	nativeTheme,
+	powerMonitor,
+	shell,
+} from "electron";
 import electronUpdater from "electron-updater";
 import { DesktopBridge } from "./bridge.ts";
 
@@ -134,6 +141,10 @@ app.whenReady().then(() => {
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) open();
 	});
+	powerMonitor.on("suspend", () => bridge?.pause());
+	powerMonitor.on("lock-screen", () => bridge?.pause());
+	powerMonitor.on("resume", () => bridge?.resume());
+	powerMonitor.on("unlock-screen", () => bridge?.resume());
 });
 
 app.on("before-quit", () => {
