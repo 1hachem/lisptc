@@ -8,10 +8,12 @@ import {
 	arrayToList,
 	Cell,
 	jsonToLisp,
+	Keyword,
 	type List,
 	listToArray,
 	newLispKeyword,
 	newSym,
+	Sym,
 	Unspecified,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
@@ -103,10 +105,26 @@ const ownerCodec: StateCodec<[string, string][]> = {
 		]),
 };
 
+const callCodec: StateCodec<[string, Cell][]> = {
+	toLisp: (calls) => arrayToList(calls.map(([id, form]) => new Cell(id, form))),
+	fromLisp: (list) =>
+		listToArray(list as List).map((pair) => [
+			(pair as Cell).car as string,
+			(pair as Cell).cdr as Cell,
+		]),
+};
+
+function isCallForm(x: unknown): x is Cell {
+	return (
+		x instanceof Cell && x.car instanceof Sym && !(x.car instanceof Keyword)
+	);
+}
+
 const UI_TAG = "ui/element";
 
 export class UiSurface {
 	private handlers: State<[string, unknown][]> | undefined;
+	private calls: State<[string, Cell][]> | undefined;
 	private seq: State<number> | undefined;
 	private views: State<number> | undefined;
 	private owners: State<[string, string][]> | undefined;
@@ -124,6 +142,12 @@ export class UiSurface {
 			handlerCodec,
 			[],
 			"The function behind each control on screen, by the action id the view carries. The oldest are dropped past 500.",
+		);
+		this.calls = interp.state(
+			"ui/calls",
+			callCodec,
+			[],
+			"The quoted call behind each control given one instead of a function, by action id. Kept whole, since the same call reuses its id.",
 		);
 		this.seq = interp.state(
 			"ui/seq",
@@ -178,12 +202,30 @@ export class UiSurface {
 		this.handlers?.set([]);
 	}
 
-	action(fn: unknown): string {
-		if (callableArity(fn) === undefined)
-			throw new EvalException("function expected as a ui action", fn);
+	private nextId(): string {
 		const n = (this.seq?.get() ?? 0) + 1;
 		this.seq?.set(n);
-		const id = `a${n}`;
+		return `a${n}`;
+	}
+
+	private callAction(form: Cell): string {
+		const held = this.calls?.get() ?? [];
+		const printed = str(form);
+		const same = held.find(([, at]) => str(at) === printed);
+		if (same !== undefined) return same[0];
+		const id = this.nextId();
+		this.calls?.set([...held, [id, form]]);
+		return id;
+	}
+
+	action(fn: unknown): string {
+		if (isCallForm(fn)) return this.callAction(fn);
+		if (callableArity(fn) === undefined)
+			throw new EvalException(
+				"function or quoted call expected as a ui action",
+				fn,
+			);
+		const id = this.nextId();
 		const handlers = [
 			...(this.handlers?.get() ?? []),
 			[id, fn] as [string, unknown],
@@ -196,7 +238,14 @@ export class UiSurface {
 		const held = this.handlers?.get() ?? [];
 		const kept = held.filter(([id]) => !ids.includes(id));
 		this.handlers?.set(kept);
-		return held.length - kept.length;
+		const calls = this.calls?.get() ?? [];
+		const keptCalls = calls.filter(([id]) => !ids.includes(id));
+		this.calls?.set(keptCalls);
+		return held.length - kept.length + calls.length - keptCalls.length;
+	}
+
+	private call(id: string): Cell | undefined {
+		return this.calls?.get().find(([at]) => at === id)?.[1];
 	}
 
 	private ownerOf(id: string): string | undefined {
@@ -227,11 +276,30 @@ export class UiSurface {
 	}
 
 	hasAction(id: string): boolean {
-		return this.handler(id) !== undefined;
+		return this.handler(id) !== undefined || this.call(id) !== undefined;
+	}
+
+	private resolved(form: Cell): { fn: unknown; args: unknown[] } {
+		const name = form.car as Sym;
+		const interp = this.interp;
+		if (interp === undefined || !interp.hasGlobal(name))
+			throw new EvalException(
+				"ui action calls a function that is not defined",
+				name,
+				false,
+			);
+		const fn = interp.getGlobal(name);
+		if (callableArity(fn) === undefined)
+			throw new EvalException("ui action calls a non-function", name, false);
+		return { fn, args: listToArray(form.cdr as List) };
 	}
 
 	async invoke(id: string, values: Record<string, unknown>): Promise<unknown> {
-		const fn = this.handler(id);
+		const form = this.call(id);
+		const { fn, args: given } =
+			form === undefined
+				? { fn: this.handler(id), args: [] as unknown[] }
+				: this.resolved(form);
 		if (fn === undefined) {
 			const owner = this.ownerOf(id);
 			if (owner === undefined || this.store === undefined)
@@ -243,10 +311,11 @@ export class UiSurface {
 		if (interp === undefined)
 			throw new EvalException("ui surface is not bound to an interpreter", id);
 		const arity = callableArity(fn);
-		const takesValues = arity !== undefined && (arity.max ?? 1) > 0;
-		const args: List = takesValues
-			? new Cell(quoted(jsonToLisp(values)), null)
-			: null;
+		const takesValues =
+			arity !== undefined && (arity.max ?? given.length + 1) > given.length;
+		const args = arrayToList(
+			(takesValues ? [...given, jsonToLisp(values)] : given).map(quoted),
+		);
 		const { value } = await driveAsync(
 			interp.evalGen(new Cell(fn, args), null),
 		);

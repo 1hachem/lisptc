@@ -1,4 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -430,7 +431,7 @@ describe("actions", () => {
 	it("rejects a non-callable action where the mistake was made", () => {
 		const { interp } = fresh();
 		expect(() => runSync(interp, '(ui/button "go" "not a function")')).toThrow(
-			/function expected as a ui action/,
+			/function or quoted call expected as a ui action/,
 		);
 	});
 
@@ -892,5 +893,58 @@ describe("the view store", () => {
 		expect([...views.expired]).toEqual(["v1"]);
 		runSync(interp, "(ui/render view)");
 		expect(views.expired.size).toBe(0);
+	});
+});
+
+describe("a quoted call as an action", () => {
+	const SETUP = `
+		(setq log nil)
+		(defun refresh () (setq log (cons "refresh" log)))
+		(defun set-filter (f) (setq log (cons f log)))
+		(defun pick (f values) (setq log (cons (concat f "=" (cdr (assoc "q" values))) log)))
+	`;
+
+	it("runs a named function with its quoted arguments", async () => {
+		const { surface, interp } = render(
+			`${SETUP} (ui/render (ui/row (ui/button "r" '(refresh)) (ui/button "o" '(set-filter "open"))))`,
+		);
+		await surface.invoke("a1", {});
+		await surface.invoke("a2", { q: "x" });
+		expect(str(runSync(interp, "log"))).toBe('("open" "refresh")');
+	});
+
+	it("appends the values when the function takes one more argument", async () => {
+		const { surface, interp } = render(
+			`${SETUP} (ui/render (ui/form '(pick "k") (ui/input :name "q")))`,
+		);
+		await surface.invoke("a1", { q: "auth" });
+		expect(str(runSync(interp, "log"))).toBe('("k=auth")');
+	});
+
+	it("reuses one id for the same call", () => {
+		const { view } = render(
+			`${SETUP} (ui/render (ui/row (ui/button "a" '(refresh)) (ui/button "b" '(refresh))))`,
+		);
+		expect(view).toMatchObject({
+			children: [{ props: { action: "a1" } }, { props: { action: "a1" } }],
+		});
+	});
+
+	it("survives a restore that drops every closure", async () => {
+		const before = render(
+			`${SETUP} (ui/render (ui/button "o" '(set-filter "open")))`,
+		);
+		const image = JSON.parse(JSON.stringify(snapshot(before.interp)));
+		const after = fresh();
+		restore(after.interp, image);
+		await after.surface.invoke("a1", {});
+		expect(str(runSync(after.interp, "log"))).toBe('("open")');
+	});
+
+	it("names the function a click could not find", async () => {
+		const { surface } = render(`(ui/render (ui/button "x" '(no-such-fn)))`);
+		await expect(surface.invoke("a1", {})).rejects.toThrow(
+			/not defined.*no-such-fn|no-such-fn.*not defined/s,
+		);
 	});
 });

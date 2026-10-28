@@ -44,6 +44,14 @@ are not asked. So every branch you anticipate is free.
 - Actions close over their environment, REPL persistent, so
   (setq counter (+ counter 1)) in a handler sticks; later step reads it like
   any global. They die with REPL: clearing conversation drops every action.
+- Action may be quoted call to global function instead: '(refresh-dashboard)
+  or '(set-filter "open"). Args passed as written, not evaluated. Field alist
+  appended when function takes one more argument. Function looked up by name
+  on click, so redefine it to change what click does. Never dropped past 500
+  handlers, kept across REPL restart. Prefer it for long-lived views:
+
+  (defun set-filter (f) (ui/render (panel f)))
+  (ui/button "open only" '(set-filter "open"))
 - (ui/forget view) drops actions behind view's controls; view shows expired,
   clicks run nothing. Use on view you replaced or closed. Returns count
   dropped.

@@ -208,13 +208,13 @@ export const WIDGET_FORMS: WidgetForms = {
 	button: form({
 		arity: 2,
 		signature: "(ui/button label action)",
-		brief: "runs action on click.",
+		brief: "runs action on click. Action is fn or quoted call like '(refresh).",
 		example: '(ui/button "refresh" (lambda () nil))',
-		doc: "A button. Both arguments are nameable, so `(ui/button :action (lambda () …) :label caption)` is the same call. `action` is a function run IN THIS REPL when the user clicks it — with no model turn in between, so a button is how you offer something without spending a step on it. Write it as `(lambda () …)`; inside a `ui/form` write `(lambda (values) …)` to receive the fields. Whatever the action renders replaces the view.",
+		doc: "A button. Both arguments are nameable, so `(ui/button :action (lambda () …) :label caption)` is the same call. `action` is a function run IN THIS REPL when the user clicks it — with no model turn in between, so a button is how you offer something without spending a step on it. Write it as `(lambda () …)`; inside a `ui/form` write `(lambda (values) …)` to receive the fields. It may instead be a quoted call to a global function, `'(refresh-dashboard)` or `'(set-filter \"open\")`: it outlives a REPL restart, and the field alist is appended when the function takes one more argument. Whatever the action renders replaces the view.",
 		args: z.tuple([zString, zAny]),
 		docArgs: [
 			arg("label", "string", "what the button reads as"),
-			arg("action", "function", "what running it does"),
+			arg("action", "function or quoted call", "what running it does"),
 		],
 		nameable: true,
 		build: ([label, fn], action) => ({ props: { label, action: action(fn) } }),
@@ -261,7 +261,7 @@ export const WIDGET_FORMS: WidgetForms = {
 			'(ui/select options :name "n" [:label "…"] [:value "…"] [:on-change fn])',
 		brief: "dropdown over strings.",
 		example: '(ui/select \'("7" "30") :name "d")',
-		doc: "A dropdown over `options`, a list of strings. Its `:name` is the key the chosen option arrives under in a handler. `:on-change` is a function of one argument run the moment the user picks something — the way to build a filter that needs no submit button, since it receives the same alist a form's handler would and answers the same way, by rendering.",
+		doc: "A dropdown over `options`, a list of strings. Its `:name` is the key the chosen option arrives under in a handler. `:on-change` is a function of one argument, or a quoted call as for `ui/button`, run the moment the user picks something — the way to build a filter that needs no submit button, since it receives the same alist a form's handler would and answers the same way, by rendering.",
 		args: z.tuple([zAny, zList]),
 		build: ([choices, rest], action) => {
 			const opts = plistOptions(rest, ["name", "label", "value", "on-change"]);
@@ -288,7 +288,7 @@ export const WIDGET_FORMS: WidgetForms = {
 			'(ui/checkbox :name "open" [:label "…"] [:checked t] [:on-change fn])',
 		brief: "tick box.",
 		example: '(ui/checkbox :name "o" :label "open only")',
-		doc: 'A tick box. Unlike a text field its value arrives as a real boolean, so `(if (cdr (assoc "open" values)) …)` works — where a `ui/input` would hand you the string "false", which is TRUE in Lisp. `:on-change` acts the moment it is ticked; without one it is read at submit like any other field.',
+		doc: 'A tick box. Unlike a text field its value arrives as a real boolean, so `(if (cdr (assoc "open" values)) …)` works — where a `ui/input` would hand you the string "false", which is TRUE in Lisp. `:on-change`, a function or a quoted call as for `ui/button`, acts the moment it is ticked; without one it is read at submit like any other field.',
 		args: z.tuple([zList]),
 		build: ([rest], action) => {
 			const opts = plistOptions(rest, [
@@ -314,7 +314,7 @@ export const WIDGET_FORMS: WidgetForms = {
 		signature: '(ui/form action child... [:submit "Send"])',
 		brief: "fields with submit button.",
 		example: '(ui/form (lambda (values) nil) (ui/input :name "q"))',
-		doc: "A group of fields with a submit button. `action` is a function of ONE argument, run in this REPL when the user submits: it receives an alist of every enclosed field's `:name` and its current contents, read with `assoc`. Whatever it renders replaces the view.",
+		doc: "A group of fields with a submit button. `action` is a function of ONE argument, or a quoted call as for `ui/button`, run in this REPL when the user submits: it receives an alist of every enclosed field's `:name` and its current contents, read with `assoc`. Whatever it renders replaces the view.",
 		args: z.tuple([zAny, zList]),
 		build: ([fn, rest], action) => {
 			const { values, options: given } = splitKeywordArgs(rest, ["submit"]);
