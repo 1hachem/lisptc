@@ -4,6 +4,7 @@ import { desktopEnv } from "@repo/env/desktop";
 import {
 	app,
 	BrowserWindow,
+	dialog,
 	type IpcMainInvokeEvent,
 	ipcMain,
 	Menu,
@@ -13,7 +14,6 @@ import {
 	shell,
 	Tray,
 } from "electron";
-import electronUpdater from "electron-updater";
 import { DesktopBridge } from "./bridge.ts";
 import {
 	applyOpenAtLogin,
@@ -21,6 +21,7 @@ import {
 	startedHidden,
 	writeSettings,
 } from "./settings.ts";
+import { startUpdates, type UpdateState, type Updates } from "./updates.ts";
 
 const ERR_ABORTED = -3;
 const RETRY_MS = 4000;
@@ -51,6 +52,7 @@ let settings: DesktopSettings;
 let tray: Tray | undefined;
 let quitting = false;
 let retryTimer: NodeJS.Timeout | undefined;
+let updates: Updates | undefined;
 
 function target(): string {
 	return candidates[current] ?? desktopEnv.LISPTC_DESKTOP_URL;
@@ -63,7 +65,7 @@ function sameOrigin(url: string): boolean {
 function bridgeTo(origin: string | undefined): void {
 	if (origin === undefined || origin === bridge?.origin) return;
 	void bridge?.stop();
-	bridge = new DesktopBridge(origin, update);
+	bridge = new DesktopBridge(origin, update, outdated);
 	bridge.start();
 }
 
@@ -132,6 +134,35 @@ function update(input: unknown): DesktopSettings {
 	return settings;
 }
 
+function updateChanged(state: UpdateState): void {
+	buildTray();
+	for (const window of BrowserWindow.getAllWindows())
+		window.webContents.send("desktop:update-changed", state);
+}
+
+async function outdated(): Promise<void> {
+	const state = updates?.state();
+	if (state?.status === "downloaded") {
+		const { response } = await dialog.showMessageBox({
+			type: "info",
+			buttons: ["Restart to update", "Later"],
+			defaultId: 0,
+			cancelId: 1,
+			message: "Update lisptc",
+			detail: `This version of the desktop app can no longer run local MCP servers. Version ${state.version} is ready.`,
+		});
+		if (response === 0) updates?.install();
+		return;
+	}
+	updates?.check();
+	await dialog.showMessageBox({
+		type: "info",
+		message: "Update lisptc",
+		detail:
+			"This version of the desktop app can no longer run local MCP servers. The new version is downloading, and the bottom bar shows when it is ready to install.",
+	});
+}
+
 function fromApp(event: IpcMainInvokeEvent): boolean {
 	return sameOrigin(event.senderFrame?.url ?? "");
 }
@@ -147,6 +178,12 @@ function serveSettings(): void {
 	ipcMain.handle("desktop:update-settings", (event, input: unknown) =>
 		fromApp(event) ? update(input) : undefined,
 	);
+	ipcMain.handle("desktop:update", (event) =>
+		fromApp(event) ? updates?.state() : undefined,
+	);
+	ipcMain.handle("desktop:install-update", (event) => {
+		if (fromApp(event)) updates?.install();
+	});
 }
 
 function buildTray(): void {
@@ -155,9 +192,18 @@ function buildTray(): void {
 		tray.setToolTip("lisptc");
 		tray.on("click", reveal);
 	}
+	const ready = updates?.state();
 	tray.setContextMenu(
 		Menu.buildFromTemplate([
 			{ label: "Open lisptc", click: reveal },
+			...(ready?.status === "downloaded"
+				? [
+						{
+							label: `Restart to update to ${ready.version}`,
+							click: () => updates?.install(),
+						},
+					]
+				: []),
 			{ type: "separator" },
 			{
 				label: "Keep running when closed",
@@ -250,8 +296,9 @@ app.whenReady().then(() => {
 	buildTray();
 	serveSettings();
 	open(!startedHidden());
-	if (app.isPackaged)
-		void electronUpdater.autoUpdater.checkForUpdatesAndNotify();
+	updates = startUpdates(updateChanged, () => {
+		quitting = true;
+	});
 	app.on("activate", () => {
 		reveal();
 	});

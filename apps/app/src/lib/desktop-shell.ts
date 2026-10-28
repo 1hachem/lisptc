@@ -11,7 +11,15 @@ interface DesktopShell {
 		change: Partial<DesktopSettings>,
 	) => Promise<DesktopSettings | undefined>;
 	onSettings?: (listener: (settings: DesktopSettings) => void) => () => void;
+	update?: () => Promise<UpdateState | undefined>;
+	onUpdate?: (listener: (state: UpdateState) => void) => () => void;
+	installUpdate?: () => Promise<void>;
 }
+
+type UpdateState =
+	| { status: "idle" }
+	| { status: "available"; version: string }
+	| { status: "downloaded"; version: string };
 
 function shell(): DesktopShell | undefined {
 	if (typeof window === "undefined") return undefined;
@@ -32,4 +40,17 @@ export function useDesktopSettings() {
 		void shell()?.updateSettings(change).then(setSettings);
 	};
 	return { settings, update };
+}
+
+export function useDesktopUpdate() {
+	const [state, setState] = useState<UpdateState>();
+	useEffect(() => {
+		void shell()?.update?.().then(setState);
+		return shell()?.onUpdate?.(setState);
+	}, []);
+	const ready = state?.status === "downloaded" ? state.version : undefined;
+	const install = () => {
+		void shell()?.installUpdate?.();
+	};
+	return { ready, install };
 }
