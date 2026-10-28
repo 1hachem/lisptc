@@ -189,8 +189,8 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   ships, and `apps/app/AGENTS.md` carries that rule.
 - `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
-- A package tagged `static` is data, like `@repo/toolkit`. It depends on a
-  `foundation` package at most, and every package and app may depend on it.
+- A package tagged `static` is data, like `@repo/toolkit`. It depends on zod or
+  a `foundation` package at most, and every package and app may depend on it.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
   above it reaches past the entrypoints its `package.json` exports. Its stores
   satisfy the language's ports and its `agent-repl` composes the extensions the
