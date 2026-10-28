@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -73,6 +76,15 @@ const offline = new QueryClient({
 	defaultOptions: { queries: { enabled: false } },
 });
 
+function storeView(viewId: string, node: unknown): { viewId: string } {
+	offline.setQueryData(
+		convexQuery(api.views.get, { chatId: "c1" as Id<"chats">, viewId })
+			.queryKey,
+		{ node, rev: 1 },
+	);
+	return { viewId };
+}
+
 async function mount() {
 	const host = document.createElement("div");
 	document.body.append(host);
@@ -136,7 +148,7 @@ const WIDE: ChatMessage[] = [
 			activity: [
 				{ id: "z", kind: "mcp", label: long, detail: long, state: "started" },
 			],
-			ui: {
+			ui: storeView("wide", {
 				tag: "stack",
 				props: {},
 				children: [
@@ -148,7 +160,7 @@ const WIDE: ChatMessage[] = [
 						children: [],
 					},
 				],
-			},
+			}),
 			asks: {
 				open: [
 					{
@@ -213,7 +225,11 @@ describe("the chat's width", () => {
 				type: "tool",
 				content: "",
 				additional_kwargs: {
-					ui: { tag: "table", props: { columns, rows: [row] }, children: [] },
+					ui: storeView("table", {
+						tag: "table",
+						props: { columns, rows: [row] },
+						children: [],
+					}),
 				},
 			},
 		];

@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
-import type { ViewNode } from "@repo/interpreter/annotations";
+import type { Id } from "@repo/backend/dataModel";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GenerativeUI } from "../src/components/generative-ui.tsx";
 import { postUiAction } from "../src/lib/ui-action.ts";
+import type { ViewNode } from "../src/lib/ui-node.ts";
+
+const stored = vi.hoisted(() => ({ row: undefined as unknown }));
 
 vi.mock("../src/lib/chat.tsx", () => ({
 	useChatSession: <U,>(
 		selector: (state: { chatId: string; send: () => void }) => U,
 	): U => selector({ chatId: "c1", send: vi.fn() }),
+}));
+vi.mock("@tanstack/react-query", () => ({
+	useQuery: () => ({ data: stored.row }),
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/ui-action.ts", () => ({
@@ -38,10 +44,21 @@ afterEach(() => {
 });
 
 function render(node: ViewNode) {
-	act(() => root.render(<GenerativeUI node={node} />));
+	stored.row = { node, rev: 1 };
+	act(() =>
+		root.render(<GenerativeUI chatId={"c1" as Id<"chats">} viewId="v1" />),
+	);
 }
 
 describe("GenerativeUI", () => {
+	it("draws nothing until the view is stored", () => {
+		stored.row = null;
+		act(() =>
+			root.render(<GenerativeUI chatId={"c1" as Id<"chats">} viewId="v1" />),
+		);
+		expect(host.textContent).toBe("");
+	});
+
 	it("renders every widget a view can name", () => {
 		render(
 			view("stack", {}, [

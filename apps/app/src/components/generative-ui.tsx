@@ -1,12 +1,15 @@
-import type { ViewNode } from "@repo/interpreter/annotations";
-import { viewKey } from "@repo/interpreter/annotations";
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import { type PropsOf, type Tag, widgetOf } from "@repo/ui-catalog";
+import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
 import { startPanelDrag } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
+import { type ViewNode, viewNode } from "../lib/ui-node.ts";
 import { Markdown } from "./markdown.tsx";
 
 type FieldValue = string | boolean;
@@ -273,12 +276,27 @@ function Node({
 	return <Widget props={widget.props} kids={kids} fire={fire} busy={busy} />;
 }
 
-export function GenerativeUI({ node }: { node: ViewNode }) {
-	const { chatId, send } = useChatSession((state) => ({
-		chatId: state.chatId,
-		send: state.send,
-	}));
-	const [ui, setUi] = useState(node);
+export function GenerativeUI({
+	chatId,
+	viewId,
+}: {
+	chatId: Id<"chats">;
+	viewId: string;
+}) {
+	const { data } = useQuery(convexQuery(api.views.get, { chatId, viewId }));
+	const node = viewNode.safeParse(data?.node).data;
+	if (node === undefined) return null;
+	return <View chatId={chatId} node={node} />;
+}
+
+export function View({
+	chatId,
+	node,
+}: {
+	chatId: Id<"chats">;
+	node: ViewNode;
+}) {
+	const send = useChatSession((state) => state.send);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
 	const [busy, setBusy] = useState(false);
@@ -289,8 +307,6 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 		void (async () => {
 			try {
 				const data = await postUiAction(chatId, action, values);
-				const next = viewKey.schema.safeParse(data.ui).data;
-				if (next) setUi(next);
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
 				if (data.message) void send(data.message);
@@ -306,7 +322,7 @@ export function GenerativeUI({ node }: { node: ViewNode }) {
 
 	return (
 		<div className="min-w-0 border-accent/40 border-l pl-3">
-			<Node node={ui} fire={fire} busy={busy} />
+			<Node node={node} fire={fire} busy={busy} />
 			{output && (
 				<div
 					className={`mt-2 whitespace-pre-wrap break-words ${failed ? "text-red" : "text-dim"}`}
