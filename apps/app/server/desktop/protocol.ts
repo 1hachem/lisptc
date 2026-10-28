@@ -1,7 +1,5 @@
 export const PROTOCOL_VERSION = 3;
 
-export const PING_EVERY_MS = 10_000;
-
 export const SILENT_FOR_TOO_LONG_MS = 25_000;
 
 export type DesktopMessage =
