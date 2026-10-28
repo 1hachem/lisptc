@@ -77,6 +77,18 @@ function open(): BrowserWindow {
 		webPreferences: { contextIsolation: true, sandbox: true },
 	});
 	window.once("ready-to-show", () => window.show());
+	window.webContents.on("console-message", ({ level, message, sourceId }) => {
+		if (level === "error" || level === "warning")
+			console.error(`[page ${level}] ${message} (${sourceId})`);
+	});
+	window.webContents.on("did-fail-load", (_event, code, description, url) =>
+		console.error(`[load failed] ${code} ${description} ${url}`),
+	);
+	window.webContents.on("did-navigate", (_event, url, status) => {
+		if (status < 500 || url.startsWith("file:")) return;
+		console.error(`[load failed] HTTP ${status} ${url}`);
+		onFailure(window);
+	});
 	window.webContents.setWindowOpenHandler(({ url }) => {
 		if (sameOrigin(url)) return { action: "allow" };
 		void shell.openExternal(url);
