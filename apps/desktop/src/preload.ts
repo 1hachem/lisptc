@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopSettings } from "./settings.ts";
 
 contextBridge.exposeInMainWorld("lisptcDesktop", {
+	retry: (): void => ipcRenderer.send("desktop:retry"),
 	settings: (): Promise<DesktopSettings> =>
 		ipcRenderer.invoke("desktop:settings"),
 	updateSettings: (

@@ -50,6 +50,7 @@ let bridge: DesktopBridge | undefined;
 let settings: DesktopSettings;
 let tray: Tray | undefined;
 let quitting = false;
+let retryTimer: NodeJS.Timeout | undefined;
 
 function target(): string {
 	return candidates[current] ?? desktopEnv.LISPTC_DESKTOP_URL;
@@ -85,9 +86,17 @@ function onFailure(window: BrowserWindow): void {
 		return;
 	}
 	showLoading(window, "retry");
-	setTimeout(() => {
+	clearTimeout(retryTimer);
+	retryTimer = setTimeout(() => {
 		if (!window.isDestroyed()) loadTarget(window);
 	}, RETRY_MS);
+}
+
+function retryNow(window: BrowserWindow): void {
+	clearTimeout(retryTimer);
+	current = 0;
+	showLoading(window, "loading");
+	window.webContents.once("did-finish-load", () => loadTarget(window));
 }
 
 function reveal(): void {
@@ -131,6 +140,10 @@ function serveSettings(): void {
 	ipcMain.handle("desktop:settings", (event) =>
 		fromApp(event) ? settings : undefined,
 	);
+	ipcMain.on("desktop:retry", (event) => {
+		const window = BrowserWindow.fromWebContents(event.sender);
+		if (window && event.senderFrame?.url.startsWith("file:")) retryNow(window);
+	});
 	ipcMain.handle("desktop:update-settings", (event, input: unknown) =>
 		fromApp(event) ? update(input) : undefined,
 	);
