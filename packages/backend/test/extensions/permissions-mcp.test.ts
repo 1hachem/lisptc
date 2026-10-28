@@ -26,7 +26,12 @@ function replWith(config: string) {
 		extensions: [
 			permissions,
 			promisesExtension(promisesHost),
-			mcpExtension({ ...mcpHost, client, policy: permissions.rules }),
+			mcpExtension({
+				...mcpHost,
+				commands: true,
+				client,
+				policy: permissions.rules,
+			}),
 		],
 	});
 	return { repl, client };

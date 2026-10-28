@@ -43,10 +43,9 @@ describe("the prompt the extension carries", () => {
 		);
 	});
 
-	it("teaches :local runs a command server on the user's machine", () => {
-		expect(PROMPT).toMatch(
-			/Add :local t to run it on user's own machine, through their desktop app/,
-		);
+	it("teaches :local runs a toolkit server's own setup on the user's machine", () => {
+		expect(PROMPT).toMatch(/Row ends :also-local/);
+		expect(PROMPT).toMatch(/\(load-mcp "acme" :local t\)/);
 	});
 
 	it("teaches the predefined local servers and the consent dialog", () => {
@@ -94,7 +93,11 @@ describe("the prompt the extension carries", () => {
 	it("shows how to load a predefined server and an ad-hoc one", () => {
 		expect(PROMPT).toMatch(/\(await \(load-mcp "acme"\)\)/);
 		expect(PROMPT).toMatch(/:url "https:\/\/\.\.\."/);
-		expect(PROMPT).toMatch(/:command "npx"/);
+		expect(PROMPT).not.toMatch(/:command "/);
+	});
+
+	it("tells the model :command is not supported", () => {
+		expect(PROMPT).toMatch(/:command , :args , :env NOT supported/);
 	});
 
 	it("shows how to load several servers concurrently", () => {

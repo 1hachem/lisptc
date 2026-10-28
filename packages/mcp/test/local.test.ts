@@ -5,6 +5,7 @@ import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
 import { MemoryOAuthStore } from "../src/oauth-host.ts";
 import type { McpHost } from "../src/ports.ts";
+import { bridgedEntries, desktopToolkit } from "../src/toolkit.ts";
 import { recordingHost } from "./helpers.ts";
 
 function interpOn(host: McpHost): Interp {
@@ -12,6 +13,7 @@ function interpOn(host: McpHost): Interp {
 		extensions: [
 			mcpExtension({
 				...mcpHost,
+				commands: true,
 				client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
 			}),
 		],
@@ -45,6 +47,79 @@ describe("load-mcp :local", () => {
 		);
 		expect(host.ensured[0]).not.toHaveProperty("local");
 		interp.dispose();
+	});
+
+	describe("a toolkit server with a local setup", () => {
+		const bundled = {
+			all: () => [{ name: "pw", image: "pw:1", port: 8931 }],
+		};
+		const local = {
+			all: () => [
+				{ name: "pw", command: "definitely-not-a-binary", args: ["pw-mcp"] },
+			],
+		};
+
+		function interpWith(host: McpHost, connected: boolean): Interp {
+			const interp = new Interp({
+				extensions: [
+					mcpExtension({
+						...mcpHost,
+						commands: true,
+						client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
+						toolkit: desktopToolkit(
+							bundled,
+							bridgedEntries(bundled, local),
+							() => connected,
+						),
+					}),
+				],
+			});
+			runSync(interp, prelude);
+			return interp;
+		}
+
+		it("loads the bundled setup without :local", async () => {
+			const host = recordingHost();
+			const interp = interpWith(host, true);
+			await settle(interp, '(load-mcp "pw")');
+			expect(host.ensured[0]).toMatchObject({ name: "pw", image: "pw:1" });
+			interp.dispose();
+		});
+
+		it.each([
+			'(load-mcp "pw" :local t)',
+			'(load-mcp "pw" :local)',
+			'(load-mcp :name "pw" :local t)',
+		])("loads the local setup with %s", async (code) => {
+			const host = recordingHost();
+			const interp = interpWith(host, true);
+			await settle(interp, code);
+			expect(host.ensured[0]).toEqual({
+				name: "pw",
+				command: "definitely-not-a-binary",
+				args: ["pw-mcp"],
+				local: true,
+			});
+			interp.dispose();
+		});
+
+		it("marks the toolkit row :also-local", () => {
+			const interp = interpWith(recordingHost(), true);
+			expect(String(runSync(interp, "(list-toolkit)"))).toContain(
+				":also-local",
+			);
+			interp.dispose();
+		});
+
+		it("refuses :local while the desktop is not connected", () => {
+			const host = recordingHost();
+			const interp = interpWith(host, false);
+			expect(() => runSync(interp, '(load-mcp "pw" :local t)')).toThrow(
+				/no local setup/,
+			);
+			expect(host.ensured).toEqual([]);
+			interp.dispose();
+		});
 	});
 
 	it("sends the transport's requests through the fetch a handle carries", async () => {

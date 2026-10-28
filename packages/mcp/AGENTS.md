@@ -24,8 +24,9 @@ agent keeps it in Convex, whichever container host it runs.
 
 **A server that only runs on the user's machine goes in
 `mcp.toolkit.local.json`, never in `mcp.toolkit.json`.** The bundled manifest
-holds only what a server-side host can run. A local entry is a command, and a
-name the bundled manifest already uses is never reused for one.
+holds only what a server-side host can run. A local entry is a command. A local
+entry that reuses a bundled name is that server's local setup: it is loaded only
+by `:local t`, so the agent never has to write the command line itself.
 
 **A local entry carries no `${VAR}`.** Expansion happens where the manifest is
 read, which for the served agent is the server, so a variable would carry the
