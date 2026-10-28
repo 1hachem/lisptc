@@ -1,4 +1,3 @@
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { fontLinks } from "@repo/ui";
 import type { QueryClient } from "@tanstack/react-query";
@@ -13,9 +12,12 @@ import {
 	useRouteContext,
 	useRouter,
 } from "@tanstack/react-router";
+import { ConvexProviderWithAuth } from "convex/react";
+import { useState } from "react";
 import { Analytics } from "../lib/analytics.tsx";
-import { providerClient } from "../lib/auth-client.ts";
+import { authClient, fetchConvexToken } from "../lib/auth-client.ts";
 import { dropRejectedSession, ssrAuth } from "../lib/auth-server.ts";
+import { convexAuthHook, tokenCache } from "../lib/convex-auth.ts";
 import { preferencesQuery, useCachedPreferences } from "../lib/preferences.ts";
 import { fontOf, themeOf } from "../lib/resolved-preferences.ts";
 import { useCachedWorkspace } from "../lib/workspace.tsx";
@@ -70,23 +72,30 @@ function RootComponent() {
 		from: Route.id,
 	});
 	const { sessionDropped } = Route.useLoaderData();
-
-	return (
-		<ConvexBetterAuthProvider
-			client={convexQueryClient.convexClient}
-			authClient={providerClient}
-			initialToken={
+	const [useAuth] = useState(() =>
+		convexAuthHook(
+			authClient,
+			tokenCache(
+				fetchConvexToken,
+				Date.now,
 				auth.source === "server" && !sessionDropped
 					? (auth.token ?? undefined)
-					: undefined
-			}
+					: undefined,
+			),
+		),
+	);
+
+	return (
+		<ConvexProviderWithAuth
+			client={convexQueryClient.convexClient}
+			useAuth={useAuth}
 		>
 			<QueryClientProvider client={queryClient}>
 				<Analytics>
 					<Outlet />
 				</Analytics>
 			</QueryClientProvider>
-		</ConvexBetterAuthProvider>
+		</ConvexProviderWithAuth>
 	);
 }
 
