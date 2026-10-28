@@ -33,6 +33,14 @@ export function requestFromDesktop(): boolean {
 	return fromDesktop(getRequestHeader("user-agent"));
 }
 
+export function carriesAuthCookie(cookies: string | undefined): boolean {
+	return AUTH_COOKIES.some((name) => cookies?.includes(`better-auth.${name}=`));
+}
+
+export function requestCarriesAuthCookie(): boolean {
+	return carriesAuthCookie(getRequestHeader("cookie"));
+}
+
 export function dropAuthCookies(): void {
 	for (const name of AUTH_COOKIES) {
 		deleteCookie(`better-auth.${name}`, { path: "/" });

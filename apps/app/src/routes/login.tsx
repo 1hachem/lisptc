@@ -46,8 +46,7 @@ function Login() {
 		}
 	};
 
-	if (isLoading) return null;
-	if (isAuthenticated) return <Navigate to="/" replace />;
+	if (!isLoading && isAuthenticated) return <Navigate to="/" replace />;
 
 	return (
 		<div className="flex h-full items-center justify-center bg-bg font-mono text-[13px] text-fg">

@@ -4,7 +4,7 @@ vi.mock("@repo/env/web", () => ({
 	webEnv: { CONVEX_URL: "http://convex", CONVEX_SITE_URL: "http://site" },
 }));
 
-const { fromDesktop } = await import("../server/auth.ts");
+const { carriesAuthCookie, fromDesktop } = await import("../server/auth.ts");
 const { signedOutPage } = await import("../src/lib/signed-out.ts");
 
 describe("signed-out routing", () => {
@@ -27,5 +27,14 @@ describe("signed-out routing", () => {
 		);
 		expect(fromDesktop("Mozilla/5.0 Chrome/140 Electron/43")).toBe(false);
 		expect(fromDesktop(undefined)).toBe(false);
+	});
+
+	it("skips minting a token for a request with no auth cookie", () => {
+		expect(carriesAuthCookie("ph_x=1; ui.panel=open")).toBe(false);
+		expect(carriesAuthCookie(undefined)).toBe(false);
+		expect(carriesAuthCookie("__Secure-better-auth.session_token=abc")).toBe(
+			true,
+		);
+		expect(carriesAuthCookie("better-auth.convex_jwt=eyJ")).toBe(true);
 	});
 });
