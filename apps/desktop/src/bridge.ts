@@ -7,6 +7,7 @@ import {
 	type ServerMessage,
 	SILENT_FOR_TOO_LONG_MS,
 } from "./protocol.ts";
+import type { DesktopSettings } from "./settings.ts";
 
 const MIN_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
@@ -46,7 +47,10 @@ export class DesktopBridge {
 	private heardAt = 0;
 	private pinging: ReturnType<typeof setInterval> | undefined;
 
-	constructor(readonly origin: string) {}
+	constructor(
+		readonly origin: string,
+		private readonly settings: (change: unknown) => DesktopSettings,
+	) {}
 
 	start(): void {
 		void this.connect();
@@ -138,6 +142,13 @@ export class DesktopBridge {
 					message: "Update lisptc",
 					detail:
 						"This version of the desktop app can no longer run local MCP servers. Install the latest version.",
+				});
+				return;
+			case "settings":
+				this.send({
+					type: "settings",
+					id: message.id,
+					...this.settings(message.change),
 				});
 				return;
 			case "open":

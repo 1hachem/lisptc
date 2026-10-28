@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export const PING_EVERY_MS = 10_000;
 
@@ -16,7 +16,13 @@ export type DesktopMessage =
 	  }
 	| { type: "chunk"; id: string; data: string }
 	| { type: "end"; id: string }
-	| { type: "fail"; id: string; error: string };
+	| { type: "fail"; id: string; error: string }
+	| {
+			type: "settings";
+			id: string;
+			closeToTray: boolean;
+			openAtLogin: boolean;
+	  };
 
 export type ServerMessage =
 	| { type: "welcome" }
@@ -40,4 +46,9 @@ export type ServerMessage =
 			body?: string;
 	  }
 	| { type: "cancel"; id: string }
-	| { type: "close"; name: string };
+	| { type: "close"; name: string }
+	| {
+			type: "settings";
+			id: string;
+			change: { closeToTray?: boolean; openAtLogin?: boolean };
+	  };

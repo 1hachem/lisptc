@@ -7,6 +7,8 @@ export const desktopEnv = createEnv({
 		LISPTC_DESKTOP_FALLBACK_URL: z
 			.url()
 			.default("https://lisptc.taild4910a.ts.net/"),
+		APPIMAGE: z.string().optional(),
+		XDG_CONFIG_HOME: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
