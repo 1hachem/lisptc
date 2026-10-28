@@ -664,23 +664,26 @@ function describe(value: unknown): string {
 		return str(value);
 
 	const items = listElements(value);
-	if (items !== undefined && items.length > 0) {
-		const keys = alistKeys(items[0]);
-		if (keys !== undefined) {
-			const uniform = items.every(
-				(el) => alistKeys(el)?.join(" ") === keys.join(" "),
-			);
-			return `list of ${items.length} ${items.length === 1 ? "alist" : "alists"}, keys ${keys
-				.map((k) => JSON.stringify(k))
-				.join(" ")}${uniform ? "" : " (keys vary)"}`;
-		}
-		const own = alistKeys(value);
-		if (own !== undefined)
-			return `alist, keys ${own.map((k) => JSON.stringify(k)).join(" ")}`;
-		return `list of ${items.length} items, ${spans.length} words`;
-	}
+	if (items !== undefined && items.length > 0)
+		return describeList(value, items, spans.length);
 	if (spans.length <= INLINE_WORDS) return `${text.length} characters`;
 	return `${spans.length} words`;
+}
+
+function describeList(value: unknown, items: unknown[], words: number): string {
+	const keys = alistKeys(items[0]);
+	if (keys !== undefined) {
+		const uniform = items.every(
+			(el) => alistKeys(el)?.join(" ") === keys.join(" "),
+		);
+		return `list of ${items.length} ${items.length === 1 ? "alist" : "alists"}, keys ${keys
+			.map((k) => JSON.stringify(k))
+			.join(" ")}${uniform ? "" : " (keys vary)"}`;
+	}
+	const own = alistKeys(value);
+	if (own !== undefined)
+		return `alist, keys ${own.map((k) => JSON.stringify(k)).join(" ")}`;
+	return `list of ${items.length} items, ${words} words`;
 }
 
 const ECHO_OPTIONS = [
