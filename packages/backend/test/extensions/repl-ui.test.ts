@@ -2,7 +2,7 @@ import { Compactor } from "@repo/compaction-extension";
 import type { EvalOutput } from "@repo/repl/repl";
 import { MemoryViewStore, type PanelOp } from "@repo/ui-extension";
 import { describe, expect, it } from "vitest";
-import { memoryRepl, modelFacing } from "./helpers.ts";
+import { agentRepl, memoryRepl, modelFacing } from "./helpers.ts";
 
 const PANEL = `
 (setq n 0)
@@ -108,6 +108,23 @@ describe("a step that opens panel tabs", () => {
 			modelFacing(undefined, undefined, panel),
 		).evalOutput('(ui/focus "view:counts")');
 		expect(out.failed).toBe(true);
+	});
+});
+
+describe("a view while its step runs", () => {
+	it("reaches the caller live as a reference, never as the tree", async () => {
+		const pushed: unknown[] = [];
+		const slow = {
+			put: () => new Promise<void>((resolve) => setTimeout(resolve, 300)),
+		};
+		const r = agentRepl(modelFacing(undefined, undefined, undefined, slow));
+		await r.evalOutput(
+			'(ui/render (ui/text "a")) (ui/render (ui/text "b"))',
+			undefined,
+			(output) => pushed.push(output.ui),
+		);
+		expect(pushed.length).toBeGreaterThan(0);
+		for (const ui of pushed) expect(ui).toEqual({ viewId: "v1" });
 	});
 });
 

@@ -23,6 +23,7 @@ import {
 	MemoryViewStore,
 	type PanelStore,
 	uiExtension,
+	type ViewStore,
 } from "@repo/ui-extension";
 import { uiHostFor } from "@repo/ui-extension/host";
 
@@ -30,7 +31,7 @@ export function modelFacing(
 	compactor?: Compactor,
 	scope?: string,
 	panel: PanelStore = { apply: () => {}, tabs: () => [] },
-	views: MemoryViewStore = new MemoryViewStore(),
+	views: ViewStore = new MemoryViewStore(),
 ): InterpExtension[] {
 	return [
 		secretsExtension(secretsHost),
