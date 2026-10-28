@@ -91,5 +91,7 @@ export function cdrCell(x: Cell): List {
 }
 
 export function messageOf(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
+	if (error instanceof Error) return error.message;
+	if (error instanceof StepHold) return error.reason;
+	return String(error);
 }

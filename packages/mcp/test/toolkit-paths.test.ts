@@ -28,7 +28,7 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 	};
 }
 
-function configFor(name: string, executable = ""): ConnConfig {
+function configFor(name: string, executable = "", flags = ""): ConnConfig {
 	const { client, seen } = recording();
 	const interp = new Interp({
 		extensions: [
@@ -43,7 +43,7 @@ function configFor(name: string, executable = ""): ConnConfig {
 		],
 	});
 	runSync(interp, prelude);
-	runSync(interp, `(load-mcp "${name}")`);
+	runSync(interp, `(load-mcp "${name}"${flags})`);
 	const conf = seen[0];
 	if (!conf) throw new Error(`no config recorded for "${name}"`);
 	return conf;
@@ -79,5 +79,20 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 				],
 			},
 		);
+	});
+
+	it("runs Playwright's own command without its image under :local", () => {
+		const conf = configFor("playwright", "/nix/chrome", " :local t");
+		expect(conf).not.toHaveProperty("image");
+		expect(conf).toMatchObject({ command: "npx" });
+	});
+
+	it("appends the headless flag under :headless", () => {
+		const conf = configFor("playwright", "/nix/chrome", " :local t :headless");
+		expect(conf.args?.at(-1)).toBe("--headless");
+	});
+
+	it("refuses :headless for a server without a headless mode", () => {
+		expect(() => configFor("ocr", "", " :headless t")).toThrow(/headless/);
 	});
 });

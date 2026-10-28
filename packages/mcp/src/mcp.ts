@@ -407,7 +407,12 @@ function connConfigFromArgs(
 ): ConnConfig {
 	const args = listToArray(rest);
 	if (args.length === 1) return lookupPredefined(predefined, asName(args[0]));
-	const opts = parsePlist(rest);
+	if (typeof args[0] === "string")
+		return withLaunchFlags(
+			lookupPredefined(predefined, args[0]),
+			parseFlags(args.slice(1)),
+		);
+	const opts = parseFlags(args);
 	const rawName = opts.get("name");
 	if (rawName === undefined || rawName === null)
 		throw new EvalException(
@@ -416,32 +421,79 @@ function connConfigFromArgs(
 			false,
 		);
 	const name = asName(rawName);
-	if (opts.has("url")) {
-		const url = opts.get("url");
-		if (typeof url !== "string")
-			throw new EvalException("load-mcp :url must be a string", url);
-		const headers = opts.has("headers")
-			? (lispToJson(opts.get("headers")) as Record<string, string>)
-			: undefined;
-		const oauth = opts.has("oauth") ? opts.get("oauth") !== null : undefined;
-		const scopes = opts.has("scopes")
-			? listToArray(opts.get("scopes") as List).map(String)
-			: undefined;
-		return { name, url, headers, oauth, scopes };
+	if (opts.has("url")) return urlConfig(name, opts);
+	if (opts.has("command")) return commandConfig(name, opts);
+	return withLaunchFlags(lookupPredefined(predefined, name), opts);
+}
+
+function urlConfig(name: string, opts: Map<string, unknown>): ConnConfig {
+	const url = opts.get("url");
+	if (typeof url !== "string")
+		throw new EvalException("load-mcp :url must be a string", url);
+	const headers = opts.has("headers")
+		? (lispToJson(opts.get("headers")) as Record<string, string>)
+		: undefined;
+	const oauth = opts.has("oauth") ? opts.get("oauth") !== null : undefined;
+	const scopes = opts.has("scopes")
+		? listToArray(opts.get("scopes") as List).map(String)
+		: undefined;
+	return { name, url, headers, oauth, scopes };
+}
+
+function commandConfig(name: string, opts: Map<string, unknown>): ConnConfig {
+	const command = opts.get("command");
+	if (typeof command !== "string")
+		throw new EvalException("load-mcp :command must be a string", command);
+	const cmdArgs = opts.has("args")
+		? listToArray(opts.get("args") as List).map(String)
+		: [];
+	const env = opts.has("env")
+		? (lispToJson(opts.get("env")) as Record<string, string>)
+		: undefined;
+	return { name, command, args: cmdArgs, env };
+}
+
+function parseFlags(args: unknown[]): Map<string, unknown> {
+	const out = new Map<string, unknown>();
+	for (let i = 0; i < args.length; i++) {
+		const key = keyName(args[i]);
+		const next = args[i + 1];
+		if (i + 1 >= args.length || next instanceof LispKeyword) out.set(key, true);
+		else out.set(key, args[++i]);
 	}
-	if (opts.has("command")) {
-		const command = opts.get("command");
-		if (typeof command !== "string")
-			throw new EvalException("load-mcp :command must be a string", command);
-		const cmdArgs = opts.has("args")
-			? listToArray(opts.get("args") as List).map(String)
-			: [];
-		const env = opts.has("env")
-			? (lispToJson(opts.get("env")) as Record<string, string>)
-			: undefined;
-		return { name, command, args: cmdArgs, env };
+	return out;
+}
+
+function flagSet(opts: Map<string, unknown>, key: string): boolean {
+	const v = opts.get(key);
+	return v !== undefined && v !== null && v !== false;
+}
+
+function withLaunchFlags(
+	conf: ConnConfig,
+	opts: Map<string, unknown>,
+): ConnConfig {
+	let out = conf;
+	if (flagSet(opts, "headless")) {
+		const extra = "headless" in out ? out.headless : undefined;
+		if (!extra)
+			throw new EvalException("MCP server has no headless mode", out.name);
+		out = { ...out, args: [...(out.args ?? []), ...extra] };
 	}
-	return lookupPredefined(predefined, name);
+	if (flagSet(opts, "local")) {
+		if ("url" in out)
+			throw new EvalException("remote MCP server cannot run :local", out.name);
+		if ("image" in out) {
+			const { image: _image, port: _port, path: _path, command, ...rest } = out;
+			if (command === undefined)
+				throw new EvalException(
+					"MCP server has no local command, only an image",
+					out.name,
+				);
+			out = { ...rest, command };
+		}
+	}
+	return out;
 }
 
 function lookupPredefined(
@@ -505,6 +557,19 @@ const LOAD_MCP_OPTIONS: DocArg[] = [
 		type: "list",
 		required: false,
 		description: "OAuth scopes to request when `:oauth` is set.",
+	},
+	{
+		name: "local",
+		type: "boolean",
+		required: false,
+		description:
+			"Run a toolkit server's own command on this machine instead of its container image.",
+	},
+	{
+		name: "headless",
+		type: "boolean",
+		required: false,
+		description: "Run a toolkit browser server without a window.",
 	},
 ];
 
@@ -825,6 +890,7 @@ export function registerMcp(
 					),
 					label: `load-mcp · ${name}`,
 					state,
+					...(state === "held" ? { detail: "requires auth" } : {}),
 					...(error === undefined ? {} : { error: messageOf(error) }),
 					id: `mcp-load-${n}`,
 					startedAt,
@@ -845,7 +911,8 @@ export function registerMcp(
 			},
 			(error: unknown) => {
 				forget();
-				report("failed", error);
+				if (error instanceof StepHold) report("held");
+				else report("failed", error);
 			},
 		);
 		return promise;
