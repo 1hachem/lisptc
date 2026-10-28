@@ -11,6 +11,7 @@ import {
 	useMatches,
 	useParams,
 	useRouteContext,
+	useRouter,
 } from "@tanstack/react-router";
 import { Analytics } from "../lib/analytics.tsx";
 import { providerClient } from "../lib/auth-client.ts";
@@ -50,6 +51,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			...fontLinks,
 		],
 	}),
+	shellComponent: RootDocument,
 	component: RootComponent,
 });
 
@@ -57,45 +59,35 @@ function RootComponent() {
 	const { queryClient, convexQueryClient, auth } = useRouteContext({
 		from: Route.id,
 	});
+
+	return (
+		<ConvexBetterAuthProvider
+			client={convexQueryClient.convexClient}
+			authClient={providerClient}
+			initialToken={
+				auth.source === "server" ? (auth.token ?? undefined) : undefined
+			}
+		>
+			<QueryClientProvider client={queryClient}>
+				<Analytics>
+					<Outlet />
+				</Analytics>
+			</QueryClientProvider>
+		</ConvexBetterAuthProvider>
+	);
+}
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+	const { queryClient } = useRouter().options.context;
 	const themed = useMatches({
 		select: (matches) => matches.some((match) => match.staticData.themed),
 	});
 	const inRoute = useParams({ strict: false }).workspaceId;
 	const cached = useCachedPreferences(queryClient);
 	const workspace = useCachedWorkspace(queryClient, inRoute);
-	const stored = themed ? cached : undefined;
+	const theme = themeOf(themed ? (workspace ?? undefined) : undefined);
+	const font = fontOf(themed ? cached : undefined);
 
-	return (
-		<RootDocument
-			theme={themeOf(themed ? (workspace ?? undefined) : undefined)}
-			font={fontOf(stored)}
-		>
-			<ConvexBetterAuthProvider
-				client={convexQueryClient.convexClient}
-				authClient={providerClient}
-				initialToken={
-					auth.source === "server" ? (auth.token ?? undefined) : undefined
-				}
-			>
-				<QueryClientProvider client={queryClient}>
-					<Analytics>
-						<Outlet />
-					</Analytics>
-				</QueryClientProvider>
-			</ConvexBetterAuthProvider>
-		</RootDocument>
-	);
-}
-
-function RootDocument({
-	theme,
-	font,
-	children,
-}: {
-	theme: string;
-	font: string;
-	children: React.ReactNode;
-}) {
 	return (
 		<html
 			lang="en"
