@@ -3,20 +3,31 @@ import { type ReactNode, useEffect, useState } from "react";
 import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
 import {
-	type BarPlace,
-	type BarSlot,
-	GAP,
+	type BarItem,
+	isGap,
 	placeOf,
+	SLOT_COUNT,
 } from "../lib/status-bar-order.ts";
 import { DesktopStatus } from "./desktop-status.tsx";
 
 const TICK_MS = 15_000;
 
-const PLACE_CLASS: Record<BarPlace, string> = {
-	left: "col-start-1 justify-self-start",
-	centre: "col-start-2 justify-self-center",
-	right: "col-start-3 justify-self-end",
-};
+const COLUMN_CLASS: readonly string[] = [
+	"col-start-1",
+	"col-start-2",
+	"col-start-3",
+	"col-start-4",
+	"col-start-5",
+	"col-start-6",
+	"col-start-7",
+];
+
+function placeClass(place: number): string {
+	const column = COLUMN_CLASS[place - 1] ?? "col-start-7";
+	if (place === 1) return `${column} justify-self-start`;
+	if (place === SLOT_COUNT) return `${column} justify-self-end`;
+	return `${column} justify-self-center`;
+}
 
 function clockTime(at: Date): string {
 	return at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -42,15 +53,10 @@ function Clock() {
 export function StatusBar({ indicator }: { indicator: ReactNode }) {
 	const { motion } = useSidebarMotion();
 	const { order, shown, reorder } = useStatusBarOrder();
-	const drawn: Record<BarSlot, ReactNode> = {
+	const drawn: Record<BarItem, ReactNode> = {
 		panes: indicator,
-		clock: (
-			<>
-				<DesktopStatus />
-				<Clock />
-			</>
-		),
-		gap: null,
+		desktop: <DesktopStatus />,
+		clock: <Clock />,
 	};
 	return (
 		<footer className="h-row flex-none border-sidebar border-t bg-sidebar text-[11px] text-dim">
@@ -59,12 +65,12 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 				onReorder={reorder}
 				motion={motion}
 				axis="horizontal"
-				className="grid h-full grid-cols-[1fr_auto_1fr] items-center"
+				className="grid h-full grid-cols-[minmax(0,auto)_repeat(5,minmax(0,1fr))_minmax(0,auto)] items-center"
 				entryClassName={(item) =>
-					`row-start-1 flex h-full min-w-0 items-center ${PLACE_CLASS[placeOf(order, item)]}`
+					`row-start-1 flex h-full min-w-0 items-center overflow-hidden ${placeClass(placeOf(order, item))}`
 				}
 			>
-				{(slot) => (slot === GAP || shown.includes(slot) ? drawn[slot] : null)}
+				{(slot) => (isGap(slot) || !shown.includes(slot) ? null : drawn[slot])}
 			</SortableTree>
 		</footer>
 	);

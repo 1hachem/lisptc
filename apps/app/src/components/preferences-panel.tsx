@@ -31,7 +31,7 @@ import {
 } from "../lib/preferences.ts";
 import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
-import { type BarItem, GAP } from "../lib/status-bar-order.ts";
+import { type BarItem, isGap } from "../lib/status-bar-order.ts";
 import { useUI } from "../lib/ui.tsx";
 
 function MetaToggle({ field }: { field: { id: MetaField; label: string } }) {
@@ -77,6 +77,7 @@ function InputToggle({
 
 const BAR_LABELS: Record<BarItem, string> = {
 	panes: "pane indicator",
+	desktop: "desktop status",
 	clock: "clock",
 };
 
@@ -91,7 +92,7 @@ function StatusBarList() {
 		<div className="px-4 text-[11.5px]">
 			<SortableTree order={order} onReorder={reorder} motion={motion}>
 				{(item) =>
-					item === GAP ? (
+					isGap(item) ? (
 						<EmptySlot />
 					) : (
 						<div className="py-0.5">
