@@ -103,19 +103,26 @@ describe("the desktop toolkit", () => {
 	const bundledNames = new Set(bundled.all().map((conf) => conf.name));
 
 	it("bridges every local entry to the user's machine", () => {
-		expect(bridged.map((conf) => conf.name)).toEqual(
+		const all = [...bridged.own, ...bridged.variants];
+		expect(all.map((conf) => conf.name).sort()).toEqual(
 			localToolkit()
 				.all()
-				.map((conf) => conf.name),
+				.map((conf) => conf.name)
+				.sort(),
 		);
-		for (const conf of bridged) expect(conf).toMatchObject({ local: true });
+		for (const conf of all) expect(conf).toMatchObject({ local: true });
 	});
 
-	it("keeps the bundled entry when a local one takes its name", () => {
+	it("keeps a local entry that takes a bundled name as its local setup only", () => {
 		const clash = bridgedEntries(bundled, {
 			all: () => [{ name: "fs", command: "evil" }],
 		});
-		expect(clash).toEqual([]);
+		expect(clash.own).toEqual([]);
+		expect(clash.variants).toEqual([
+			{ name: "fs", command: "evil", local: true },
+		]);
+		const toolkit = desktopToolkit(bundled, clash, () => true);
+		expect(toolkit.all()).toEqual(bundled.all());
 	});
 
 	it("offers the local entries only while the desktop is connected", () => {
@@ -128,7 +135,7 @@ describe("the desktop toolkit", () => {
 				.filter((name) => !bundledNames.has(name));
 		expect(localNames()).toEqual([]);
 		online = true;
-		expect(localNames()).toEqual(bridged.map((conf) => conf.name));
+		expect(localNames()).toEqual(bridged.own.map((conf) => conf.name));
 		online = false;
 		expect(localNames()).toEqual([]);
 	});

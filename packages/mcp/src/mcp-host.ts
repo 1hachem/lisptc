@@ -54,7 +54,7 @@ function desktopParts(
 	const bundled = bundledToolkit();
 	const bridged = bridgedEntries(bundled, localToolkit());
 	const machine = cachedMachine(presence, () =>
-		bridged.map((conf) => conf.name),
+		[...bridged.own, ...bridged.variants].map((conf) => conf.name),
 	);
 	return {
 		toolkit: desktopToolkit(bundled, bridged, () => machine.connected()),

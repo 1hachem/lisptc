@@ -4,6 +4,7 @@ import {
 	StdioClientTransport,
 } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { localServerEnv } from "@repo/env/desktop";
 
 export interface LocalServerSpec {
 	readonly name: string;
@@ -22,7 +23,7 @@ export class LocalServer {
 		this.stdio = new StdioClientTransport({
 			command: spec.command,
 			args: [...spec.args],
-			env: { ...getDefaultEnvironment(), ...spec.env },
+			env: { ...getDefaultEnvironment(), ...localServerEnv, ...spec.env },
 			stderr: "inherit",
 		});
 		this.stdio.onmessage = (message) => {

@@ -135,6 +135,7 @@ export interface UserMachine {
 
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
+	local?(name: string): StdioConnConfig | undefined;
 }
 
 export type ServerAccess =

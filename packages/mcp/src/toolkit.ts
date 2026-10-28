@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { TOOLKIT_URL } from "@repo/toolkit";
-import type { ConnConfig, EnvLookup, ToolkitRegistry } from "./ports.ts";
+import type {
+	ConnConfig,
+	EnvLookup,
+	StdioConnConfig,
+	ToolkitRegistry,
+} from "./ports.ts";
 
 const LOCAL_TOOLKIT_URL = new URL(
 	import.meta.url.endsWith(".ts")
@@ -61,25 +66,38 @@ export function localToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
 	return fileToolkit(LOCAL_TOOLKIT_URL, env);
 }
 
+export interface Bridged {
+	readonly own: StdioConnConfig[];
+	readonly variants: StdioConnConfig[];
+}
+
 export function bridgedEntries(
 	bundled: ToolkitRegistry,
 	local: ToolkitRegistry,
-): ConnConfig[] {
+): Bridged {
 	const taken = new Set(bundled.all().map((conf) => conf.name));
-	return local
+	const commands = local
 		.all()
-		.filter((conf) => !taken.has(conf.name))
-		.flatMap((conf) =>
+		.flatMap((conf): StdioConnConfig[] =>
 			"url" in conf || "image" in conf ? [] : [{ ...conf, local: true }],
 		);
+	return {
+		own: commands.filter((conf) => !taken.has(conf.name)),
+		variants: commands.filter((conf) => taken.has(conf.name)),
+	};
 }
 
 export function desktopToolkit(
 	bundled: ToolkitRegistry,
-	bridged: readonly ConnConfig[],
+	bridged: Bridged,
 	connected: () => boolean,
 ): ToolkitRegistry {
 	return {
-		all: () => (connected() ? [...bundled.all(), ...bridged] : bundled.all()),
+		all: () =>
+			connected() ? [...bundled.all(), ...bridged.own] : bundled.all(),
+		local: (name) =>
+			connected()
+				? bridged.variants.find((conf) => conf.name === name)
+				: undefined,
 	};
 }

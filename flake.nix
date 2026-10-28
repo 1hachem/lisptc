@@ -106,6 +106,7 @@
 
         shellHook = ''
           export PLAYWRIGHT_MCP_EXECUTABLE="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"
+          export PLAYWRIGHT_MCP_EXECUTABLE_PATH="$PLAYWRIGHT_MCP_EXECUTABLE"
           export CHROME_AGENT_CHROME="$PLAYWRIGHT_MCP_EXECUTABLE"
         '';
       };

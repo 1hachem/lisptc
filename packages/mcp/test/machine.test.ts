@@ -7,11 +7,11 @@ import { describe, expect, it } from "vitest";
 import { cachedMachine } from "../src/machine.ts";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
-import type { ConnConfig } from "../src/ports.ts";
+import type { ConnConfig, StdioConnConfig } from "../src/ports.ts";
 import { desktopToolkit } from "../src/toolkit.ts";
 
 const CLUSTER: ConnConfig = { name: "remote", url: "https://example.com/mcp" };
-const LOCAL: ConnConfig = {
+const LOCAL: StdioConnConfig = {
 	name: "local-git",
 	description: "git on the machine",
 	command: "uvx",
@@ -26,8 +26,10 @@ function session(online: { value: boolean }) {
 	);
 	const extension = mcpExtension({
 		...mcpHost,
-		toolkit: desktopToolkit({ all: () => [CLUSTER] }, [LOCAL], () =>
-			machine.connected(),
+		toolkit: desktopToolkit(
+			{ all: () => [CLUSTER] },
+			{ own: [LOCAL], variants: [] },
+			() => machine.connected(),
 		),
 		machine,
 	});
