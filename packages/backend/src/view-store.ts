@@ -10,7 +10,7 @@ export interface ViewClock {
 	after(ms: number, run: () => void): void;
 }
 
-export const systemClock: ViewClock = {
+const systemClock: ViewClock = {
 	now: () => Date.now(),
 	after: (ms, run) => {
 		setTimeout(run, ms);

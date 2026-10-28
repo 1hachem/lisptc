@@ -17,12 +17,12 @@ import type { UiNode } from "./view.ts";
 
 const MAX_ROWS = 200;
 
-export interface Built<T extends Tag> {
+interface Built<T extends Tag> {
 	props: Draft<T>;
 	children?: UiNode[];
 }
 
-export interface WidgetForm<T extends Tag> {
+interface WidgetForm<T extends Tag> {
 	arity: number;
 	signature: string;
 	brief: string;
@@ -78,9 +78,7 @@ function arg(name: string, type: string, description: string): DocArg {
 	return { name, type, required: false, description };
 }
 
-type WidgetForms = { [T in Tag]: WidgetForm<T> };
-
-export const WIDGET_FORMS: WidgetForms = {
+export const WIDGET_FORMS = {
 	text: form({
 		arity: 1,
 		signature: "(ui/text s)",
@@ -353,7 +351,7 @@ export const WIDGET_FORMS: WidgetForms = {
 			return { props: { columns, rows: drawn } };
 		},
 	}),
-};
+} satisfies { [T in Tag]: WidgetForm<T> };
 
 export function widgetPromptSection(): string {
 	return [
