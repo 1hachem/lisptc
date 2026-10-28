@@ -26,6 +26,8 @@ MCP SERVERS
     ("local-git" "…" ("git" …) :unloaded :local) . No :local = runs on server.
   - Row ends :also-local = toolkit server has own setup for user machine:
     (load-mcp "acme" :local t) . Without :local t it runs on server.
+  - List after :local or :also-local = flags server takes, e.g. (:quiet) :
+    (load-mcp "acme" :local t :quiet t) . Only listed flags; others error.
   - Notice says when it changes: "desktop app connected: local servers now
     loadable: …" or "desktop app disconnected: local servers gone: …" .
   - Desktop app asks user consent before start: tell user approve dialog on

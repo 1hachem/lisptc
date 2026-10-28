@@ -130,9 +130,20 @@ function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
 	});
 }
 
-function whereRuns(conf: ConnConfig, local: LocalVariant): LispKeyword[] {
-	if ("local" in conf && conf.local === true) return [newLispKeyword("local")];
-	return local?.(conf.name) === undefined ? [] : [newLispKeyword("also-local")];
+function whereRuns(conf: ConnConfig, local: LocalVariant): unknown[] {
+	if ("local" in conf && conf.local === true)
+		return [newLispKeyword("local"), ...flagRow(conf)];
+	const variant = local?.(conf.name);
+	return variant === undefined
+		? []
+		: [newLispKeyword("also-local"), ...flagRow(variant)];
+}
+
+function flagRow(conf: ConnConfig): List[] {
+	const names = Object.keys(flagsOf(conf));
+	return names.length === 0
+		? []
+		: [arrayToList(names.map((name) => newLispKeyword(name)))];
 }
 
 function reportActivity(hooks: SessionHooks): void {
@@ -454,8 +465,38 @@ function connConfigFromArgs(
 	if (opts.has("url")) return urlConfig(name, opts);
 	if (commands && opts.has("command")) return commandConfig(name, opts);
 	refuseCommand(opts);
-	if (isLocal(opts)) return lookupLocal(predefined, local, name);
-	return lookupPredefined(predefined, name);
+	const conf = isLocal(opts)
+		? lookupLocal(predefined, local, name)
+		: lookupPredefined(predefined, name);
+	return withFlags(conf, opts);
+}
+
+const LOAD_KEYS = new Set(["name", "local"]);
+
+function flagsOf(conf: ConnConfig): Record<string, string[]> {
+	return "flags" in conf && conf.flags !== undefined ? conf.flags : {};
+}
+
+function withFlags(conf: ConnConfig, opts: Plist): ConnConfig {
+	const flags = flagsOf(conf);
+	const extra: string[] = [];
+	for (const [key, value] of opts) {
+		if (LOAD_KEYS.has(key)) continue;
+		const flag = flags[key];
+		if (flag === undefined) {
+			const known = Object.keys(flags).map((k) => `:${k}`);
+			throw new EvalException(
+				known.length === 0
+					? `${conf.name} takes no :${key}`
+					: `${conf.name} takes no :${key}; it takes ${known.join(", ")}`,
+				value ?? null,
+				false,
+			);
+		}
+		if (value !== null) extra.push(...flag);
+	}
+	if (extra.length === 0 || !("command" in conf)) return conf;
+	return { ...conf, args: [...(conf.args ?? []), ...extra] };
 }
 
 type Plist = ReturnType<typeof parsePlist>;

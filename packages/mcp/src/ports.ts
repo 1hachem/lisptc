@@ -65,6 +65,7 @@ export type StdioConnConfig = ConnMeta & {
 	args?: string[];
 	env?: Record<string, string>;
 	local?: boolean;
+	flags?: Record<string, string[]>;
 };
 
 export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;

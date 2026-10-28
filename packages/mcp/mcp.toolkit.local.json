@@ -49,6 +49,9 @@
       "--browser",
       "chromium",
       "--isolated"
-    ]
+    ],
+    "flags": {
+      "headless": ["--headless"]
+    }
   }
 ]
