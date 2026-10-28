@@ -40,7 +40,7 @@ jobs:
       - name: Build and publish
         shell: bash
         run: >
-          pnpm --filter @lisptc/desktop dist
+          pnpm --filter @lisptc/desktop run dist
           --publish ${{ startsWith(github.ref_name, 'desktop-v') && 'always' || 'never' }}
           -c.extraMetadata.version=${{ steps.version.outputs.value }}
         env:
