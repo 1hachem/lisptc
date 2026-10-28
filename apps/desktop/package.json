@@ -8,7 +8,9 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/main.cjs",
+    "build": "pnpm build:main && pnpm build:loading",
+    "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/main.cjs",
+    "build:loading": "esbuild src/loading/loading.tsx --bundle --platform=browser --format=iife --minify --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\" --outfile=dist/loading.js",
     "dev": "pnpm build && electron .",
     "dist": "pnpm build && electron-builder",
     "typecheck": "tsc --noEmit"
@@ -18,19 +20,25 @@
     "electron-updater": "^6.8.11"
   },
   "devDependencies": {
+    "@repo/components": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
     "electron": "^45.1.0",
     "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.8",
     "typescript": "^5.9.3"
   },
   "build": {
     "appId": "io.lisptc.desktop",
     "productName": "lisptc",
     "files": [
-      "dist/**"
+      "dist/**",
+      "static/**"
     ],
     "protocols": [
       {

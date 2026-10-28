@@ -41,7 +41,7 @@ export class DesktopBridge {
 	private retryMs = MIN_RETRY_MS;
 	private stopped = false;
 
-	constructor(private readonly origin: string) {}
+	constructor(readonly origin: string) {}
 
 	start(): void {
 		void this.connect();
