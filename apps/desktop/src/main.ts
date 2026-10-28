@@ -17,6 +17,7 @@ import {
 import { DesktopBridge } from "./bridge.ts";
 import {
 	applyOpenAtLogin,
+	machine,
 	readSettings,
 	startedHidden,
 	writeSettings,
@@ -65,7 +66,7 @@ function sameOrigin(url: string): boolean {
 function bridgeTo(origin: string | undefined): void {
 	if (origin === undefined || origin === bridge?.origin) return;
 	void bridge?.stop();
-	bridge = new DesktopBridge(origin, update, outdated);
+	bridge = new DesktopBridge(origin, update, outdated, machine());
 	bridge.start();
 }
 

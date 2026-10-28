@@ -6,17 +6,23 @@ import {
 	type QueryCtx,
 	query,
 } from "./_generated/server.js";
-import { requireUser, requireWorkspace } from "./lib/auth.js";
+import { requireUser } from "./lib/auth.js";
 import { DESKTOP_STALE_MS } from "./limits.js";
 
 const SWEEP_BATCH = 128;
 
 const presence = v.object({ connected: v.boolean() });
 
-function rowOf(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
+function rowOf(
+	ctx: QueryCtx | MutationCtx,
+	userId: Id<"users">,
+	machineId: string,
+) {
 	return ctx.db
 		.query("desktops")
-		.withIndex("by_user", (q) => q.eq("userId", userId))
+		.withIndex("by_machine", (q) =>
+			q.eq("userId", userId).eq("machineId", machineId),
+		)
 		.unique();
 }
 
@@ -24,7 +30,11 @@ async function connectedOf(
 	ctx: QueryCtx,
 	userId: Id<"users">,
 ): Promise<{ connected: boolean }> {
-	return { connected: (await rowOf(ctx, userId))?.connected === true };
+	const rows = await ctx.db
+		.query("desktops")
+		.withIndex("by_user", (q) => q.eq("userId", userId))
+		.collect();
+	return { connected: rows.some((row) => row.connected === true) };
 }
 
 export const mine = query({
@@ -33,44 +43,42 @@ export const mine = query({
 	handler: async (ctx) => connectedOf(ctx, (await requireUser(ctx))._id),
 });
 
-export const owner = query({
-	args: { workspaceId: v.id("workspaces") },
-	returns: presence,
-	handler: async (ctx, { workspaceId }) =>
-		connectedOf(
-			ctx,
-			(await requireWorkspace(ctx, workspaceId)).workspace.ownerId,
-		),
-});
-
 export const attach = internalMutation({
 	args: {
 		userId: v.id("users"),
+		machineId: v.string(),
+		label: v.string(),
 		connection: v.string(),
 		instance: v.string(),
 	},
 	returns: v.null(),
-	handler: async (ctx, { userId, connection, instance }) => {
+	handler: async (ctx, { userId, machineId, label, connection, instance }) => {
 		const now = Date.now();
 		const fields = {
+			label,
 			connection,
 			instance,
 			connected: true,
 			connectedAt: now,
 			seenAt: now,
 		};
-		const row = await rowOf(ctx, userId);
-		if (row === null) await ctx.db.insert("desktops", { userId, ...fields });
+		const row = await rowOf(ctx, userId, machineId);
+		if (row === null)
+			await ctx.db.insert("desktops", { userId, machineId, ...fields });
 		else await ctx.db.patch(row._id, fields);
 		return null;
 	},
 });
 
 export const detach = internalMutation({
-	args: { userId: v.id("users"), connection: v.string() },
+	args: {
+		userId: v.id("users"),
+		machineId: v.string(),
+		connection: v.string(),
+	},
 	returns: v.null(),
-	handler: async (ctx, { userId, connection }) => {
-		const row = await rowOf(ctx, userId);
+	handler: async (ctx, { userId, machineId, connection }) => {
+		const row = await rowOf(ctx, userId, machineId);
 		if (row?.connection === connection && row.connected === true)
 			await ctx.db.patch(row._id, { connected: false });
 		return null;
@@ -78,10 +86,14 @@ export const detach = internalMutation({
 });
 
 export const seen = internalMutation({
-	args: { userId: v.id("users"), connection: v.string() },
+	args: {
+		userId: v.id("users"),
+		machineId: v.string(),
+		connection: v.string(),
+	},
 	returns: v.null(),
-	handler: async (ctx, { userId, connection }) => {
-		const row = await rowOf(ctx, userId);
+	handler: async (ctx, { userId, machineId, connection }) => {
+		const row = await rowOf(ctx, userId, machineId);
 		if (row?.connection === connection && row.connected === true)
 			await ctx.db.patch(row._id, { seenAt: Date.now() });
 		return null;

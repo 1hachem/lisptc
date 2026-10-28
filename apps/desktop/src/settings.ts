@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import path from "node:path";
-import type { DesktopSettings } from "@repo/desktop-protocol";
+import type { DesktopSettings, Machine } from "@repo/desktop-protocol";
 import { desktopEnv } from "@repo/env/desktop";
 import { app } from "electron";
 
@@ -27,6 +28,23 @@ export function readSettings(): DesktopSettings {
 	} catch {
 		return { ...DEFAULTS };
 	}
+}
+
+function machineFile(): string {
+	return path.join(app.getPath("userData"), "machine.json");
+}
+
+export function machine(): Machine {
+	const label = hostname();
+	try {
+		const stored = JSON.parse(readFileSync(machineFile(), "utf8"));
+		if (typeof stored.id === "string" && stored.id !== "")
+			return { id: stored.id, label };
+	} catch {}
+	const id = randomUUID();
+	mkdirSync(path.dirname(machineFile()), { recursive: true });
+	writeFileSync(machineFile(), JSON.stringify({ id }, null, 2));
+	return { id, label };
 }
 
 export function writeSettings(settings: DesktopSettings): void {

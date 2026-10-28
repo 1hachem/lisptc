@@ -1,5 +1,6 @@
 import type { Id } from "@repo/backend/dataModel";
 import type { DesktopBridge, LocalServer } from "@repo/backend/desktop-bridge";
+import type { DesktopSettingsBridge } from "@repo/backend/desktop-settings";
 import type {
 	DesktopMessage,
 	DesktopSettings,
@@ -41,6 +42,7 @@ class Connection {
 	readonly opening = new Map<string, Waiting>();
 	readonly settling = new Map<string, Settling>();
 	readonly streams = new Map<string, Streaming>();
+	dropped = false;
 
 	constructor(readonly peer: DesktopPeer) {}
 
@@ -109,6 +111,7 @@ class Connection {
 	}
 
 	drop(reason: Error): void {
+		this.dropped = true;
 		for (const waiting of this.opening.values()) waiting.reject(reason);
 		for (const settling of this.settling.values()) settling.reject(reason);
 		this.settling.clear();
@@ -125,46 +128,66 @@ function nullBody(status: number): boolean {
 	return status === 204 || status === 205 || status === 304;
 }
 
-export class DesktopRegistry implements DesktopBridge {
-	private readonly connections = new Map<Id<"users">, Connection>();
-	private readonly owners = new Map<DesktopPeer, Id<"users">>();
+interface Seat {
+	readonly userId: Id<"users">;
+	readonly machineId: string;
+}
 
-	attach(userId: Id<"users">, peer: DesktopPeer): void {
-		const previous = this.connections.get(userId);
+export class DesktopRegistry implements DesktopBridge, DesktopSettingsBridge {
+	private readonly connections = new Map<
+		Id<"users">,
+		Map<string, Connection>
+	>();
+	private readonly seats = new Map<DesktopPeer, Seat>();
+
+	attach(userId: Id<"users">, machineId: string, peer: DesktopPeer): void {
+		const machines =
+			this.connections.get(userId) ?? new Map<string, Connection>();
+		const previous = machines.get(machineId);
 		if (previous !== undefined && previous.peer !== peer) {
-			this.owners.delete(previous.peer);
+			this.seats.delete(previous.peer);
 			previous.drop(new Error("desktop reconnected"));
 			previous.peer.close();
 		}
-		this.connections.set(userId, new Connection(peer));
-		this.owners.set(peer, userId);
+		machines.delete(machineId);
+		machines.set(machineId, new Connection(peer));
+		this.connections.set(userId, machines);
+		this.seats.set(peer, { userId, machineId });
 	}
 
 	receive(peer: DesktopPeer, message: DesktopMessage): void {
-		const userId = this.owners.get(peer);
-		if (userId === undefined) return;
-		this.connections.get(userId)?.receive(message);
+		const seat = this.seats.get(peer);
+		if (seat === undefined) return;
+		this.connections.get(seat.userId)?.get(seat.machineId)?.receive(message);
 	}
 
 	detach(peer: DesktopPeer): void {
-		const userId = this.owners.get(peer);
-		if (userId === undefined) return;
-		this.owners.delete(peer);
-		const connection = this.connections.get(userId);
-		if (connection?.peer !== peer) return;
-		this.connections.delete(userId);
+		const seat = this.seats.get(peer);
+		if (seat === undefined) return;
+		this.seats.delete(peer);
+		const machines = this.connections.get(seat.userId);
+		const connection = machines?.get(seat.machineId);
+		if (machines === undefined || connection?.peer !== peer) return;
+		machines.delete(seat.machineId);
+		if (machines.size === 0) this.connections.delete(seat.userId);
 		connection.drop(new Error("desktop disconnected"));
 	}
 
-	holds(userId: Id<"users">): boolean {
-		return this.connections.has(userId);
+	connected(userId: Id<"users">): boolean {
+		return this.latest(userId) !== undefined;
+	}
+
+	private latest(userId: Id<"users">): Connection | undefined {
+		const machines = this.connections.get(userId);
+		if (machines === undefined) return undefined;
+		return [...machines.values()].at(-1);
 	}
 
 	async open(
 		userId: Id<"users">,
 		server: LocalServer,
 	): Promise<(url: string | URL, init?: RequestInit) => Promise<Response>> {
-		const connection = this.connections.get(userId);
+		const connection = this.latest(userId);
 		if (connection === undefined) throw noDesktop(server.name);
 		const id = crypto.randomUUID();
 		await new Promise<void>((resolve, reject) => {
@@ -184,14 +207,14 @@ export class DesktopRegistry implements DesktopBridge {
 			});
 			connection.send({ type: "open", id, ...server });
 		});
-		return (url, init) => this.forward(userId, server.name, url, init);
+		return (url, init) => this.forward(connection, server.name, url, init);
 	}
 
 	async settings(
 		userId: Id<"users">,
 		change: Partial<DesktopSettings>,
 	): Promise<DesktopSettings | undefined> {
-		const connection = this.connections.get(userId);
+		const connection = this.latest(userId);
 		if (connection === undefined) return undefined;
 		const id = crypto.randomUUID();
 		return new Promise<DesktopSettings>((resolve, reject) => {
@@ -214,17 +237,17 @@ export class DesktopRegistry implements DesktopBridge {
 	}
 
 	async close(userId: Id<"users">, name: string): Promise<void> {
-		this.connections.get(userId)?.send({ type: "close", name });
+		for (const connection of this.connections.get(userId)?.values() ?? [])
+			connection.send({ type: "close", name });
 	}
 
 	private async forward(
-		userId: Id<"users">,
+		connection: Connection,
 		name: string,
 		url: string | URL,
 		init?: RequestInit,
 	): Promise<Response> {
-		const connection = this.connections.get(userId);
-		if (connection === undefined) throw noDesktop(name);
+		if (connection.dropped) throw noDesktop(name);
 		const request = new Request(url, init);
 		const body =
 			request.method === "GET" || request.method === "HEAD"

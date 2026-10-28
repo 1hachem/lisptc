@@ -60,7 +60,7 @@ describe("the desktop registry", () => {
 	it("opens a server on the user's desktop and streams a request through it", async () => {
 		const registry = new DesktopRegistry();
 		const peer = fakeDesktop(registry);
-		registry.attach(user, peer);
+		registry.attach(user, "m1", peer);
 		const fetch = await registry.open(user, server);
 		const response = await fetch("http://desktop.bridge/fs/mcp", {
 			method: "POST",
@@ -95,14 +95,14 @@ describe("the desktop registry", () => {
 			},
 			close() {},
 		};
-		registry.attach(user, peer);
+		registry.attach(user, "m1", peer);
 		await expect(registry.open(user, server)).rejects.toThrow("user declined");
 	});
 
 	it("fails what is in flight when the desktop disconnects", async () => {
 		const registry = new DesktopRegistry();
 		const silent: DesktopPeer = { send() {}, close() {} };
-		registry.attach(user, silent);
+		registry.attach(user, "m1", silent);
 		const opening = registry.open(user, server);
 		registry.detach(silent);
 		await expect(opening).rejects.toThrow("desktop disconnected");
@@ -111,23 +111,40 @@ describe("the desktop registry", () => {
 	it("knows whether a user's desktop is connected right now", () => {
 		const registry = new DesktopRegistry();
 		const peer: DesktopPeer = { send() {}, close() {} };
-		expect(registry.holds(user)).toBe(false);
-		registry.attach(user, peer);
-		expect(registry.holds(user)).toBe(true);
+		expect(registry.connected(user)).toBe(false);
+		registry.attach(user, "m1", peer);
+		expect(registry.connected(user)).toBe(true);
 		registry.detach(peer);
-		expect(registry.holds(user)).toBe(false);
+		expect(registry.connected(user)).toBe(false);
 	});
 
 	it("keeps the newest connection and closes the one it replaces", async () => {
 		const registry = new DesktopRegistry();
 		const first = fakeDesktop(registry);
 		const second = fakeDesktop(registry);
-		registry.attach(user, first);
-		registry.attach(user, second);
+		registry.attach(user, "m1", first);
+		registry.attach(user, "m1", second);
 		expect(first.closed).toBe(true);
 		await registry.open(user, server);
 		expect(first.sent).toEqual([]);
 		expect(second.sent.map((m) => m.type)).toEqual(["open"]);
+	});
+
+	it("keeps two machines of one account side by side, and opens on the newest", async () => {
+		const registry = new DesktopRegistry();
+		const laptop = fakeDesktop(registry);
+		const tower = fakeDesktop(registry);
+		registry.attach(user, "laptop", laptop);
+		registry.attach(user, "tower", tower);
+		expect(laptop.closed).toBe(false);
+		expect(tower.closed).toBe(false);
+		await registry.open(user, server);
+		expect(laptop.sent).toEqual([]);
+		expect(tower.sent.map((m) => m.type)).toEqual(["open"]);
+		registry.detach(tower);
+		expect(registry.connected(user)).toBe(true);
+		await registry.open(user, server);
+		expect(laptop.sent.map((m) => m.type)).toEqual(["open"]);
 	});
 
 	it("shares one registry across every module instance", async () => {
@@ -137,10 +154,10 @@ describe("the desktop registry", () => {
 		const second = await import("../../server/desktop/registry.ts");
 		expect(first.desktops).toBe(second.desktops);
 		const peer = fakeDesktop(first.desktops);
-		first.desktops.attach(user, peer);
-		expect(second.desktops.holds(user)).toBe(true);
+		first.desktops.attach(user, "m1", peer);
+		expect(second.desktops.connected(user)).toBe(true);
 		second.desktops.detach(peer);
-		expect(first.desktops.holds(user)).toBe(false);
+		expect(first.desktops.connected(user)).toBe(false);
 	});
 });
 
@@ -156,7 +173,7 @@ describe("the bridge is the account's, not the window's", () => {
 	it("reaches the account's desktop for a chat driven from any client", async () => {
 		const registry = new DesktopRegistry();
 		const desktop = fakeDesktop(registry);
-		registry.attach(user, desktop);
+		registry.attach(user, "m1", desktop);
 		const fromBrowser = new BridgedHost(user, registry, cluster);
 		const fromWindow = new BridgedHost(user, registry, cluster);
 		for (const host of [fromBrowser, fromWindow]) {
@@ -172,7 +189,7 @@ describe("the bridge is the account's, not the window's", () => {
 
 	it("never reaches another account's desktop", async () => {
 		const registry = new DesktopRegistry();
-		registry.attach("user-2" as Id<"users">, fakeDesktop(registry));
+		registry.attach("user-2" as Id<"users">, "m1", fakeDesktop(registry));
 		await expect(
 			new BridgedHost(user, registry, cluster).ensure({
 				...server,

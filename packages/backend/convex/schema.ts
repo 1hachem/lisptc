@@ -134,6 +134,8 @@ export default defineSchema({
 
 	desktops: defineTable({
 		userId: v.id("users"),
+		machineId: v.string(),
+		label: v.string(),
 		connection: v.string(),
 		instance: v.string(),
 		connected: v.optional(v.boolean()),
@@ -141,6 +143,7 @@ export default defineSchema({
 		seenAt: v.number(),
 	})
 		.index("by_user", ["userId"])
+		.index("by_machine", ["userId", "machineId"])
 		.index("by_seen", ["connected", "seenAt"]),
 
 	preferences: defineTable({

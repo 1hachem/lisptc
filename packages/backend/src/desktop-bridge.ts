@@ -6,7 +6,6 @@ import type {
 	ServerState,
 	StdioConnConfig,
 } from "@repo/mcp-extension/ports";
-import type { DesktopPreferences } from "@repo/preferences-extension/ports";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 export interface LocalServer {
@@ -17,12 +16,9 @@ export interface LocalServer {
 }
 
 export interface DesktopBridge {
+	connected(userId: Id<"users">): boolean;
 	open(userId: Id<"users">, server: LocalServer): Promise<HandleFetch>;
 	close(userId: Id<"users">, name: string): Promise<void>;
-	settings(
-		userId: Id<"users">,
-		change: Partial<DesktopPreferences>,
-	): Promise<DesktopPreferences | undefined>;
 }
 
 function localServer(conf: ConnConfig): StdioConnConfig | undefined {

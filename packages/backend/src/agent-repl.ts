@@ -39,13 +39,13 @@ import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import type { Infer } from "convex/values";
-import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
 import { BridgedHost, type DesktopBridge } from "./desktop-bridge.ts";
+import type { DesktopSettingsBridge } from "./desktop-settings.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -91,8 +91,9 @@ export interface ThreadScope {
 	readonly roster?: readonly string[];
 	readonly subAgent?: boolean;
 	readonly desktop?: {
-		readonly owner: Id<"users">;
-		readonly bridge: DesktopBridge;
+		readonly user: Id<"users">;
+		readonly bridge?: DesktopBridge;
+		readonly settings?: DesktopSettingsBridge;
 	};
 }
 
@@ -131,6 +132,8 @@ export async function workspaceExtensions(
 				: { threads: new SupervisedAgents(supervisor, chatId) }),
 		}),
 	);
+	const bridge = desktop?.bridge;
+	const desktopSettings = desktop?.settings;
 	const permissions = permissionsExtension(
 		permissionsHostFor({
 			store: await ConvexPermissionsStore.open(workspaceId, connect),
@@ -149,11 +152,11 @@ export async function workspaceExtensions(
 			store: new ConvexPreferencesStore(connect),
 			fonts,
 			motions,
-			...(desktop === undefined
+			...(desktopSettings === undefined || desktop === undefined
 				? {}
 				: {
 						desktop: {
-							apply: (change) => desktop.bridge.settings(desktop.owner, change),
+							apply: (change) => desktopSettings.settings(desktop.user, change),
 						},
 					}),
 		}),
@@ -179,17 +182,13 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
-				...(desktop === undefined
+				...(bridge === undefined || desktop === undefined
 					? {}
-					: {
-							desktop: async () =>
-								(await connect().query(api.desktops.owner, { workspaceId }))
-									.connected,
-						}),
+					: { desktop: async () => bridge.connected(desktop.user) }),
 				host:
-					desktop === undefined
+					bridge === undefined || desktop === undefined
 						? new DockerHost()
-						: new BridgedHost(desktop.owner, desktop.bridge, new DockerHost()),
+						: new BridgedHost(desktop.user, bridge, new DockerHost()),
 			}),
 			policy: permissions.rules,
 		}),

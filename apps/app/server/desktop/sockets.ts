@@ -1,6 +1,7 @@
 import type { Id } from "@repo/backend/dataModel";
 import { DESKTOP_SEEN_REFRESH_MS } from "@repo/backend/limits";
 import {
+	type Machine,
 	PROTOCOL_VERSION,
 	parseDesktopMessage,
 	type ServerMessage,
@@ -15,13 +16,14 @@ export interface DesktopSocket {
 
 export interface Presence {
 	readonly userId: Id<"users">;
+	readonly machineId: string;
 	readonly connection: string;
 }
 
 export interface SocketPorts {
 	readonly registry: Pick<DesktopRegistry, "attach" | "receive" | "detach">;
 	authenticate(token: string): Promise<Id<"users"> | null>;
-	announce(userId: Id<"users">): Promise<Presence>;
+	announce(userId: Id<"users">, machine: Machine): Promise<Presence>;
 	seen(presence: Presence): Promise<void>;
 	withdraw(presence: Presence): Promise<void>;
 	now(): number;
@@ -64,8 +66,8 @@ export class DesktopSockets {
 		if (message.type !== "auth") return socket.close(4401, "auth first");
 		const userId = await this.ports.authenticate(message.token);
 		if (userId === null) return socket.close(4401, "invalid token");
-		this.ports.registry.attach(userId, entry.peer);
-		entry.presence = this.ports.announce(userId);
+		this.ports.registry.attach(userId, message.machine.id, entry.peer);
+		entry.presence = this.ports.announce(userId, message.machine);
 		entry.seenAt = this.ports.now();
 		reply(socket, { type: "welcome" });
 	}

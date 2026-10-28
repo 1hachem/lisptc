@@ -23,6 +23,7 @@ import {
 	workspaceExtensions,
 } from "./agent-repl.ts";
 import type { DesktopBridge } from "./desktop-bridge.ts";
+import type { DesktopSettingsBridge } from "./desktop-settings.ts";
 import { ConvexImageStore } from "./image-store.ts";
 import type { Owner, ServerClient } from "./server-client.ts";
 
@@ -111,6 +112,7 @@ export interface ThreadHostOptions {
 	readonly actAs: (owner: Owner) => WorkspaceClient;
 	readonly threads?: () => Threads;
 	readonly bridge?: DesktopBridge;
+	readonly desktopSettings?: DesktopSettingsBridge;
 }
 
 const asChat = (threadId: string) => threadId as Id<"chats">;
@@ -289,8 +291,9 @@ export class ThreadHost {
 		images: ImageStore,
 		own: boolean,
 	): Promise<AgentRepl> {
-		const { workspaceId, ownerId, profile } = await this.record(chatId);
-		const { actAs, threads, bridge } = this.options;
+		const { workspaceId, ownerId, callerId, profile } =
+			await this.record(chatId);
+		const { actAs, threads, bridge, desktopSettings } = this.options;
 		const owner = actAs({ userId: ownerId, workspaceId });
 		const supervisor =
 			own && threads !== undefined
@@ -313,9 +316,17 @@ export class ThreadHost {
 				...(profile.subAgent === undefined ? {} : { subAgent: true }),
 				...(own ? { chatId } : {}),
 				...(supervisor === undefined ? {} : { supervisor }),
-				...(bridge === undefined
+				...(bridge === undefined && desktopSettings === undefined
 					? {}
-					: { desktop: { owner: ownerId, bridge } }),
+					: {
+							desktop: {
+								user: callerId,
+								...(bridge === undefined ? {} : { bridge }),
+								...(desktopSettings === undefined
+									? {}
+									: { settings: desktopSettings }),
+							},
+						}),
 			}),
 			images,
 		});

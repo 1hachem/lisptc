@@ -16,7 +16,9 @@ describe("a user's desktop presence", () => {
 		});
 		await t.mutation(internal.desktops.attach, {
 			userId: alice.user,
+			machineId: "m1",
 			connection: "c1",
+			label: "laptop",
 			instance: "i1",
 		});
 		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
@@ -30,7 +32,9 @@ describe("a user's desktop presence", () => {
 		const bob = await signIn(t, "bob@example.com");
 		await t.mutation(internal.desktops.attach, {
 			userId: bob.user,
+			machineId: "m1",
 			connection: "c1",
+			label: "laptop",
 			instance: "i1",
 		});
 		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
@@ -43,16 +47,21 @@ describe("a user's desktop presence", () => {
 		const alice = await signIn(t, "alice@example.com");
 		await t.mutation(internal.desktops.attach, {
 			userId: alice.user,
+			machineId: "m1",
 			connection: "old",
+			label: "laptop",
 			instance: "i1",
 		});
 		await t.mutation(internal.desktops.attach, {
 			userId: alice.user,
+			machineId: "m1",
 			connection: "new",
+			label: "laptop",
 			instance: "i2",
 		});
 		await t.mutation(internal.desktops.detach, {
 			userId: alice.user,
+			machineId: "m1",
 			connection: "old",
 		});
 		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
@@ -60,6 +69,7 @@ describe("a user's desktop presence", () => {
 		});
 		await t.mutation(internal.desktops.detach, {
 			userId: alice.user,
+			machineId: "m1",
 			connection: "new",
 		});
 		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
@@ -73,17 +83,22 @@ describe("a user's desktop presence", () => {
 		for (const connection of ["c1", "c2", "c3"]) {
 			await t.mutation(internal.desktops.attach, {
 				userId: alice.user,
+				machineId: "m1",
 				connection,
+				label: "laptop",
 				instance: "i1",
 			});
 			await t.mutation(internal.desktops.detach, {
 				userId: alice.user,
+				machineId: "m1",
 				connection,
 			});
 		}
 		await t.mutation(internal.desktops.attach, {
 			userId: alice.user,
+			machineId: "m1",
 			connection: "c4",
+			label: "laptop",
 			instance: "i1",
 		});
 		const rows = await t.run((ctx) => ctx.db.query("desktops").collect());
@@ -91,21 +106,30 @@ describe("a user's desktop presence", () => {
 		expect(rows[0]).toMatchObject({ connection: "c4", connected: true });
 	});
 
-	it("answers the workspace owner's presence to a thread acting in that workspace", async () => {
+	it("keeps two machines of one account apart, and is on while either is", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
-		const workspaceId = alice.workspace;
-		expect(await alice.as.query(api.desktops.owner, { workspaceId })).toEqual({
-			connected: false,
-		});
-		await t.mutation(internal.desktops.attach, {
+		for (const machineId of ["laptop", "tower"])
+			await t.mutation(internal.desktops.attach, {
+				userId: alice.user,
+				machineId,
+				label: machineId,
+				connection: machineId,
+				instance: "i1",
+			});
+		await t.mutation(internal.desktops.detach, {
 			userId: alice.user,
-			connection: "c1",
-			instance: "i1",
+			machineId: "laptop",
+			connection: "laptop",
 		});
-		expect(await alice.as.query(api.desktops.owner, { workspaceId })).toEqual({
+		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
 			connected: true,
 		});
+		const rows = await t.run((ctx) => ctx.db.query("desktops").collect());
+		expect(rows.map((row) => [row.machineId, row.connected])).toEqual([
+			["laptop", false],
+			["tower", true],
+		]);
 	});
 
 	it("marks a desktop gone when its connection stopped pinging, and keeps a pinging one", async () => {
@@ -115,17 +139,22 @@ describe("a user's desktop presence", () => {
 		const bob = await signIn(t, "bob@example.com");
 		await t.mutation(internal.desktops.attach, {
 			userId: alice.user,
+			machineId: "m1",
 			connection: "a",
+			label: "laptop",
 			instance: "crashed",
 		});
 		await t.mutation(internal.desktops.attach, {
 			userId: bob.user,
+			machineId: "m1",
 			connection: "b",
+			label: "laptop",
 			instance: "alive",
 		});
 		vi.advanceTimersByTime(DESKTOP_STALE_MS + 1);
 		await t.mutation(internal.desktops.seen, {
 			userId: bob.user,
+			machineId: "m1",
 			connection: "b",
 		});
 		await t.mutation(internal.desktops.sweep, {});

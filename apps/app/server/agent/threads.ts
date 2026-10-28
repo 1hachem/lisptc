@@ -22,6 +22,7 @@ const host: ThreadHost = new ThreadHost({
 	actAs: convexActingAs,
 	threads: () => threads,
 	bridge: desktops,
+	desktopSettings: desktops,
 });
 
 const telemetry = new Map<string, Identity>();

@@ -1,6 +1,7 @@
 import {
 	type DesktopMessage,
 	type DesktopSettings,
+	type Machine,
 	PING_EVERY_MS,
 	PROTOCOL_VERSION,
 	type ServerMessage,
@@ -46,6 +47,7 @@ export class DesktopBridge {
 		readonly origin: string,
 		private readonly settings: (change: unknown) => DesktopSettings,
 		private readonly outdated: () => Promise<void>,
+		private readonly machine: Machine,
 	) {}
 
 	start(): void {
@@ -85,7 +87,12 @@ export class DesktopBridge {
 		const socket = new WebSocket(socketUrl(this.origin));
 		this.socket = socket;
 		socket.addEventListener("open", () => {
-			this.send({ type: "auth", token, version: PROTOCOL_VERSION });
+			this.send({
+				type: "auth",
+				token,
+				version: PROTOCOL_VERSION,
+				machine: this.machine,
+			});
 		});
 		socket.addEventListener("message", (event) => {
 			this.heardAt = Date.now();

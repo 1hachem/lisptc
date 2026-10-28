@@ -13,6 +13,7 @@ import {
 } from "../../server/desktop/sockets.ts";
 
 const user = "user-1" as Id<"users">;
+const MACHINE = { id: "m1", label: "laptop" };
 
 function world() {
 	let clock = 0;
@@ -21,7 +22,11 @@ function world() {
 	const sockets = new DesktopSockets({
 		registry,
 		authenticate: async (token) => (token === "good" ? user : null),
-		announce: async (userId) => ({ userId, connection: "c1" }),
+		announce: async (userId, machine) => ({
+			userId,
+			machineId: machine.id,
+			connection: "c1",
+		}),
 		seen: async () => {},
 		withdraw: async (presence) => {
 			withdrawn.push(presence);
@@ -51,14 +56,19 @@ function world() {
 describe("the desktop socket", () => {
 	it("answers a ping with a pong", async () => {
 		const { socket, say } = world();
-		await say({ type: "auth", token: "good", version: PROTOCOL_VERSION });
+		await say({
+			type: "auth",
+			token: "good",
+			version: PROTOCOL_VERSION,
+			machine: MACHINE,
+		});
 		await say({ type: "ping" });
 		expect(socket.sent).toEqual([{ type: "welcome" }, { type: "pong" }]);
 	});
 
 	it("tells an older desktop to upgrade", async () => {
 		const { socket, say } = world();
-		await say({ type: "auth", token: "good", version: 2 });
+		await say({ type: "auth", token: "good", version: 2, machine: MACHINE });
 		expect(socket.sent).toEqual([
 			{ type: "upgrade", version: PROTOCOL_VERSION },
 		]);
@@ -67,26 +77,38 @@ describe("the desktop socket", () => {
 
 	it("drops a desktop that went silent and withdraws its presence", async () => {
 		const { registry, sockets, socket, say, pass, withdrawn } = world();
-		await say({ type: "auth", token: "good", version: PROTOCOL_VERSION });
-		expect(registry.holds(user)).toBe(true);
+		await say({
+			type: "auth",
+			token: "good",
+			version: PROTOCOL_VERSION,
+			machine: MACHINE,
+		});
+		expect(registry.connected(user)).toBe(true);
 		pass(SILENT_FOR_TOO_LONG_MS + 1);
 		sockets.sweep();
 		await vi.waitFor(() =>
-			expect(withdrawn).toEqual([{ userId: user, connection: "c1" }]),
+			expect(withdrawn).toEqual([
+				{ userId: user, machineId: MACHINE.id, connection: "c1" },
+			]),
 		);
 		expect(socket.closed).toBe(4408);
-		expect(registry.holds(user)).toBe(false);
+		expect(registry.connected(user)).toBe(false);
 	});
 
 	it("keeps a desktop that keeps pinging", async () => {
 		const { registry, sockets, socket, say, pass } = world();
-		await say({ type: "auth", token: "good", version: PROTOCOL_VERSION });
+		await say({
+			type: "auth",
+			token: "good",
+			version: PROTOCOL_VERSION,
+			machine: MACHINE,
+		});
 		for (let beat = 0; beat < 5; beat += 1) {
 			pass(SILENT_FOR_TOO_LONG_MS - 1);
 			await say({ type: "ping" });
 			sockets.sweep();
 		}
 		expect(socket.closed).toBeUndefined();
-		expect(registry.holds(user)).toBe(true);
+		expect(registry.connected(user)).toBe(true);
 	});
 });

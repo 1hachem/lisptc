@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export const PING_EVERY_MS = 10_000;
 
@@ -9,8 +9,13 @@ export interface DesktopSettings {
 	openAtLogin: boolean;
 }
 
+export interface Machine {
+	readonly id: string;
+	readonly label: string;
+}
+
 export type DesktopMessage =
-	| { type: "auth"; token: string; version: number }
+	| { type: "auth"; token: string; version: number; machine: Machine }
 	| { type: "ping" }
 	| { type: "opened"; id: string; ok: boolean; error?: string }
 	| {
