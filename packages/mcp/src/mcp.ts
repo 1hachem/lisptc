@@ -474,7 +474,12 @@ function connConfigFromArgs(
 const LOAD_KEYS = new Set(["name", "local"]);
 
 function flagsOf(conf: ConnConfig): Record<string, string[]> {
-	return "flags" in conf && conf.flags !== undefined ? conf.flags : {};
+	const headless: Record<string, string[]> =
+		"headless" in conf && conf.headless !== undefined
+			? { headless: conf.headless }
+			: {};
+	const flags = "flags" in conf && conf.flags !== undefined ? conf.flags : {};
+	return { ...headless, ...flags };
 }
 
 function withFlags(conf: ConnConfig, opts: Plist): ConnConfig {
@@ -623,6 +628,12 @@ const LOAD_MCP_OPTIONS: DocArg[] = [
 		type: "list",
 		required: false,
 		description: "OAuth scopes to request when `:oauth` is set.",
+	},
+	{
+		name: "headless",
+		type: "boolean",
+		required: false,
+		description: "Run a toolkit browser server without a window.",
 	},
 ];
 

@@ -32,7 +32,8 @@
       "${PLAYWRIGHT_MCP_EXECUTABLE}",
       "--no-sandbox",
       "--isolated"
-    ]
+    ],
+    "headless": ["--headless"]
   },
   {
     "name": "fs",
