@@ -8,16 +8,12 @@ Turbo tag: `product`.
 
 ## Shape
 
-`src/main.ts` is the Electron main process. esbuild bundles it to
-`dist/main.cjs`, because Electron loads no `.ts` and no workspace package
-unbundled. electron-builder packages `dist/` with the config in
-`package.json`, and publishes the releases electron-updater reads back.
+`src/main.ts` is the Electron main process, and the only entry. Electron loads
+no TypeScript and no workspace package, so whatever the main process imports is
+bundled before it ships. The packaging config lives in `package.json`.
 
-`src/bridge.ts` is the desktop end of the MCP bridge: it signs in to the app's
-websocket with the window's session and runs the :local servers the agent
-asks for. `src/local-server.ts` turns one stdio server into the HTTP the agent
-speaks. `src/protocol.ts` is the wire, and it mirrors
-`apps/app/server/desktop/protocol.ts` field for field.
+`src/bridge.ts` is the desktop end of the MCP bridge, and `src/protocol.ts` is
+its wire, the mirror of `apps/app/server/desktop/protocol.ts`.
 
 ## Rules
 
