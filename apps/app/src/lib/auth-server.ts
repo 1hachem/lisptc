@@ -18,3 +18,7 @@ export const ssrAuth = createIsomorphicFn()
 		return { source: "server", token };
 	})
 	.client((): SsrAuth => ({ source: "browser" }));
+
+export const forgetSession = createIsomorphicFn()
+	.server((): void => dropAuthCookies())
+	.client((): void => undefined);

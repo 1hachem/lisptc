@@ -1,5 +1,6 @@
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import type { ConvexQueryClient } from "@convex-dev/react-query";
+import { type ConvexQueryClient, convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
 import { fontLinks } from "@repo/ui";
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -13,9 +14,10 @@ import {
 	useRouteContext,
 	useRouter,
 } from "@tanstack/react-router";
+import { rejectsSession } from "../components/route-error.tsx";
 import { Analytics } from "../lib/analytics.tsx";
 import { providerClient } from "../lib/auth-client.ts";
-import { ssrAuth } from "../lib/auth-server.ts";
+import { forgetSession, ssrAuth } from "../lib/auth-server.ts";
 import { preferencesQuery, useCachedPreferences } from "../lib/preferences.ts";
 import { fontOf, themeOf } from "../lib/resolved-preferences.ts";
 import { useCachedWorkspace } from "../lib/workspace.tsx";
@@ -26,11 +28,26 @@ interface RouterContext {
 	convexQueryClient: ConvexQueryClient;
 }
 
+async function accountExists(queryClient: QueryClient): Promise<boolean> {
+	try {
+		await queryClient.ensureQueryData(convexQuery(api.users.me, {}));
+		return true;
+	} catch (error) {
+		if (rejectsSession(error)) return false;
+		throw error;
+	}
+}
+
 export const Route = createRootRouteWithContext<RouterContext>()({
 	beforeLoad: async ({ context }) => {
 		const auth = await ssrAuth();
 		if (auth.source === "server" && auth.token !== null) {
 			context.convexQueryClient.serverHttpClient?.setAuth(auth.token);
+			if (!(await accountExists(context.queryClient))) {
+				context.convexQueryClient.serverHttpClient?.clearAuth();
+				forgetSession();
+				return { auth: { source: "server" as const, token: null } };
+			}
 		}
 		return { auth };
 	},
