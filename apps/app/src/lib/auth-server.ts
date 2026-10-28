@@ -1,3 +1,4 @@
+import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import {
 	authToken,
@@ -6,6 +7,7 @@ import {
 	requestFromDesktop,
 } from "../../server/auth.ts";
 import { verifyToken } from "../../server/token.ts";
+import { rejectsSession } from "../components/route-error.tsx";
 
 type SsrAuth =
 	| { source: "server"; token: string | null; desktop: boolean }
@@ -27,6 +29,15 @@ export const ssrAuth = createIsomorphicFn()
 	})
 	.client((): SsrAuth => ({ source: "browser" }));
 
-export const forgetSession = createIsomorphicFn()
+const forgetSession = createIsomorphicFn()
 	.server((): void => dropAuthCookies())
 	.client((): void => undefined);
+
+export function dropRejectedSession(
+	error: unknown,
+	convexQueryClient: ConvexQueryClient,
+): void {
+	if (!rejectsSession(error)) throw error;
+	convexQueryClient.serverHttpClient?.clearAuth();
+	forgetSession();
+}

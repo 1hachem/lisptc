@@ -15,7 +15,7 @@ import {
 } from "@tanstack/react-router";
 import { Analytics } from "../lib/analytics.tsx";
 import { providerClient } from "../lib/auth-client.ts";
-import { ssrAuth } from "../lib/auth-server.ts";
+import { dropRejectedSession, ssrAuth } from "../lib/auth-server.ts";
 import { preferencesQuery, useCachedPreferences } from "../lib/preferences.ts";
 import { fontOf, themeOf } from "../lib/resolved-preferences.ts";
 import { useCachedWorkspace } from "../lib/workspace.tsx";
@@ -35,7 +35,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 	},
 	loader: async ({ context }) => {
 		if (context.auth.source !== "server" || context.auth.token === null) return;
-		await context.queryClient.ensureQueryData(preferencesQuery);
+		try {
+			await context.queryClient.ensureQueryData(preferencesQuery);
+		} catch (error) {
+			dropRejectedSession(error, context.convexQueryClient);
+		}
 	},
 	head: () => ({
 		meta: [

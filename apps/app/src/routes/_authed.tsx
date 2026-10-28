@@ -11,11 +11,10 @@ import { useConvexAuth } from "convex/react";
 import { useEffect } from "react";
 import { AppShell } from "../components/app-shell.tsx";
 import { Landing } from "../components/landing.tsx";
-import { rejectsSession } from "../components/route-error.tsx";
 import { useIdentify } from "../lib/analytics.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
-import { forgetSession } from "../lib/auth-server.ts";
+import { dropRejectedSession } from "../lib/auth-server.ts";
 import { inDesktopShell } from "../lib/desktop-shell.ts";
 import { LeaveProvider, useLeaveState } from "../lib/leave.tsx";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
@@ -45,8 +44,7 @@ export const Route = createFileRoute("/_authed")({
 				),
 			]);
 		} catch (error) {
-			if (!rejectsSession(error)) throw error;
-			forgetSession();
+			dropRejectedSession(error, context.convexQueryClient);
 			throw redirect({ to: "/login" });
 		}
 	},
