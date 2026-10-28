@@ -1,5 +1,8 @@
 import path from "node:path";
-import type { DesktopSettings } from "@repo/desktop-protocol";
+import {
+	DESKTOP_USER_AGENT,
+	type DesktopSettings,
+} from "@repo/desktop-protocol";
 import { desktopEnv } from "@repo/env/desktop";
 import {
 	app,
@@ -11,6 +14,7 @@ import {
 	nativeImage,
 	nativeTheme,
 	powerMonitor,
+	session,
 	shell,
 	Tray,
 } from "electron";
@@ -291,6 +295,9 @@ const macMenu = () =>
 	Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }]);
 
 app.whenReady().then(() => {
+	session.defaultSession.setUserAgent(
+		`${session.defaultSession.getUserAgent()} ${DESKTOP_USER_AGENT}/${app.getVersion()}`,
+	);
 	Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null);
 	settings = readSettings();
 	applyOpenAtLogin(settings.openAtLogin);

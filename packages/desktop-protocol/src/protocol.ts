@@ -1,5 +1,7 @@
 export const PROTOCOL_VERSION = 6;
 
+export const DESKTOP_USER_AGENT = "salsal-desktop";
+
 export const PING_EVERY_MS = 10_000;
 
 export const SILENT_FOR_TOO_LONG_MS = 25_000;

@@ -1,6 +1,7 @@
 import { convexBetterAuthReactStart } from "@convex-dev/better-auth/react-start";
+import { DESKTOP_USER_AGENT } from "@repo/desktop-protocol";
 import { webEnv } from "@repo/env/web";
-import { deleteCookie } from "@tanstack/react-start/server";
+import { deleteCookie, getRequestHeader } from "@tanstack/react-start/server";
 import { ConvexError } from "convex/values";
 
 const UNAUTHENTICATED = new Set(["UNAUTHENTICATED", "NOT_PROVISIONED"]);
@@ -23,6 +24,14 @@ export const { handler: authHandler, getToken: authToken } =
 	});
 
 const AUTH_COOKIES = ["convex_jwt", "session_token", "session_data"];
+
+export function fromDesktop(userAgent: string | undefined): boolean {
+	return userAgent?.includes(`${DESKTOP_USER_AGENT}/`) ?? false;
+}
+
+export function requestFromDesktop(): boolean {
+	return fromDesktop(getRequestHeader("user-agent"));
+}
 
 export function dropAuthCookies(): void {
 	for (const name of AUTH_COOKIES) {

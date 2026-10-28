@@ -2,7 +2,6 @@ import {
 	createFileRoute,
 	Link,
 	Navigate,
-	redirect,
 	useNavigate,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
@@ -11,11 +10,6 @@ import { authClient } from "../lib/auth-client.ts";
 import { inDesktopShell } from "../lib/desktop-shell.ts";
 
 export const Route = createFileRoute("/login")({
-	beforeLoad: ({ context }) => {
-		if (context.auth.source === "server" && context.auth.token !== null) {
-			throw redirect({ to: "/" });
-		}
-	},
 	component: Login,
 });
 
