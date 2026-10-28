@@ -303,6 +303,94 @@ describe("the display widgets", () => {
 		});
 	});
 
+	it("prints a non-string ui/text the way echo would", () => {
+		expect(render("(ui/render (ui/text 42))").view).toEqual({
+			tag: "text",
+			props: { text: "42" },
+			children: [],
+		});
+	});
+
+	it("serialises a heading and markdown as their text", () => {
+		expect(render('(ui/render (ui/heading "Issues"))').view).toEqual({
+			tag: "heading",
+			props: { text: "Issues" },
+			children: [],
+		});
+		expect(render('(ui/render (ui/markdown "**two**"))').view).toEqual({
+			tag: "markdown",
+			props: { text: "**two**" },
+			children: [],
+		});
+	});
+
+	it("accepts a link and a kpi by name, in any order", () => {
+		expect(
+			render('(ui/render (ui/link :url "https://x.dev" :text "x"))').view,
+		).toEqual({
+			tag: "link",
+			props: { text: "x", href: "https://x.dev" },
+			children: [],
+		});
+		expect(render('(ui/render (ui/kpi :value 27 :label "open"))').view).toEqual(
+			{
+				tag: "kpi",
+				props: { label: "open", value: "27" },
+				children: [],
+			},
+		);
+	});
+
+	it("carries only the input options that were given", () => {
+		expect(render('(ui/render (ui/input :name "q"))').view).toEqual({
+			tag: "input",
+			props: { name: "q" },
+			children: [],
+		});
+		expect(
+			render(
+				'(ui/render (ui/input :name "q" :label "Search" :placeholder "…" :value "x"))',
+			).view,
+		).toEqual({
+			tag: "input",
+			props: { name: "q", label: "Search", placeholder: "…", value: "x" },
+			children: [],
+		});
+	});
+
+	it("prints every select option as a string", () => {
+		expect(
+			render(
+				'(ui/render (ui/select \'("a" 2) :name "s" :label "Pick" :value "a"))',
+			).view,
+		).toEqual({
+			tag: "select",
+			props: { name: "s", options: ["a", "2"], label: "Pick", value: "a" },
+			children: [],
+		});
+	});
+
+	it("needs a :name on an input and a select", () => {
+		const { interp } = fresh();
+		expect(() => runSync(interp, "(ui/input)")).toThrow(
+			/ui\/input needs a :name/,
+		);
+		expect(() => runSync(interp, '(ui/select \'("a"))')).toThrow(
+			/ui\/select needs a :name/,
+		);
+	});
+
+	it("nests a form's fields and carries its submit label", () => {
+		const { view } = render(
+			'(ui/render (ui/form (lambda (v) v) (ui/input :name "q") :submit "Go"))',
+		);
+		expect(view).toEqual({
+			tag: "form",
+			props: { action: "a1", submit: "Go" },
+			children: [{ tag: "input", props: { name: "q" }, children: [] }],
+		});
+	});
+
 	it("needs a :name on a checkbox, as on every other field", () => {
 		const { interp } = fresh();
 		expect(() => runSync(interp, "(ui/checkbox)")).toThrow(
