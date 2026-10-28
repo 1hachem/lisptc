@@ -24,9 +24,9 @@ import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
+import { ACTION_PROPS, FOLDERS, TONES } from "@repo/ui-catalog";
 import { z } from "zod";
 import {
-	FOLDERS,
 	type Folder,
 	fileTab,
 	type PanelOp,
@@ -324,10 +324,6 @@ const BUTTON_ARGS: DocArg[] = [
 		description: "what running it does",
 	},
 ];
-
-const ACTION_PROPS = ["action", "on-change"] as const;
-
-const TONES = ["ok", "warn", "bad", "info", "muted"] as const;
 
 function booleanOption(
 	opts: Map<string, unknown>,

@@ -2,6 +2,7 @@ import { bufferTransport } from "@repo/interpreter/channels-host";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { TAGS, widgetOf } from "@repo/ui-catalog";
 import { describe, expect, it } from "vitest";
 import {
 	fileTab,
@@ -741,5 +742,41 @@ describe("the panel beside the chat", () => {
 		const { interp, ui } = fresh();
 		runSync(interp, '(ui/open-file "knowledge" "a.md")');
 		expect(ui.takeView()).toBeUndefined();
+	});
+});
+
+describe("the catalog the frontend draws from", () => {
+	function tagsOf(node: UiNode): string[] {
+		return [node.tag, ...node.children.flatMap(tagsOf)];
+	}
+
+	function strays(node: UiNode): string[] {
+		const own = widgetOf(node) === undefined ? [node.tag] : [];
+		return [...own, ...node.children.flatMap(strays)];
+	}
+
+	it("holds every widget this surface builds, and nothing more", () => {
+		const { interp, ui } = fresh();
+		runSync(
+			interp,
+			`(ui/render
+			   (ui/stack
+			     (ui/text 1) (ui/heading "h") (ui/markdown "m")
+			     (ui/link "l" "https://x.dev") (ui/file-link "f" "knowledge" "a.pdf")
+			     (ui/badge "b") (ui/badge "b" :tone "warn")
+			     (ui/kpi "k" 2) (ui/kpi "k" 2 :hint "h")
+			     (ui/row (ui/card "c" "x"))
+			     (ui/button "go" (lambda () nil))
+			     (ui/form (lambda (v) v)
+			       (ui/input :name "q" :label "Q" :placeholder "p" :value "v")
+			       (ui/select '("a") :name "s" :value "a" :on-change (lambda (v) v))
+			       (ui/checkbox :name "c" :checked t :on-change (lambda (v) v))
+			       :submit "Send")
+			     (ui/table (list (list (cons "id" 1))))))`,
+		);
+		const view = ui.takeView();
+		if (view === undefined) throw new Error("nothing rendered");
+		expect(strays(view)).toEqual([]);
+		expect(new Set(tagsOf(view))).toEqual(new Set(TAGS));
 	});
 });

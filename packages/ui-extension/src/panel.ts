@@ -1,7 +1,6 @@
 import type { Awaitable } from "@repo/shared/host";
+import type { FOLDERS } from "@repo/ui-catalog";
 import type { UiValue } from "./view.ts";
-
-export const FOLDERS = ["attachments", "knowledge"] as const;
 
 export type Folder = (typeof FOLDERS)[number];
 

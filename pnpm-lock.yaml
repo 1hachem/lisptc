@@ -182,6 +182,9 @@ importers:
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@repo/ui-catalog':
+        specifier: workspace:*
+        version: link:../../packages/ui-catalog
       '@repo/ui-extension':
         specifier: workspace:*
         version: link:../../packages/ui-extension
@@ -1642,6 +1645,9 @@ importers:
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
+      '@repo/ui-catalog':
+        specifier: workspace:*
+        version: link:../ui-catalog
       zod:
         specifier: 4.4.3
         version: 4.4.3
