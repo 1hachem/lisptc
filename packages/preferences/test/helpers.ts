@@ -1,8 +1,8 @@
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import {
-	type DesktopPreferences,
 	type DesktopPreferencesPort,
 	MemoryPreferencesStore,
 	type Preferences,

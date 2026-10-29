@@ -1,3 +1,4 @@
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import type { Awaitable, PromptSource } from "@repo/shared/host";
 
 export type Toggles = Readonly<Record<string, boolean>>;
@@ -24,11 +25,6 @@ export interface PreferencesStore {
 export interface Choice {
 	id: string;
 	name: string;
-}
-
-export interface DesktopPreferences {
-	closeToTray: boolean;
-	openAtLogin: boolean;
 }
 
 export interface DesktopPreferencesPort {

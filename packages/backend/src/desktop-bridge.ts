@@ -6,7 +6,7 @@ import type {
 	ServerState,
 	StdioConnConfig,
 } from "@repo/mcp-extension/ports";
-import type { DesktopPreferences } from "@repo/preferences-extension/ports";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 export interface LocalServer {

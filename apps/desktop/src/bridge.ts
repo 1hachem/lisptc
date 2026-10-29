@@ -1,12 +1,12 @@
 import {
 	type DesktopMessage,
-	type DesktopSettings,
 	type Machine,
 	PING_EVERY_MS,
 	PROTOCOL_VERSION,
 	type ServerMessage,
 	SILENT_FOR_TOO_LONG_MS,
 } from "@repo/desktop-protocol";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import { session } from "electron";
 import { LocalServer } from "./local-server.ts";
 
@@ -47,7 +47,7 @@ export class DesktopBridge {
 
 	constructor(
 		readonly origin: string,
-		private readonly settings: (change: unknown) => DesktopSettings,
+		private readonly settings: (change: unknown) => DesktopPreferences,
 		private readonly outdated: () => Promise<void>,
 		private readonly machine: Machine,
 		private readonly changed: (state: ConnectionState) => void,

@@ -413,6 +413,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       electron-updater:
         specifier: ^6.8.11
         version: 6.8.11
@@ -1023,6 +1026,10 @@ importers:
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@24.19.2)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
 
   packages/desktop-protocol:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@repo/tsconfigs':
         specifier: workspace:*

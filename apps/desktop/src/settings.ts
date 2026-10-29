@@ -2,17 +2,18 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import path from "node:path";
-import type { DesktopSettings, Machine } from "@repo/desktop-protocol";
+import type { Machine } from "@repo/desktop-protocol";
 import { desktopEnv } from "@repo/env/desktop";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import { app } from "electron";
 
-const DEFAULTS: DesktopSettings = { closeToTray: true, openAtLogin: false };
+const DEFAULTS: DesktopPreferences = { closeToTray: true, openAtLogin: false };
 
 function file(): string {
 	return path.join(app.getPath("userData"), "settings.json");
 }
 
-export function readSettings(): DesktopSettings {
+export function readSettings(): DesktopPreferences {
 	try {
 		const stored = JSON.parse(readFileSync(file(), "utf8"));
 		return {
@@ -47,7 +48,7 @@ export function machine(): Machine {
 	return { id, label };
 }
 
-export function writeSettings(settings: DesktopSettings): void {
+export function writeSettings(settings: DesktopPreferences): void {
 	mkdirSync(path.dirname(file()), { recursive: true });
 	writeFileSync(file(), JSON.stringify(settings, null, 2));
 }

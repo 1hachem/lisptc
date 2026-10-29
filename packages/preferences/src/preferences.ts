@@ -11,14 +11,9 @@ import {
 import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import { z } from "zod";
-import type {
-	Choice,
-	DesktopPreferences,
-	Preferences,
-	PreferencesHost,
-	Toggles,
-} from "./ports.ts";
+import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
 
 const SET_KEYS = [
 	"font",

@@ -1,11 +1,8 @@
 import type { Id } from "@repo/backend/dataModel";
 import type { Desktop, LocalServer } from "@repo/backend/desktop-bridge";
-import type {
-	DesktopMessage,
-	DesktopSettings,
-	ServerMessage,
-} from "@repo/desktop-protocol";
+import type { DesktopMessage, ServerMessage } from "@repo/desktop-protocol";
 import type { McpTransport } from "@repo/mcp-extension/ports";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 
 export interface DesktopPeer {
 	send(text: string): void;
@@ -26,7 +23,7 @@ function noDesktop(name: string): Error {
 }
 
 interface Settling {
-	resolve(settings: DesktopSettings): void;
+	resolve(settings: DesktopPreferences): void;
 	reject(error: Error): void;
 }
 
@@ -243,12 +240,12 @@ export class DesktopRegistry {
 
 	async settings(
 		userId: Id<"users">,
-		change: Partial<DesktopSettings>,
-	): Promise<DesktopSettings | undefined> {
+		change: Partial<DesktopPreferences>,
+	): Promise<DesktopPreferences | undefined> {
 		const connection = this.latest(userId);
 		if (connection === undefined) return undefined;
 		const id = crypto.randomUUID();
-		return new Promise<DesktopSettings>((resolve, reject) => {
+		return new Promise<DesktopPreferences>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				connection.settling.delete(id);
 				reject(new Error("desktop did not answer about its settings in time"));

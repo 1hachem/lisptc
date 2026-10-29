@@ -1,3 +1,5 @@
+import type { DesktopPreferences } from "@repo/shared/desktop";
+
 export const PROTOCOL_VERSION = 6;
 
 export const DESKTOP_USER_AGENT = "salsal-desktop";
@@ -5,11 +7,6 @@ export const DESKTOP_USER_AGENT = "salsal-desktop";
 export const PING_EVERY_MS = 10_000;
 
 export const SILENT_FOR_TOO_LONG_MS = 25_000;
-
-export interface DesktopSettings {
-	closeToTray: boolean;
-	openAtLogin: boolean;
-}
 
 export interface Machine {
 	readonly id: string;
@@ -46,10 +43,7 @@ export type ServerMessage =
 	| {
 			type: "settings";
 			id: string;
-			change: {
-				readonly closeToTray?: boolean;
-				readonly openAtLogin?: boolean;
-			};
+			change: Partial<DesktopPreferences>;
 	  };
 
 export function parseDesktopMessage(text: string): DesktopMessage | undefined {

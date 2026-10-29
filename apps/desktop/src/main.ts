@@ -1,9 +1,7 @@
 import path from "node:path";
-import {
-	DESKTOP_USER_AGENT,
-	type DesktopSettings,
-} from "@repo/desktop-protocol";
+import { DESKTOP_USER_AGENT } from "@repo/desktop-protocol";
 import { desktopEnv } from "@repo/env/desktop";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import {
 	app,
 	BrowserWindow,
@@ -63,7 +61,7 @@ function targets(): string[] {
 const candidates = targets();
 let current = 0;
 let bridge: DesktopBridge | undefined;
-let settings: DesktopSettings;
+let settings: DesktopPreferences;
 let tray: Tray | undefined;
 let quitting = false;
 let retryTimer: NodeJS.Timeout | undefined;
@@ -134,9 +132,9 @@ function reveal(): void {
 	window.focus();
 }
 
-function settingsChange(input: unknown): Partial<DesktopSettings> {
+function settingsChange(input: unknown): Partial<DesktopPreferences> {
 	if (typeof input !== "object" || input === null) return {};
-	const change: Partial<DesktopSettings> = {};
+	const change: Partial<DesktopPreferences> = {};
 	if ("closeToTray" in input && typeof input.closeToTray === "boolean")
 		change.closeToTray = input.closeToTray;
 	if ("openAtLogin" in input && typeof input.openAtLogin === "boolean")
@@ -144,7 +142,7 @@ function settingsChange(input: unknown): Partial<DesktopSettings> {
 	return change;
 }
 
-function update(input: unknown): DesktopSettings {
+function update(input: unknown): DesktopPreferences {
 	const change = settingsChange(input);
 	if (Object.keys(change).length === 0) return settings;
 	settings = { ...settings, ...change };

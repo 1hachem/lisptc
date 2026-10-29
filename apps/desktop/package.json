@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@repo/shared": "workspace:*",
     "electron-updater": "^6.8.11"
   },
   "devDependencies": {

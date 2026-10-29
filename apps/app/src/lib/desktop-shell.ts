@@ -1,16 +1,12 @@
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import { useEffect, useState } from "react";
 
-interface DesktopSettings {
-	closeToTray: boolean;
-	openAtLogin: boolean;
-}
-
 interface DesktopShell {
-	settings: () => Promise<DesktopSettings | undefined>;
+	settings: () => Promise<DesktopPreferences | undefined>;
 	updateSettings: (
-		change: Partial<DesktopSettings>,
-	) => Promise<DesktopSettings | undefined>;
-	onSettings?: (listener: (settings: DesktopSettings) => void) => () => void;
+		change: Partial<DesktopPreferences>,
+	) => Promise<DesktopPreferences | undefined>;
+	onSettings?: (listener: (settings: DesktopPreferences) => void) => () => void;
 	update?: () => Promise<UpdateState | undefined>;
 	onUpdate?: (listener: (state: UpdateState) => void) => () => void;
 	installUpdate?: () => Promise<void>;
@@ -44,12 +40,12 @@ export function inDesktopShell(): boolean {
 }
 
 export function useDesktopSettings() {
-	const [settings, setSettings] = useState<DesktopSettings>();
+	const [settings, setSettings] = useState<DesktopPreferences>();
 	useEffect(() => {
 		void shell()?.settings().then(setSettings);
 		return shell()?.onSettings?.(setSettings);
 	}, []);
-	const update = (change: Partial<DesktopSettings>) => {
+	const update = (change: Partial<DesktopPreferences>) => {
 		void shell()?.updateSettings(change).then(setSettings);
 	};
 	return { settings, update };

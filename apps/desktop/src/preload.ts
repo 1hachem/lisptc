@@ -1,18 +1,20 @@
-import type { DesktopSettings } from "@repo/desktop-protocol";
+import type { DesktopPreferences } from "@repo/shared/desktop";
 import { contextBridge, ipcRenderer } from "electron";
 import type { ConnectionState } from "./bridge.ts";
 import type { UpdateState } from "./updates.ts";
 
 contextBridge.exposeInMainWorld("lisptcDesktop", {
 	retry: (): void => ipcRenderer.send("desktop:retry"),
-	settings: (): Promise<DesktopSettings> =>
+	settings: (): Promise<DesktopPreferences> =>
 		ipcRenderer.invoke("desktop:settings"),
 	updateSettings: (
-		change: Partial<DesktopSettings>,
-	): Promise<DesktopSettings> =>
+		change: Partial<DesktopPreferences>,
+	): Promise<DesktopPreferences> =>
 		ipcRenderer.invoke("desktop:update-settings", change),
-	onSettings: (listener: (settings: DesktopSettings) => void): (() => void) => {
-		const relay = (_event: unknown, settings: DesktopSettings) =>
+	onSettings: (
+		listener: (settings: DesktopPreferences) => void,
+	): (() => void) => {
+		const relay = (_event: unknown, settings: DesktopPreferences) =>
 			listener(settings);
 		ipcRenderer.on("desktop:settings-changed", relay);
 		return () => ipcRenderer.off("desktop:settings-changed", relay);
