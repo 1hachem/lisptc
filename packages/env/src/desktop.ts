@@ -21,8 +21,10 @@ const localServerSchema = Object.fromEntries(
 
 export const desktopEnv = createEnv({
 	server: {
-		LISPTC_DESKTOP_URL: z.url().default("https://salsal.xyz/"),
-		LISPTC_DESKTOP_FALLBACK_URL: z.url().default("https://salsal.xyz/"),
+		LISPTC_DESKTOP_URL: z.url().default("https://lisptc.taild4910a.ts.net/"),
+		LISPTC_DESKTOP_FALLBACK_URL: z
+			.url()
+			.default("https://lisptc.taild4910a.ts.net/"),
 		APPIMAGE: z.string().optional(),
 		XDG_CONFIG_HOME: z.string().optional(),
 		...localServerSchema,
