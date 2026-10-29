@@ -40,6 +40,8 @@ import {
 	type Split,
 	viewTab,
 } from "./panel.ts";
+import { anchorPromptSection, registerTours } from "./tour.ts";
+import type { TourStore } from "./tour-store.ts";
 import type { UiNode } from "./view.ts";
 import type { ViewStore } from "./view-store.ts";
 import { WIDGET_FORMS, widgetPromptSection, zString } from "./widgets.ts";
@@ -53,6 +55,11 @@ export {
 	type PanelTab,
 	viewTab,
 } from "./panel.ts";
+export {
+	MemoryTourStore,
+	type StartedTour,
+	type TourStore,
+} from "./tour-store.ts";
 export type { UiNode, UiValue } from "./view.ts";
 export {
 	MemoryViewStore,
@@ -434,6 +441,7 @@ function registerUi(
 	surface: UiSurface,
 	panel: PanelStore,
 	views: ViewStore,
+	tours: TourStore,
 ): void {
 	surface.bind(interp, views);
 	surface.reset();
@@ -445,6 +453,10 @@ function registerUi(
 	});
 
 	for (const tag of TAGS) defineWidget(interp, surface, tag);
+	registerTours(interp, tours, {
+		action: (form) => surface.action(form),
+		send: (text) => surface.send(text),
+	});
 
 	function* emit(op: PanelOp): Eval<void> {
 		yield* settled(panel.apply([op]));
@@ -613,6 +625,7 @@ export interface UiHost {
 	prompt: PromptSource;
 	panel: PanelStore;
 	views: ViewStore;
+	tours: TourStore;
 }
 
 export interface UiOptions {
@@ -628,10 +641,13 @@ export function uiExtension(
 	const surface = options.surface ?? new UiSurface();
 	return Object.assign(
 		(interp: Interp): void =>
-			registerUi(interp, surface, host.panel, host.views),
+			registerUi(interp, surface, host.panel, host.views, host.tours),
 		{
 			surface,
-			prompt: host.prompt().replace("{{widgets}}", widgetPromptSection()),
+			prompt: host
+				.prompt()
+				.replace("{{widgets}}", widgetPromptSection())
+				.replace("{{anchors}}", anchorPromptSection()),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();

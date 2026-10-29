@@ -3,8 +3,9 @@ import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { TAGS, widgetOf } from "@repo/ui-catalog";
+import { ANCHOR_IDS, TAGS, tourStep, widgetOf } from "@repo/ui-catalog";
 import { describe, expect, it } from "vitest";
+import { MemoryTourStore } from "../src/tour-store.ts";
 import {
 	fileTab,
 	joinMessages,
@@ -946,5 +947,107 @@ describe("a quoted call as an action", () => {
 		await expect(surface.invoke("a1", {})).rejects.toThrow(
 			/not defined.*no-such-fn|no-such-fn.*not defined/s,
 		);
+	});
+});
+
+describe("tours", () => {
+	function touring() {
+		const surface = new UiSurface();
+		const tours = new MemoryTourStore();
+		const host = uiHostFor({ panel: panelOf([]).panel, tours });
+		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
+		runSync(interp, prelude);
+		return {
+			surface,
+			tours,
+			interp,
+			ui: collector(interp),
+			ev: (code: string) => str(runSync(interp, code)),
+		};
+	}
+
+	it("points at an anchor with one step that waits for a click", () => {
+		const { tours, ev } = touring();
+		expect(ev('(ui/point "knowledge/upload" "Upload here")')).toBe(
+			'"point:knowledge/upload"',
+		);
+		expect(tours.tours.get("point:knowledge/upload")?.steps).toEqual([
+			{ anchor: "knowledge/upload", say: "Upload here", until: "click" },
+		]);
+	});
+
+	it("stores every step of a tour, each one valid against the catalog", () => {
+		const { tours, ev } = touring();
+		ev(`(ui/tour 'upload-files
+			'(:anchor knowledge/upload :say "Drop a PDF here" :until click)
+			'(:anchor "settings" :say "Your account lives here")
+			'(:say "Now ask me about it"))`);
+		const tour = tours.tours.get("upload-files");
+		expect(tour?.steps).toEqual([
+			{ anchor: "knowledge/upload", say: "Drop a PDF here", until: "click" },
+			{ anchor: "settings", say: "Your account lives here", until: "next" },
+			{ say: "Now ask me about it", until: "next" },
+		]);
+		for (const step of tour?.steps ?? [])
+			expect(tourStep.safeParse(step).success).toBe(true);
+	});
+
+	it("refuses an anchor the app does not mount", () => {
+		const { ev } = touring();
+		expect(() => ev('(ui/point "model-picker" "x")')).toThrow(/unknown anchor/);
+		expect(() => ev(`(ui/tour "t" '(:anchor "nowhere" :say "x"))`)).toThrow(
+			/unknown anchor/,
+		);
+	});
+
+	it("refuses a click step without an anchor, an empty tour and a stray key", () => {
+		const { ev } = touring();
+		expect(() => ev(`(ui/tour "t" '(:say "x" :until click))`)).toThrow(
+			/needs an :anchor/,
+		);
+		expect(() => ev('(ui/tour "t")')).toThrow();
+		expect(() => ev(`(ui/tour "t" '(:say "x" :until hover))`)).toThrow(
+			/unknown :until/,
+		);
+		expect(() => ev(`(ui/tour "t" '(:say "x" :colour "red"))`)).toThrow(
+			/unknown option/,
+		);
+	});
+
+	it("tells the agent when the user finishes or skips a tour", async () => {
+		const { tours, surface, ui, ev } = touring();
+		ev(`(ui/tour "upload-files" '(:say "hi"))`);
+		const tour = tours.tours.get("upload-files");
+		if (tour?.done === undefined || tour.skip === undefined)
+			throw new Error("tour carries no end actions");
+		await surface.invoke(tour.done, {});
+		expect(ui.takeMessage()).toBe("I finished the upload-files tour.");
+		await surface.invoke(tour.skip, {});
+		expect(ui.takeMessage()).toBe("I skipped the upload-files tour.");
+	});
+
+	it("reads whether a tour was finished before", () => {
+		const { tours, ev } = touring();
+		expect(ev("(ui/tour-done? 'upload-files)")).toBe("nil");
+		tours.done.add("upload-files");
+		expect(ev("(ui/tour-done? 'upload-files)")).toBe("t");
+	});
+
+	it("names every anchor in the prompt", () => {
+		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		expect(prompt).not.toContain("{{anchors}}");
+		for (const id of ANCHOR_IDS) expect(prompt).toContain(`- ${id}:`);
+	});
+
+	it("runs the tour the prompt shows", () => {
+		const prompt =
+			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
+		const example = prompt.slice(
+			prompt.indexOf('(ui/tour "upload-files"'),
+			prompt.indexOf("New tour or point"),
+		);
+		const { tours, ev } = touring();
+		ev(example);
+		expect(tours.tours.get("upload-files")?.steps).toHaveLength(2);
 	});
 });

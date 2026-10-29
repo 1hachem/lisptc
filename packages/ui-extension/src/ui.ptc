@@ -106,3 +106,24 @@ auth", not a note, "user clicked search".
 - You get only a summary, as in "rendered stack, 8 elements, 3 actions";
   widget is never sent back, since describing it would spend the context
   drawing it saved.
+
+**Showing user around the app**: point at part of the app itself, not a
+widget. Anchors, nothing else exists:
+{{anchors}}
+- (ui/point anchor text) spotlights anchor with callout until user clicks it.
+  (ui/point "knowledge/upload" "Upload PDF here")
+- (ui/tour id step...) walks user through steps, one at a time. Step is plist
+  (:anchor anchor :say text :until next|click). No :anchor: callout in middle.
+  :until next (default) waits for next button; click waits for click on
+  anchor, needs :anchor.
+
+  (ui/tour "upload-files"
+    '(:anchor "knowledge/upload" :say "Drop PDF here" :until click)
+    '(:say "Now ask me about it"))
+
+  New tour or point replaces one on screen. User may skip. Finish or skip
+  sends you message, "I finished the upload-files tour.", so you take next
+  turn. New user message pauses tour; tours expire on their own.
+- (ui/tour-done? id) t if user finished tour before, any chat. Check before
+  offering, do not replay finished tour unasked.
+- Use tour when user asks how to do something in app, not for chat content.
