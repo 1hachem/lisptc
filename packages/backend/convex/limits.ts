@@ -24,6 +24,10 @@ export const MAX_OAUTH_RECORD_BYTES = 65_536;
 
 export const MAX_OAUTH_RECORDS = 100;
 
+export const MAX_MCP_REASON_LENGTH = 4_096;
+
+export const MAX_MCP_MOUNT_BYTES = 524_288;
+
 export const MAX_KNOWLEDGE_BYTES = 20_971_520;
 
 export const MAX_KNOWLEDGE = 200;

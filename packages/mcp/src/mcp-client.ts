@@ -8,8 +8,10 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import { localStateArgs } from "./local-host.ts";
 import {
 	type CallbackServer,
+	issuerClient,
 	StoredOAuthProvider,
 	sharedAuthCallback,
 } from "./mcp-oauth.ts";
@@ -17,13 +19,15 @@ import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
-	type HttpConnConfig,
 	type Icon,
 	type McpClient,
 	type McpHost,
 	type McpTransport,
+	type OAuthClients,
+	type OAuthConnConfig,
 	type OAuthStore,
 	type ServerHandle,
+	type StartWatch,
 	type Tool,
 	type ToolCall,
 } from "./ports.ts";
@@ -40,7 +44,11 @@ function sdkTransport(inner: McpTransport): Transport {
 	return outer;
 }
 
-function stdioTransport(conf: ConnConfig): StdioClientTransport {
+function stdioTransport(
+	conf: ConnConfig,
+	stateHome: string | undefined,
+	scope: string | undefined,
+): StdioClientTransport {
 	const command = "command" in conf ? conf.command : undefined;
 	if (command === undefined)
 		throw new Error(
@@ -48,7 +56,9 @@ function stdioTransport(conf: ConnConfig): StdioClientTransport {
 		);
 	return new StdioClientTransport({
 		command,
-		args: conf.args ?? [],
+		args: stateHome
+			? localStateArgs(conf, stateHome, scope)
+			: (conf.args ?? []),
 		env: {
 			// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
 			...(process.env as Record<string, string>),
@@ -62,7 +72,21 @@ export interface McpClientPorts {
 	oauth: OAuthStore;
 	redirectUri: string;
 	callbackPort: number;
+	clients?: OAuthClients;
 	scope?: string;
+	stateHome?: string;
+}
+
+function oauthScope(conf: OAuthConnConfig): string | undefined {
+	return conf.scopes?.length ? conf.scopes.join(" ") : undefined;
+}
+
+function signsIn(conf: ConnConfig): conf is OAuthConnConfig {
+	return "oauth" in conf && Boolean(conf.oauth);
+}
+
+function serverKey(conf: OAuthConnConfig, serverUrl: string): string {
+	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
 }
 
 function landsOnCallbackPort(url: string, port: number): boolean {
@@ -77,10 +101,32 @@ function landsOnCallbackPort(url: string, port: number): boolean {
 export function mcpClient(ports: McpClientPorts): McpClient {
 	const clients = new Map<string, { client: Client; name: string }>();
 
-	const tokenKey = (serverUrl: string): string => {
-		const origin = new URL(serverUrl).origin;
-		return ports.scope === undefined ? origin : `${ports.scope}/${origin}`;
-	};
+	const tokenKey = (key: string): string =>
+		ports.scope === undefined ? key : `${ports.scope}/${key}`;
+
+	function providerFor(
+		conf: OAuthConnConfig,
+		serverUrl: string,
+	): Promise<StoredOAuthProvider> {
+		const issuer =
+			typeof conf.oauth === "object"
+				? issuerClient(conf.name, conf.oauth, ports.clients ?? {})
+				: undefined;
+		return StoredOAuthProvider.open(
+			scopedStore,
+			serverKey(conf, serverUrl),
+			ports.redirectUri,
+			oauthScope(conf),
+			issuer,
+		);
+	}
+
+	async function serverUrlOf(conf: OAuthConnConfig): Promise<string> {
+		const handle = await ports.host.ensure(conf);
+		if (handle && "url" in handle) return handle.url;
+		if ("url" in conf) return conf.url;
+		throw new Error(`${conf.name}: the host started no server to sign in to`);
+	}
 
 	const scopedStore: OAuthStore = {
 		load: (key) => ports.oauth.load(tokenKey(key)),
@@ -114,19 +160,15 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	}
 
 	async function ensureAuthorized(
+		conf: OAuthConnConfig,
 		serverUrl: string,
-		scope: string | undefined,
 	): Promise<{
 		provider: StoredOAuthProvider;
 		authUrl: string | null;
 		captured: boolean;
 	}> {
-		const provider = await StoredOAuthProvider.create(
-			scopedStore,
-			serverUrl,
-			ports.redirectUri,
-			scope,
-		);
+		const scope = oauthScope(conf);
+		const provider = await providerFor(conf, serverUrl);
 		const registered = provider.clientInformation();
 		if (
 			registered?.redirect_uris &&
@@ -134,7 +176,8 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		) {
 			await provider.invalidateCredentials("all");
 		}
-		if (provider.tokens()) return { provider, authUrl: null, captured: false };
+		if (await provider.tokens())
+			return { provider, authUrl: null, captured: false };
 		await auth(provider, { serverUrl, scope });
 		const authUrl = provider.authorizationUrl;
 		if (!authUrl) throw new Error("no authorization URL produced");
@@ -150,14 +193,12 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 
 	async function connectAuthorized(
 		client: Client,
-		name: string,
+		conf: OAuthConnConfig,
 		url: string,
-		scopes: readonly string[] | undefined,
 		signal?: AbortSignal,
 	): Promise<void> {
-		const scope = scopes?.length ? scopes.join(" ") : undefined;
-		const { provider, authUrl, captured } = await ensureAuthorized(url, scope);
-		if (authUrl) throw new AuthorizationRequired(name, authUrl, captured);
+		const { provider, authUrl, captured } = await ensureAuthorized(conf, url);
+		if (authUrl) throw new AuthorizationRequired(conf.name, authUrl, captured);
 		const transport = new StreamableHTTPClientTransport(new URL(url), {
 			authProvider: provider,
 		});
@@ -166,9 +207,9 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		} catch (e) {
 			if (!(e instanceof UnauthorizedError)) throw e;
 			await provider.invalidateCredentials("tokens");
-			const retry = await ensureAuthorized(url, scope);
+			const retry = await ensureAuthorized(conf, url);
 			throw new AuthorizationRequired(
-				name,
+				conf.name,
 				retry.authUrl ?? url,
 				retry.captured,
 			);
@@ -179,7 +220,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		conf: ConnConfig,
 		handle: ServerHandle | undefined,
 	): Transport {
-		if (!handle) return stdioTransport(conf);
+		if (!handle) return stdioTransport(conf, ports.stateHome, ports.scope);
 		if ("transport" in handle) return sdkTransport(handle.transport());
 		return new StreamableHTTPClientTransport(new URL(handle.url), {
 			requestInit: handle.headers ? { headers: handle.headers } : undefined,
@@ -189,18 +230,15 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	async function openClient(
 		client: Client,
 		conf: ConnConfig,
-		signal?: AbortSignal,
+		watch: StartWatch,
 	): Promise<ConnectResult> {
-		const http = "url" in conf ? conf : undefined;
-		const handle: ServerHandle | undefined = await ports.host.ensure(conf);
-		if (handle && "url" in handle && http?.oauth)
-			await connectAuthorized(
-				client,
-				conf.name,
-				handle.url,
-				http.scopes,
-				signal,
-			);
+		const { signal } = watch;
+		const handle: ServerHandle | undefined = await ports.host.ensure(
+			conf,
+			watch,
+		);
+		if (handle && "url" in handle && signsIn(conf))
+			await connectAuthorized(client, conf, handle.url, signal);
 		else await client.connect(plainTransport(conf, handle), { signal });
 		const { tools } = await client.listTools(undefined, { signal });
 		if (tools.length === 0) {
@@ -220,14 +258,14 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 	return {
 		async connect(
 			conf: ConnConfig,
-			signal?: AbortSignal,
+			watch: StartWatch = {},
 		): Promise<ConnectResult> {
 			const client = new Client(
 				{ name: "lisptc", version: "1.0.0" },
 				{ capabilities: {} },
 			);
 			try {
-				return await openClient(client, conf, signal);
+				return await openClient(client, conf, watch);
 			} catch (e) {
 				await client.close().catch(() => {});
 				throw e;
@@ -237,6 +275,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		async callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown> {
 			const entry = clients.get(call.serverId);
 			if (!entry) throw new Error(`no such server: ${call.serverId}`);
+			ports.host.used(entry.name);
 			const result = await entry.client.callTool(
 				{ name: call.tool, arguments: call.args },
 				undefined,
@@ -272,32 +311,27 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			await ports.host.stop(entry.name);
 		},
 
-		async login(conf: HttpConnConfig): Promise<{ authUrl: string | null }> {
-			const handle = await ports.host.ensure(conf);
-			const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
-			const { authUrl } = await ensureAuthorized(
-				handle !== undefined && "url" in handle ? handle.url : conf.url,
-				scope,
-			);
+		async asleep(serverId: string): Promise<boolean> {
+			const entry = clients.get(serverId);
+			return entry ? await ports.host.asleep(entry.name) : false;
+		},
+
+		async login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }> {
+			const { authUrl } = await ensureAuthorized(conf, await serverUrlOf(conf));
 			return { authUrl };
 		},
 
-		async logout(conf: HttpConnConfig): Promise<void> {
-			await scopedStore.clear(conf.url);
+		async logout(conf: OAuthConnConfig): Promise<void> {
+			await scopedStore.clear(serverKey(conf, "url" in conf ? conf.url : ""));
 		},
 
-		async authorize(conf: HttpConnConfig, code: string): Promise<void> {
-			const scope = conf.scopes?.length ? conf.scopes.join(" ") : undefined;
-			const provider = await StoredOAuthProvider.create(
-				scopedStore,
-				conf.url,
-				ports.redirectUri,
-				scope,
-			);
+		async authorize(conf: OAuthConnConfig, code: string): Promise<void> {
+			const serverUrl = "url" in conf ? conf.url : await serverUrlOf(conf);
+			const provider = await providerFor(conf, serverUrl);
 			const result = await auth(provider, {
-				serverUrl: conf.url,
+				serverUrl,
 				authorizationCode: code,
-				scope,
+				scope: oauthScope(conf),
 			});
 			if (result !== "AUTHORIZED")
 				throw new Error("authorization did not complete (unexpected redirect)");

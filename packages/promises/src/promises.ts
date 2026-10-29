@@ -77,8 +77,13 @@ export function registerPromises(interp: Interp): void {
 		z.tuple([zList]),
 		([rest]) => {
 			const args = listToArray(rest);
-			const [promise] = toPromises(interp, args[0]);
-			return withTimeout(promise, parseTimeout(args[1]), "await");
+			const target = args[0];
+			const [promise] = toPromises(interp, target);
+			return withTimeout(promise, parseTimeout(args[1]), "await", () =>
+				target instanceof LispPromise
+					? interp.async.progressOf(target)
+					: undefined,
+			);
 		},
 	);
 

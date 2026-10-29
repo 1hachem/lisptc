@@ -6,6 +6,7 @@ import { ChatComposer } from "./chat-composer.tsx";
 import { ChatView } from "./chat-view.tsx";
 import { ChildThreads } from "./child-threads.tsx";
 import { Greeting } from "./greeting.tsx";
+import { McpServers } from "./mcp-servers.tsx";
 
 export function Chat() {
 	const fresh = useChatSession((state) => state.fresh);
@@ -38,6 +39,7 @@ export function Chat() {
 						</>
 					) : null}
 				</div>
+				<McpServers />
 				<ChatComposer question={question} />
 			</div>
 		</div>

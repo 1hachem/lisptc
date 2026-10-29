@@ -8,12 +8,16 @@ import type {
 	ToolkitRegistry,
 } from "./ports.ts";
 
-const LOCAL_TOOLKIT_URL = new URL(
-	import.meta.url.endsWith(".ts")
-		? "../mcp.toolkit.local.json"
-		: "./mcp.toolkit.local.json",
-	import.meta.url,
-);
+function packageFile(name: string): URL {
+	return new URL(
+		import.meta.url.endsWith(".ts") ? `../${name}` : `./${name}`,
+		import.meta.url,
+	);
+}
+
+const DEV_TOOLKIT_URL = packageFile("mcp.toolkit.dev.json");
+
+const MACHINE_TOOLKIT_URL = packageFile("mcp.toolkit.local.json");
 
 export const processEnv: EnvLookup = {
 	// biome-ignore lint/style/noProcessEnv: mcp.toolkit.json names the variable, so it is only known at runtime
@@ -63,7 +67,11 @@ export function bundledToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
 }
 
 export function localToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
-	return fileToolkit(LOCAL_TOOLKIT_URL, env);
+	return fileToolkit(DEV_TOOLKIT_URL, env);
+}
+
+export function machineToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
+	return fileToolkit(MACHINE_TOOLKIT_URL, env);
 }
 
 export interface Bridged {

@@ -27,6 +27,8 @@ function fallback(): McpHost & { ensured: string[]; stopped: string[] } {
 		stopAll: async () => {},
 		status: (): ServerState => "unknown",
 		logs: () => "docker log",
+		used: () => {},
+		asleep: async () => false,
 	};
 }
 

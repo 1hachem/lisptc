@@ -1,31 +1,27 @@
-import { fileURLToPath } from "node:url";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
 import { MemoryOAuthStore } from "../src/oauth-host.ts";
-import { recordingHost } from "./helpers.ts";
-
-const FIXTURE = fileURLToPath(
-	new URL("./fixture-mcp-server.ts", import.meta.url),
-);
+import { fixtureServer, recordingHost, withServers } from "./helpers.ts";
 
 async function loaded(host: ReturnType<typeof recordingHost>): Promise<Interp> {
 	const interp = new Interp({
 		extensions: [
-			mcpExtension({
-				...mcpHost,
-				commands: true,
-				client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
-			}),
+			mcpExtension(
+				withServers(
+					{
+						...mcpHost,
+						client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
+					},
+					fixtureServer("fx"),
+				),
+			),
 		],
 	});
 	runSync(interp, prelude);
-	await (runSync(
-		interp,
-		`(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`,
-	) as Promise<unknown>);
+	await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
 	return interp;
 }
 

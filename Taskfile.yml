@@ -10,6 +10,12 @@ includes:
   dashi-codes: ./taskfiles/dashi-codes.yml
   evals: ./taskfiles/evals.yml
   cluster: ./taskfiles/cluster.yml
+  compose:
+    taskfile: ./taskfiles/compose.yml
+    flatten: true
+  mcp-images:
+    taskfile: ./taskfiles/mcp-images.yml
+    flatten: true
 tasks:
   default:
     desc: prints this help
@@ -29,57 +35,20 @@ tasks:
       - echo "desktop on {{.URL}}"
       - LISPTC_DESKTOP_URL={{.URL}} pnpm --filter @lisptc/desktop dev
 
-  mcp:browser:build:
-    desc: build the browser MCP image the playwright toolkit entry runs
-    vars:
-      TAG: '{{.TAG | default "v1.63.0"}}'
-    cmd: docker build -f docker/browser-mcp.Dockerfile -t lisptc/browser-mcp:{{.TAG}} .
-
   mcp:reap:
-    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
+    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown), and the volumes they kept their state on
+    cmds:
+      - |
+        ids=$(docker ps -aq --filter label=lisptc.mcp.host)
+        if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
+      - task: mcp:reap:state
+
+  mcp:reap:state:
+    desc: delete the volumes MCP servers keep their state on, for one workspace or (WORKSPACE unset) all of them
     cmd: |
-      ids=$(docker ps -aq --filter label=lisptc.mcp.host)
-      if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
-
-  up:
-    desc: build and run the whole stack in docker with live reload, secrets from infisical
-    aliases:
-      - dev
-    deps: [mcp:browser:build]
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=dev docker compose up --build --watch {{.CLI_ARGS}}'
-
-  up:convex:
-    desc: start postgres and the convex backend in the background, seed and deploy the functions, and wait until they are done
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: "docker compose up -d --wait convex-backend && docker compose run --rm --build convex-deploy"
-
-  up:prod-local:
-    desc: build the production images and run them locally, against the dev secrets unless ENV says otherwise
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex /auth /api /web /ai /analytics"
-          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" DOCKER_TARGET=prod docker compose up -d --build {{.CLI_ARGS}}'
-      - echo "app http://localhost:3000 · dashboard http://127.0.0.1:6791"
-
-  down:
-    desc: stop the whole stack (pass -- -v to drop its data)
-    cmds:
-      - task: _infisical-run
-        vars:
-          ENV: '{{.ENV | default "dev"}}'
-          PATHS: "/db /convex"
-          CMD: "docker compose down {{.CLI_ARGS}}"
+      filter="label=lisptc.mcp.state{{if .WORKSPACE}}={{.WORKSPACE}}{{end}}"
+      volumes=$(docker volume ls -q --filter "$filter")
+      if [ -z "$volumes" ]; then echo "no MCP state volumes"; else docker volume rm $volumes; fi
 
   convex:push:
     desc: push the convex functions and schema to the local dev deployment, once (production releases through the cluster's convex-deploy Job)

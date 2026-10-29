@@ -68,7 +68,7 @@ export interface Import {
 	typeOnly: boolean;
 }
 
-function imports(text: string): Import[] {
+export function imports(text: string): Import[] {
 	const re = /import\s+(type\s+)?([\s\S]*?)from\s+"([^"]+)"/g;
 	return [...text.matchAll(re)].map((found) => ({
 		module: found[3],

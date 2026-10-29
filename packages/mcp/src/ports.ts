@@ -37,26 +37,82 @@ export interface ConnMeta {
 	icon?: string;
 }
 
+export interface ResourceAmounts {
+	cpu?: string;
+	memory?: string;
+}
+
+export interface Resources {
+	requests?: ResourceAmounts;
+	limits?: ResourceAmounts;
+}
+
+export interface IssuerOAuth {
+	issuer: string;
+	authorize: string;
+	token: string;
+	client: string;
+	params?: Record<string, string>;
+}
+
 export type HttpConnConfig = ConnMeta & {
 	name: string;
 	url: string;
 	headers?: Record<string, string>;
-	oauth?: boolean;
+	oauth?: boolean | IssuerOAuth;
 	scopes?: string[];
 	command?: string;
 	args?: string[];
 	env?: Record<string, string>;
 };
 
+export type Reclaim = "Retain" | "Delete";
+
+export interface StateEntry {
+	name?: string;
+	path: string;
+	size?: string;
+	reclaim?: Reclaim;
+	retentionSeconds?: number;
+}
+
+export type StateSpec = string | StateEntry | (string | StateEntry)[];
+
+export interface NamedPort {
+	name: string;
+	port: number;
+}
+
+export interface AppContainer {
+	image: string;
+	args?: string[];
+	ports?: NamedPort[];
+	expose?: string[];
+	resources?: Resources;
+	state?: StateSpec;
+}
+
+export interface SecretRef {
+	name: string;
+	keys: string[];
+}
+
 export type ContainerConnConfig = ConnMeta & {
 	name: string;
 	image: string;
+	internal?: boolean;
 	port: number;
 	path?: string;
 	command?: string;
 	args?: string[];
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
+	secret?: SecretRef;
+	oauth?: IssuerOAuth;
+	scopes?: string[];
+	resources?: Resources;
+	state?: StateSpec;
+	app?: AppContainer;
 	flags?: Record<string, string[]>;
 };
 
@@ -65,11 +121,14 @@ export type StdioConnConfig = ConnMeta & {
 	command: string;
 	args?: string[];
 	env?: Record<string, string>;
+	resources?: Resources;
 	local?: boolean;
 	flags?: Record<string, string[]>;
 };
 
 export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
+
+export type OAuthConnConfig = HttpConnConfig | ContainerConnConfig;
 
 export interface ConnectResult {
 	serverId: string;
@@ -85,12 +144,13 @@ export interface ToolCall {
 }
 
 export interface McpClient {
-	connect(conf: ConnConfig, signal?: AbortSignal): Promise<ConnectResult>;
+	connect(conf: ConnConfig, watch?: StartWatch): Promise<ConnectResult>;
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
-	login(conf: HttpConnConfig): Promise<{ authUrl: string | null }>;
-	logout(conf: HttpConnConfig): Promise<void>;
-	authorize(conf: HttpConnConfig, code: string): Promise<void>;
+	asleep(serverId: string): Promise<boolean>;
+	login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }>;
+	logout(conf: OAuthConnConfig): Promise<void>;
+	authorize(conf: OAuthConnConfig, code: string): Promise<void>;
 	shutdown(): Promise<void>;
 }
 
@@ -130,12 +190,32 @@ export type ServerHandle = AddressHandle | TransportHandle;
 
 export type ServerState = "running" | "stopped" | "unknown";
 
+export type ServerPhase = "starting" | "ready" | "sleeping" | "failed";
+
+export interface ServerReport {
+	server: string;
+	phase: ServerPhase;
+	reason?: string;
+}
+
+export type ServerReporter = (report: ServerReport) => void;
+
+export interface StartWatch {
+	signal?: AbortSignal;
+	progress?: (note: string) => void;
+}
+
 export interface McpHost {
-	ensure(conf: ConnConfig): Promise<ServerHandle | undefined>;
+	ensure(
+		conf: ConnConfig,
+		watch?: StartWatch,
+	): Promise<ServerHandle | undefined>;
 	stop(name: string): Promise<void>;
 	stopAll(): Promise<void>;
 	status(name: string): ServerState;
 	logs(name: string): string;
+	used(name: string): void;
+	asleep(name: string): Promise<boolean>;
 }
 
 export interface UserMachine {
@@ -147,6 +227,31 @@ export interface UserMachine {
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
 	local?(name: string): StdioConnConfig | undefined;
+}
+
+export interface McpMount {
+	readonly server: string;
+	readonly conf?: HttpConnConfig;
+	readonly tools: readonly Tool[];
+}
+
+export interface McpRegistry {
+	mounts(): readonly McpMount[] | Promise<readonly McpMount[]>;
+	mount(mount: McpMount): void | Promise<void>;
+	unmount(server: string): void | Promise<void>;
+}
+
+export function memoryRegistry(): McpRegistry {
+	const mounted = new Map<string, McpMount>();
+	return {
+		mounts: () => [...mounted.values()],
+		mount: (mount) => {
+			mounted.set(mount.server, mount);
+		},
+		unmount: (server) => {
+			mounted.delete(server);
+		},
+	};
 }
 
 export type ServerAccess =
@@ -168,14 +273,23 @@ export interface PendingAuthorization {
 	state: string;
 	serverUrl: string;
 	scope?: string;
+	oauth?: IssuerOAuth;
 }
 
 export interface OAuthRecord {
 	clientInformation?: OAuthClientInformationFull;
 	tokens?: OAuthTokens;
+	expiresAt?: number;
 	codeVerifier?: string;
 	pending?: PendingAuthorization;
 }
+
+export interface OAuthClient {
+	client_id: string;
+	client_secret: string;
+}
+
+export type OAuthClients = Record<string, OAuthClient>;
 
 export interface OAuthStore {
 	load(serverKey: string): Promise<OAuthRecord | undefined>;

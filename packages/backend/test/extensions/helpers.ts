@@ -8,7 +8,9 @@ import type { InterpExtension } from "@repo/interpreter/session";
 import type {
 	ConnectResult,
 	McpClient,
+	StartWatch,
 	ToolCall,
+	ToolkitRegistry,
 } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
@@ -73,6 +75,16 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
+export function mockToolkit(
+	servers: Record<string, MockServer>,
+): ToolkitRegistry {
+	const entries = Object.keys(servers).map((name) => ({
+		name,
+		command: "node",
+	}));
+	return { all: () => entries };
+}
+
 export function mockMcpClient(
 	servers: Record<string, MockServer>,
 ): McpClient & { calls: ToolCall[] } {
@@ -81,11 +93,11 @@ export function mockMcpClient(
 
 	async function connect(
 		conf: { name: string },
-		signal?: AbortSignal,
+		watch?: StartWatch,
 	): Promise<ConnectResult> {
 		const spec = servers[conf.name];
 		if (!spec) throw new Error(`cannot start MCP server "${conf.name}"`);
-		if (spec.connectDelayMs) await delay(spec.connectDelayMs, signal);
+		if (spec.connectDelayMs) await delay(spec.connectDelayMs, watch?.signal);
 		if (spec.tools.length === 0)
 			throw new Error("connected but the server exposed no tools");
 		const serverId = randomUUID();
@@ -112,6 +124,7 @@ export function mockMcpClient(
 		disconnect: async (serverId) => {
 			live.delete(serverId);
 		},
+		asleep: async () => false,
 		login: async () => ({ authUrl: null }),
 		logout: async () => {},
 		authorize: async () => {},

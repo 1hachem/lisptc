@@ -213,6 +213,8 @@ describe("the bridge is the account's, not the window's", () => {
 		stopAll: async () => {},
 		status: () => "unknown",
 		logs: () => "",
+		used: () => {},
+		asleep: async () => false,
 	};
 
 	it("reaches the account's desktop for a chat driven from any client", async () => {

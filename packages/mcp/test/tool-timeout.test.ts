@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { McpClient, ToolCall } from "../src/ports.ts";
+import { fixtureServer, withServers } from "./helpers.ts";
 
 function stallingClient(): { client: McpClient; calls: ToolCall[] } {
 	const calls: ToolCall[] = [];
@@ -32,6 +33,7 @@ function stallingClient(): { client: McpClient; calls: ToolCall[] } {
 			login: () => Promise.resolve({ authUrl: null }),
 			logout: () => Promise.resolve(),
 			authorize: () => Promise.resolve(),
+			asleep: () => Promise.resolve(false),
 			shutdown: () => Promise.resolve(),
 		},
 	};
@@ -39,13 +41,12 @@ function stallingClient(): { client: McpClient; calls: ToolCall[] } {
 
 async function loaded(client: McpClient): Promise<Interp> {
 	const interp = new Interp({
-		extensions: [mcpExtension({ ...mcpHost, commands: true, client })],
+		extensions: [
+			mcpExtension(withServers({ ...mcpHost, client }, fixtureServer("x"))),
+		],
 	});
 	runSync(interp, prelude);
-	await (runSync(
-		interp,
-		'(load-mcp :name "x" :command "node")',
-	) as LispPromise);
+	await (runSync(interp, '(load-mcp "x")') as LispPromise);
 	return interp;
 }
 

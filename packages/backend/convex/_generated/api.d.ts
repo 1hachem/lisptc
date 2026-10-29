@@ -32,6 +32,7 @@ import type * as lib_stored from "../lib/stored.js";
 import type * as lib_waiting from "../lib/waiting.js";
 import type * as lib_workspaceIcons from "../lib/workspaceIcons.js";
 import type * as limits from "../limits.js";
+import type * as mcpServers from "../mcpServers.js";
 import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
@@ -79,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   "lib/waiting": typeof lib_waiting;
   "lib/workspaceIcons": typeof lib_workspaceIcons;
   limits: typeof limits;
+  mcpServers: typeof mcpServers;
   memories: typeof memories;
   messages: typeof messages;
   migrations: typeof migrations;

@@ -2,9 +2,10 @@ import { googleSheetsEnv } from "@repo/env/mcps/google/sheets";
 import { FastMCP, UserError } from "fastmcp";
 import { z } from "zod";
 import {
+	bearer,
 	credentialsFrom,
 	GoogleAuthError,
-	googleProvider,
+	type GoogleCredentials,
 } from "../google-auth.ts";
 import {
 	addWorksheet,
@@ -17,14 +18,10 @@ import {
 	updateSheetData,
 } from "./api.ts";
 
-const PORT = googleSheetsEnv.LISPTC_SHEETS_PORT;
-const BASE_URL =
-	googleSheetsEnv.LISPTC_SHEETS_URL ?? `http://localhost:${PORT}`;
-
-const server = new FastMCP({
+const server = new FastMCP<GoogleCredentials>({
 	name: "sheets",
 	version: "0.0.0",
-	auth: googleProvider({ server: "sheets", baseUrl: BASE_URL }),
+	authenticate: bearer,
 });
 
 async function json<T>(work: () => Promise<T>): Promise<string> {
@@ -195,5 +192,9 @@ server.addTool({
 
 await server.start({
 	transportType: "httpStream",
-	httpStream: { endpoint: "/mcp", port: PORT },
+	httpStream: {
+		endpoint: "/mcp",
+		host: googleSheetsEnv.LISPTC_SHEETS_HOST,
+		port: googleSheetsEnv.LISPTC_SHEETS_PORT,
+	},
 });

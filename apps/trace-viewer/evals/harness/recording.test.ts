@@ -103,7 +103,7 @@ describe("a mocked MCP server", () => {
 				flaky: { tools: [{ name: "go" }], calls: { go: { error: "boom" } } },
 			},
 		}));
-		await repl.eval('(await (load-mcp :name "flaky" :command "none"))');
+		await repl.eval('(await (load-mcp "flaky"))');
 
 		expect(await repl.eval("(flaky/go)")).toContain("boom");
 		expect(trace.events).toContainEqual(
@@ -130,7 +130,7 @@ describe("a mocked MCP server", () => {
 			},
 		}));
 		secrets.set({ REPL_TOKEN: "s3cr3t-value" });
-		await repl.eval('(await (load-mcp :name "api" :command "none"))');
+		await repl.eval('(await (load-mcp "api"))');
 		await repl.eval('(api/send :token (secret "REPL_TOKEN"))');
 
 		const call = trace.events.find((e) => e.kind === "tool");

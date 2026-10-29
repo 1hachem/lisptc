@@ -4,6 +4,7 @@ import type {
 	McpTransport,
 	ServerHandle,
 	ServerState,
+	StartWatch,
 	StdioConnConfig,
 } from "@repo/mcp-extension/ports";
 import type { DesktopPreferences } from "@repo/shared/desktop";
@@ -41,9 +42,12 @@ export class BridgedHost implements McpHost {
 		private readonly fallback: McpHost,
 	) {}
 
-	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
+	async ensure(
+		conf: ConnConfig,
+		watch?: StartWatch,
+	): Promise<ServerHandle | undefined> {
 		const local = localServer(conf);
-		if (local === undefined) return this.fallback.ensure(conf);
+		if (local === undefined) return this.fallback.ensure(conf, watch);
 		const channel = await this.desktop.open({
 			name: local.name,
 			command: local.command,
@@ -75,5 +79,13 @@ export class BridgedHost implements McpHost {
 
 	logs(name: string): string {
 		return this.opened.has(name) ? "" : this.fallback.logs(name);
+	}
+
+	used(name: string): void {
+		if (!this.opened.has(name)) this.fallback.used(name);
+	}
+
+	async asleep(name: string): Promise<boolean> {
+		return this.opened.has(name) ? false : this.fallback.asleep(name);
 	}
 }

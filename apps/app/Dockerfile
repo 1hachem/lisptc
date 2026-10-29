@@ -30,6 +30,7 @@ RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm install --frozen-lockfile --offline
 COPY --from=pruner /app/out/full/ .
 ARG WEB_BUILD_VARS_HASH
+ENV NODE_OPTIONS=--max-old-space-size=6144
 RUN --mount=type=secret,id=TURBO_TOKEN,env=TURBO_TOKEN \
     --mount=type=secret,id=TURBO_REMOTE_CACHE_SIGNATURE_KEY,env=TURBO_REMOTE_CACHE_SIGNATURE_KEY \
     --mount=type=secret,id=web-build-vars,required=true,target=/app/.env \

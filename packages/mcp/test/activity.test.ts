@@ -48,6 +48,7 @@ function fakeClient(icons: Icon[] | undefined = SERVER_ICONS): McpClient {
 			if (call.tool === "explode") throw new Error("boom");
 			return { ok: true };
 		},
+		asleep: async () => false,
 		disconnect: () => Promise.resolve(),
 		login: () => Promise.resolve({ authUrl: null }),
 		logout: () => Promise.resolve(),

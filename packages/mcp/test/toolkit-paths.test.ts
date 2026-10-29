@@ -11,6 +11,7 @@ import {
 	bundledToolkit,
 	desktopToolkit,
 	localToolkit,
+	machineToolkit,
 } from "../src/toolkit.ts";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
@@ -25,6 +26,7 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 			},
 			callTool: () => never(),
 			disconnect: () => Promise.resolve(),
+			asleep: () => Promise.resolve(false),
 			login: () => Promise.resolve({ authUrl: null }),
 			logout: () => Promise.resolve(),
 			authorize: () => Promise.resolve(),
@@ -33,14 +35,19 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 	};
 }
 
-function configFor(name: string, executable = "", flags = ""): ConnConfig {
+function configFor(
+	name: string,
+	executable = "",
+	flags = "",
+	read: typeof localToolkit = localToolkit,
+): ConnConfig {
 	const { client, seen } = recording();
 	const interp = new Interp({
 		extensions: [
 			mcpExtension({
 				...mcpHost,
 				client,
-				toolkit: bundledToolkit({
+				toolkit: read({
 					get: (key) =>
 						key === "PLAYWRIGHT_MCP_EXECUTABLE" ? executable : undefined,
 				}),
@@ -54,7 +61,7 @@ function configFor(name: string, executable = "", flags = ""): ConnConfig {
 	return conf;
 }
 
-describe("bundled toolkit commands resolve against the manifest", () => {
+describe("local toolkit commands resolve against the manifest", () => {
 	for (const name of ["sheets", "ocr"]) {
 		it(`points ${name} at the directory holding Taskfile.yml`, () => {
 			const conf = configFor(name);
@@ -66,34 +73,43 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 		});
 	}
 
-	it("keeps Playwright's local command alongside its container image", () => {
-		expect(configFor("playwright", "/nix/store/chromium/chrome")).toMatchObject(
-			{
-				image: "lisptc/browser-mcp:v1.63.0",
-				port: 8931,
-				command: "npx",
-				args: [
-					"-y",
-					"@playwright/mcp@0.0.81",
-					"--browser",
-					"chromium",
-					"--executable-path",
-					"/nix/store/chromium/chrome",
-					"--no-sandbox",
-					"--isolated",
-				],
-			},
-		);
+	it("runs Playwright from its local command", () => {
+		expect(configFor("playwright", "/nix/store/chromium/chrome")).toEqual({
+			name: "playwright",
+			description: expect.any(String),
+			keywords: expect.any(Array),
+			command: "npx",
+			args: [
+				"-y",
+				"@playwright/mcp@0.0.81",
+				"--browser",
+				"chromium",
+				"--executable-path",
+				"/nix/store/chromium/chrome",
+				"--no-sandbox",
+				"--shared-browser-context",
+			],
+		});
 	});
 
 	it("runs Playwright's own command without its image under :local", () => {
-		const conf = configFor("playwright", "/nix/chrome", " :local t");
+		const conf = configFor(
+			"playwright",
+			"/nix/chrome",
+			" :local t",
+			bundledToolkit,
+		);
 		expect(conf).not.toHaveProperty("image");
 		expect(conf).toMatchObject({ command: "npx" });
 	});
 
 	it("appends the headless flag under :headless", () => {
-		const conf = configFor("playwright", "/nix/chrome", " :local t :headless");
+		const conf = configFor(
+			"playwright",
+			"/nix/chrome",
+			" :local t :headless",
+			bundledToolkit,
+		);
 		expect(conf.args?.at(-1)).toBe("--headless");
 	});
 
@@ -104,6 +120,34 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 
 describe("the local toolkit runs no container", () => {
 	for (const conf of localToolkit().all()) {
+		it(`names no image for ${conf.name}`, () => {
+			expect("image" in conf).toBe(false);
+		});
+	}
+});
+
+const DOCKERFILES = new URL("../../../docker/mcp/", import.meta.url);
+
+describe("the production toolkit runs a command only as an image's local setup", () => {
+	for (const conf of bundledToolkit().all()) {
+		it(`serves ${conf.name} from its own image or a remote url`, () => {
+			if ("command" in conf) expect("image" in conf).toBe(true);
+			const built = existsSync(new URL(`${conf.name}.Dockerfile`, DOCKERFILES));
+			if ("image" in conf) {
+				expect(Boolean(conf.internal)).toBe(built);
+				if (built)
+					expect(conf.image).toBe(
+						`ghcr.io/1hachem/lisptc-mcp-${conf.name}:main`,
+					);
+			} else {
+				expect("url" in conf && conf.url).toMatch(/^https:\/\//);
+			}
+		});
+	}
+});
+
+describe("the machine toolkit runs no container", () => {
+	for (const conf of machineToolkit().all()) {
 		it(`runs ${conf.name} as a command on the machine`, () => {
 			expect("image" in conf).toBe(false);
 			expect("url" in conf).toBe(false);
@@ -114,13 +158,13 @@ describe("the local toolkit runs no container", () => {
 
 describe("the desktop toolkit", () => {
 	const bundled = bundledToolkit();
-	const bridged = bridgedEntries(bundled, localToolkit());
+	const bridged = bridgedEntries(bundled, machineToolkit());
 	const bundledNames = new Set(bundled.all().map((conf) => conf.name));
 
 	it("bridges every local entry to the user's machine", () => {
 		const all = [...bridged.own, ...bridged.variants];
 		expect(all.map((conf) => conf.name).sort()).toEqual(
-			localToolkit()
+			machineToolkit()
 				.all()
 				.map((conf) => conf.name)
 				.sort(),
