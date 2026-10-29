@@ -97,9 +97,12 @@ export interface SecretRef {
 	keys: string[];
 }
 
+export type Tenancy = "shared" | "dedicated";
+
 export type ContainerConnConfig = ConnMeta & {
 	name: string;
 	image: string;
+	tenancy?: Tenancy;
 	internal?: boolean;
 	port: number;
 	path?: string;

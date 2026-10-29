@@ -341,12 +341,17 @@ export default defineSchema({
 	mcpServers: defineTable({
 		workspaceId: v.id("workspaces"),
 		server: v.string(),
+		instance: v.optional(v.string()),
 		phase: mcpServerPhase,
 		reason: v.optional(v.string()),
 		observedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_server", ["workspaceId", "server"]),
+		.index("by_workspace_server_instance", [
+			"workspaceId",
+			"server",
+			"instance",
+		]),
 
 	mcpMounts: defineTable({
 		workspaceId: v.id("workspaces"),
@@ -361,6 +366,7 @@ export default defineSchema({
 	mcpState: defineTable({
 		workspaceId: v.id("workspaces"),
 		server: v.string(),
+		instance: v.optional(v.string()),
 		name: v.string(),
 		path: v.string(),
 		size: v.string(),
@@ -370,7 +376,12 @@ export default defineSchema({
 		observedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_server_name", ["workspaceId", "server", "name"]),
+		.index("by_workspace_server_instance_name", [
+			"workspaceId",
+			"server",
+			"instance",
+			"name",
+		]),
 
 	sources: defineTable({
 		workspaceId: v.id("workspaces"),

@@ -18,6 +18,7 @@ const RECONCILE_LIMIT = 4096;
 const serverRow = v.object({
 	workspaceId: v.id("workspaces"),
 	server: v.string(),
+	instance: v.optional(v.string()),
 	phase: v.union(mcpServerPhase, v.literal("gone")),
 	reason: v.optional(v.string()),
 });
@@ -25,6 +26,7 @@ const serverRow = v.object({
 const stateRow = v.object({
 	workspaceId: v.id("workspaces"),
 	server: v.string(),
+	instance: v.optional(v.string()),
 	name: v.string(),
 	path: v.string(),
 	size: v.string(),
@@ -34,6 +36,14 @@ const stateRow = v.object({
 });
 
 type ServerRow = Infer<typeof serverRow>;
+
+function ownerKey(row: {
+	workspaceId: string;
+	server: string;
+	instance?: string;
+}): string {
+	return `${row.workspaceId}\0${row.server}\0${row.instance ?? ""}`;
+}
 type StateRow = Infer<typeof stateRow>;
 type StoredState = Omit<Doc<"mcpState">, "_id" | "_creationTime">;
 
@@ -67,6 +77,7 @@ export const list = query({
 		servers: v.array(
 			v.object({
 				server: v.string(),
+				instance: v.optional(v.string()),
 				phase: mcpServerPhase,
 				reason: v.optional(v.string()),
 				observedAt: v.number(),
@@ -75,6 +86,7 @@ export const list = query({
 		state: v.array(
 			v.object({
 				server: v.string(),
+				instance: v.optional(v.string()),
 				name: v.string(),
 				path: v.string(),
 				size: v.string(),
@@ -95,15 +107,28 @@ export const list = query({
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.take(LIST_LIMIT);
 		return {
-			servers: servers.map(({ server, phase, reason, observedAt }) => ({
-				server,
-				phase,
-				...(reason === undefined ? {} : { reason }),
-				observedAt,
-			})),
-			state: state.map(
-				({ server, name, path, size, phase, lastAttached, releasedAt }) => ({
+			servers: servers.map(
+				({ server, instance, phase, reason, observedAt }) => ({
 					server,
+					...(instance === undefined ? {} : { instance }),
+					phase,
+					...(reason === undefined ? {} : { reason }),
+					observedAt,
+				}),
+			),
+			state: state.map(
+				({
+					server,
+					instance,
+					name,
+					path,
+					size,
+					phase,
+					lastAttached,
+					releasedAt,
+				}) => ({
+					server,
+					...(instance === undefined ? {} : { instance }),
 					name,
 					path,
 					size,
@@ -118,12 +143,15 @@ export const list = query({
 
 async function putServer(
 	ctx: MutationCtx,
-	{ workspaceId, server, phase, reason }: ServerRow,
+	{ workspaceId, server, instance, phase, reason }: ServerRow,
 ): Promise<void> {
 	const existing = await ctx.db
 		.query("mcpServers")
-		.withIndex("by_workspace_server", (q) =>
-			q.eq("workspaceId", workspaceId).eq("server", server),
+		.withIndex("by_workspace_server_instance", (q) =>
+			q
+				.eq("workspaceId", workspaceId)
+				.eq("server", server)
+				.eq("instance", instance),
 		)
 		.unique();
 	if (phase === "gone") {
@@ -133,6 +161,7 @@ async function putServer(
 	const next = {
 		workspaceId,
 		server,
+		...(instance === undefined ? {} : { instance }),
 		phase,
 		...(reason === undefined ? {} : { reason }),
 		observedAt: Date.now(),
@@ -147,11 +176,15 @@ async function putServer(
 }
 
 async function putState(ctx: MutationCtx, row: StateRow): Promise<void> {
-	const { workspaceId, server, name, phase } = row;
+	const { workspaceId, server, instance, name, phase } = row;
 	const existing = await ctx.db
 		.query("mcpState")
-		.withIndex("by_workspace_server_name", (q) =>
-			q.eq("workspaceId", workspaceId).eq("server", server).eq("name", name),
+		.withIndex("by_workspace_server_instance_name", (q) =>
+			q
+				.eq("workspaceId", workspaceId)
+				.eq("server", server)
+				.eq("instance", instance)
+				.eq("name", name),
 		)
 		.unique();
 	if (phase === "gone") {
@@ -293,17 +326,14 @@ export const reconcile = internalMutation({
 	handler: async (ctx, { servers, state }) => {
 		for (const row of servers) await putServer(ctx, row);
 		for (const row of state) await putState(ctx, row);
-		const liveServers = new Set(
-			servers.map((row) => `${row.workspaceId}\0${row.server}`),
-		);
+		const liveServers = new Set(servers.map(ownerKey));
 		const liveState = new Set(
-			state.map((row) => `${row.workspaceId}\0${row.server}\0${row.name}`),
+			state.map((row) => `${ownerKey(row)}\0${row.name}`),
 		);
 		for (const row of await ctx.db.query("mcpServers").take(RECONCILE_LIMIT))
-			if (!liveServers.has(`${row.workspaceId}\0${row.server}`))
-				await ctx.db.delete(row._id);
+			if (!liveServers.has(ownerKey(row))) await ctx.db.delete(row._id);
 		for (const row of await ctx.db.query("mcpState").take(RECONCILE_LIMIT))
-			if (!liveState.has(`${row.workspaceId}\0${row.server}\0${row.name}`))
+			if (!liveState.has(`${ownerKey(row)}\0${row.name}`))
 				await ctx.db.delete(row._id);
 		return null;
 	},
