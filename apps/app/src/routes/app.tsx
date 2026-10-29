@@ -1,36 +1,24 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
-import {
-	createFileRoute,
-	Outlet,
-	redirect,
-	useRouterState,
-} from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useEffect } from "react";
 import { AppLoading } from "../components/app-loading.tsx";
 import { AppShell } from "../components/app-shell.tsx";
-import { Landing } from "../components/landing.tsx";
 import { useIdentify } from "../lib/analytics.tsx";
 import { AppearanceProvider } from "../lib/appearance.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { dropRejectedSession } from "../lib/auth-server.ts";
-import { inDesktopShell } from "../lib/desktop-shell.ts";
 import { LeaveProvider, useLeaveState } from "../lib/leave.tsx";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
-import { signedOutPage } from "../lib/signed-out.ts";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
-export const Route = createFileRoute("/_authed")({
+export const Route = createFileRoute("/app")({
 	staticData: { themed: true },
-	beforeLoad: ({ context, location }) => {
-		if (
-			context.auth.source === "server" &&
-			context.auth.token === null &&
-			signedOutPage(location.pathname, context.auth.desktop) === "login"
-		) {
+	beforeLoad: ({ context }) => {
+		if (context.auth.source === "server" && context.auth.token === null) {
 			throw redirect({ to: "/login" });
 		}
 	},
@@ -68,17 +56,9 @@ function LoadLogin() {
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const departure = useLeaveState();
-	const pathname = useRouterState({
-		select: (state) => (state.resolvedLocation ?? state.location).pathname,
-	});
 
 	if (isLoading) return <AppLoading />;
-	if (!isAuthenticated)
-		return signedOutPage(pathname, inDesktopShell()) === "landing" ? (
-			<Landing />
-		) : (
-			<LoadLogin />
-		);
+	if (!isAuthenticated) return <LoadLogin />;
 	if (departure.leaving) return null;
 
 	return (

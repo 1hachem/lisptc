@@ -8,7 +8,7 @@ import { prefetchPanels } from "../../../lib/panel-prefetch.ts";
 import { PanelsProvider } from "../../../lib/panels.tsx";
 import { prefetchSidebar } from "../../../lib/sidebar-prefetch.ts";
 
-export const Route = createFileRoute("/_authed/$workspaceId")({
+export const Route = createFileRoute("/app/$workspaceId")({
 	params: {
 		parse: ({ workspaceId }: { workspaceId: string }) => ({
 			workspaceId: workspaceId as Id<"workspaces">,

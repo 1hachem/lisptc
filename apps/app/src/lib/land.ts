@@ -1,14 +1,14 @@
 import type { AnyRouter } from "@tanstack/react-router";
 
 const APP_ROUTE_IDS = [
-	"/_authed",
-	"/_authed/",
-	"/_authed/$workspaceId",
-	"/_authed/$workspaceId/",
+	"/app",
+	"/app/",
+	"/app/$workspaceId",
+	"/app/$workspaceId/",
 ] as const;
 
 export function landInApp(location: Pick<Location, "replace">): void {
-	location.replace("/");
+	location.replace("/app");
 }
 
 function loadAppChunks(router: AnyRouter): void {
