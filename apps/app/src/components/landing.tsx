@@ -13,7 +13,7 @@ export function Landing() {
 						sign in
 					</Link>
 					<Link
-						to="/download/thanks"
+						to="/download"
 						className="flex-1 bg-bg2 px-2.5 py-1 text-center text-dim hover:text-fg"
 					>
 						download
