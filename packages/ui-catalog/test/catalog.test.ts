@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	ACTION_PROPS,
 	ANCHOR_IDS,
+	anchors,
+	FOLDERS,
 	isAnchor,
 	isPage,
 	isTag,
@@ -92,5 +94,20 @@ describe("the page catalog", () => {
 		expect(
 			tourStep.safeParse({ page: "billing", say: "x", until: "next" }).success,
 		).toBe(false);
+	});
+});
+
+describe("an anchor's location", () => {
+	it("is given for every anchor, and names a known folder or page", () => {
+		for (const id of ANCHOR_IDS) {
+			const { location } = anchors[id];
+			if (location.kind === "page") expect(isPage(location.page)).toBe(true);
+			if (location.kind === "folder")
+				expect(FOLDERS).toContain(location.folder);
+		}
+		expect(anchors["knowledge/upload"].location).toEqual({
+			kind: "folder",
+			folder: "knowledge",
+		});
 	});
 });

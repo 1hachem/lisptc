@@ -115,24 +115,6 @@ export function widgetOf(node: {
 		: undefined;
 }
 
-function anchor(doc: string) {
-	return { doc };
-}
-
-export const anchors = {
-	composer: anchor("box where user types message"),
-	"knowledge/upload": anchor("sidebar button: upload files to knowledge/"),
-	settings: anchor("sidebar gear: account settings"),
-};
-
-export type AnchorId = keyof typeof anchors;
-
-export const ANCHOR_IDS = Object.keys(anchors) as AnchorId[];
-
-export function isAnchor(id: string): id is AnchorId {
-	return Object.hasOwn(anchors, id);
-}
-
 function page(title: string, doc: string) {
 	return { title, doc };
 }
@@ -156,6 +138,32 @@ export const PAGE_IDS = Object.keys(pages) as PageId[];
 
 export function isPage(id: string): id is PageId {
 	return Object.hasOwn(pages, id);
+}
+
+export type AnchorLocation =
+	| { kind: "shell" }
+	| { kind: "folder"; folder: (typeof FOLDERS)[number] }
+	| { kind: "page"; page: PageId };
+
+function anchor(doc: string, location: AnchorLocation) {
+	return { doc, location };
+}
+
+export const anchors = {
+	composer: anchor("box where user types message", { kind: "shell" }),
+	"knowledge/upload": anchor("sidebar button: upload files to knowledge/", {
+		kind: "folder",
+		folder: "knowledge",
+	}),
+	settings: anchor("sidebar gear: account settings", { kind: "shell" }),
+};
+
+export type AnchorId = keyof typeof anchors;
+
+export const ANCHOR_IDS = Object.keys(anchors) as AnchorId[];
+
+export function isAnchor(id: string): id is AnchorId {
+	return Object.hasOwn(anchors, id);
 }
 
 export const UNTILS = ["next", "click"] as const;
