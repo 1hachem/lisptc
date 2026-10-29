@@ -114,3 +114,35 @@ export function widgetOf(node: {
 		? ({ tag: node.tag, props: parsed.data } as Widget)
 		: undefined;
 }
+
+function anchor(doc: string) {
+	return { doc };
+}
+
+export const anchors = {
+	composer: anchor("box where user types message"),
+	"knowledge/upload": anchor("sidebar button: upload files to knowledge/"),
+	settings: anchor("sidebar gear: account settings"),
+};
+
+export type AnchorId = keyof typeof anchors;
+
+export const ANCHOR_IDS = Object.keys(anchors) as AnchorId[];
+
+export function isAnchor(id: string): id is AnchorId {
+	return Object.hasOwn(anchors, id);
+}
+
+export const UNTILS = ["next", "click"] as const;
+
+export const tourStep = z.strictObject({
+	anchor: z.enum(ANCHOR_IDS as [AnchorId, ...AnchorId[]]).optional(),
+	say: z.string().min(1),
+	until: z.enum(UNTILS),
+});
+
+export type TourStep = z.infer<typeof tourStep>;
+
+export const TOUR_STATUSES = ["active", "paused", "done", "skipped"] as const;
+
+export type TourStatus = (typeof TOUR_STATUSES)[number];

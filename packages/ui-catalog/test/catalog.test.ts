@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ACTION_PROPS, isTag, TAGS, widgetOf } from "../src/catalog.ts";
+import {
+	ACTION_PROPS,
+	ANCHOR_IDS,
+	isAnchor,
+	isTag,
+	TAGS,
+	tourStep,
+	widgetOf,
+} from "../src/catalog.ts";
 
 describe("the widget catalog", () => {
 	it("names every action prop a widget carries", () => {
@@ -36,5 +44,34 @@ describe("the widget catalog", () => {
 				props: { text: "x", folder: "downloads", name: "x" },
 			}),
 		).toBeUndefined();
+	});
+});
+
+describe("the anchor catalog", () => {
+	it("knows its own anchors and nothing else", () => {
+		expect(ANCHOR_IDS).toEqual(["composer", "knowledge/upload", "settings"]);
+		expect(isAnchor("toString")).toBe(false);
+		expect(isAnchor("model-picker")).toBe(false);
+	});
+
+	it("takes a tour step only on a known anchor", () => {
+		expect(
+			tourStep.safeParse({
+				anchor: "knowledge/upload",
+				say: "drop a pdf here",
+				until: "click",
+			}).success,
+		).toBe(true);
+		expect(tourStep.safeParse({ say: "hello", until: "next" }).success).toBe(
+			true,
+		);
+		expect(
+			tourStep.safeParse({ anchor: "nowhere", say: "x", until: "next" })
+				.success,
+		).toBe(false);
+		expect(
+			tourStep.safeParse({ anchor: "settings", say: "x", until: "hover" })
+				.success,
+		).toBe(false);
 	});
 });
