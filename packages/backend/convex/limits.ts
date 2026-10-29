@@ -57,3 +57,5 @@ export const MAX_VIEW_BYTES = 262_144;
 export const DESKTOP_SEEN_REFRESH_MS = 30_000;
 
 export const DESKTOP_STALE_MS = 90_000;
+
+export const TOUR_TTL_MS = 1_800_000;

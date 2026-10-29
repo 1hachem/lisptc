@@ -16,6 +16,7 @@ import { clamp } from "./lib/clamp.js";
 import { waitsOnUser } from "./lib/waiting.js";
 import { collect, layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
+import { pauseChatTours } from "./tours.js";
 
 const MAX_SENT = 200;
 
@@ -170,6 +171,8 @@ export async function appendTo(
 		seq += 1;
 	}
 	await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
+	if (messages.some((entry) => entry.type === "human"))
+		await pauseChatTours(ctx, chatId);
 	return ids;
 }
 

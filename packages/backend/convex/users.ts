@@ -31,6 +31,11 @@ export const purge = internalMutation({
 			.withIndex("by_user", (q) => q.eq("userId", userId))
 			.collect();
 		for (const desktop of desktops) await ctx.db.delete(desktop._id);
+		const progress = await ctx.db
+			.query("tourProgress")
+			.withIndex("by_user_tour", (q) => q.eq("userId", userId))
+			.collect();
+		for (const row of progress) await ctx.db.delete(row._id);
 		const workspaces = await ctx.db
 			.query("workspaces")
 			.withIndex("by_owner", (q) => q.eq("ownerId", userId))

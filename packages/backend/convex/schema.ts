@@ -23,6 +23,19 @@ export const subAgent = v.object({
 	budget: v.optional(v.number()),
 });
 
+export const tourStep = v.object({
+	anchor: v.optional(v.string()),
+	say: v.string(),
+	until: v.union(v.literal("next"), v.literal("click")),
+});
+
+export const tourStatus = v.union(
+	v.literal("active"),
+	v.literal("paused"),
+	v.literal("done"),
+	v.literal("skipped"),
+);
+
 export const chatStatus = v.union(
 	v.literal("streaming"),
 	v.literal("waiting"),
@@ -287,6 +300,28 @@ export default defineSchema({
 	})
 		.index("by_chat_view", ["chatId", "viewId"])
 		.index("by_workspace", ["workspaceId"]),
+
+	tours: defineTable({
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		tourId: v.string(),
+		steps: v.array(tourStep),
+		current: v.number(),
+		status: tourStatus,
+		done: v.optional(v.string()),
+		skip: v.optional(v.string()),
+		expiresAt: v.number(),
+	})
+		.index("by_chat_tour", ["chatId", "tourId"])
+		.index("by_user_status", ["userId", "status"]),
+
+	tourProgress: defineTable({
+		userId: v.id("users"),
+		tourId: v.string(),
+		status: v.union(v.literal("done"), v.literal("skipped")),
+		at: v.number(),
+	}).index("by_user_tour", ["userId", "tourId"]),
 
 	repls: defineTable({
 		workspaceId: v.id("workspaces"),

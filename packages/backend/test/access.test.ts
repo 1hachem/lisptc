@@ -372,6 +372,29 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
+	it("refuses starting, reading or moving another user's tour", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const steps = [{ say: "hi", until: "next" as const }];
+		await expect(
+			alice.as.mutation(api.tours.start, { chatId, tourId: "t", steps }),
+		).rejects.toThrow();
+		await bob.as.mutation(api.tours.start, { chatId, tourId: "t", steps });
+		const tour = await bob.as.query(api.tours.active, {});
+		if (tour === null) throw new Error("no active tour");
+		expect(await alice.as.query(api.tours.active, {})).toBeNull();
+		await expect(
+			alice.as.mutation(api.tours.advance, { tour: tour._id, from: 0 }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.tours.skip, { tour: tour._id }),
+		).rejects.toThrow();
+	});
+
 	it("marks a view expired until it is written again", async () => {
 		const t = harness();
 		const bob = await signIn(t, "bob@example.com");
