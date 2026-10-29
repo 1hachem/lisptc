@@ -33,6 +33,16 @@ const RETRY_MS = 4000;
 const LOADING_PAGE = path.join(__dirname, "loading.html");
 const TRAY_ICON = path.join(__dirname, "tray.png");
 const PRELOAD = path.join(__dirname, "preload.cjs");
+const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+const ZOOM_KEYS: Record<string, ZoomDirection> = {
+	"=": "in",
+	"+": "in",
+	"-": "out",
+	_: "out",
+	"0": "reset",
+};
+
+type ZoomDirection = "in" | "out" | "reset";
 
 function originOf(url: string): string | undefined {
 	try {
@@ -181,6 +191,27 @@ async function outdated(): Promise<void> {
 	});
 }
 
+function zoomedFactor(factor: number, direction: ZoomDirection): number {
+	if (direction === "reset") return 1;
+	const steps = direction === "in" ? ZOOM_STEPS : [...ZOOM_STEPS].reverse();
+	return (
+		steps.find((step) =>
+			direction === "in" ? step > factor : step < factor,
+		) ?? factor
+	);
+}
+
+function zoom(window: BrowserWindow, direction: ZoomDirection): void {
+	const contents = window.webContents;
+	const factor = zoomedFactor(contents.getZoomFactor(), direction);
+	contents.setZoomFactor(factor);
+	contents.send("desktop:zoom-changed", factor);
+}
+
+function isZoomDirection(input: unknown): input is ZoomDirection {
+	return input === "in" || input === "out" || input === "reset";
+}
+
 function fromApp(event: IpcMainInvokeEvent): boolean {
 	return sameOrigin(event.senderFrame?.url ?? "");
 }
@@ -204,6 +235,14 @@ function serveSettings(): void {
 	);
 	ipcMain.handle("desktop:reconnect", (event) => {
 		if (fromApp(event)) bridge?.reconnect();
+	});
+	ipcMain.handle("desktop:zoom", (event) =>
+		fromApp(event) ? event.sender.getZoomFactor() : undefined,
+	);
+	ipcMain.handle("desktop:set-zoom", (event, direction: unknown) => {
+		const window = BrowserWindow.fromWebContents(event.sender);
+		if (window && fromApp(event) && isZoomDirection(direction))
+			zoom(window, direction);
 	});
 	ipcMain.handle("desktop:install-update", (event) => {
 		if (fromApp(event)) updates?.install();
@@ -269,6 +308,16 @@ function open(visible: boolean): BrowserWindow {
 		event.preventDefault();
 		window.hide();
 	});
+	window.webContents.on("before-input-event", (event, input) => {
+		const direction = ZOOM_KEYS[input.key];
+		if (input.type !== "keyDown" || direction === undefined) return;
+		if (!(input.control || input.meta) || input.alt) return;
+		event.preventDefault();
+		zoom(window, direction);
+	});
+	window.webContents.on("zoom-changed", (_event, direction) =>
+		zoom(window, direction),
+	);
 	window.webContents.on("console-message", ({ level, message, sourceId }) => {
 		if (level === "error" || level === "warning")
 			console.error(`[page ${level}] ${message} (${sourceId})`);

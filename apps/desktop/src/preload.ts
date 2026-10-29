@@ -31,6 +31,14 @@ contextBridge.exposeInMainWorld("lisptcDesktop", {
 		return () => ipcRenderer.off("desktop:connection-changed", relay);
 	},
 	reconnect: (): Promise<void> => ipcRenderer.invoke("desktop:reconnect"),
+	zoom: (): Promise<number> => ipcRenderer.invoke("desktop:zoom"),
+	setZoom: (direction: "in" | "out" | "reset"): Promise<void> =>
+		ipcRenderer.invoke("desktop:set-zoom", direction),
+	onZoom: (listener: (factor: number) => void): (() => void) => {
+		const relay = (_event: unknown, factor: number) => listener(factor);
+		ipcRenderer.on("desktop:zoom-changed", relay);
+		return () => ipcRenderer.off("desktop:zoom-changed", relay);
+	},
 	installUpdate: (): Promise<void> =>
 		ipcRenderer.invoke("desktop:install-update"),
 });

@@ -9,6 +9,7 @@ import {
 	SLOT_COUNT,
 } from "../lib/status-bar-order.ts";
 import { DesktopStatus } from "./desktop-status.tsx";
+import { DesktopZoom } from "./desktop-zoom.tsx";
 
 const TICK_MS = 15_000;
 
@@ -55,7 +56,12 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 	const { order, shown, reorder } = useStatusBarOrder();
 	const drawn: Record<BarItem, ReactNode> = {
 		panes: indicator,
-		desktop: <DesktopStatus />,
+		desktop: (
+			<>
+				<DesktopZoom />
+				<DesktopStatus />
+			</>
+		),
 		clock: <Clock />,
 	};
 	return (

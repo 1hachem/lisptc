@@ -17,7 +17,12 @@ interface DesktopShell {
 	connection?: () => Promise<ConnectionState | undefined>;
 	onConnection?: (listener: (state: ConnectionState) => void) => () => void;
 	reconnect?: () => Promise<void>;
+	zoom?: () => Promise<number | undefined>;
+	setZoom?: (direction: ZoomDirection) => Promise<void>;
+	onZoom?: (listener: (factor: number) => void) => () => void;
 }
+
+type ZoomDirection = "in" | "out" | "reset";
 
 type ConnectionState =
 	| { status: "connecting" }
@@ -73,4 +78,16 @@ export function useDesktopConnection() {
 		void shell()?.reconnect?.();
 	};
 	return { state, reconnect };
+}
+
+export function useDesktopZoom() {
+	const [factor, setFactor] = useState<number>();
+	useEffect(() => {
+		void shell()?.zoom?.().then(setFactor);
+		return shell()?.onZoom?.(setFactor);
+	}, []);
+	const zoom = (direction: ZoomDirection) => {
+		void shell()?.setZoom?.(direction);
+	};
+	return { factor, zoom };
 }
