@@ -60,6 +60,7 @@ export class DesktopBridge {
 	pause(): void {
 		this.paused = true;
 		this.socket?.close();
+		this.changed({ status: "connecting" });
 	}
 
 	resume(): void {

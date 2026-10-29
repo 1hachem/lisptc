@@ -80,6 +80,16 @@ export class DesktopSockets {
 		void entry.presence?.then((presence) => this.ports.withdraw(presence));
 	}
 
+	async closeAll(): Promise<void> {
+		const withdrawn = [...this.live].map(([socket, entry]) => {
+			this.live.delete(socket);
+			this.ports.registry.detach(entry.peer);
+			socket.close(1012, "server restarting");
+			return entry.presence?.then((presence) => this.ports.withdraw(presence));
+		});
+		await Promise.all(withdrawn);
+	}
+
 	sweep(): void {
 		const deadline = this.ports.now() - SILENT_FOR_TOO_LONG_MS;
 		for (const [socket, entry] of [...this.live])

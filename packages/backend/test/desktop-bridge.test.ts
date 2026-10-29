@@ -53,6 +53,7 @@ function bridge(): Desktop & {
 			closed.push(name);
 		},
 		connected: () => true,
+		running: () => true,
 		settings: async () => undefined,
 	};
 }
@@ -75,6 +76,17 @@ describe("BridgedHost", () => {
 		expect(handle).not.toHaveProperty("url");
 		expect(handle && "transport" in handle && handle.transport()).toBe(channel);
 		expect(host.status("fs")).toBe("running");
+	});
+
+	it("reports a bridged server stopped once the desktop no longer runs it", async () => {
+		const desktop = bridge();
+		const alive = { value: true };
+		desktop.running = () => alive.value;
+		const host = new BridgedHost(desktop, fallback());
+		await host.ensure({ name: "fs", command: "npx", local: true });
+		expect(host.status("fs")).toBe("running");
+		alive.value = false;
+		expect(host.status("fs")).toBe("stopped");
 	});
 
 	it("leaves every other server to the fallback host", async () => {
@@ -107,6 +119,7 @@ describe("BridgedHost", () => {
 				},
 				close: async () => {},
 				connected: () => false,
+				running: () => true,
 				settings: async () => undefined,
 			},
 			fallback(),

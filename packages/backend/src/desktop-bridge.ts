@@ -18,6 +18,7 @@ export interface LocalServer {
 
 export interface Desktop {
 	connected(): boolean;
+	running(name: string): boolean;
 	open(server: LocalServer): Promise<McpTransport>;
 	close(name: string): Promise<void>;
 	settings(
@@ -68,7 +69,8 @@ export class BridgedHost implements McpHost {
 	}
 
 	status(name: string): ServerState {
-		return this.opened.has(name) ? "running" : this.fallback.status(name);
+		if (!this.opened.has(name)) return this.fallback.status(name);
+		return this.desktop.running(name) ? "running" : "stopped";
 	}
 
 	logs(name: string): string {

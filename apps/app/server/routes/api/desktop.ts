@@ -21,6 +21,8 @@ function sweepSilentDesktops(): void {
 	if (sweeping !== undefined) return;
 	sweeping = setInterval(() => sockets.sweep(), SILENCE_SWEEP_MS);
 	sweeping.unref?.();
+	for (const signal of ["SIGTERM", "SIGINT"] as const)
+		process.once(signal, () => void sockets.closeAll());
 }
 
 export default defineWebSocketHandler({

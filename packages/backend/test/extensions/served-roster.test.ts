@@ -89,6 +89,7 @@ describe("the agent the app serves", () => {
 				close: async () => {},
 			}),
 			close: async () => {},
+			running: () => true,
 			settings: async () => undefined,
 		};
 		const extensions = await workspaceExtensions(WORKSPACE, offline, {

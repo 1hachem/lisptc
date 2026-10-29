@@ -42,6 +42,21 @@ function fakeDesktop(registry: DesktopRegistry): DesktopPeer & {
 }
 
 describe("the desktop registry", () => {
+	it("stops reporting a server running once it exits or the desktop goes away", async () => {
+		const registry = new DesktopRegistry();
+		const peer = fakeDesktop(registry);
+		registry.attach(user, "m1", peer);
+		const desktop = registry.for(user);
+		await desktop.open(server);
+		expect(desktop.running("fs")).toBe(true);
+		registry.receive(peer, { type: "exited", server: "fs" });
+		expect(desktop.running("fs")).toBe(false);
+		await desktop.open(server);
+		registry.detach(peer);
+		expect(desktop.running("fs")).toBe(false);
+		expect(desktop.connected()).toBe(false);
+	});
+
 	it("binds a desktop to one user, so another user's machine is never reached", async () => {
 		const registry = new DesktopRegistry();
 		const peer = fakeDesktop(registry);

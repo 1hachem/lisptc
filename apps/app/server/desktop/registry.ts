@@ -194,10 +194,17 @@ export class DesktopRegistry {
 	for(userId: Id<"users">): Desktop {
 		return {
 			connected: () => this.connected(userId),
+			running: (name) => this.running(userId, name),
 			open: (server) => this.open(userId, server),
 			close: (name) => this.close(userId, name),
 			settings: (change) => this.settings(userId, change),
 		};
+	}
+
+	running(userId: Id<"users">, name: string): boolean {
+		for (const connection of this.connections.get(userId)?.values() ?? [])
+			if (connection.channels.has(name)) return true;
+		return false;
 	}
 
 	connected(userId: Id<"users">): boolean {

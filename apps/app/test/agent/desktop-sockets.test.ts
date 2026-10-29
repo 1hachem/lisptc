@@ -75,6 +75,22 @@ describe("the desktop socket", () => {
 		expect(socket.closed).toBe(4426);
 	});
 
+	it("withdraws every desktop's presence when the server shuts down", async () => {
+		const { registry, sockets, socket, say, withdrawn } = world();
+		await say({
+			type: "auth",
+			token: "good",
+			version: PROTOCOL_VERSION,
+			machine: MACHINE,
+		});
+		await sockets.closeAll();
+		expect(withdrawn).toEqual([
+			{ userId: user, machineId: MACHINE.id, connection: "c1" },
+		]);
+		expect(registry.connected(user)).toBe(false);
+		expect(socket.closed).toBe(1012);
+	});
+
 	it("drops a desktop that went silent and withdraws its presence", async () => {
 		const { registry, sockets, socket, say, pass, withdrawn } = world();
 		await say({
