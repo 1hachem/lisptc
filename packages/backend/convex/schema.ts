@@ -25,6 +25,7 @@ export const subAgent = v.object({
 
 export const tourStep = v.object({
 	anchor: v.optional(v.string()),
+	page: v.optional(v.string()),
 	say: v.string(),
 	until: v.union(v.literal("next"), v.literal("click")),
 });
