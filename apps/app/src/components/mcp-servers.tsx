@@ -20,8 +20,15 @@ const DOT: Record<LoadedChip["phase"], string> = {
 	failed: "bg-red",
 };
 
-export function McpServerChips({ servers }: { servers: McpServerChip[] }) {
+export function McpServerChips({
+	servers,
+	chatId = null,
+}: {
+	servers: McpServerChip[];
+	chatId?: string | null;
+}) {
 	const sorted = servers
+		.filter(({ instance }) => instance === undefined || instance === chatId)
 		.filter((chip): chip is LoadedChip => chip.phase !== "sleeping")
 		.sort((a, b) => a.server.localeCompare(b.server));
 	if (sorted.length === 0) return null;
@@ -48,15 +55,6 @@ export function McpServerChips({ servers }: { servers: McpServerChip[] }) {
 	);
 }
 
-export function seenFrom(
-	servers: McpServerChip[],
-	chatId: string | null,
-): McpServerChip[] {
-	return servers.filter(
-		({ instance }) => instance === undefined || instance === chatId,
-	);
-}
-
 function WorkspaceMcpServers({
 	workspaceId,
 	chatId,
@@ -65,7 +63,7 @@ function WorkspaceMcpServers({
 	chatId: string | null;
 }) {
 	const { data } = useQuery(convexQuery(api.mcpServers.list, { workspaceId }));
-	return <McpServerChips servers={seenFrom(data?.servers ?? [], chatId)} />;
+	return <McpServerChips servers={data?.servers ?? []} chatId={chatId} />;
 }
 
 export function McpServers({ chatId }: { chatId: string | null }) {

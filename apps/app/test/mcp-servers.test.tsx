@@ -80,3 +80,38 @@ describe("the MCP servers above the chat input", () => {
 		expect(host.children.length).toBe(0);
 	});
 });
+
+describe("the MCP servers a chat sees", () => {
+	it("shows the workspace's shared servers and only its own instances", async () => {
+		const host = document.createElement("div");
+		document.body.append(host);
+		const root = createRoot(host);
+		roots.push(root);
+		await act(async () => {
+			root.render(
+				<McpServerChips
+					chatId="chat-a"
+					servers={[
+						{ server: "fs", phase: "ready", observedAt: 1 },
+						{
+							server: "playwright",
+							instance: "chat-a",
+							phase: "ready",
+							observedAt: 1,
+						},
+						{
+							server: "playwright",
+							instance: "chat-b",
+							phase: "ready",
+							observedAt: 1,
+						},
+					]}
+				/>,
+			);
+		});
+
+		expect(
+			[...host.querySelectorAll("li")].map((li) => li.textContent),
+		).toEqual(["fsready", "playwright (own)ready"]);
+	});
+});
