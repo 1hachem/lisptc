@@ -19,7 +19,7 @@ permissions:
 jobs:
   find:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+    if: false
     outputs:
       prs: ${{ steps.list.outputs.prs }}
     env:
@@ -237,7 +237,7 @@ jobs:
 
   update:
     needs: [find, resolve]
-    if: always() && inputs.update
+    if: false
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
