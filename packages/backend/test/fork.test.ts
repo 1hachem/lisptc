@@ -113,6 +113,19 @@ describe("forking a chat at a message", () => {
 		).toBe("work (fork)");
 	});
 
+	it("carries the chat's rendered views into the fork", async () => {
+		const { alice, chatId } = await conversation();
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await alice.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		const forked = await alice.as.mutation(api.chats.fork, {
+			chatId,
+			messageId: "h2",
+		});
+		expect(
+			await alice.as.query(api.views.get, { chatId: forked, viewId: "v1" }),
+		).toEqual({ node, rev: 1, expired: false });
+	});
+
 	it("leaves the original chat as it was", async () => {
 		const { t, alice, chatId, replId, second } = await conversation();
 		await alice.as.mutation(api.chats.fork, { chatId, messageId: "t1" });

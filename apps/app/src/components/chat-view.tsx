@@ -411,13 +411,16 @@ function RanOutput({ message }: { message: ChatMessage }) {
 }
 
 function TurnOutput({ message }: { message: ChatMessage }) {
+	const chatId = useChatSession((state) => state.chatId);
 	const ui = toolUi(message);
 	const attachments = attachedTo(message);
 	const asks = toolAsks(message);
 	const answers = toolAnswers(message);
 	return (
 		<>
-			{ui !== undefined && <GenerativeUI node={ui} />}
+			{ui !== undefined && chatId !== null && (
+				<GenerativeUI chatId={chatId} viewId={ui.viewId} />
+			)}
 			{attachments.length > 0 && <AttachedFiles files={attachments} />}
 			{asks.map((ask) => (
 				<AskCard

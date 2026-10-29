@@ -137,6 +137,7 @@ Everything else:
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/desktop-protocol` (`@repo/desktop-protocol`) — the wire between the desktop app and the app server.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
+- `packages/ui-catalog` (`@repo/ui-catalog`) — the widgets a view may hold, which the UI extension builds against and the frontend draws against.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
@@ -189,8 +190,8 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   ships, and `apps/app/AGENTS.md` carries that rule.
 - `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
-- A package tagged `static` is data, like `@repo/toolkit`. It depends on a
-  `foundation` package at most, and every package and app may depend on it.
+- A package tagged `static` is data, like `@repo/toolkit`. It depends on zod or
+  a `foundation` package at most, and every package and app may depend on it.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
   above it reaches past the entrypoints its `package.json` exports. Its stores
   satisfy the language's ports and its `agent-repl` composes the extensions the

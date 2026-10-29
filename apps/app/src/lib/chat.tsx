@@ -11,7 +11,7 @@ import {
 	type Question,
 	questionKey,
 	readAnnotation,
-	type ViewNode,
+	type ViewRef,
 	viewKey,
 } from "@repo/interpreter/annotations";
 import type { Answered, Ask } from "@repo/interpreter/asks";
@@ -778,7 +778,7 @@ export function toolResults(message: ChatMessage): string[] {
 	return [...(envelopeOf(message.additional_kwargs).results ?? [])];
 }
 
-export function toolUi(message: ChatMessage): ViewNode | undefined {
+export function toolUi(message: ChatMessage): ViewRef | undefined {
 	return readAnnotation(message.additional_kwargs, viewKey);
 }
 

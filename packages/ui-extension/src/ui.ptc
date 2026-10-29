@@ -14,27 +14,7 @@ same REPL.
       :submit "search")))
 (ui/render (panel))
 
-**Constructors** each return a widget; none draws on its own.
-- (ui/text s) a line · (ui/heading s) · (ui/markdown s) markdown block.
-- (ui/stack child...) stacked · (ui/row child...) side by side. Bare string
-  child becomes ui/text.
-- (ui/card title child...) titled box. Split long view into named parts;
-  big ui/stack without cards reads as one wall.
-- (ui/kpi label value [:hint "..."]) one big number, as in (ui/kpi "open" 27).
-  Most understanding per token: a glance says what a 27-row table says in a
-  screenful. :hint is smaller line under it.
-- (ui/badge text [:tone "ok"]) short status label. :tone only "ok", "warn",
-  "bad", "info" or "muted"; any other tone is an error, do not invent one. For *state*:
-  status, severity, check result, where a sentence is noise.
-- (ui/link text url) opens in new tab. Use for URL a tool handed you, so user
-  follows it, not copies it from a table.
-- (ui/table rows [:columns '("id" "title")]) rows is list of alists, usual MCP
-  result shape. No :columns: first row's keys are columns.
-- (ui/input :name "q" [:label "..."] [:placeholder "..."] [:value "..."]) text
-  field · (ui/select options :name "n" [:label "..."] [:value "..."]
-  [:on-change fn]) dropdown over strings · (ui/checkbox :name "o"
-  [:label "..."] [:checked t] [:on-change fn]) tick box.
-- (ui/button label action) · (ui/form action child... [:submit "Send"]).
+{{widgets}}
 
 **Actions** are ordinary Lisp functions. Button or form action runs IN THIS
 REPL on use, NO model turn between: click, closure runs, view replaced, you
@@ -64,8 +44,17 @@ are not asked. So every branch you anticipate is free.
 - Actions close over their environment, REPL persistent, so
   (setq counter (+ counter 1)) in a handler sticks; later step reads it like
   any global. They die with REPL: clearing conversation drops every action.
-- (ui/forget view) drops actions behind view's controls; clicks then run
-  nothing. Use on view you replaced or closed. Returns count dropped.
+- Action may be quoted call to global function instead: '(refresh-dashboard)
+  or '(set-filter "open"). Args passed as written, not evaluated. Field alist
+  appended when function takes one more argument. Function looked up by name
+  on click, so redefine it to change what click does. Never dropped past 500
+  handlers, kept across REPL restart. Prefer it for long-lived views:
+
+  (defun set-filter (f) (ui/render (panel f)))
+  (ui/button "open only" '(set-filter "open"))
+- (ui/forget view) drops actions behind view's controls; view shows expired,
+  clicks run nothing. Use on view you replaced or closed. Returns count
+  dropped.
 
 **Handing work back to you, the (ui/send text...) call**: arguments join as
 echo joins them; result joins conversation as user message, so you take next

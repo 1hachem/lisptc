@@ -1,3 +1,4 @@
+import { annotate, viewKey } from "@repo/interpreter/annotations";
 import { newSym } from "@repo/interpreter/objects";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { describe, expect, test } from "vitest";
@@ -31,5 +32,24 @@ describe("a ui action", () => {
 
 		expect(result.error).toBe(false);
 		expect(seen).toEqual([7n]);
+	});
+
+	test("hands the step's annotations back apart from the reply", async () => {
+		const rendering = extension((hooks) => {
+			hooks.invoke.use(async () => {});
+			hooks.annotate.use((buffer, into, next) =>
+				next(buffer, annotate(into, viewKey, { viewId: "v1" })),
+			);
+		});
+		const repl = testRepl([rendering]);
+		const result = await runUiAction(
+			{ repl: async () => repl },
+			"chat",
+			"a1",
+			{},
+		);
+
+		expect(result).not.toHaveProperty("ui");
+		expect(result.annotations).toEqual({ ui: { viewId: "v1" } });
 	});
 });

@@ -27,7 +27,7 @@ const MESSAGES: ChatMessage[] = [
 		additional_kwargs: {
 			display: "drawn for you",
 			results: ["RESULT-VALUE"],
-			ui: { tag: "text", props: {}, children: [] },
+			ui: { viewId: "v1" },
 			intent: {
 				doing: "drawing the chart",
 				todos: [
@@ -566,7 +566,7 @@ describe("the trace", () => {
 			content: '{"source":"lisp-repl","output":"MODEL-MARK"}',
 			additional_kwargs: {
 				display: "OUTPUT-MARK",
-				ui: { tag: "text", props: { text: "UI-MARK" }, children: [] },
+				ui: { viewId: "UI-MARK" },
 				question: {
 					id: "q1",
 					prompt: "ASKS-MARK",

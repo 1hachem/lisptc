@@ -60,7 +60,7 @@ export const panelContent = v.union(
 	v.object({
 		kind: v.literal("view"),
 		title: v.string(),
-		node: v.any(),
+		viewId: v.string(),
 		chatId: v.optional(v.string()),
 	}),
 	v.object({
@@ -276,6 +276,17 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		layout: panelLayout,
 	}).index("by_workspace", ["workspaceId"]),
+
+	views: defineTable({
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		viewId: v.string(),
+		node: v.any(),
+		rev: v.number(),
+		expired: v.optional(v.boolean()),
+	})
+		.index("by_chat_view", ["chatId", "viewId"])
+		.index("by_workspace", ["workspaceId"]),
 
 	repls: defineTable({
 		workspaceId: v.id("workspaces"),

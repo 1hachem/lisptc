@@ -1,7 +1,9 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { TAGS, widgetOf } from "@repo/ui-catalog";
 import { describe, expect, it } from "vitest";
 import {
 	fileTab,
@@ -19,6 +21,8 @@ import {
 	viewTab,
 } from "../src/ui.ts";
 import { uiHostFor } from "../src/ui-host.ts";
+import { MemoryViewStore } from "../src/view-store.ts";
+import { WIDGET_FORMS } from "../src/widgets.ts";
 
 function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 	let tabs = [...saved];
@@ -51,7 +55,7 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 function collector(interp: Interp) {
 	let view: UiNode | undefined;
 	let messages: string[] = [];
-	rendered.on(interp.channels, (node) => {
+	rendered.on(interp.channels, ({ node }) => {
 		view = node;
 	});
 	sent.on(interp.channels, (text) => {
@@ -303,6 +307,94 @@ describe("the display widgets", () => {
 		});
 	});
 
+	it("prints a non-string ui/text the way echo would", () => {
+		expect(render("(ui/render (ui/text 42))").view).toEqual({
+			tag: "text",
+			props: { text: "42" },
+			children: [],
+		});
+	});
+
+	it("serialises a heading and markdown as their text", () => {
+		expect(render('(ui/render (ui/heading "Issues"))').view).toEqual({
+			tag: "heading",
+			props: { text: "Issues" },
+			children: [],
+		});
+		expect(render('(ui/render (ui/markdown "**two**"))').view).toEqual({
+			tag: "markdown",
+			props: { text: "**two**" },
+			children: [],
+		});
+	});
+
+	it("accepts a link and a kpi by name, in any order", () => {
+		expect(
+			render('(ui/render (ui/link :url "https://x.dev" :text "x"))').view,
+		).toEqual({
+			tag: "link",
+			props: { text: "x", href: "https://x.dev" },
+			children: [],
+		});
+		expect(render('(ui/render (ui/kpi :value 27 :label "open"))').view).toEqual(
+			{
+				tag: "kpi",
+				props: { label: "open", value: "27" },
+				children: [],
+			},
+		);
+	});
+
+	it("carries only the input options that were given", () => {
+		expect(render('(ui/render (ui/input :name "q"))').view).toEqual({
+			tag: "input",
+			props: { name: "q" },
+			children: [],
+		});
+		expect(
+			render(
+				'(ui/render (ui/input :name "q" :label "Search" :placeholder "…" :value "x"))',
+			).view,
+		).toEqual({
+			tag: "input",
+			props: { name: "q", label: "Search", placeholder: "…", value: "x" },
+			children: [],
+		});
+	});
+
+	it("prints every select option as a string", () => {
+		expect(
+			render(
+				'(ui/render (ui/select \'("a" 2) :name "s" :label "Pick" :value "a"))',
+			).view,
+		).toEqual({
+			tag: "select",
+			props: { name: "s", options: ["a", "2"], label: "Pick", value: "a" },
+			children: [],
+		});
+	});
+
+	it("needs a :name on an input and a select", () => {
+		const { interp } = fresh();
+		expect(() => runSync(interp, "(ui/input)")).toThrow(
+			/ui\/input needs a :name/,
+		);
+		expect(() => runSync(interp, '(ui/select \'("a"))')).toThrow(
+			/ui\/select needs a :name/,
+		);
+	});
+
+	it("nests a form's fields and carries its submit label", () => {
+		const { view } = render(
+			'(ui/render (ui/form (lambda (v) v) (ui/input :name "q") :submit "Go"))',
+		);
+		expect(view).toEqual({
+			tag: "form",
+			props: { action: "a1", submit: "Go" },
+			children: [{ tag: "input", props: { name: "q" }, children: [] }],
+		});
+	});
+
 	it("needs a :name on a checkbox, as on every other field", () => {
 		const { interp } = fresh();
 		expect(() => runSync(interp, "(ui/checkbox)")).toThrow(
@@ -339,7 +431,7 @@ describe("actions", () => {
 	it("rejects a non-callable action where the mistake was made", () => {
 		const { interp } = fresh();
 		expect(() => runSync(interp, '(ui/button "go" "not a function")')).toThrow(
-			/function expected as a ui action/,
+			/function or quoted call expected as a ui action/,
 		);
 	});
 
@@ -390,7 +482,7 @@ describe("actions", () => {
 			(ui/render view)
 		`);
 		expect(str(runSync(interp, "(ui/forget view)"))).toBe("2");
-		await expect(surface.invoke("a1", {})).rejects.toThrow(/no such ui action/);
+		expect(surface.hasAction("a1")).toBe(false);
 		expect(str(runSync(interp, "(ui/forget view)"))).toBe("0");
 	});
 
@@ -566,15 +658,7 @@ describe("the panel beside the chat", () => {
 			op: "open",
 			tab: "view:counts",
 			split: "right",
-			content: {
-				kind: "view",
-				title: "counts",
-				node: {
-					tag: "kpi",
-					props: { label: "open", value: "3" },
-					children: [],
-				},
-			},
+			content: { kind: "view", title: "counts", viewId: "view:counts" },
 		});
 	});
 
@@ -653,5 +737,214 @@ describe("the panel beside the chat", () => {
 		const { interp, ui } = fresh();
 		runSync(interp, '(ui/open-file "knowledge" "a.md")');
 		expect(ui.takeView()).toBeUndefined();
+	});
+});
+
+describe("the catalog the frontend draws from", () => {
+	function tagsOf(node: UiNode): string[] {
+		return [node.tag, ...node.children.flatMap(tagsOf)];
+	}
+
+	function strays(node: UiNode): string[] {
+		const own = widgetOf(node) === undefined ? [node.tag] : [];
+		return [...own, ...node.children.flatMap(strays)];
+	}
+
+	it("holds every widget this surface builds, and nothing more", () => {
+		const { interp, ui } = fresh();
+		runSync(
+			interp,
+			`(ui/render
+			   (ui/stack
+			     (ui/text 1) (ui/heading "h") (ui/markdown "m")
+			     (ui/link "l" "https://x.dev") (ui/file-link "f" "knowledge" "a.pdf")
+			     (ui/badge "b") (ui/badge "b" :tone "warn")
+			     (ui/kpi "k" 2) (ui/kpi "k" 2 :hint "h")
+			     (ui/row (ui/card "c" "x"))
+			     (ui/button "go" (lambda () nil))
+			     (ui/form (lambda (v) v)
+			       (ui/input :name "q" :label "Q" :placeholder "p" :value "v")
+			       (ui/select '("a") :name "s" :value "a" :on-change (lambda (v) v))
+			       (ui/checkbox :name "c" :checked t :on-change (lambda (v) v))
+			       :submit "Send")
+			     (ui/table (list (list (cons "id" 1))))))`,
+		);
+		const view = ui.takeView();
+		if (view === undefined) throw new Error("nothing rendered");
+		expect(strays(view)).toEqual([]);
+		expect(new Set(tagsOf(view))).toEqual(new Set(TAGS));
+	});
+});
+
+describe("the widget form table", () => {
+	it("builds a widget of its own tag from every example", () => {
+		for (const tag of TAGS) {
+			const { interp, ui } = fresh();
+			runSync(interp, `(ui/render ${WIDGET_FORMS[tag].example})`);
+			const node = ui.takeView();
+			if (node === undefined) throw new Error(`${tag} rendered nothing`);
+			expect(node.tag).toBe(tag);
+			expect(widgetOf(node)).toBeDefined();
+		}
+	});
+
+	it("lists every constructor in the prompt", () => {
+		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		expect(prompt).not.toContain("{{widgets}}");
+		for (const tag of TAGS)
+			expect(prompt).toContain(WIDGET_FORMS[tag].signature);
+	});
+});
+
+describe("the view store", () => {
+	function stored() {
+		const surface = new UiSurface();
+		const views = new MemoryViewStore();
+		const host = uiHostFor({ panel: panelOf([]).panel, views });
+		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
+		runSync(interp, prelude);
+		return { surface, views, interp };
+	}
+
+	it("writes every render of a step into one view", () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/text "a")) (ui/render (ui/text "b"))');
+		expect([...views.views.keys()]).toEqual(["v1"]);
+		expect(views.views.get("v1")).toMatchObject({ props: { text: "b" } });
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/text "c"))');
+		expect([...views.views.keys()]).toEqual(["v1", "v2"]);
+	});
+
+	it("renders a click back into the view the control was in", async () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			`(setq n 0)
+			(defun panel () (ui/stack (ui/text (string n))
+				(ui/button "+1" (lambda () (setq n (+ n 1)) (ui/render (panel))))))
+			(ui/render (panel))`,
+		);
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/text "other"))');
+		surface.enter("a1");
+		await surface.invoke("a1", {});
+		expect(views.views.get("v1")).toMatchObject({
+			children: [{ props: { text: "1" } }, { tag: "button" }],
+		});
+		expect(views.views.get("v2")).toMatchObject({ props: { text: "other" } });
+	});
+
+	it("stores a panel view under its tab, and a click renders back into it", async () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			`(setq n 0)
+			(defun panel () (ui/stack (ui/text (string n))
+				(ui/button "+1" (lambda () (setq n (+ n 1)) (ui/render (panel))))))
+			(ui/open-view "counts" (panel))`,
+		);
+		expect(views.views.get("view:counts")).toMatchObject({ tag: "stack" });
+		surface.enter("a1");
+		await surface.invoke("a1", {});
+		expect(views.views.get("view:counts")).toMatchObject({
+			children: [{ props: { text: "1" } }, { tag: "button" }],
+		});
+	});
+
+	it("marks a view expired when ui/forget drops its handlers", () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			'(setq view (ui/stack (ui/button "a" (lambda () 1)))) (ui/render view)',
+		);
+		surface.beginStep();
+		runSync(interp, "(ui/forget view)");
+		expect([...views.expired]).toEqual(["v1"]);
+	});
+
+	it("marks a view expired when a click finds its handler gone", async () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(interp, '(ui/render (ui/button "a" (lambda () 1)))');
+		surface.reset();
+		await expect(surface.invoke("a1", {})).resolves.toBeDefined();
+		expect([...views.expired]).toEqual(["v1"]);
+	});
+
+	it("still reports an id no view ever carried", async () => {
+		const { surface } = stored();
+		await expect(surface.invoke("a99", {})).rejects.toThrow(
+			/no such ui action/,
+		);
+	});
+
+	it("clears the expired mark when the view is drawn again", () => {
+		const { surface, views, interp } = stored();
+		surface.beginStep();
+		runSync(
+			interp,
+			'(setq view (ui/stack (ui/button "a" (lambda () 1)))) (ui/render view) (ui/forget view)',
+		);
+		expect([...views.expired]).toEqual(["v1"]);
+		runSync(interp, "(ui/render view)");
+		expect(views.expired.size).toBe(0);
+	});
+});
+
+describe("a quoted call as an action", () => {
+	const SETUP = `
+		(setq log nil)
+		(defun refresh () (setq log (cons "refresh" log)))
+		(defun set-filter (f) (setq log (cons f log)))
+		(defun pick (f values) (setq log (cons (concat f "=" (cdr (assoc "q" values))) log)))
+	`;
+
+	it("runs a named function with its quoted arguments", async () => {
+		const { surface, interp } = render(
+			`${SETUP} (ui/render (ui/row (ui/button "r" '(refresh)) (ui/button "o" '(set-filter "open"))))`,
+		);
+		await surface.invoke("a1", {});
+		await surface.invoke("a2", { q: "x" });
+		expect(str(runSync(interp, "log"))).toBe('("open" "refresh")');
+	});
+
+	it("appends the values when the function takes one more argument", async () => {
+		const { surface, interp } = render(
+			`${SETUP} (ui/render (ui/form '(pick "k") (ui/input :name "q")))`,
+		);
+		await surface.invoke("a1", { q: "auth" });
+		expect(str(runSync(interp, "log"))).toBe('("k=auth")');
+	});
+
+	it("reuses one id for the same call", () => {
+		const { view } = render(
+			`${SETUP} (ui/render (ui/row (ui/button "a" '(refresh)) (ui/button "b" '(refresh))))`,
+		);
+		expect(view).toMatchObject({
+			children: [{ props: { action: "a1" } }, { props: { action: "a1" } }],
+		});
+	});
+
+	it("survives a restore that drops every closure", async () => {
+		const before = render(
+			`${SETUP} (ui/render (ui/button "o" '(set-filter "open")))`,
+		);
+		const image = JSON.parse(JSON.stringify(snapshot(before.interp)));
+		const after = fresh();
+		restore(after.interp, image);
+		await after.surface.invoke("a1", {});
+		expect(str(runSync(after.interp, "log"))).toBe('("open")');
+	});
+
+	it("names the function a click could not find", async () => {
+		const { surface } = render(`(ui/render (ui/button "x" '(no-such-fn)))`);
+		await expect(surface.invoke("a1", {})).rejects.toThrow(
+			/not defined.*no-such-fn|no-such-fn.*not defined/s,
+		);
 	});
 });
