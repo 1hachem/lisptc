@@ -73,6 +73,102 @@ const ARROW_TURN: Record<Side, string> = {
 	above: "-45deg",
 };
 
+function ringed(box: Box): Box {
+	return {
+		top: box.top - RING,
+		left: box.left - RING,
+		width: box.width + 2 * RING,
+		height: box.height + 2 * RING,
+	};
+}
+
+function usePlacement(
+	box: Box | undefined,
+	callout: HTMLDivElement | null,
+): Placement | undefined {
+	const size = useBox(callout);
+	if (box === undefined) return undefined;
+	const zoom = pageZoom();
+	return calloutPlacement(
+		ringed(box),
+		size ?? { width: CALLOUT_WIDTH, height: 0 },
+		{ width: window.innerWidth / zoom, height: window.innerHeight / zoom },
+	);
+}
+
+function Spotlight({ box }: { box: Box | undefined }) {
+	if (box === undefined) return <div className="absolute inset-0 bg-bg/60" />;
+	return (
+		<div
+			data-testid="tour-spotlight"
+			className="absolute rounded-sm"
+			style={{
+				...ringed(box),
+				outline: "2px solid var(--yellow)",
+				boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.55)",
+			}}
+		/>
+	);
+}
+
+function Arrow({ side }: { side: Side }) {
+	return (
+		<span
+			aria-hidden
+			className="absolute size-2.5 border-yellow border-b border-l bg-bg1"
+			style={{ ...ARROW[side], rotate: ARROW_TURN[side] }}
+		/>
+	);
+}
+
+function calloutPosition(placement: Placement | undefined): CSSProperties {
+	return placement === undefined
+		? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
+		: { top: placement.top, left: placement.left };
+}
+
+function Controls({
+	at,
+	count,
+	showNext,
+	onNext,
+	onSkip,
+}: {
+	at: number;
+	count: number;
+	showNext: boolean;
+	onNext: () => void;
+	onSkip: () => void;
+}) {
+	return (
+		<div className="flex items-center gap-2">
+			<span className="text-dim">
+				{at + 1}/{count}
+			</span>
+			<Button
+				type="button"
+				size="sm"
+				variant="ghost"
+				className="ml-auto rounded-none"
+				onClick={onSkip}
+			>
+				skip
+			</Button>
+			{showNext && (
+				<Button
+					type="button"
+					size="sm"
+					variant="secondary"
+					className="rounded-none"
+					onClick={onNext}
+				>
+					{at + 1 >= count ? "done" : "next"}
+				</Button>
+			)}
+		</div>
+	);
+}
+
 export function TourCallout({
 	step,
 	at,
@@ -92,93 +188,28 @@ export function TourCallout({
 }) {
 	const box = useBox(element);
 	const [callout, setCallout] = useState<HTMLDivElement | null>(null);
-	const size = useBox(callout);
+	const placement = usePlacement(box, callout);
 	if (step.anchor !== undefined && box === undefined && !gaveUp) return null;
-	const placement: Placement | undefined =
-		box === undefined
-			? undefined
-			: calloutPlacement(
-					{
-						top: box.top - RING,
-						left: box.left - RING,
-						width: box.width + 2 * RING,
-						height: box.height + 2 * RING,
-					},
-					size ?? { width: CALLOUT_WIDTH, height: 0 },
-					{
-						width: window.innerWidth / pageZoom(),
-						height: window.innerHeight / pageZoom(),
-					},
-				);
-	const last = at + 1 >= count;
-	const showNext = step.until === "next" || box === undefined;
 	return createPortal(
 		<div className="pointer-events-none fixed inset-0 z-[100] font-mono text-[13px]">
-			{box === undefined ? (
-				<div className="absolute inset-0 bg-bg/60" />
-			) : (
-				<div
-					data-testid="tour-spotlight"
-					className="absolute rounded-sm"
-					style={{
-						top: box.top - RING,
-						left: box.left - RING,
-						width: box.width + 2 * RING,
-						height: box.height + 2 * RING,
-						outline: "2px solid var(--yellow)",
-						boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.55)",
-					}}
-				/>
-			)}
+			<Spotlight box={box} />
 			<div
 				ref={setCallout}
 				role="dialog"
 				aria-label="tour"
 				data-side={placement?.side ?? "center"}
 				className="pointer-events-auto absolute flex flex-col gap-2 border border-yellow bg-bg1 p-3 text-fg shadow-lg"
-				style={{
-					width: CALLOUT_WIDTH,
-					...(placement === undefined
-						? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
-						: { top: placement.top, left: placement.left }),
-				}}
+				style={{ width: CALLOUT_WIDTH, ...calloutPosition(placement) }}
 			>
-				{placement !== undefined && (
-					<span
-						aria-hidden
-						className="absolute size-2.5 border-yellow border-b border-l bg-bg1"
-						style={{
-							...ARROW[placement.side],
-							rotate: ARROW_TURN[placement.side],
-						}}
-					/>
-				)}
+				{placement !== undefined && <Arrow side={placement.side} />}
 				<p className="whitespace-pre-wrap break-words">{step.say}</p>
-				<div className="flex items-center gap-2">
-					<span className="text-dim">
-						{at + 1}/{count}
-					</span>
-					<Button
-						type="button"
-						size="sm"
-						variant="ghost"
-						className="ml-auto rounded-none"
-						onClick={onSkip}
-					>
-						skip
-					</Button>
-					{showNext && (
-						<Button
-							type="button"
-							size="sm"
-							variant="secondary"
-							className="rounded-none"
-							onClick={onNext}
-						>
-							{last ? "done" : "next"}
-						</Button>
-					)}
-				</div>
+				<Controls
+					at={at}
+					count={count}
+					showNext={step.until === "next" || box === undefined}
+					onNext={onNext}
+					onSkip={onSkip}
+				/>
 			</div>
 		</div>,
 		document.body,
