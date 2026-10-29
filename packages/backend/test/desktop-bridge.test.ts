@@ -5,14 +5,11 @@ import type {
 	ServerState,
 } from "@repo/mcp-extension/ports";
 import { describe, expect, it } from "vitest";
-import type { Id } from "../convex/_generated/dataModel.js";
 import {
 	BridgedHost,
-	type DesktopBridge,
+	type Desktop,
 	type LocalServer,
 } from "../src/desktop-bridge.ts";
-
-const owner = "user-1" as Id<"users">;
 
 function fallback(): McpHost & { ensured: string[]; stopped: string[] } {
 	const ensured: string[] = [];
@@ -39,23 +36,24 @@ const channel: McpTransport = {
 	close: async () => {},
 };
 
-function bridge(): DesktopBridge & {
-	opened: [Id<"users">, LocalServer][];
+function bridge(): Desktop & {
+	opened: LocalServer[];
 	closed: string[];
 } {
-	const opened: [Id<"users">, LocalServer][] = [];
+	const opened: LocalServer[] = [];
 	const closed: string[] = [];
 	return {
 		opened,
 		closed,
-		open: async (userId, server) => {
-			opened.push([userId, server]);
+		open: async (server) => {
+			opened.push(server);
 			return channel;
 		},
-		close: async (_userId, name) => {
+		close: async (name) => {
 			closed.push(name);
 		},
 		connected: () => true,
+		settings: async () => undefined,
 	};
 }
 
@@ -63,7 +61,7 @@ describe("BridgedHost", () => {
 	it("opens a :local command server on the owner's desktop", async () => {
 		const desktop = bridge();
 		const docker = fallback();
-		const host = new BridgedHost(owner, desktop, docker);
+		const host = new BridgedHost(desktop, docker);
 		const handle = await host.ensure({
 			name: "fs",
 			command: "npx",
@@ -71,7 +69,7 @@ describe("BridgedHost", () => {
 			local: true,
 		});
 		expect(desktop.opened).toEqual([
-			[owner, { name: "fs", command: "npx", args: ["fs-mcp"], env: {} }],
+			{ name: "fs", command: "npx", args: ["fs-mcp"], env: {} },
 		]);
 		expect(docker.ensured).toEqual([]);
 		expect(handle).not.toHaveProperty("url");
@@ -82,7 +80,7 @@ describe("BridgedHost", () => {
 	it("leaves every other server to the fallback host", async () => {
 		const desktop = bridge();
 		const docker = fallback();
-		const host = new BridgedHost(owner, desktop, docker);
+		const host = new BridgedHost(desktop, docker);
 		await host.ensure({ name: "plain", command: "npx" });
 		await host.ensure({ name: "remote", url: "https://example.test/mcp" });
 		expect(docker.ensured).toEqual(["plain", "remote"]);
@@ -92,7 +90,7 @@ describe("BridgedHost", () => {
 	it("closes a bridged server on the desktop and stops the rest on the fallback", async () => {
 		const desktop = bridge();
 		const docker = fallback();
-		const host = new BridgedHost(owner, desktop, docker);
+		const host = new BridgedHost(desktop, docker);
 		await host.ensure({ name: "fs", command: "npx", local: true });
 		await host.stop("fs");
 		await host.stop("other");
@@ -103,13 +101,13 @@ describe("BridgedHost", () => {
 
 	it("passes the bridge's refusal through when no desktop is connected", async () => {
 		const host = new BridgedHost(
-			owner,
 			{
 				open: async () => {
 					throw new Error("no desktop connected for this user");
 				},
 				close: async () => {},
 				connected: () => false,
+				settings: async () => undefined,
 			},
 			fallback(),
 		);

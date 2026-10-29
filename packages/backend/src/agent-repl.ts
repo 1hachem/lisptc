@@ -44,8 +44,7 @@ import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
-import { BridgedHost, type DesktopBridge } from "./desktop-bridge.ts";
-import type { DesktopSettingsBridge } from "./desktop-settings.ts";
+import { BridgedHost, type Desktop } from "./desktop-bridge.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -90,11 +89,7 @@ export interface ThreadScope {
 	readonly bounds?: readonly string[];
 	readonly roster?: readonly string[];
 	readonly subAgent?: boolean;
-	readonly desktop?: {
-		readonly user: Id<"users">;
-		readonly bridge?: DesktopBridge;
-		readonly settings?: DesktopSettingsBridge;
-	};
+	readonly desktop?: Desktop;
 }
 
 export async function workspaceExtensions(
@@ -132,8 +127,6 @@ export async function workspaceExtensions(
 				: { threads: new SupervisedAgents(supervisor, chatId) }),
 		}),
 	);
-	const bridge = desktop?.bridge;
-	const desktopSettings = desktop?.settings;
 	const permissions = permissionsExtension(
 		permissionsHostFor({
 			store: await ConvexPermissionsStore.open(workspaceId, connect),
@@ -152,13 +145,9 @@ export async function workspaceExtensions(
 			store: new ConvexPreferencesStore(connect),
 			fonts,
 			motions,
-			...(desktopSettings === undefined || desktop === undefined
+			...(desktop === undefined
 				? {}
-				: {
-						desktop: {
-							apply: (change) => desktopSettings.settings(desktop.user, change),
-						},
-					}),
+				: { desktop: { apply: (change) => desktop.settings(change) } }),
 		}),
 	);
 	const ui = uiExtension(
@@ -182,13 +171,12 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
-				...(bridge === undefined || desktop === undefined
-					? {}
-					: { desktop: async () => bridge.connected(desktop.user) }),
-				host:
-					bridge === undefined || desktop === undefined
-						? new DockerHost()
-						: new BridgedHost(desktop.user, bridge, new DockerHost()),
+				...(desktop === undefined
+					? { host: new DockerHost() }
+					: {
+							desktop: async () => desktop.connected(),
+							host: new BridgedHost(desktop, new DockerHost()),
+						}),
 			}),
 			policy: permissions.rules,
 		}),

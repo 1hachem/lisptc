@@ -1,6 +1,5 @@
 import type { Id } from "@repo/backend/dataModel";
-import type { DesktopBridge, LocalServer } from "@repo/backend/desktop-bridge";
-import type { DesktopSettingsBridge } from "@repo/backend/desktop-settings";
+import type { Desktop, LocalServer } from "@repo/backend/desktop-bridge";
 import type {
 	DesktopMessage,
 	DesktopSettings,
@@ -152,7 +151,7 @@ interface Seat {
 	readonly machineId: string;
 }
 
-export class DesktopRegistry implements DesktopBridge, DesktopSettingsBridge {
+export class DesktopRegistry {
 	private readonly connections = new Map<
 		Id<"users">,
 		Map<string, Connection>
@@ -190,6 +189,15 @@ export class DesktopRegistry implements DesktopBridge, DesktopSettingsBridge {
 		machines.delete(seat.machineId);
 		if (machines.size === 0) this.connections.delete(seat.userId);
 		connection.drop(new Error("desktop disconnected"));
+	}
+
+	for(userId: Id<"users">): Desktop {
+		return {
+			connected: () => this.connected(userId),
+			open: (server) => this.open(userId, server),
+			close: (name) => this.close(userId, name),
+			settings: (change) => this.settings(userId, change),
+		};
 	}
 
 	connected(userId: Id<"users">): boolean {

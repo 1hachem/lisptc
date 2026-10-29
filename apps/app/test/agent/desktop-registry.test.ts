@@ -42,6 +42,20 @@ function fakeDesktop(registry: DesktopRegistry): DesktopPeer & {
 }
 
 describe("the desktop registry", () => {
+	it("binds a desktop to one user, so another user's machine is never reached", async () => {
+		const registry = new DesktopRegistry();
+		const peer = fakeDesktop(registry);
+		registry.attach(user, "m1", peer);
+		const other = registry.for("user-2" as Id<"users">);
+		expect(other.connected()).toBe(false);
+		await expect(other.open(server)).rejects.toThrow(
+			"no desktop connected for this user",
+		);
+		expect(registry.for(user).connected()).toBe(true);
+		await registry.for(user).open(server);
+		expect(peer.sent.map((message) => message.type)).toEqual(["open"]);
+	});
+
 	it("refuses to open a server when the user has no desktop connected", async () => {
 		await expect(new DesktopRegistry().open(user, server)).rejects.toThrow(
 			"no desktop connected for this user",
@@ -190,8 +204,8 @@ describe("the bridge is the account's, not the window's", () => {
 		const registry = new DesktopRegistry();
 		const desktop = fakeDesktop(registry);
 		registry.attach(user, "m1", desktop);
-		const fromBrowser = new BridgedHost(user, registry, cluster);
-		const fromWindow = new BridgedHost(user, registry, cluster);
+		const fromBrowser = new BridgedHost(registry.for(user), cluster);
+		const fromWindow = new BridgedHost(registry.for(user), cluster);
 		for (const host of [fromBrowser, fromWindow]) {
 			const handle = await host.ensure({ ...server, local: true });
 			expect(handle).not.toHaveProperty("url");
@@ -210,7 +224,7 @@ describe("the bridge is the account's, not the window's", () => {
 		const registry = new DesktopRegistry();
 		registry.attach("user-2" as Id<"users">, "m1", fakeDesktop(registry));
 		await expect(
-			new BridgedHost(user, registry, cluster).ensure({
+			new BridgedHost(registry.for(user), cluster).ensure({
 				...server,
 				local: true,
 			}),

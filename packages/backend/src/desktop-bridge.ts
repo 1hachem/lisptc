@@ -6,6 +6,7 @@ import type {
 	ServerState,
 	StdioConnConfig,
 } from "@repo/mcp-extension/ports";
+import type { DesktopPreferences } from "@repo/preferences-extension/ports";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 export interface LocalServer {
@@ -15,11 +16,16 @@ export interface LocalServer {
 	readonly env: Readonly<Record<string, string>>;
 }
 
-export interface DesktopBridge {
-	connected(userId: Id<"users">): boolean;
-	open(userId: Id<"users">, server: LocalServer): Promise<McpTransport>;
-	close(userId: Id<"users">, name: string): Promise<void>;
+export interface Desktop {
+	connected(): boolean;
+	open(server: LocalServer): Promise<McpTransport>;
+	close(name: string): Promise<void>;
+	settings(
+		change: Partial<DesktopPreferences>,
+	): Promise<DesktopPreferences | undefined>;
 }
+
+export type DesktopFor = (userId: Id<"users">) => Desktop;
 
 function localServer(conf: ConnConfig): StdioConnConfig | undefined {
 	if ("url" in conf || "image" in conf) return undefined;
@@ -30,15 +36,14 @@ export class BridgedHost implements McpHost {
 	private readonly opened = new Set<string>();
 
 	constructor(
-		private readonly owner: Id<"users">,
-		private readonly bridge: DesktopBridge,
+		private readonly desktop: Desktop,
 		private readonly fallback: McpHost,
 	) {}
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
 		const local = localServer(conf);
 		if (local === undefined) return this.fallback.ensure(conf);
-		const channel = await this.bridge.open(this.owner, {
+		const channel = await this.desktop.open({
 			name: local.name,
 			command: local.command,
 			args: local.args ?? [],
@@ -50,14 +55,14 @@ export class BridgedHost implements McpHost {
 
 	async stop(name: string): Promise<void> {
 		if (!this.opened.delete(name)) return this.fallback.stop(name);
-		await this.bridge.close(this.owner, name);
+		await this.desktop.close(name);
 	}
 
 	async stopAll(): Promise<void> {
 		const names = [...this.opened];
 		this.opened.clear();
 		await Promise.all([
-			...names.map((name) => this.bridge.close(this.owner, name)),
+			...names.map((name) => this.desktop.close(name)),
 			this.fallback.stopAll(),
 		]);
 	}

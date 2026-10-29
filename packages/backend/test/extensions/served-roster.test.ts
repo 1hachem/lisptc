@@ -7,7 +7,7 @@ import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import { type Connect, workspaceExtensions } from "../../src/agent-repl.ts";
-import type { DesktopBridge } from "../../src/desktop-bridge.ts";
+import type { Desktop } from "../../src/desktop-bridge.ts";
 
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 
@@ -80,19 +80,19 @@ describe("the agent the app serves", () => {
 	});
 
 	it("reads the desktop's presence off the bridge at the start of each step", async () => {
-		const owner = "user-1" as Id<"users">;
 		const online = { value: false };
-		const bridge: DesktopBridge = {
-			connected: (userId) => userId === owner && online.value,
+		const desktop: Desktop = {
+			connected: () => online.value,
 			open: async () => ({
 				start: async () => {},
 				send: async () => {},
 				close: async () => {},
 			}),
 			close: async () => {},
+			settings: async () => undefined,
 		};
 		const extensions = await workspaceExtensions(WORKSPACE, offline, {
-			desktop: { user: owner, bridge },
+			desktop,
 		});
 		const interp = new Interp({ extensions });
 		await runAsync(interp, prelude);

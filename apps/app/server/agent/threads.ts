@@ -21,8 +21,7 @@ const host: ThreadHost = new ThreadHost({
 	server: convexAsServer,
 	actAs: convexActingAs,
 	threads: () => threads,
-	bridge: desktops,
-	desktopSettings: desktops,
+	desktopFor: (user) => desktops.for(user),
 });
 
 const telemetry = new Map<string, Identity>();
