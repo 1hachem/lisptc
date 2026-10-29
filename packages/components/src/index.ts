@@ -13,6 +13,11 @@ export {
 	TreePending,
 	TreeSelection,
 } from "./file-tree.tsx";
+export {
+	GlyphCycle,
+	type GlyphCycleProps,
+	RUNNING_GLYPHS,
+} from "./glyph-cycle.tsx";
 export type { FiredMemory } from "./memories.ts";
 export { firedMemories } from "./memories.ts";
 export { MessageFeedback } from "./message-feedback.tsx";

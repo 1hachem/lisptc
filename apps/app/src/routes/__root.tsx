@@ -1,4 +1,3 @@
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import type { ConvexQueryClient } from "@convex-dev/react-query";
 import { fontLinks } from "@repo/ui";
 import type { QueryClient } from "@tanstack/react-query";
@@ -13,9 +12,12 @@ import {
 	useRouteContext,
 	useRouter,
 } from "@tanstack/react-router";
+import { ConvexProviderWithAuth } from "convex/react";
+import { useState } from "react";
 import { Analytics } from "../lib/analytics.tsx";
-import { providerClient } from "../lib/auth-client.ts";
-import { ssrAuth } from "../lib/auth-server.ts";
+import { authClient, fetchConvexToken } from "../lib/auth-client.ts";
+import { dropRejectedSession, ssrAuth } from "../lib/auth-server.ts";
+import { convexAuthHook, tokenCache } from "../lib/convex-auth.ts";
 import { preferencesQuery, useCachedPreferences } from "../lib/preferences.ts";
 import { fontOf, themeOf } from "../lib/resolved-preferences.ts";
 import { useCachedWorkspace } from "../lib/workspace.tsx";
@@ -29,20 +31,30 @@ interface RouterContext {
 export const Route = createRootRouteWithContext<RouterContext>()({
 	beforeLoad: async ({ context }) => {
 		const auth = await ssrAuth();
-		if (auth.source === "server" && auth.token !== null) {
+		if (auth.source === "server" && auth.token !== null)
 			context.convexQueryClient.serverHttpClient?.setAuth(auth.token);
-		}
 		return { auth };
 	},
 	loader: async ({ context }) => {
-		if (context.auth.source !== "server" || context.auth.token === null) return;
-		await context.queryClient.ensureQueryData(preferencesQuery);
+		if (context.auth.source !== "server" || context.auth.token === null)
+			return { sessionDropped: false };
+		try {
+			await context.queryClient.ensureQueryData(preferencesQuery);
+			return { sessionDropped: false };
+		} catch (error) {
+			dropRejectedSession(error, context.convexQueryClient);
+			context.queryClient.removeQueries({
+				queryKey: preferencesQuery.queryKey,
+			});
+			return { sessionDropped: true };
+		}
 	},
 	head: () => ({
 		meta: [
 			{ charSet: "utf-8" },
 			{ name: "viewport", content: "width=device-width, initial-scale=1" },
-			{ title: "ptc agent" },
+			{ title: "salsal" },
+			{ name: "description", content: "malleable AI agents workspaces" },
 		],
 		links: [
 			{ rel: "icon", href: "/favicon.ico", sizes: "16x16 32x32 48x48" },
@@ -59,21 +71,31 @@ function RootComponent() {
 	const { queryClient, convexQueryClient, auth } = useRouteContext({
 		from: Route.id,
 	});
+	const { sessionDropped } = Route.useLoaderData();
+	const [useAuth] = useState(() =>
+		convexAuthHook(
+			authClient,
+			tokenCache(
+				fetchConvexToken,
+				Date.now,
+				auth.source === "server" && !sessionDropped
+					? (auth.token ?? undefined)
+					: undefined,
+			),
+		),
+	);
 
 	return (
-		<ConvexBetterAuthProvider
+		<ConvexProviderWithAuth
 			client={convexQueryClient.convexClient}
-			authClient={providerClient}
-			initialToken={
-				auth.source === "server" ? (auth.token ?? undefined) : undefined
-			}
+			useAuth={useAuth}
 		>
 			<QueryClientProvider client={queryClient}>
 				<Analytics>
 					<Outlet />
 				</Analytics>
 			</QueryClientProvider>
-		</ConvexBetterAuthProvider>
+		</ConvexProviderWithAuth>
 	);
 }
 

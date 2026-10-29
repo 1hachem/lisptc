@@ -1,45 +1,106 @@
+import { STATUS_BAR_SLOT_COUNT } from "@repo/shared/status-bar";
 import { describe, expect, it } from "vitest";
 import { barOrder, placeOf, shownItems } from "../src/lib/status-bar-order.ts";
 
 describe("barOrder", () => {
-	it("puts the pane indicator left and the clock right, the centre empty, when nothing is stored", () => {
+	it("puts the pane indicator first and the desktop status beside the clock last, gaps between, when nothing is stored", () => {
 		const order = barOrder(undefined);
-		expect(order).toEqual(["panes", "gap", "clock"]);
+		expect(order).toEqual([
+			"panes",
+			"gap-1",
+			"gap-2",
+			"gap-3",
+			"gap-4",
+			"gap-5",
+			"gap-6",
+			"desktop",
+			"clock",
+		]);
 		expect(order.map((slot) => placeOf(order, slot))).toEqual([
-			"left",
-			"centre",
-			"right",
+			1, 2, 3, 4, 5, 6, 7, 8, 9,
 		]);
 	});
 
-	it("keeps an item stored in the centre there", () => {
-		expect(barOrder(["gap", "clock", "panes"])).toEqual([
-			"gap",
-			"clock",
+	it("always has nine slots", () => {
+		expect(barOrder(undefined)).toHaveLength(STATUS_BAR_SLOT_COUNT);
+		expect(barOrder(["clock"])).toHaveLength(STATUS_BAR_SLOT_COUNT);
+		expect(barOrder(["gap-3", "desktop", "panes", "clock"])).toHaveLength(
+			STATUS_BAR_SLOT_COUNT,
+		);
+	});
+
+	it("turns an old row's single empty slot into a gap id and keeps it in place", () => {
+		expect(barOrder(["panes", "gap", "clock"])).toEqual([
 			"panes",
+			"gap-2",
+			"gap-3",
+			"gap-4",
+			"gap-5",
+			"gap-6",
+			"gap-1",
+			"desktop",
+			"clock",
 		]);
 	});
 
-	it("keeps two stored items at either end, and drops one the bar no longer has", () => {
-		expect(barOrder(["clock", "panes"])).toEqual(["clock", "gap", "panes"]);
-		expect(barOrder(["minimized", "clock", "panes"])).toEqual([
-			"clock",
-			"gap",
+	it("keeps the desktop status wherever it is stored, apart from the clock", () => {
+		const order = barOrder([
+			"desktop",
+			"gap-1",
+			"gap-2",
 			"panes",
+			"gap-3",
+			"gap-4",
+			"clock",
 		]);
+		expect(placeOf(order, "desktop")).toBe(1);
+		expect(placeOf(order, "panes")).toBe(6);
+		expect(placeOf(order, "clock")).toBe(STATUS_BAR_SLOT_COUNT);
 	});
 
-	it("has one empty slot however many are stored", () => {
-		expect(barOrder(["gap", "gap", "panes"])).toEqual([
-			"gap",
-			"panes",
+	it("keeps several stored gaps and drops unknown and repeated names", () => {
+		expect(
+			barOrder([
+				"clock",
+				"gap-2",
+				"gap-2",
+				"minimized",
+				"gap-1",
+				"panes",
+				"desktop",
+				"gap-9",
+			]),
+		).toEqual([
 			"clock",
+			"gap-3",
+			"gap-4",
+			"gap-5",
+			"gap-6",
+			"gap-2",
+			"gap-1",
+			"panes",
+			"desktop",
 		]);
 	});
 });
 
 describe("shownItems", () => {
-	it("lists the items on show, never the empty slot", () => {
-		expect(shownItems(["panes", "gap", "clock"], ["clock"])).toEqual(["panes"]);
+	it("lists the items on show, never a gap", () => {
+		expect(
+			shownItems(
+				[
+					"panes",
+					"gap-1",
+					"gap-2",
+					"gap-3",
+					"gap-4",
+					"gap-5",
+					"gap-6",
+					"desktop",
+					"clock",
+				],
+				["clock"],
+			),
+		).toEqual(["panes", "desktop"]);
 	});
 });

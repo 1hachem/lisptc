@@ -42,10 +42,13 @@ function run(what: string): EvalRun {
 	return current;
 }
 
-export function mockedMcpExtension(): InterpExtension {
+export function mockedMcpExtension(
+	options: { commands?: boolean } = {},
+): InterpExtension {
 	const { trace, mocks } = run("mockedMcpExtension()");
 	return mcpExtension({
 		...mcpHost,
+		...options,
 		client: trace.client(mockClient(mocks)),
 		toolkit: withMockedServers(mcpHost.toolkit, mocks),
 	});

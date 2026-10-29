@@ -7,6 +7,7 @@ import { filePrompt } from "@repo/shared/host-node";
 import { DockerHost, dockerAnswers } from "./docker-host.ts";
 import { clusterServes, KubernetesHost } from "./kubernetes-host.ts";
 import { LocalProcessHost } from "./local-host.ts";
+import { cachedMachine } from "./machine.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
 import { completeAuthorization } from "./mcp-oauth.ts";
@@ -20,12 +21,19 @@ import type {
 } from "./ports.ts";
 import { type HostCandidate, ProbedHost } from "./probed-host.ts";
 import { miniSearchEngine } from "./search.ts";
-import { bundledToolkit, localToolkit } from "./toolkit.ts";
+import {
+	bridgedEntries,
+	bundledToolkit,
+	desktopToolkit,
+	localToolkit,
+	machineToolkit,
+} from "./toolkit.ts";
 
 export interface McpHostOptions {
 	scope?: string;
 	oauth: OAuthStore;
 	host?: McpHost;
+	desktop?: () => Promise<boolean>;
 }
 
 function oauthClients(): OAuthClients {
@@ -104,12 +112,32 @@ export function containerHost(scope: string, report?: ServerReporter): McpHost {
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
+function desktopParts(
+	presence: () => Promise<boolean>,
+): Pick<McpExtensionHost, "toolkit" | "machine"> {
+	const bundled = bundledToolkit();
+	const bridged = bridgedEntries(bundled, machineToolkit());
+	const machine = cachedMachine(presence, () =>
+		[...bridged.own, ...bridged.variants].map((conf) => conf.name),
+	);
+	return {
+		toolkit: desktopToolkit(bundled, bridged, () => machine.connected()),
+		machine,
+	};
+}
+
 export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 	const host = options.host ?? new LocalProcessHost();
 	return {
 		client: localMcpClient({ ...options, host }),
-		toolkit:
-			host instanceof LocalProcessHost ? localToolkit() : bundledToolkit(),
+		...(options.desktop !== undefined
+			? desktopParts(options.desktop)
+			: {
+					toolkit:
+						host instanceof LocalProcessHost
+							? localToolkit()
+							: bundledToolkit(),
+				}),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
 		clock: systemClock,

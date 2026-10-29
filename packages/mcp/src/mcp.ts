@@ -52,6 +52,7 @@ import {
 	openPolicy,
 	type Tool,
 	type ToolkitRegistry,
+	type UserMachine,
 } from "./ports.ts";
 
 const CALL_TIMEOUT_MS = 30_000;
@@ -111,6 +112,43 @@ function iconOf(
 
 function manifestIcons(conf: ConnConfig): Icon[] | undefined {
 	return conf.icon === undefined ? undefined : [{ src: conf.icon }];
+}
+
+export function machineNotice(
+	machine: UserMachine,
+	connected: boolean,
+): string {
+	const names = machine.servers().join(", ");
+	return connected
+		? `desktop app connected: local servers now loadable: ${names}`
+		: `desktop app disconnected: local servers gone: ${names}`;
+}
+
+function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
+	let known = false;
+	hooks.beginStep.use(function* (ctx, next) {
+		const now = yield* settled(machine.refresh());
+		if (now !== known && machine.servers().length > 0)
+			ctx.emit(machineNotice(machine, now));
+		known = now;
+		yield* next(ctx);
+	});
+}
+
+function whereRuns(conf: ConnConfig, local: LocalVariant): unknown[] {
+	if ("local" in conf && conf.local === true)
+		return [newLispKeyword("local"), ...flagRow(conf)];
+	const variant = local?.(conf.name);
+	return variant === undefined
+		? []
+		: [newLispKeyword("also-local"), ...flagRow(variant)];
+}
+
+function flagRow(conf: ConnConfig): List[] {
+	const names = Object.keys(flagsOf(conf));
+	return names.length === 0
+		? []
+		: [arrayToList(names.map((name) => newLispKeyword(name)))];
 }
 
 function reportActivity(hooks: SessionHooks): void {
@@ -304,6 +342,8 @@ export interface McpExtensionHost {
 	clock: Clock;
 	policy?: McpPolicy;
 	registry?: McpRegistry;
+	machine?: UserMachine;
+	commands?: boolean;
 }
 
 function extractAuthCode(raw: string): string {
@@ -408,19 +448,19 @@ function typeMatches(type: string, value: unknown): boolean {
 	}
 }
 
+type LocalVariant = ToolkitRegistry["local"];
+
 function connConfigFromArgs(
 	rest: List,
 	predefined: Map<string, ConnConfig>,
+	local: LocalVariant,
+	commands: boolean,
 ): ConnConfig {
 	const args = listToArray(rest);
 	if (args.length === 1) return lookupPredefined(predefined, asName(args[0]));
-	if (typeof args[0] === "string")
-		return withLaunchFlags(
-			lookupPredefined(predefined, args[0]),
-			parseFlags(args.slice(1)),
-		);
-	const opts = parseFlags(args);
-	const rawName = opts.get("name");
+	const named = !(args[0] instanceof LispKeyword);
+	const opts = loadOptions(named ? args.slice(1) : args);
+	const rawName = named ? args[0] : opts.get("name");
 	if (rawName === undefined || rawName === null)
 		throw new EvalException(
 			"load-mcp requires a :name",
@@ -429,16 +469,77 @@ function connConfigFromArgs(
 		);
 	const name = asName(rawName);
 	if (opts.has("url")) return urlConfig(name, opts);
-	if (opts.has("command"))
-		throw new EvalException(
-			"load-mcp :command is not supported: load a toolkit server by name, (search-mcps) finds one",
-			name,
-			false,
-		);
-	return withLaunchFlags(lookupPredefined(predefined, name), opts);
+	if (commands && opts.has("command")) return commandConfig(name, opts);
+	refuseCommand(opts);
+	const conf = isLocal(opts)
+		? lookupLocal(predefined, local, name)
+		: lookupPredefined(predefined, name);
+	return withFlags(conf, opts);
 }
 
-function urlConfig(name: string, opts: Map<string, unknown>): ConnConfig {
+const LOAD_KEYS = new Set(["name", "local"]);
+
+function flagsOf(conf: ConnConfig): Record<string, string[]> {
+	return "flags" in conf && conf.flags !== undefined ? conf.flags : {};
+}
+
+function withFlags(conf: ConnConfig, opts: Plist): ConnConfig {
+	const flags = flagsOf(conf);
+	const extra: string[] = [];
+	for (const [key, value] of opts) {
+		if (LOAD_KEYS.has(key)) continue;
+		const flag = flags[key];
+		if (flag === undefined) {
+			const known = Object.keys(flags).map((k) => `:${k}`);
+			throw new EvalException(
+				known.length === 0
+					? `${conf.name} takes no :${key}`
+					: `${conf.name} takes no :${key}; it takes ${known.join(", ")}`,
+				value ?? null,
+				false,
+			);
+		}
+		if (value !== null) extra.push(...flag);
+	}
+	if (extra.length === 0 || !("command" in conf)) return conf;
+	return { ...conf, args: [...(conf.args ?? []), ...extra] };
+}
+
+type Plist = ReturnType<typeof parsePlist>;
+
+function loadOptions(items: unknown[]): Plist {
+	const last = items.at(-1);
+	const bareFlag = items.length % 2 === 1 && last instanceof LispKeyword;
+	return parsePlist(arrayToList(bareFlag ? [...items, true] : items));
+}
+
+function isLocal(opts: Plist): boolean {
+	return opts.has("local") && opts.get("local") !== null;
+}
+
+function lookupLocal(
+	predefined: Map<string, ConnConfig>,
+	local: LocalVariant,
+	name: string,
+): ConnConfig {
+	const conf = local?.(name);
+	if (conf !== undefined) return conf;
+	const own = predefined.get(name);
+	if (own !== undefined && "local" in own && own.local === true) return own;
+	if (own !== undefined && "image" in own && own.command !== undefined) {
+		const { image: _image, port: _port, path: _path, ...rest } = own;
+		return { ...rest, command: own.command, local: true };
+	}
+	throw new EvalException(
+		predefined.has(name)
+			? `${name} has no local setup, or the desktop app is not connected: load it without :local`
+			: "unknown predefined MCP server",
+		name,
+		false,
+	);
+}
+
+function urlConfig(name: string, opts: Plist): ConnConfig {
 	const url = opts.get("url");
 	if (typeof url !== "string")
 		throw new EvalException("load-mcp :url must be a string", url);
@@ -452,47 +553,35 @@ function urlConfig(name: string, opts: Map<string, unknown>): ConnConfig {
 	return { name, url, headers, oauth, scopes };
 }
 
-function parseFlags(args: unknown[]): Map<string, unknown> {
-	const out = new Map<string, unknown>();
-	for (let i = 0; i < args.length; i++) {
-		const key = keyName(args[i]);
-		const next = args[i + 1];
-		if (i + 1 >= args.length || next instanceof LispKeyword) out.set(key, true);
-		else out.set(key, args[++i]);
-	}
-	return out;
+function commandConfig(name: string, opts: Plist): ConnConfig {
+	const command = opts.get("command");
+	if (typeof command !== "string")
+		throw new EvalException("load-mcp :command must be a string", command);
+	const cmdArgs = opts.has("args")
+		? listToArray(opts.get("args") as List).map(String)
+		: [];
+	const env = opts.has("env")
+		? (lispToJson(opts.get("env")) as Record<string, string>)
+		: undefined;
+	return {
+		name,
+		command,
+		args: cmdArgs,
+		env,
+		...(isLocal(opts) ? { local: true } : {}),
+	};
 }
 
-function flagSet(opts: Map<string, unknown>, key: string): boolean {
-	const v = opts.get(key);
-	return v !== undefined && v !== null && v !== false;
-}
+const UNSUPPORTED_OPTIONS = ["command", "args", "env"] as const;
 
-function withLaunchFlags(
-	conf: ConnConfig,
-	opts: Map<string, unknown>,
-): ConnConfig {
-	let out = conf;
-	if (flagSet(opts, "headless")) {
-		const extra = "headless" in out ? out.headless : undefined;
-		if (!extra)
-			throw new EvalException("MCP server has no headless mode", out.name);
-		out = { ...out, args: [...(out.args ?? []), ...extra] };
-	}
-	if (flagSet(opts, "local")) {
-		if ("url" in out)
-			throw new EvalException("remote MCP server cannot run :local", out.name);
-		if ("image" in out) {
-			const { image: _image, port: _port, path: _path, command, ...rest } = out;
-			if (command === undefined)
-				throw new EvalException(
-					"MCP server has no local command, only an image",
-					out.name,
-				);
-			out = { ...rest, command };
-		}
-	}
-	return out;
+function refuseCommand(opts: Plist): void {
+	const given = UNSUPPORTED_OPTIONS.find((key) => opts.has(key));
+	if (given !== undefined)
+		throw new EvalException(
+			`load-mcp :${given} is not supported: load a toolkit server by name, or a remote one with :url`,
+			opts.get(given) ?? null,
+			false,
+		);
 }
 
 function lookupPredefined(
@@ -514,10 +603,17 @@ const LOAD_MCP_NAME: DocArg = {
 
 const LOAD_MCP_OPTIONS: DocArg[] = [
 	{
+		name: "local",
+		type: "boolean",
+		required: false,
+		description:
+			"Run a toolkit server marked :also-local on the user's machine, through their desktop app.",
+	},
+	{
 		name: "url",
 		type: "string",
 		required: false,
-		description: "Connect to an HTTP server at this URL.",
+		description: "Connect to a remote HTTP server at this URL.",
 	},
 	{
 		name: "headers",
@@ -537,19 +633,6 @@ const LOAD_MCP_OPTIONS: DocArg[] = [
 		type: "list",
 		required: false,
 		description: "OAuth scopes to request when `:oauth` is set.",
-	},
-	{
-		name: "local",
-		type: "boolean",
-		required: false,
-		description:
-			"Run a toolkit server's own command on this machine instead of its container image.",
-	},
-	{
-		name: "headless",
-		type: "boolean",
-		required: false,
-		description: "Run a toolkit browser server without a window.",
 	},
 ];
 
@@ -847,6 +930,10 @@ function reconcileEachTurn(
 	});
 }
 
+export const LOCAL_GATE = "local/";
+
+export const LOCAL_ASKS: readonly string[] = [`${LOCAL_GATE}*`];
+
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	const reconcilers = new WeakMap<Interp, Reconcile>();
 	const registry = host.registry ?? memoryRegistry();
@@ -860,6 +947,7 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 				answerAuthorization(hooks);
 				reportActivity(hooks);
 				reconcileEachTurn(hooks, reconcilers);
+				if (host.machine !== undefined) announceMachine(hooks, host.machine);
 			},
 		},
 	);
@@ -869,13 +957,20 @@ export function registerMcp(
 	interp: Interp,
 	host: Pick<
 		McpExtensionHost,
-		"client" | "toolkit" | "search" | "policy" | "clock"
+		| "client"
+		| "toolkit"
+		| "search"
+		| "policy"
+		| "clock"
+		| "machine"
+		| "commands"
 	> & {
 		registry: McpRegistry;
 	},
 ): Reconcile {
 	const { client, toolkit, search, clock, registry } = host;
 	const policy = host.policy ?? openPolicy;
+	const commands = host.commands === true;
 
 	const servers = interp.state(
 		"mcp/servers",
@@ -924,7 +1019,7 @@ export function registerMcp(
 		signal: AbortSignal,
 		progress?: Progress,
 	): Promise<List> {
-		const conf = connConfigFromArgs(args, shown());
+		const conf = connConfigFromArgs(args, shown(), toolkit.local, commands);
 		admitServer(policy, conf.name);
 		return client.connect(conf, { signal, progress }).then(
 			async (res) => {
@@ -950,7 +1045,7 @@ export function registerMcp(
 	}
 
 	function startLoad(args: List): LispPromise {
-		const conf = connConfigFromArgs(args, shown());
+		const conf = connConfigFromArgs(args, shown(), toolkit.local, commands);
 		const { name } = conf;
 		admitServer(policy, name);
 		const n = loads.get() + 1;
@@ -1040,14 +1135,16 @@ export function registerMcp(
 		clock,
 	};
 
-	interp.def(
+	interp.defGen(
 		"load-mcp",
 		-1,
-		'(load-mcp "server") | (load-mcp :name "server")',
-		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); pass :url to load an ad-hoc remote server instead.',
+		'(load-mcp "server" [:local t] [:flag t]...) | (load-mcp :name "server")',
+		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); add :local t to run a toolkit server marked :also-local on the user machine through their desktop app; pass :url to load a remote server instead. :command is not supported.',
 		z.tuple([zList]),
-		([rest]) => {
-			const conf = connConfigFromArgs(rest, shown());
+		function* ([rest]) {
+			const conf = connConfigFromArgs(rest, shown(), toolkit.local, commands);
+			if ("local" in conf && conf.local === true)
+				yield* interp.guard(`${LOCAL_GATE}${conf.name}`, []);
 			if (entryOf(servers, conf.name))
 				doUnload(interp, client, servers, conf.name);
 			return startLoad(rest);
@@ -1178,7 +1275,7 @@ export function registerMcp(
 		"list-toolkit",
 		0,
 		"(list-toolkit)",
-		'Return the ready-to-use MCP servers from the toolkit, each as (name description keywords :loaded|:unloaded). Load one by bare name with (load-mcp name); search the same keywords with (search-mcps "query").',
+		'Return the ready-to-use MCP servers from the toolkit, each as (name description keywords :loaded|:unloaded), ending :local when it runs on the user machine, or :also-local when (load-mcp name :local t) runs it there instead. Load one by bare name with (load-mcp name); search the same keywords with (search-mcps "query").',
 		z.tuple([]),
 		() => {
 			const rows = [...shown().entries()].map(([name, conf]) =>
@@ -1187,6 +1284,7 @@ export function registerMcp(
 					conf.description ?? "",
 					arrayToList(conf.keywords ?? []),
 					statusOf(servers, name),
+					...whereRuns(conf, toolkit.local),
 				]),
 			);
 			return arrayToList(rows);
@@ -1194,10 +1292,19 @@ export function registerMcp(
 	);
 
 	interp.def(
+		"desktop-connected-p",
+		0,
+		"(desktop-connected-p)",
+		"Return t if the user's desktop app was connected when this step began, so the :local servers in (list-toolkit) can load; nil otherwise.",
+		z.tuple([]),
+		() => (host.machine?.connected() ? true : null),
+	);
+
+	interp.def(
 		"search-mcps",
 		1,
 		'(search-mcps "query")',
-		"Search the toolkit's MCP servers by name, keywords and description, best match first; each row is (name score description :loaded|:unloaded). Load a match by bare name with (load-mcp name); (list-toolkit) shows every server's keywords.",
+		"Search the toolkit's MCP servers by name, keywords and description, best match first; each row is (name score description :loaded|:unloaded), ending :local when it runs on the user machine, or :also-local when (load-mcp name :local t) runs it there instead. Load a match by bare name with (load-mcp name); (list-toolkit) shows every server's keywords.",
 		z.tuple([zName]),
 		([rawQuery]) => {
 			const scored = searchDocuments(
@@ -1220,6 +1327,7 @@ export function registerMcp(
 						BigInt(Math.round(score)),
 						firstLine(conf.description),
 						statusOf(servers, conf.name),
+						...whereRuns(conf, toolkit.local),
 					]),
 				),
 			);

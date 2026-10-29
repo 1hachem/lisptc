@@ -21,10 +21,28 @@ MCP SERVERS
   joins that start, begins no other.
 - Ad-hoc remote server, awaited same way:
   (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
-- No :command : only toolkit servers run here. Never spawn own server.
+- :command , :args , :env NOT supported: error. Only toolkit names and :url .
+- User's own machine: predefined local servers, names start local- , e.g.
+  (load-mcp "local-files") , (load-mcp "local-git") . Run on user's machine
+  through desktop app. Only when user asks for their machine. Fails if desktop
+  app not open.
+  - (desktop-connected-p) : t if desktop app connected as of this step, else nil.
+  - Listed only while desktop app connected. Row ends :local , e.g.
+    ("local-git" "…" ("git" …) :unloaded :local) . No :local = runs on server.
+  - Row ends :also-local = toolkit server has own setup for user machine:
+    (load-mcp "acme" :local t) . Without :local t it runs on server.
+  - List after :local or :also-local = flags server takes, e.g. (:quiet) :
+    (load-mcp "acme" :local t :quiet t) . Only listed flags; others error.
+  - Notice says when it changes: "desktop app connected: local servers now
+    loadable: …" or "desktop app disconnected: local servers gone: …" .
+  - Local load asks user as call local/<name> , e.g. local/local-files ,
+    unless config allows it: (permission/allow local/local-files) or
+    (permission/allow local/*) .
+  - Load fails with message if desktop app not open or user denied: say so,
+    don't retry.
 - OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
-- Toolkit flags: (load-mcp "acme" :local t :headless t) . :local runs own
-  command on this machine, not container. :headless no browser window.
+- Toolkit server with own command: (load-mcp "acme" :local t) runs that
+  command, not container.
 - Several concurrently:
 (await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) . Settled,
   not all: one failing server discards no others.

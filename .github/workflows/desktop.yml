@@ -1,0 +1,64 @@
+name: Desktop
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm and Node.js
+        uses: ./.github/actions/setup
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Version from the tag
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_NAME" == desktop-v* ]]; then
+            echo "value=${GITHUB_REF_NAME#desktop-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=0.0.0-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and publish
+        shell: bash
+        run: >
+          pnpm --filter @lisptc/desktop run dist
+          --publish ${{ startsWith(github.ref_name, 'desktop-v') && 'always' || 'never' }}
+          -c.extraMetadata.version=${{ steps.version.outputs.value }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Keep the installers of a manual run
+        if: ${{ !startsWith(github.ref_name, 'desktop-v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.AppImage
+          if-no-files-found: ignore

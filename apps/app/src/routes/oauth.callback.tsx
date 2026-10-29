@@ -126,7 +126,6 @@ function OAuthCallback() {
 	return (
 		<main className="flex h-full items-center justify-center bg-bg p-6 font-mono text-[13px] text-fg">
 			<div className="flex w-[320px] flex-col gap-3.5">
-				<div className="text-orange">ptc</div>
 				<Status phase={phase} />
 				{phase.kind === "orphaned" || phase.kind === "failed" ? (
 					<Link

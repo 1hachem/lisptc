@@ -107,33 +107,34 @@ MCP built-ins are installed on every Interp:
   search-tools / mcp-shutdown
 Tool docs surface through the generic `doc` built-in.
 
-Load a server from the toolkit by name.
-(await (load-mcp "fs"))
+Load a toolkit server by name. Here the filesystem server on the user's
+machine, through the desktop app. load-mcp takes no :command.
+(await (load-mcp "local-files"))
 
-(fs/read_file "/tmp/test")
+(local-files/read_file "/tmp/test")
 
 What servers are loaded, and how many tools each has?
 (list-mcps)
-=> fx :loaded 1
+=> local-files :loaded 14
 Enumerate tools: symbol param-count doc
-(list-tools "fs")
+(list-tools "local-files")
 
 Full documentation for one tool, including per-parameter docs.
-(doc 'fs/echo)
+(doc 'local-files/read_file)
 
 Fuzzy search across all loaded tools, ranked best-first.
-(echo (search-tools "echo text back"))
+(echo (search-tools "read a file"))
 
 Each tool is an ordinary global binding named <server>/<tool>,
 called with native keyword syntax. The synchronous interpreter
 blocks on the async broker under the hood.
-(fs/echo :message "hello from lisptc")
+(local-files/list_directory :path "/tmp")
 
-=> "hello from lisptc"
+=> "[FILE] test"
 Unload releases the tool bindings; shutdown tears down the broker.
-(unload-mcp "fs")
+(unload-mcp "local-files")
 
-=> fx/echo
+=> (local-files/read_file local-files/list_directory …)
 (mcp-shutdown)
 
 (echo "=== done ===")

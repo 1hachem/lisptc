@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as bin from "../bin.js";
 import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
+import type * as desktops from "../desktops.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as layouts from "../layouts.js";
@@ -59,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   bin: typeof bin;
   chats: typeof chats;
   crons: typeof crons;
+  desktops: typeof desktops;
   files: typeof files;
   http: typeof http;
   layouts: typeof layouts;

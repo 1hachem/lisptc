@@ -18,10 +18,12 @@ workspace. App applies change at once, while they watch.
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
   '() shows all. Attachments and bin hidden until user
   shows them.
-- :status-bar is bottom bar's three slots: left, centre, right. Empty slot
-  has name too, read it from plist. (preferences/set :status-bar '("clock"
-  "panes")) puts clock left, panes centre, keeps rest in order. User also
-  drags them on bar or in preferences.
+- :status-bar is bottom bar's 9 slots, left to right. Items: "panes",
+  "desktop" (desktop app status, shows only while connected), "clock". Each
+  empty slot is gap with own name: "gap-1" through "gap-6".
+  (preferences/set :status-bar '("desktop" "gap-1" "panes")) puts desktop
+  first, gap second, panes third, keeps rest in order. User also drags them
+  on bar or in preferences.
 - :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
   (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
 - :motion is how sidebar animates that drag. (motions) gives alist of
@@ -35,6 +37,13 @@ workspace. App applies change at once, while they watch.
 - :trace-link t shows "show in trace" on message metadata; opens trace at
   that message. Default t. nil hides it: (preferences/set :trace-link nil).
 - (fonts) gives alist of (id . name) to choose from.
+- (desktop-preferences) gives desktop app's own: (:close-to-tray t :open-at-login nil).
+  Live on user's machine, not in app. Work only while desktop app connected;
+  else error says no desktop app connected.
+- :close-to-tray t keeps desktop app running in tray when window closes; nil
+  quits. Default t: (desktop-preferences/set :close-to-tray nil).
+- :open-at-login t starts desktop app hidden in tray at login. Default nil:
+  (desktop-preferences/set :open-at-login t).
 - Theme is not preference: belongs to workspace, see (settings).
 
 Change preference only when user asks, not to suit yourself. Say what you

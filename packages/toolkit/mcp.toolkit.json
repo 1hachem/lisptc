@@ -23,7 +23,21 @@
     "image": "ghcr.io/1hachem/lisptc-mcp-playwright:main",
     "internal": true,
     "port": 8931,
-    "state": "/home/pwuser/profile"
+    "state": "/home/pwuser/profile",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@playwright/mcp@0.0.81",
+      "--browser",
+      "chromium",
+      "--executable-path",
+      "${PLAYWRIGHT_MCP_EXECUTABLE}",
+      "--no-sandbox",
+      "--isolated"
+    ],
+    "flags": {
+      "headless": ["--headless"]
+    }
   },
   {
     "name": "fs",

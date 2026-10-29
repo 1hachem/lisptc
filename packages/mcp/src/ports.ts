@@ -105,7 +105,6 @@ export type ContainerConnConfig = ConnMeta & {
 	path?: string;
 	command?: string;
 	args?: string[];
-	headless?: string[];
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
 	secret?: SecretRef;
@@ -114,15 +113,17 @@ export type ContainerConnConfig = ConnMeta & {
 	resources?: Resources;
 	state?: StateSpec;
 	app?: AppContainer;
+	flags?: Record<string, string[]>;
 };
 
 export type StdioConnConfig = ConnMeta & {
 	name: string;
 	command: string;
 	args?: string[];
-	headless?: string[];
 	env?: Record<string, string>;
 	resources?: Resources;
+	local?: boolean;
+	flags?: Record<string, string[]>;
 };
 
 export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
@@ -167,10 +168,25 @@ export class AuthorizationRequired extends Error {
 	}
 }
 
-export interface ServerHandle {
+export interface McpTransport {
+	start(): Promise<void>;
+	send(message: unknown): Promise<void>;
+	close(): Promise<void>;
+	onmessage?: (message: unknown) => void;
+	onclose?: () => void;
+	onerror?: (error: Error) => void;
+}
+
+export interface AddressHandle {
 	url: string;
 	headers?: Record<string, string>;
 }
+
+export interface TransportHandle {
+	transport(): McpTransport;
+}
+
+export type ServerHandle = AddressHandle | TransportHandle;
 
 export type ServerState = "running" | "stopped" | "unknown";
 
@@ -202,8 +218,15 @@ export interface McpHost {
 	asleep(name: string): Promise<boolean>;
 }
 
+export interface UserMachine {
+	refresh(): Promise<boolean>;
+	connected(): boolean;
+	servers(): readonly string[];
+}
+
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
+	local?(name: string): StdioConnConfig | undefined;
 }
 
 export interface McpMount {

@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { ConnConfig, McpClient } from "../src/ports.ts";
-import { bundledToolkit, localToolkit } from "../src/toolkit.ts";
+import {
+	bridgedEntries,
+	bundledToolkit,
+	desktopToolkit,
+	localToolkit,
+	machineToolkit,
+} from "../src/toolkit.ts";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
 	const seen: ConnConfig[] = [];
@@ -29,14 +35,19 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 	};
 }
 
-function configFor(name: string, executable = "", flags = ""): ConnConfig {
+function configFor(
+	name: string,
+	executable = "",
+	flags = "",
+	read: typeof localToolkit = localToolkit,
+): ConnConfig {
 	const { client, seen } = recording();
 	const interp = new Interp({
 		extensions: [
 			mcpExtension({
 				...mcpHost,
 				client,
-				toolkit: localToolkit({
+				toolkit: read({
 					get: (key) =>
 						key === "PLAYWRIGHT_MCP_EXECUTABLE" ? executable : undefined,
 				}),
@@ -82,13 +93,23 @@ describe("local toolkit commands resolve against the manifest", () => {
 	});
 
 	it("runs Playwright's own command without its image under :local", () => {
-		const conf = configFor("playwright", "/nix/chrome", " :local t");
+		const conf = configFor(
+			"playwright",
+			"/nix/chrome",
+			" :local t",
+			bundledToolkit,
+		);
 		expect(conf).not.toHaveProperty("image");
 		expect(conf).toMatchObject({ command: "npx" });
 	});
 
 	it("appends the headless flag under :headless", () => {
-		const conf = configFor("playwright", "/nix/chrome", " :local t :headless");
+		const conf = configFor(
+			"playwright",
+			"/nix/chrome",
+			" :local t :headless",
+			bundledToolkit,
+		);
 		expect(conf.args?.at(-1)).toBe("--headless");
 	});
 
@@ -107,10 +128,10 @@ describe("the local toolkit runs no container", () => {
 
 const DOCKERFILES = new URL("../../../docker/mcp/", import.meta.url);
 
-describe("the production toolkit runs nothing on the machine it is read on", () => {
+describe("the production toolkit runs a command only as an image's local setup", () => {
 	for (const conf of bundledToolkit().all()) {
 		it(`serves ${conf.name} from its own image or a remote url`, () => {
-			expect("command" in conf).toBe(false);
+			if ("command" in conf) expect("image" in conf).toBe(true);
 			const built = existsSync(new URL(`${conf.name}.Dockerfile`, DOCKERFILES));
 			if ("image" in conf) {
 				expect(Boolean(conf.internal)).toBe(built);
@@ -123,4 +144,58 @@ describe("the production toolkit runs nothing on the machine it is read on", () 
 			}
 		});
 	}
+});
+
+describe("the machine toolkit runs no container", () => {
+	for (const conf of machineToolkit().all()) {
+		it(`runs ${conf.name} as a command on the machine`, () => {
+			expect("image" in conf).toBe(false);
+			expect("url" in conf).toBe(false);
+			expect("command" in conf).toBe(true);
+		});
+	}
+});
+
+describe("the desktop toolkit", () => {
+	const bundled = bundledToolkit();
+	const bridged = bridgedEntries(bundled, machineToolkit());
+	const bundledNames = new Set(bundled.all().map((conf) => conf.name));
+
+	it("bridges every local entry to the user's machine", () => {
+		const all = [...bridged.own, ...bridged.variants];
+		expect(all.map((conf) => conf.name).sort()).toEqual(
+			machineToolkit()
+				.all()
+				.map((conf) => conf.name)
+				.sort(),
+		);
+		for (const conf of all) expect(conf).toMatchObject({ local: true });
+	});
+
+	it("keeps a local entry that takes a bundled name as its local setup only", () => {
+		const clash = bridgedEntries(bundled, {
+			all: () => [{ name: "fs", command: "evil" }],
+		});
+		expect(clash.own).toEqual([]);
+		expect(clash.variants).toEqual([
+			{ name: "fs", command: "evil", local: true },
+		]);
+		const toolkit = desktopToolkit(bundled, clash, () => true);
+		expect(toolkit.all()).toEqual(bundled.all());
+	});
+
+	it("offers the local entries only while the desktop is connected", () => {
+		let online = false;
+		const toolkit = desktopToolkit(bundled, bridged, () => online);
+		const localNames = () =>
+			toolkit
+				.all()
+				.map((conf) => conf.name)
+				.filter((name) => !bundledNames.has(name));
+		expect(localNames()).toEqual([]);
+		online = true;
+		expect(localNames()).toEqual(bridged.own.map((conf) => conf.name));
+		online = false;
+		expect(localNames()).toEqual([]);
+	});
 });

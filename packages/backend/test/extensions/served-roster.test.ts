@@ -1,10 +1,13 @@
+import { driveAsync, settled } from "@repo/interpreter/drive";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { openSession } from "@repo/interpreter/session";
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import { type Connect, workspaceExtensions } from "../../src/agent-repl.ts";
+import type { Desktop } from "../../src/desktop-bridge.ts";
 
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 
@@ -74,5 +77,40 @@ describe("the agent the app serves", () => {
 		expect(prompt).toContain("WORKSPACE");
 		expect(prompt).toContain("KNOWLEDGE");
 		expect(prompt).toContain("PREFERENCES");
+	});
+
+	it("reads the desktop's presence off the bridge at the start of each step", async () => {
+		const online = { value: false };
+		const desktop: Desktop = {
+			connected: () => online.value,
+			open: async () => ({
+				start: async () => {},
+				send: async () => {},
+				close: async () => {},
+			}),
+			close: async () => {},
+			running: () => true,
+			settings: async () => undefined,
+		};
+		const extensions = await workspaceExtensions(WORKSPACE, offline, {
+			desktop,
+		});
+		const interp = new Interp({ extensions });
+		await runAsync(interp, prelude);
+		const hooks = openSession(extensions);
+		const step = () =>
+			driveAsync(
+				hooks.beginStep.run(() => settled(undefined), {
+					interp,
+					emit: () => {},
+				}),
+			);
+		const asked = async () =>
+			str((await runAsync(interp, "(desktop-connected-p)")).value, false);
+		await step();
+		expect(await asked()).toBe("nil");
+		online.value = true;
+		await step();
+		expect(await asked()).toBe("t");
 	});
 });

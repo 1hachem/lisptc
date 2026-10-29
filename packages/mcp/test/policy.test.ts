@@ -132,6 +132,7 @@ describe("load-mcp's name argument", () => {
 			extensions: [
 				mcpExtension({
 					...mcpHost,
+					commands: true,
 					toolkit: {
 						all: () => [
 							{ name: "shown", description: "A shown server.", url: "x" },

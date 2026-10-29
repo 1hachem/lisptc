@@ -15,7 +15,7 @@ import { knowledgeExtension } from "@repo/knowledge-extension";
 import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
-import { mcpExtension } from "@repo/mcp-extension";
+import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
 import { containerHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import type { ServerReporter } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
@@ -45,6 +45,7 @@ import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
+import { BridgedHost, type Desktop } from "./desktop-bridge.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMcpRegistry } from "./mcp-registry.ts";
@@ -104,12 +105,13 @@ export interface ThreadScope {
 	readonly bounds?: readonly string[];
 	readonly roster?: readonly string[];
 	readonly subAgent?: boolean;
+	readonly desktop?: Desktop;
 }
 
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, supervisor, bounds, roster, subAgent }: ThreadScope = {},
+	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -149,6 +151,7 @@ export async function workspaceExtensions(
 				...workspace.asks,
 				...knowledge.asks,
 				...agents.asks,
+				...LOCAL_ASKS,
 			],
 			...(bounds === undefined ? {} : { bounds }),
 		}),
@@ -158,6 +161,9 @@ export async function workspaceExtensions(
 			store: new ConvexPreferencesStore(connect),
 			fonts,
 			motions,
+			...(desktop === undefined
+				? {}
+				: { desktop: { apply: (change) => desktop.settings(change) } }),
 		}),
 	);
 	const ui = uiExtension(
@@ -181,7 +187,17 @@ export async function workspaceExtensions(
 			...mcpHostFor({
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
-				host: containerHost(workspaceId, reportsOf(workspaceId, connect)),
+				...(desktop === undefined
+					? {
+							host: containerHost(workspaceId, reportsOf(workspaceId, connect)),
+						}
+					: {
+							desktop: async () => desktop.connected(),
+							host: new BridgedHost(
+								desktop,
+								containerHost(workspaceId, reportsOf(workspaceId, connect)),
+							),
+						}),
 			}),
 			policy: permissions.rules,
 			registry: new ConvexMcpRegistry(workspaceId, connect),

@@ -1,0 +1,23 @@
+{
+  "name": "@repo/desktop-protocol",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "exports": {
+    ".": "./src/protocol.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@repo/tsconfigs": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@repo/shared": "workspace:*"
+  }
+}

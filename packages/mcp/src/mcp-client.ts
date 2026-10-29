@@ -6,6 +6,8 @@ import {
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { localStateArgs } from "./local-host.ts";
 import {
 	type CallbackServer,
@@ -20,6 +22,7 @@ import {
 	type Icon,
 	type McpClient,
 	type McpHost,
+	type McpTransport,
 	type OAuthClients,
 	type OAuthConnConfig,
 	type OAuthStore,
@@ -28,6 +31,18 @@ import {
 	type Tool,
 	type ToolCall,
 } from "./ports.ts";
+
+function sdkTransport(inner: McpTransport): Transport {
+	const outer: Transport = {
+		start: () => inner.start(),
+		send: (message) => inner.send(message),
+		close: () => inner.close(),
+	};
+	inner.onmessage = (message) => outer.onmessage?.(message as JSONRPCMessage);
+	inner.onclose = () => outer.onclose?.();
+	inner.onerror = (error) => outer.onerror?.(error);
+	return outer;
+}
 
 function stdioTransport(
 	conf: ConnConfig,
@@ -108,7 +123,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 
 	async function serverUrlOf(conf: OAuthConnConfig): Promise<string> {
 		const handle = await ports.host.ensure(conf);
-		if (handle) return handle.url;
+		if (handle && "url" in handle) return handle.url;
 		if ("url" in conf) return conf.url;
 		throw new Error(`${conf.name}: the host started no server to sign in to`);
 	}
@@ -201,8 +216,12 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		}
 	}
 
-	function plainTransport(conf: ConnConfig, handle: ServerHandle | undefined) {
+	function plainTransport(
+		conf: ConnConfig,
+		handle: ServerHandle | undefined,
+	): Transport {
 		if (!handle) return stdioTransport(conf, ports.stateHome, ports.scope);
+		if ("transport" in handle) return sdkTransport(handle.transport());
 		return new StreamableHTTPClientTransport(new URL(handle.url), {
 			requestInit: handle.headers ? { headers: handle.headers } : undefined,
 		});
@@ -218,7 +237,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			conf,
 			watch,
 		);
-		if (handle && signsIn(conf))
+		if (handle && "url" in handle && signsIn(conf))
 			await connectAuthorized(client, conf, handle.url, signal);
 		else await client.connect(plainTransport(conf, handle), { signal });
 		const { tools } = await client.listTools(undefined, { signal });
