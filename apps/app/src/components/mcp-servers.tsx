@@ -20,8 +20,15 @@ const DOT: Record<LoadedChip["phase"], string> = {
 	failed: "bg-red",
 };
 
-export function McpServerChips({ servers }: { servers: McpServerChip[] }) {
+export function McpServerChips({
+	servers,
+	chatId = null,
+}: {
+	servers: McpServerChip[];
+	chatId?: string | null;
+}) {
 	const sorted = servers
+		.filter(({ instance }) => instance === undefined || instance === chatId)
 		.filter((chip): chip is LoadedChip => chip.phase !== "sleeping")
 		.sort((a, b) => a.server.localeCompare(b.server));
 	if (sorted.length === 0) return null;
@@ -30,9 +37,9 @@ export function McpServerChips({ servers }: { servers: McpServerChip[] }) {
 			aria-label="MCP servers"
 			className="mx-auto mb-1 flex w-full max-w-[680px] flex-wrap gap-x-3 gap-y-1 px-3 text-[11px] text-dim"
 		>
-			{sorted.map(({ server, phase, reason }) => (
+			{sorted.map(({ server, instance, phase, reason }) => (
 				<li
-					key={server}
+					key={`${server}\0${instance ?? ""}`}
 					title={reason ? `${phase}: ${reason}` : phase}
 					className="flex items-center gap-1.5"
 				>
@@ -40,7 +47,7 @@ export function McpServerChips({ servers }: { servers: McpServerChip[] }) {
 						aria-hidden
 						className={cn("size-1.5 flex-none rounded-full", DOT[phase])}
 					/>
-					<span>{server}</span>
+					<span>{instance ? `${server} (own)` : server}</span>
 					<span className="sr-only">{phase}</span>
 				</li>
 			))}
@@ -50,14 +57,18 @@ export function McpServerChips({ servers }: { servers: McpServerChip[] }) {
 
 function WorkspaceMcpServers({
 	workspaceId,
+	chatId,
 }: {
 	workspaceId: Id<"workspaces">;
+	chatId: string | null;
 }) {
 	const { data } = useQuery(convexQuery(api.mcpServers.list, { workspaceId }));
-	return <McpServerChips servers={data?.servers ?? []} />;
+	return <McpServerChips servers={data?.servers ?? []} chatId={chatId} />;
 }
 
-export function McpServers() {
+export function McpServers({ chatId }: { chatId: string | null }) {
 	const { workspace } = useWorkspace();
-	return workspace ? <WorkspaceMcpServers workspaceId={workspace._id} /> : null;
+	return workspace ? (
+		<WorkspaceMcpServers workspaceId={workspace._id} chatId={chatId} />
+	) : null;
 }

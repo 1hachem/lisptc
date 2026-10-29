@@ -9,12 +9,12 @@ import type {
 } from "./status-sink.ts";
 import { sweep } from "./sweep.ts";
 import {
+	claimOwner,
 	namespaceFor,
+	ownerOf,
 	RELEASED_AT,
-	SERVER_NAME,
 	STATE_LABEL,
 	STATE_PATH,
-	WORKSPACE_ID,
 } from "./workload.ts";
 
 const BACKOFF_MIN_MS = 1_000;
@@ -45,8 +45,7 @@ function stateRow(
 			(entry) => entry.name === name,
 		)?.path ?? "";
 	return {
-		workspace: server.spec.workspace,
-		server: server.spec.server,
+		...ownerOf(server),
 		name,
 		path,
 		size: claim.size,
@@ -56,7 +55,7 @@ function stateRow(
 }
 
 function stateKey(row: StateRow): string {
-	return `${row.workspace}\0${row.server}\0${row.name}`;
+	return `${row.workspace}\0${row.server}\0${row.instance ?? ""}\0${row.name}`;
 }
 
 function serverRow(server: McpServer): ServerRow[] {
@@ -64,8 +63,7 @@ function serverRow(server: McpServer): ServerRow[] {
 	if (!phase) return [];
 	return [
 		{
-			workspace: server.spec.workspace,
-			server: server.spec.server,
+			...ownerOf(server),
 			phase: phase.toLowerCase() as ServerRow["phase"],
 			...(server.status?.reason ? { reason: server.status.reason } : {}),
 		},
@@ -76,8 +74,7 @@ function releasedRow(claim: Located): StateRow | undefined {
 	const released = Number(claim.annotations[RELEASED_AT]);
 	if (!released) return undefined;
 	return {
-		workspace: claim.annotations[WORKSPACE_ID] ?? "",
-		server: claim.annotations[SERVER_NAME] ?? "",
+		...claimOwner(claim.annotations),
 		name: claim.labels[STATE_LABEL] ?? "",
 		path: claim.annotations[STATE_PATH] ?? "",
 		size: "",

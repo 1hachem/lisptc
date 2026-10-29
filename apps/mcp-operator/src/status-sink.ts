@@ -1,16 +1,18 @@
 export type ServerRowPhase = "starting" | "ready" | "sleeping" | "failed";
 export type StateRowPhase = "bound" | "pending" | "resizing" | "released";
 
-export interface ServerRow {
+export interface RowOwner {
 	workspace: string;
 	server: string;
+	instance?: string;
+}
+
+export interface ServerRow extends RowOwner {
 	phase: ServerRowPhase | "gone";
 	reason?: string;
 }
 
-export interface StateRow {
-	workspace: string;
-	server: string;
+export interface StateRow extends RowOwner {
 	name: string;
 	path: string;
 	size: string;

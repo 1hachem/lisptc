@@ -19,6 +19,9 @@ MCP SERVERS
   doing, so tell user, await again. No name to await: run
   (await (load-mcp "acme")) once more; second load of server still starting
   joins that start, begins no other.
+- Toolkit container server shared by whole workspace by default. Own
+  instance for this chat (e.g. sub-agent wants server to itself):
+  (load-mcp "acme" :dedicated t) .
 - Ad-hoc remote server, awaited same way:
   (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
 - :command , :args , :env NOT supported: error. Only toolkit names and :url .

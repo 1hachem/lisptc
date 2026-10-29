@@ -82,6 +82,18 @@ function host(
 	});
 }
 
+function chatHost(store: ServerStore, chat: string) {
+	return new KubernetesHost({
+		scope: "ws1",
+		chat,
+		namespace: "lisptc",
+		store,
+		fallback: recordingHost(),
+		limits: { pollMs: 1, stallMs: 200, ceilingMs: 400 },
+		clock: () => 1000,
+	});
+}
+
 function ticking() {
 	let now = 1000;
 	return {
@@ -187,6 +199,37 @@ describe("the kubernetes host", () => {
 
 		expect(fake.servers.size).toBe(1);
 		expect(fake.patches).toHaveLength(1);
+	});
+
+	it("shares one server between every chat of the workspace", async () => {
+		const fake = fakeStore();
+
+		await chatHost(fake.store, "chat-a").ensure(browser);
+		await chatHost(fake.store, "chat-b").ensure(browser);
+
+		expect([...fake.servers.keys()]).toEqual([NAME]);
+		expect(fake.servers.get(NAME)?.spec.instance).toBeUndefined();
+	});
+
+	it("runs a dedicated server once per chat, apart from the shared one", async () => {
+		const fake = fakeStore();
+		const own = { ...browser, tenancy: "dedicated" } as const;
+
+		await chatHost(fake.store, "chat-a").ensure(own);
+		await chatHost(fake.store, "chat-a").ensure(own);
+		await chatHost(fake.store, "chat-b").ensure(own);
+		await chatHost(fake.store, "chat-a").ensure(browser);
+
+		expect([...fake.servers.keys()].sort()).toEqual(
+			[
+				NAME,
+				serverName("ws1", "playwright", "chat-a"),
+				serverName("ws1", "playwright", "chat-b"),
+			].sort(),
+		);
+		expect(
+			fake.servers.get(serverName("ws1", "playwright", "chat-b"))?.spec,
+		).toMatchObject({ server: "playwright", instance: "chat-b" });
 	});
 
 	it("keeps a resize and a reset made on the live server", async () => {
