@@ -15,7 +15,9 @@
     "./providers": "./src/providers.ts",
     "./search": "./src/search.ts",
     "./split-layout": "./src/split-layout.ts",
-    "./panel-layout": "./src/panel-layout.ts"
+    "./panel-layout": "./src/panel-layout.ts",
+    "./desktop": "./src/desktop.ts",
+    "./status-bar": "./src/status-bar.ts"
   },
   "engines": {
     "node": ">=22.6.0"

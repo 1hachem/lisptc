@@ -135,6 +135,7 @@ Everything else:
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
+- `packages/desktop-protocol` (`@repo/desktop-protocol`) — the wire between the desktop app and the app server.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.

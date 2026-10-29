@@ -15,6 +15,20 @@ tasks:
     desc: prints this help
     cmd: task -l
 
+  desktop:
+    desc: open the desktop app on this branch's open preview pull request, else on main, or on URL=<origin>
+    vars:
+      TAILNET: taild4910a.ts.net
+      PREVIEW:
+        sh: >
+          gh pr view --json number,state,labels
+          --jq 'select(.state == "OPEN" and any(.labels[]; .name == "preview")) | .number'
+          2>/dev/null || true
+      URL: '{{.URL | default (ternary (printf "https://lisptc-pr-%s.%s/" .PREVIEW .TAILNET) (printf "https://lisptc.%s/" .TAILNET) (ne .PREVIEW ""))}}'
+    cmds:
+      - echo "desktop on {{.URL}}"
+      - LISPTC_DESKTOP_URL={{.URL}} pnpm --filter @lisptc/desktop dev
+
   mcp:browser:build:
     desc: build the browser MCP image the playwright toolkit entry runs
     vars:

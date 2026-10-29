@@ -12,6 +12,7 @@ const NEEDS_APPROVAL = "This call needs your approval.";
 const DONE = {
 	denied: "Denied",
 	session: "Allowed for session",
+	always: "Always allowed",
 	once: "Allowed",
 } as const;
 
@@ -35,6 +36,16 @@ function approvalAsk(request: ApprovalRequest): Ask {
 				accepts: false,
 				answer: answer(false, "once"),
 			},
+			...(request.change
+				? []
+				: [
+						{
+							label: "Always allow",
+							done: DONE.always,
+							accepts: true,
+							answer: answer(true, "always"),
+						},
+					]),
 			{
 				label: "Allow for session",
 				done: DONE.session,
@@ -111,5 +122,5 @@ export const uiApprover: Approver = {
 };
 
 function scopeOf(x: unknown): Scope {
-	return x === "session" ? "session" : "once";
+	return x === "session" || x === "always" ? x : "once";
 }

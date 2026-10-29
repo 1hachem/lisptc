@@ -23,6 +23,12 @@ describe("an error that means the session is gone", () => {
 		);
 	});
 
+	it("is an account whose user row was deleted", () => {
+		expect(rejectsSession(new ConvexError({ code: "NOT_PROVISIONED" }))).toBe(
+			true,
+		);
+	});
+
 	it("is not any other failure", () => {
 		expect(rejectsSession(new ConvexError({ code: "FORBIDDEN" }))).toBe(false);
 		expect(rejectsSession(new Error("something else"))).toBe(false);

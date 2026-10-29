@@ -17,6 +17,7 @@ editors/nvim/.vendor/
 .llama-cache/
 
 dist/
+apps/desktop/release/
 
 coverage/
 

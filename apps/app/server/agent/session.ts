@@ -13,17 +13,22 @@ function bearer(header: string | null): string {
 	return header.slice(7).trim();
 }
 
+export async function sessionOf(token: string): Promise<Session | null> {
+	const verdict = await verifyToken(token);
+	if (!verdict.signed || verdict.subject === undefined) return null;
+	return { token, subject: verdict.subject };
+}
+
 const session = createMiddleware({ type: "request" }).server(
 	async ({ request, next }) => {
 		const token = bearer(request.headers.get("authorization"));
 		if (token === "") {
 			throw new HttpError(401, "missing bearer token");
 		}
-		const verdict = await verifyToken(token);
-		if (!verdict.signed || verdict.subject === undefined) {
+		const current = await sessionOf(token);
+		if (current === null) {
 			throw new HttpError(401, "invalid bearer token");
 		}
-		const current: Session = { token, subject: verdict.subject };
 		return next({ context: { session: current } });
 	},
 );

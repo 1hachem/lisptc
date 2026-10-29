@@ -7,13 +7,15 @@ import { EverythingFine } from "./everything-fine.tsx";
 
 const REJECTED_TOKEN = /InvalidAuthHeader|Could not verify OIDC token/;
 
+const SIGNED_OUT_CODES = new Set(["UNAUTHENTICATED", "NOT_PROVISIONED"]);
+
 export function rejectsSession(error: unknown): boolean {
 	if (error instanceof ConvexError)
 		return (
 			typeof error.data === "object" &&
 			error.data !== null &&
 			"code" in error.data &&
-			error.data.code === "UNAUTHENTICATED"
+			SIGNED_OUT_CODES.has(String(error.data.code))
 		);
 	return error instanceof Error && REJECTED_TOKEN.test(error.message);
 }

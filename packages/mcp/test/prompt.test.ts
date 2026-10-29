@@ -37,6 +37,31 @@ describe("the prompt the extension carries", () => {
 		);
 	});
 
+	it("teaches desktop-connected-p", () => {
+		expect(PROMPT).toMatch(
+			/\(desktop-connected-p\) : t if desktop app connected as of this step, else nil\./,
+		);
+	});
+
+	it("teaches :local runs a toolkit server's own setup on the user's machine", () => {
+		expect(PROMPT).toMatch(/Row ends :also-local/);
+		expect(PROMPT).toMatch(/\(load-mcp "acme" :local t\)/);
+	});
+
+	it("teaches the predefined local servers and the local/<name> gate", () => {
+		expect(PROMPT).toMatch(
+			/\(load-mcp "local-files"\) , \(load-mcp "local-git"\)/,
+		);
+		expect(PROMPT).toMatch(/\(permission\/allow local\/\*\)/);
+		expect(PROMPT).toMatch(/desktop app not open or user denied/);
+		expect(PROMPT).toMatch(
+			/Listed only while desktop app connected\. Row ends :local/,
+		);
+		expect(PROMPT).toMatch(
+			/"desktop app connected: local servers now\s+loadable: …"/,
+		);
+	});
+
 	it("teaches the <server>/<tool> keyword calling convention", () => {
 		expect(PROMPT).toMatch(
 			/global named <server>\/<tool>, called with keyword args/,
@@ -68,7 +93,11 @@ describe("the prompt the extension carries", () => {
 	it("shows how to load a predefined server and an ad-hoc one", () => {
 		expect(PROMPT).toMatch(/\(await \(load-mcp "acme"\)\)/);
 		expect(PROMPT).toMatch(/:url "https:\/\/\.\.\."/);
-		expect(PROMPT).toMatch(/:command "npx"/);
+		expect(PROMPT).not.toMatch(/:command "/);
+	});
+
+	it("tells the model :command is not supported", () => {
+		expect(PROMPT).toMatch(/:command , :args , :env NOT supported/);
 	});
 
 	it("shows how to load several servers concurrently", () => {

@@ -6,7 +6,12 @@ import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { ConnConfig, McpClient } from "../src/ports.ts";
-import { bundledToolkit } from "../src/toolkit.ts";
+import {
+	bridgedEntries,
+	bundledToolkit,
+	desktopToolkit,
+	localToolkit,
+} from "../src/toolkit.ts";
 
 function recording(): { client: McpClient; seen: ConnConfig[] } {
 	const seen: ConnConfig[] = [];
@@ -94,5 +99,59 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 
 	it("refuses :headless for a server without a headless mode", () => {
 		expect(() => configFor("ocr", "", " :headless t")).toThrow(/headless/);
+	});
+});
+
+describe("the local toolkit runs no container", () => {
+	for (const conf of localToolkit().all()) {
+		it(`runs ${conf.name} as a command on the machine`, () => {
+			expect("image" in conf).toBe(false);
+			expect("url" in conf).toBe(false);
+			expect("command" in conf).toBe(true);
+		});
+	}
+});
+
+describe("the desktop toolkit", () => {
+	const bundled = bundledToolkit();
+	const bridged = bridgedEntries(bundled, localToolkit());
+	const bundledNames = new Set(bundled.all().map((conf) => conf.name));
+
+	it("bridges every local entry to the user's machine", () => {
+		const all = [...bridged.own, ...bridged.variants];
+		expect(all.map((conf) => conf.name).sort()).toEqual(
+			localToolkit()
+				.all()
+				.map((conf) => conf.name)
+				.sort(),
+		);
+		for (const conf of all) expect(conf).toMatchObject({ local: true });
+	});
+
+	it("keeps a local entry that takes a bundled name as its local setup only", () => {
+		const clash = bridgedEntries(bundled, {
+			all: () => [{ name: "fs", command: "evil" }],
+		});
+		expect(clash.own).toEqual([]);
+		expect(clash.variants).toEqual([
+			{ name: "fs", command: "evil", local: true },
+		]);
+		const toolkit = desktopToolkit(bundled, clash, () => true);
+		expect(toolkit.all()).toEqual(bundled.all());
+	});
+
+	it("offers the local entries only while the desktop is connected", () => {
+		let online = false;
+		const toolkit = desktopToolkit(bundled, bridged, () => online);
+		const localNames = () =>
+			toolkit
+				.all()
+				.map((conf) => conf.name)
+				.filter((name) => !bundledNames.has(name));
+		expect(localNames()).toEqual([]);
+		online = true;
+		expect(localNames()).toEqual(bridged.own.map((conf) => conf.name));
+		online = false;
+		expect(localNames()).toEqual([]);
 	});
 });

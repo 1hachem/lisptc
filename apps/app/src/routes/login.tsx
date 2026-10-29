@@ -1,26 +1,23 @@
 import {
 	createFileRoute,
+	Link,
 	Navigate,
-	redirect,
-	useNavigate,
+	useRouter,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authClient } from "../lib/auth-client.ts";
+import { inDesktopShell } from "../lib/desktop-shell.ts";
+import { landInApp, preloadAppChunks } from "../lib/land.ts";
 
 export const Route = createFileRoute("/login")({
-	beforeLoad: ({ context }) => {
-		if (context.auth.source === "server" && context.auth.token !== null) {
-			throw redirect({ to: "/" });
-		}
-	},
 	component: Login,
 });
 
 type Mode = "sign-in" | "sign-up";
 
 function Login() {
-	const navigate = useNavigate();
+	const router = useRouter();
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const [mode, setMode] = useState<Mode>("sign-in");
 	const [name, setName] = useState("");
@@ -29,35 +26,35 @@ function Login() {
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 
-	const land = () => navigate({ to: "/", replace: true });
+	useEffect(() => {
+		preloadAppChunks(router, "idle");
+	}, [router]);
 
 	const run = async (
 		attempt: () => Promise<{ error?: { message?: string } | null }>,
 	) => {
 		setBusy(true);
 		setError(null);
+		preloadAppChunks(router, "now");
 		try {
 			const { error: failure } = await attempt();
 			if (failure) {
 				setError(failure.message ?? "that did not work");
+				setBusy(false);
 				return;
 			}
-			await land();
+			landInApp(window.location);
 		} catch (ex) {
 			setError(ex instanceof Error ? ex.message : String(ex));
-		} finally {
 			setBusy(false);
 		}
 	};
 
-	if (isLoading) return null;
-	if (isAuthenticated) return <Navigate to="/" replace />;
+	if (!isLoading && isAuthenticated) return <Navigate to="/" replace />;
 
 	return (
 		<div className="flex h-full items-center justify-center bg-bg font-mono text-[13px] text-fg">
 			<div className="flex w-[320px] flex-col gap-3.5">
-				<div className="text-orange">ptc</div>
-
 				<form
 					className="flex flex-col gap-2"
 					onSubmit={(event) => {
@@ -153,6 +150,12 @@ function Login() {
 				</button>
 
 				{error ? <div className="text-[11.5px] text-red">{error}</div> : null}
+
+				{inDesktopShell() ? null : (
+					<Link to="/download" className="text-[11.5px] text-dim hover:text-fg">
+						get the desktop app
+					</Link>
+				)}
 			</div>
 		</div>
 	);

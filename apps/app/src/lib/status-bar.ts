@@ -1,7 +1,7 @@
+import type { StatusBarItem } from "@repo/shared/status-bar";
 import { useCallback, useEffect, useMemo } from "react";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
 import {
-	type BarItem,
 	type BarSlot,
 	barOrder,
 	shownItems,
@@ -28,7 +28,7 @@ export function useStatusBarOrder() {
 	);
 
 	const toggle = useCallback(
-		(item: BarItem) =>
+		(item: StatusBarItem) =>
 			put({ statusBarHidden: toggledItem(stored?.statusBarHidden, item) }),
 		[put, stored?.statusBarHidden],
 	);
