@@ -120,7 +120,8 @@ widget. Anchors, nothing else exists:
 - (ui/tour id step...) walks user through steps, one at a time. Step is plist
   (:anchor anchor :page page :say text :until next|click). No :anchor:
   callout in middle. :page opens that page beside chat as step starts, so
-  anchor inside it is on screen.
+  anchor inside it is on screen. Anchor in closed folder or page: app
+  reveals it first, no :page needed.
   :until next (default) waits for next button; click waits for click on
   anchor, needs :anchor.
 
