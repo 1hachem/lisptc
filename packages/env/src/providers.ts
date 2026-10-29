@@ -16,7 +16,7 @@ const providersEnv = createEnv({
 		DO_MODEL: z.string().default("gemma-4-31B-it"),
 		OPENROUTER_API_KEY: z.string().optional(),
 		OPENROUTER_BASE_URL: z.url().default("https://openrouter.ai/api/v1"),
-		OPENROUTER_MODEL: z.string().default("google/gemma-4-31b-it"),
+		OPENROUTER_MODEL: z.string().default("anthropic/claude-haiku-5.5"),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

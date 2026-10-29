@@ -56,7 +56,7 @@ export const CATALOGUED_CHOICES: readonly CataloguedChoice[] =
 
 export const DEFAULT_CHOICE: CataloguedChoice = {
 	provider: "openrouter",
-	model: "google/gemma-4-31b-it",
+	model: "anthropic/claude-haiku-5.5",
 };
 
 export function isCatalogued(choice: {
