@@ -30,6 +30,11 @@ function socketUrl(origin: string): string {
 	return url.href;
 }
 
+export type ConnectionState =
+	| { status: "connecting" }
+	| { status: "connected" }
+	| { status: "failed"; retryAt: number };
+
 export class DesktopBridge {
 	private readonly servers = new Map<string, LocalServer>();
 	private socket: WebSocket | undefined;
@@ -38,12 +43,14 @@ export class DesktopBridge {
 	private paused = false;
 	private heardAt = 0;
 	private pinging: ReturnType<typeof setInterval> | undefined;
+	private retrying: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(
 		readonly origin: string,
 		private readonly settings: (change: unknown) => DesktopSettings,
 		private readonly outdated: () => Promise<void>,
 		private readonly machine: Machine,
+		private readonly changed: (state: ConnectionState) => void,
 	) {}
 
 	start(): void {
@@ -62,8 +69,17 @@ export class DesktopBridge {
 		if (this.socket === undefined) void this.connect();
 	}
 
+	reconnect(): void {
+		if (this.stopped || this.paused || this.retrying === undefined) return;
+		clearTimeout(this.retrying);
+		this.retrying = undefined;
+		this.retryMs = MIN_RETRY_MS;
+		void this.connect();
+	}
+
 	async stop(): Promise<void> {
 		this.stopped = true;
+		clearTimeout(this.retrying);
 		this.socket?.close();
 		const servers = [...this.servers.values()];
 		this.servers.clear();
@@ -72,12 +88,17 @@ export class DesktopBridge {
 
 	private retry(): void {
 		if (this.stopped || this.paused) return;
-		setTimeout(() => void this.connect(), this.retryMs);
+		this.changed({ status: "failed", retryAt: Date.now() + this.retryMs });
+		this.retrying = setTimeout(() => {
+			this.retrying = undefined;
+			void this.connect();
+		}, this.retryMs);
 		this.retryMs = Math.min(this.retryMs * 2, MAX_RETRY_MS);
 	}
 
 	private async connect(): Promise<void> {
 		if (this.stopped || this.paused) return;
+		this.changed({ status: "connecting" });
 		const token = await sessionToken(this.origin);
 		if (token === undefined) return this.retry();
 		const socket = new WebSocket(socketUrl(this.origin));
@@ -128,6 +149,7 @@ export class DesktopBridge {
 		switch (message.type) {
 			case "welcome":
 				this.retryMs = MIN_RETRY_MS;
+				this.changed({ status: "connected" });
 				this.startPinging();
 				return;
 			case "pong":

@@ -18,7 +18,7 @@ import {
 	shell,
 	Tray,
 } from "electron";
-import { DesktopBridge } from "./bridge.ts";
+import { type ConnectionState, DesktopBridge } from "./bridge.ts";
 import {
 	applyOpenAtLogin,
 	machine,
@@ -58,6 +58,7 @@ let tray: Tray | undefined;
 let quitting = false;
 let retryTimer: NodeJS.Timeout | undefined;
 let updates: Updates | undefined;
+let connection: ConnectionState = { status: "connecting" };
 
 function target(): string {
 	return candidates[current] ?? desktopEnv.LISPTC_DESKTOP_URL;
@@ -70,7 +71,13 @@ function sameOrigin(url: string): boolean {
 function bridgeTo(origin: string | undefined): void {
 	if (origin === undefined || origin === bridge?.origin) return;
 	void bridge?.stop();
-	bridge = new DesktopBridge(origin, update, outdated, machine());
+	bridge = new DesktopBridge(
+		origin,
+		update,
+		outdated,
+		machine(),
+		connectionChanged,
+	);
 	bridge.start();
 }
 
@@ -145,6 +152,12 @@ function updateChanged(state: UpdateState): void {
 		window.webContents.send("desktop:update-changed", state);
 }
 
+function connectionChanged(state: ConnectionState): void {
+	connection = state;
+	for (const window of BrowserWindow.getAllWindows())
+		window.webContents.send("desktop:connection-changed", state);
+}
+
 async function outdated(): Promise<void> {
 	const state = updates?.state();
 	if (state?.status === "downloaded") {
@@ -186,6 +199,12 @@ function serveSettings(): void {
 	ipcMain.handle("desktop:update", (event) =>
 		fromApp(event) ? updates?.state() : undefined,
 	);
+	ipcMain.handle("desktop:connection", (event) =>
+		fromApp(event) ? connection : undefined,
+	);
+	ipcMain.handle("desktop:reconnect", (event) => {
+		if (fromApp(event)) bridge?.reconnect();
+	});
 	ipcMain.handle("desktop:install-update", (event) => {
 		if (fromApp(event)) updates?.install();
 	});

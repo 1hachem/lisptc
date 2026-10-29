@@ -14,7 +14,15 @@ interface DesktopShell {
 	update?: () => Promise<UpdateState | undefined>;
 	onUpdate?: (listener: (state: UpdateState) => void) => () => void;
 	installUpdate?: () => Promise<void>;
+	connection?: () => Promise<ConnectionState | undefined>;
+	onConnection?: (listener: (state: ConnectionState) => void) => () => void;
+	reconnect?: () => Promise<void>;
 }
+
+type ConnectionState =
+	| { status: "connecting" }
+	| { status: "connected" }
+	| { status: "failed"; retryAt: number };
 
 type UpdateState =
 	| { status: "idle" }
@@ -53,4 +61,16 @@ export function useDesktopUpdate() {
 		void shell()?.installUpdate?.();
 	};
 	return { ready, install };
+}
+
+export function useDesktopConnection() {
+	const [state, setState] = useState<ConnectionState>();
+	useEffect(() => {
+		void shell()?.connection?.().then(setState);
+		return shell()?.onConnection?.(setState);
+	}, []);
+	const reconnect = () => {
+		void shell()?.reconnect?.();
+	};
+	return { state, reconnect };
 }

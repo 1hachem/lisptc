@@ -1,5 +1,6 @@
 import type { DesktopSettings } from "@repo/desktop-protocol";
 import { contextBridge, ipcRenderer } from "electron";
+import type { ConnectionState } from "./bridge.ts";
 import type { UpdateState } from "./updates.ts";
 
 contextBridge.exposeInMainWorld("lisptcDesktop", {
@@ -22,6 +23,14 @@ contextBridge.exposeInMainWorld("lisptcDesktop", {
 		ipcRenderer.on("desktop:update-changed", relay);
 		return () => ipcRenderer.off("desktop:update-changed", relay);
 	},
+	connection: (): Promise<ConnectionState> =>
+		ipcRenderer.invoke("desktop:connection"),
+	onConnection: (listener: (state: ConnectionState) => void): (() => void) => {
+		const relay = (_event: unknown, state: ConnectionState) => listener(state);
+		ipcRenderer.on("desktop:connection-changed", relay);
+		return () => ipcRenderer.off("desktop:connection-changed", relay);
+	},
+	reconnect: (): Promise<void> => ipcRenderer.invoke("desktop:reconnect"),
 	installUpdate: (): Promise<void> =>
 		ipcRenderer.invoke("desktop:install-update"),
 });
