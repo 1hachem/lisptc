@@ -112,6 +112,7 @@ describe("BridgedHost", () => {
 	});
 
 	it("passes the bridge's refusal through when no desktop is connected", async () => {
+		const docker = fallback();
 		const host = new BridgedHost(
 			{
 				open: async () => {
@@ -122,10 +123,16 @@ describe("BridgedHost", () => {
 				running: () => true,
 				settings: async () => undefined,
 			},
-			fallback(),
+			docker,
 		);
 		await expect(
-			host.ensure({ name: "fs", command: "npx", local: true }),
+			host.ensure({
+				name: "fs",
+				command: "npx",
+				args: ["fs-mcp"],
+				local: true,
+			}),
 		).rejects.toThrow("no desktop connected for this user");
+		expect(docker.ensured).toEqual([]);
 	});
 });

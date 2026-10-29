@@ -142,6 +142,43 @@ describe("load-mcp :local", () => {
 			expect(host.ensured).toEqual([]);
 			interp.dispose();
 		});
+
+		it("keeps a bundled command :local while the desktop is not connected", async () => {
+			const host = recordingHost();
+			const interp = new Interp({
+				extensions: [
+					mcpExtension({
+						...mcpHost,
+						commands: true,
+						client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
+						toolkit: desktopToolkit(
+							{
+								all: () => [
+									{
+										name: "pw",
+										image: "pw:1",
+										port: 8931,
+										command: "definitely-not-a-binary",
+										args: ["pw-mcp"],
+									},
+								],
+							},
+							bridgedEntries(bundled, local),
+							() => false,
+						),
+					}),
+				],
+			});
+			runSync(interp, prelude);
+			await settle(interp, '(load-mcp "pw" :local t)');
+			expect(host.ensured[0]).toEqual({
+				name: "pw",
+				command: "definitely-not-a-binary",
+				args: ["pw-mcp"],
+				local: true,
+			});
+			interp.dispose();
+		});
 	});
 
 	it("speaks json-rpc through the transport a handle carries", async () => {

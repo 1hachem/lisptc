@@ -522,7 +522,7 @@ function lookupLocal(
 	if (own !== undefined && "local" in own && own.local === true) return own;
 	if (own !== undefined && "image" in own && own.command !== undefined) {
 		const { image: _image, port: _port, path: _path, ...rest } = own;
-		return { ...rest, command: own.command };
+		return { ...rest, command: own.command, local: true };
 	}
 	throw new EvalException(
 		predefined.has(name)
