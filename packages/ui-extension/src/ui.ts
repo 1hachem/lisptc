@@ -21,7 +21,14 @@ import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
-import { ACTION_PROPS, FOLDERS, TAGS, type Tag } from "@repo/ui-catalog";
+import {
+	ACTION_PROPS,
+	FOLDERS,
+	PAGE_IDS,
+	pages,
+	TAGS,
+	type Tag,
+} from "@repo/ui-catalog";
 import { z } from "zod";
 import {
 	element,
@@ -36,11 +43,17 @@ import {
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
+	pageTab,
 	SPLITS,
 	type Split,
 	viewTab,
 } from "./panel.ts";
-import { anchorPromptSection, registerTours } from "./tour.ts";
+import {
+	anchorPromptSection,
+	pageOf,
+	pagePromptSection,
+	registerTours,
+} from "./tour.ts";
 import type { TourStore } from "./tour-store.ts";
 import type { UiNode } from "./view.ts";
 import type { ViewStore } from "./view-store.ts";
@@ -53,6 +66,7 @@ export {
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
+	pageTab,
 	viewTab,
 } from "./panel.ts";
 export {
@@ -504,6 +518,25 @@ function registerUi(
 	);
 
 	interp.defGen(
+		"ui/open",
+		-2,
+		'(ui/open page [:split "right"])',
+		`Open a page of the app in a tab of the panel beside the chat. \`page\` is one of ${PAGE_IDS.join(" ")}. A page already open is focused instead. \`:split\` is as for \`ui/open-file\`. Returns the tab id.`,
+		z.tuple([zAny, zList]),
+		function* ([name, rest]): Eval {
+			const page = pageOf(name);
+			const tab = pageTab(page);
+			yield* emit({
+				op: "open",
+				tab,
+				split: splitOf(plistOptions(rest, ["split"])),
+				content: { kind: "page", page, title: pages[page].title },
+			});
+			return tab;
+		},
+	);
+
+	interp.defGen(
 		"ui/close",
 		1,
 		"(ui/close tab)",
@@ -647,7 +680,8 @@ export function uiExtension(
 			prompt: host
 				.prompt()
 				.replace("{{widgets}}", widgetPromptSection())
-				.replace("{{anchors}}", anchorPromptSection()),
+				.replace("{{anchors}}", anchorPromptSection())
+				.replace("{{pages}}", pagePromptSection()),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();

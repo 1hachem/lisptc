@@ -16,6 +16,10 @@ import {
 	type AnchorId,
 	anchors,
 	isAnchor,
+	isPage,
+	PAGE_IDS,
+	type PageId,
+	pages,
 	type TourStep,
 	UNTILS,
 } from "@repo/ui-catalog";
@@ -51,6 +55,20 @@ function anchorOf(x: unknown): AnchorId {
 	return id;
 }
 
+export function pageOf(x: unknown): PageId {
+	const id = nameOf(x, "a page");
+	if (!isPage(id))
+		throw new EvalException(
+			`unknown page; expected one of ${PAGE_IDS.join(" ")}`,
+			id,
+		);
+	return id;
+}
+
+export function pagePromptSection(): string {
+	return PAGE_IDS.map((id) => `- ${id}: ${pages[id].doc}`).join("\n");
+}
+
 function sayOf(x: unknown): string {
 	if (typeof x !== "string" || x.trim() === "")
 		throw new EvalException("tour step needs a :say string", x ?? null);
@@ -75,15 +93,18 @@ function untilOf(x: unknown): TourStep["until"] {
 function stepOf(x: unknown): TourStep {
 	const opts = plistOptions(x instanceof Cell ? x : null, [
 		"anchor",
+		"page",
 		"say",
 		"until",
 	]);
 	const anchor = opts.has("anchor") ? anchorOf(opts.get("anchor")) : undefined;
+	const page = opts.has("page") ? pageOf(opts.get("page")) : undefined;
 	const until = opts.has("until") ? untilOf(opts.get("until")) : "next";
 	if (until === "click" && anchor === undefined)
 		throw new EvalException("tour step :until click needs an :anchor", x);
 	return {
 		...(anchor === undefined ? {} : { anchor }),
+		...(page === undefined ? {} : { page }),
 		say: sayOf(opts.get("say")),
 		until,
 	};
@@ -126,7 +147,7 @@ export function registerTours(
 		"ui/tour",
 		-2,
 		"(ui/tour id step...)",
-		`Walk the user through the app one step at a time. Each step is a plist (:anchor anchor :say text :until next-or-click): :anchor one of ${ANCHOR_IDS.join(" ")}, or none for a callout in the middle; :until next (default) waits for the next button, click waits for the user to click the anchor. Replaces any tour on screen. When the user finishes or skips it, you get a message saying so. Returns the tour id.`,
+		`Walk the user through the app one step at a time. Each step is a plist (:anchor anchor :page page :say text :until next-or-click): :anchor one of ${ANCHOR_IDS.join(" ")}, or none for a callout in the middle; :page one of ${PAGE_IDS.join(" ")}, opened beside the chat as the step starts; :until next (default) waits for the next button, click waits for the user to click the anchor. Replaces any tour on screen. When the user finishes or skips it, you get a message saying so. Returns the tour id.`,
 		z.tuple([zAny, zList]),
 		function* ([id, rest]): Eval {
 			const tourId = nameOf(id, "a tour id");

@@ -3,7 +3,9 @@ import {
 	ACTION_PROPS,
 	ANCHOR_IDS,
 	isAnchor,
+	isPage,
 	isTag,
+	PAGE_IDS,
 	TAGS,
 	tourStep,
 	widgetOf,
@@ -72,6 +74,23 @@ describe("the anchor catalog", () => {
 		expect(
 			tourStep.safeParse({ anchor: "settings", say: "x", until: "hover" })
 				.success,
+		).toBe(false);
+	});
+});
+
+describe("the page catalog", () => {
+	it("knows the pages the app opens and nothing else", () => {
+		expect(PAGE_IDS).toEqual(["account", "settings", "preferences", "readme"]);
+		expect(isPage("toString")).toBe(false);
+		expect(isPage("bin")).toBe(false);
+	});
+
+	it("takes a tour step only on a known page", () => {
+		expect(
+			tourStep.safeParse({ page: "settings", say: "x", until: "next" }).success,
+		).toBe(true);
+		expect(
+			tourStep.safeParse({ page: "billing", say: "x", until: "next" }).success,
 		).toBe(false);
 	});
 });

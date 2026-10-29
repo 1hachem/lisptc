@@ -1,5 +1,5 @@
 import type { Awaitable } from "@repo/shared/host";
-import type { FOLDERS } from "@repo/ui-catalog";
+import type { FOLDERS, PageId } from "@repo/ui-catalog";
 
 export type Folder = (typeof FOLDERS)[number];
 
@@ -9,7 +9,8 @@ export type Split = (typeof SPLITS)[number];
 
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
-	| { kind: "view"; title: string; viewId: string };
+	| { kind: "view"; title: string; viewId: string }
+	| { kind: "page"; page: PageId; title: string };
 
 export type PanelOp =
 	| { op: "open"; tab: string; split: Split; content: PanelContent }
@@ -35,4 +36,8 @@ export interface PanelTab {
 	title: string;
 	shown: boolean;
 	focused: boolean;
+}
+
+export function pageTab(page: PageId): string {
+	return `page:${page}`;
 }

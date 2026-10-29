@@ -81,6 +81,11 @@ auth", not a note, "user clicked search".
 - (ui/open-view title view [:split "down"]) widget in tab, not under message.
   Controls run in this REPL as usual. Same title replaces that tab. Returns
   tab id.
+- (ui/open page [:split "right"]) opens app page in tab, as user would from
+  sidebar. Pages, nothing else exists:
+{{pages}}
+  Open page already focused, no second tab. Returns tab id, as in
+  "page:account".
 - (ui/close tab) · (ui/focus tab) by id open returned. ui/close gives t if tab
   was open, nil if not.
 - (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:page :title
@@ -113,7 +118,9 @@ widget. Anchors, nothing else exists:
 - (ui/point anchor text) spotlights anchor with callout until user clicks it.
   (ui/point "knowledge/upload" "Upload PDF here")
 - (ui/tour id step...) walks user through steps, one at a time. Step is plist
-  (:anchor anchor :say text :until next|click). No :anchor: callout in middle.
+  (:anchor anchor :page page :say text :until next|click). No :anchor:
+  callout in middle. :page opens that page beside chat as step starts, so
+  anchor inside it is on screen.
   :until next (default) waits for next button; click waits for click on
   anchor, needs :anchor.
 

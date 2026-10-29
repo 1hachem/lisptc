@@ -3,7 +3,13 @@ import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { ANCHOR_IDS, TAGS, tourStep, widgetOf } from "@repo/ui-catalog";
+import {
+	ANCHOR_IDS,
+	PAGE_IDS,
+	TAGS,
+	tourStep,
+	widgetOf,
+} from "@repo/ui-catalog";
 import { describe, expect, it } from "vitest";
 import { MemoryTourStore } from "../src/tour-store.ts";
 import {
@@ -41,7 +47,7 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 							id: op.tab,
 							kind: op.content.kind,
 							title:
-								op.content.kind === "view" ? op.content.title : op.content.name,
+								op.content.kind === "file" ? op.content.name : op.content.title,
 							shown: true,
 							focused: true,
 						},
@@ -1033,10 +1039,45 @@ describe("tours", () => {
 		expect(ev("(ui/tour-done? 'upload-files)")).toBe("t");
 	});
 
-	it("names every anchor in the prompt", () => {
+	it("opens a page of the app beside the chat", () => {
+		const { panel, ops } = panelOf([]);
+		const interp = new Interp({
+			extensions: [uiExtension(uiHostFor({ panel }))],
+		});
+		runSync(interp, prelude);
+		expect(str(runSync(interp, '(ui/open "account" :split "right")'))).toBe(
+			'"page:account"',
+		);
+		expect(ops).toEqual([
+			{
+				op: "open",
+				tab: "page:account",
+				split: "right",
+				content: { kind: "page", page: "account", title: "account" },
+			},
+		]);
+		expect(() => runSync(interp, '(ui/open "billing")')).toThrow(
+			/unknown page/,
+		);
+	});
+
+	it("carries the page a tour step opens", () => {
+		const { tours, ev } = touring();
+		ev(`(ui/tour "t" '(:page settings :say "your workspace settings"))`);
+		expect(tours.tours.get("t")?.steps).toEqual([
+			{ page: "settings", say: "your workspace settings", until: "next" },
+		]);
+		expect(() => ev(`(ui/tour "t" '(:page "billing" :say "x"))`)).toThrow(
+			/unknown page/,
+		);
+	});
+
+	it("names every anchor and page in the prompt", () => {
 		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
 		expect(prompt).not.toContain("{{anchors}}");
-		for (const id of ANCHOR_IDS) expect(prompt).toContain(`- ${id}:`);
+		expect(prompt).not.toContain("{{pages}}");
+		for (const id of [...ANCHOR_IDS, ...PAGE_IDS])
+			expect(prompt).toContain(`- ${id}:`);
 	});
 
 	it("runs the tour the prompt shows", () => {

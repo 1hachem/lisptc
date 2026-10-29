@@ -133,10 +133,36 @@ export function isAnchor(id: string): id is AnchorId {
 	return Object.hasOwn(anchors, id);
 }
 
+function page(title: string, doc: string) {
+	return { title, doc };
+}
+
+export const pages = {
+	account: page(
+		"account",
+		"user settings: name, email, sign out, delete account",
+	),
+	settings: page("settings.ptc", "workspace settings: name, icon, model"),
+	preferences: page(
+		"preferences.ptc",
+		"look and feel: theme, font, what chat shows",
+	),
+	readme: page("README.md", "workspace readme the agent reads"),
+};
+
+export type PageId = keyof typeof pages;
+
+export const PAGE_IDS = Object.keys(pages) as PageId[];
+
+export function isPage(id: string): id is PageId {
+	return Object.hasOwn(pages, id);
+}
+
 export const UNTILS = ["next", "click"] as const;
 
 export const tourStep = z.strictObject({
 	anchor: z.enum(ANCHOR_IDS as [AnchorId, ...AnchorId[]]).optional(),
+	page: z.enum(PAGE_IDS as [PageId, ...PageId[]]).optional(),
 	say: z.string().min(1),
 	until: z.enum(UNTILS),
 });
