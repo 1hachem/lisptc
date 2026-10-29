@@ -17,10 +17,9 @@ import {
 function useSecondsUntil(at: number): number {
 	const [now, setNow] = useState(Date.now);
 	useEffect(() => {
-		setNow(Date.now());
 		const ticking = setInterval(() => setNow(Date.now()), 1_000);
 		return () => clearInterval(ticking);
-	}, [at]);
+	}, []);
 	return Math.max(0, Math.ceil((at - now) / 1_000));
 }
 
