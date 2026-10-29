@@ -18,9 +18,9 @@ workspace. App applies change at once, while they watch.
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
   '() shows all. Attachments and bin hidden until user
   shows them.
-- :status-bar is bottom bar's seven slots, left to right. Items: "panes",
+- :status-bar is bottom bar's 9 slots, left to right. Items: "panes",
   "desktop" (desktop app status, shows only while connected), "clock". Each
-  empty slot is gap with own name: "gap-1" "gap-2" ... read them from plist.
+  empty slot is gap with own name: "gap-1" through "gap-6".
   (preferences/set :status-bar '("desktop" "gap-1" "panes")) puts desktop
   first, gap second, panes third, keeps rest in order. User also drags them
   on bar or in preferences.

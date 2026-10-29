@@ -1,10 +1,6 @@
+import { STATUS_BAR_SLOT_COUNT } from "@repo/shared/status-bar";
 import { describe, expect, it } from "vitest";
-import {
-	barOrder,
-	placeOf,
-	SLOT_COUNT,
-	shownItems,
-} from "../src/lib/status-bar-order.ts";
+import { barOrder, placeOf, shownItems } from "../src/lib/status-bar-order.ts";
 
 describe("barOrder", () => {
 	it("puts the pane indicator first and the desktop status beside the clock last, gaps between, when nothing is stored", () => {
@@ -26,10 +22,10 @@ describe("barOrder", () => {
 	});
 
 	it("always has nine slots", () => {
-		expect(barOrder(undefined)).toHaveLength(SLOT_COUNT);
-		expect(barOrder(["clock"])).toHaveLength(SLOT_COUNT);
+		expect(barOrder(undefined)).toHaveLength(STATUS_BAR_SLOT_COUNT);
+		expect(barOrder(["clock"])).toHaveLength(STATUS_BAR_SLOT_COUNT);
 		expect(barOrder(["gap-3", "desktop", "panes", "clock"])).toHaveLength(
-			SLOT_COUNT,
+			STATUS_BAR_SLOT_COUNT,
 		);
 	});
 
@@ -59,7 +55,7 @@ describe("barOrder", () => {
 		]);
 		expect(placeOf(order, "desktop")).toBe(1);
 		expect(placeOf(order, "panes")).toBe(6);
-		expect(placeOf(order, "clock")).toBe(SLOT_COUNT);
+		expect(placeOf(order, "clock")).toBe(STATUS_BAR_SLOT_COUNT);
 	});
 
 	it("keeps several stored gaps and drops unknown and repeated names", () => {

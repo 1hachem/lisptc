@@ -8,7 +8,17 @@ const HELD = {
 	input: { lisp: true },
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
-	statusBar: ["panes", "gap-1", "gap-2", "gap-3", "gap-4", "desktop", "clock"],
+	statusBar: [
+		"panes",
+		"gap-1",
+		"gap-2",
+		"gap-3",
+		"gap-4",
+		"gap-5",
+		"gap-6",
+		"desktop",
+		"clock",
+	],
 	statusBarHidden: [],
 	motion: "slide",
 	panelMotion: true,
@@ -16,7 +26,7 @@ const HELD = {
 	traceLink: true,
 };
 
-describe("a stored bottom bar from before seven slots", () => {
+describe("a stored bottom bar from before nine slots", () => {
 	it("still accepts the desktop item and every gap", async () => {
 		const { ev } = await world({
 			...HELD,
@@ -24,7 +34,7 @@ describe("a stored bottom bar from before seven slots", () => {
 		});
 		await ev('(preferences/set :status-bar \'("desktop" "gap-4" "panes"))');
 		expect(await ev("(preferences)")).toContain(
-			':status-bar ("desktop" "gap-4" "panes" "clock" "gap-1" "gap-2" "gap-3")',
+			':status-bar ("desktop" "gap-4" "panes" "clock" "gap-1" "gap-2" "gap-3" "gap-5" "gap-6")',
 		);
 		await ev('(preferences/set :status-bar-hidden \'("desktop"))');
 		expect(await ev("(preferences)")).toContain(
@@ -37,7 +47,7 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
+			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
 		);
 	});
 
@@ -154,7 +164,7 @@ describe("changing preferences", () => {
 		expect(
 			await ev('(preferences/set :status-bar \'("clock" "panes"))'),
 		).toContain(
-			':status-bar ("clock" "panes" "gap-1" "gap-2" "gap-3" "gap-4" "desktop")',
+			':status-bar ("clock" "panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop")',
 		);
 		expect(store.read().statusBar).toEqual([
 			"clock",
@@ -163,6 +173,8 @@ describe("changing preferences", () => {
 			"gap-2",
 			"gap-3",
 			"gap-4",
+			"gap-5",
+			"gap-6",
 			"desktop",
 		]);
 	});
@@ -179,6 +191,8 @@ describe("changing preferences", () => {
 			"panes",
 			"gap-2",
 			"gap-4",
+			"gap-5",
+			"gap-6",
 			"clock",
 		]);
 	});
@@ -196,7 +210,7 @@ describe("changing preferences", () => {
 		await expect(
 			ev('(preferences/set :status-bar-hidden \'("weather"))'),
 		).rejects.toThrow(
-			/unknown status bar item, there are "panes" "gap-1" "gap-2" "gap-3" "gap-4" "desktop" "clock"/,
+			/unknown status bar item, there are "panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock"/,
 		);
 		expect(store.read()).toEqual(HELD);
 	});

@@ -1,13 +1,12 @@
 import { SortableTree } from "@repo/components";
+import {
+	STATUS_BAR_SLOT_COUNT,
+	type StatusBarItem,
+} from "@repo/shared/status-bar";
 import { type ReactNode, useEffect, useState } from "react";
 import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
-import {
-	type BarItem,
-	isGap,
-	placeOf,
-	SLOT_COUNT,
-} from "../lib/status-bar-order.ts";
+import { isGap, placeOf } from "../lib/status-bar-order.ts";
 import { DesktopStatus } from "./desktop-status.tsx";
 import { DesktopZoom } from "./desktop-zoom.tsx";
 
@@ -27,7 +26,7 @@ const COLUMN_CLASS: readonly string[] = [
 
 function placeClass(place: number): string {
 	const column = COLUMN_CLASS[place - 1] ?? "col-start-9";
-	const middle = (SLOT_COUNT + 1) / 2;
+	const middle = (STATUS_BAR_SLOT_COUNT + 1) / 2;
 	if (place < middle) return `${column} justify-start`;
 	if (place > middle) return `${column} justify-end`;
 	return `${column} justify-center`;
@@ -57,7 +56,7 @@ function Clock() {
 export function StatusBar({ indicator }: { indicator: ReactNode }) {
 	const { motion } = useSidebarMotion();
 	const { order, shown, reorder } = useStatusBarOrder();
-	const drawn: Record<BarItem, ReactNode> = {
+	const drawn: Record<StatusBarItem, ReactNode> = {
 		panes: indicator,
 		desktop: (
 			<>

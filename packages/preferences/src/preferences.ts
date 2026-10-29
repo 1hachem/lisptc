@@ -12,6 +12,12 @@ import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
 import type { DesktopPreferences } from "@repo/shared/desktop";
+import {
+	STATUS_BAR_GAP_PREFIX,
+	STATUS_BAR_GAPS,
+	STATUS_BAR_SLOT_COUNT,
+	STATUS_BAR_SLOTS,
+} from "@repo/shared/status-bar";
 import { z } from "zod";
 import type { Choice, Preferences, PreferencesHost, Toggles } from "./ports.ts";
 
@@ -68,8 +74,7 @@ const SET_ARGS = [
 		name: "status-bar",
 		type: "list",
 		required: false,
-		description:
-			'the bottom bar\'s seven slots, first to last, left to right, as ("name" ...); each empty slot is a gap named like an item ("gap-1" ...); slots not named follow in their current order',
+		description: `the bottom bar's ${STATUS_BAR_SLOT_COUNT} slots, first to last, left to right, as ("name" ...); each empty slot is a gap named like an item, "${STATUS_BAR_GAP_PREFIX}1" through "${STATUS_BAR_GAPS.at(-1)}"; slots not named follow in their current order`,
 	},
 	{
 		name: "status-bar-hidden",
@@ -207,16 +212,6 @@ function ordered(
 	const named = names(kind, what, value, known);
 	return [...named, ...(known ?? []).filter((name) => !named.includes(name))];
 }
-
-const STATUS_BAR_SLOTS = [
-	"panes",
-	"gap-1",
-	"gap-2",
-	"gap-3",
-	"gap-4",
-	"desktop",
-	"clock",
-];
 
 function statusBarSlots(stored: readonly string[] | undefined): string[] {
 	const kept = (stored ?? []).filter((name) => STATUS_BAR_SLOTS.includes(name));
