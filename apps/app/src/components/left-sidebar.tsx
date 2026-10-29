@@ -14,6 +14,7 @@ import {
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useAnchor } from "../lib/anchors.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
@@ -98,9 +99,11 @@ function UserName() {
 
 function SettingsLink({ expanded }: { expanded: boolean }) {
 	const { workspace } = useWorkspace();
+	const anchor = useAnchor<HTMLAnchorElement>("settings");
 	if (!workspace) return null;
 	return (
 		<PanelLink
+			anchor={anchor}
 			workspaceId={workspace._id}
 			content={ACCOUNT}
 			className={`${expanded ? "ml-auto" : ""} flex-none text-dim hover:text-fg`}

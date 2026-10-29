@@ -9,7 +9,8 @@ import {
 	TreePending,
 } from "@repo/components";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, type Ref, useRef, useState } from "react";
+import { useAnchor } from "../lib/anchors.ts";
 import { restoreFailure } from "../lib/bin.ts";
 import { knowledgeIcon } from "../lib/file-icons.ts";
 import { searched, useSelection } from "../lib/file-list.ts";
@@ -143,6 +144,7 @@ function FileFolder<T extends StoredFile>({
 	restore,
 	onCreate,
 	createLabel,
+	createRef,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
@@ -161,6 +163,7 @@ function FileFolder<T extends StoredFile>({
 	};
 	onCreate?: () => void;
 	createLabel?: string;
+	createRef?: Ref<HTMLButtonElement>;
 	children?: ReactNode;
 }) {
 	const shownPanel = useShown();
@@ -184,7 +187,12 @@ function FileFolder<T extends StoredFile>({
 	);
 
 	return (
-		<TreeFolder {...folder} onCreate={onCreate} createLabel={createLabel}>
+		<TreeFolder
+			{...folder}
+			onCreate={onCreate}
+			createLabel={createLabel}
+			createRef={createRef}
+		>
 			{files !== undefined && files.length > 0 && (
 				<TreeFilter
 					value={query}
@@ -252,6 +260,7 @@ export function KnowledgeFolder({
 	const stored = useStored(workspaceId, "knowledge", true);
 	const picker = useRef<HTMLInputElement>(null);
 	const { upload, uploading, failures } = useKnowledgeUpload(workspaceId);
+	const uploadAnchor = useAnchor<HTMLButtonElement>("knowledge/upload");
 
 	return (
 		<>
@@ -277,6 +286,7 @@ export function KnowledgeFolder({
 				confirm={{ one: "move it to the bin?", all: "move them to the bin?" }}
 				onCreate={() => picker.current?.click()}
 				createLabel="upload to knowledge/"
+				createRef={uploadAnchor}
 			>
 				{uploading.map((name) => (
 					<TreePending key={name} name={name} label="uploading" depth={1} />

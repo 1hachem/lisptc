@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { useNoSwipeNavigation } from "../lib/swipe-guard.ts";
 import { useUI } from "../lib/ui.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
+import { Onboarding } from "./onboarding.tsx";
 import { PreferencesPanel } from "./preferences-panel.tsx";
 
 const SIDEBAR_SIZE = {
@@ -42,6 +43,7 @@ export function AppShell({
 					<PreferencesPanel />
 				</SidebarProvider>
 			</SidebarProvider>
+			<Onboarding />
 		</div>
 	);
 }

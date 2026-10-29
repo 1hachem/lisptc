@@ -1,6 +1,6 @@
 import type { Id } from "@repo/backend/dataModel";
 import { Link, useParams } from "@tanstack/react-router";
-import type { DragEvent, MouseEvent, ReactNode } from "react";
+import type { DragEvent, MouseEvent, ReactNode, Ref } from "react";
 import type { PanelContent } from "../lib/panel-ops.ts";
 import { panelPath } from "../lib/panel-paths.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
@@ -23,6 +23,7 @@ export function PanelLink({
 	label,
 	onDragStart,
 	onClick,
+	anchor,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
@@ -32,10 +33,12 @@ export function PanelLink({
 	label?: string;
 	onDragStart?: (event: DragEvent) => void;
 	onClick?: () => void;
+	anchor?: Ref<HTMLAnchorElement>;
 	children: ReactNode;
 }) {
 	return (
 		<Link
+			ref={anchor}
 			to="/app/$workspaceId/$"
 			params={{ workspaceId, _splat: panelPath(content) ?? "" }}
 			className={className}
