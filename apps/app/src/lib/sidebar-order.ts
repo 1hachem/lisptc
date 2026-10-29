@@ -19,8 +19,8 @@ export const SIDEBAR_ENTRIES = [
 	"new_chat",
 	...SIDEBAR_FOLDERS,
 	"README.md",
-	"settings.ptc",
-	"preferences.ptc",
+	"settings",
+	"preferences",
 ] as const;
 
 export type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number];

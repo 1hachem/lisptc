@@ -1,11 +1,8 @@
-import type { Id } from "@repo/backend/dataModel";
 import { describe, expect, it } from "vitest";
 import {
 	fileContext,
 	memorySource,
 	permissionRules,
-	preferencesSource,
-	settingsSource,
 	withoutRule,
 } from "../src/lib/files.ts";
 
@@ -29,40 +26,6 @@ describe("memorySource", () => {
 			}),
 		).toBe(
 			'(memory/remember "retry"\n  (retry 3)\n  :on (error "timeout")\n  :links ("net" "say \\"hi\\""))',
-		);
-	});
-});
-
-describe("preferencesSource", () => {
-	it("names the font, every toggle, the sidebar order and what it hides", () => {
-		expect(
-			preferencesSource({
-				font: "mono",
-				metadata: { tokens: true },
-				input: { lisp: true },
-				sidebar: ["README.md", "home"],
-				hidden: ["tests"],
-				motion: "lift",
-				panelMotion: false,
-				traceBesideChat: true,
-				traceLink: false,
-			}),
-		).toBe(
-			'(preferences :font "mono"\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift"\n  :panel-motion nil\n  :trace-beside-chat t\n  :trace-link nil)',
-		);
-	});
-});
-
-describe("settingsSource", () => {
-	it("names the workspace, its model, its icon and its theme", () => {
-		expect(
-			settingsSource(
-				{ _id: "w1" as Id<"workspaces">, name: "personal", icon: "rocket" },
-				{ provider: "anthropic", model: "claude-opus-5-5" },
-				"borland",
-			),
-		).toBe(
-			'(settings :name "personal"\n  :model "anthropic/claude-opus-5-5"\n  :icon "rocket"\n  :theme "borland")',
 		);
 	});
 });

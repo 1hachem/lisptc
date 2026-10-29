@@ -343,7 +343,7 @@ export function PreferencesPanel() {
 	);
 }
 
-function Preferences() {
+export function Preferences() {
 	return (
 		<div className="flex h-full flex-col gap-5 overflow-y-auto py-3.5">
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">

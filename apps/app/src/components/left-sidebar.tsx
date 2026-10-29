@@ -34,11 +34,11 @@ const TREE_ROW = "flex h-[calc(1lh+0.5rem)] items-center text-[11.5px]";
 const PAGES: Partial<Record<SidebarEntry, PanelContent>> = {
 	home: NEW_CHAT,
 	"README.md": { kind: "page", page: "readme", title: "README.md" },
-	"settings.ptc": { kind: "page", page: "settings", title: "settings.ptc" },
-	"preferences.ptc": {
+	settings: { kind: "page", page: "settings", title: "settings" },
+	preferences: {
 		kind: "page",
 		page: "preferences",
-		title: "preferences.ptc",
+		title: "preferences",
 	},
 };
 
