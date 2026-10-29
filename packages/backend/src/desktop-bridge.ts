@@ -17,7 +17,6 @@ export interface LocalServer {
 }
 
 export interface Desktop {
-	connected(): boolean;
 	running(name: string): boolean;
 	open(server: LocalServer): Promise<McpTransport>;
 	close(name: string): Promise<void>;

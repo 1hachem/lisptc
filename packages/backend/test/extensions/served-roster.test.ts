@@ -79,10 +79,18 @@ describe("the agent the app serves", () => {
 		expect(prompt).toContain("PREFERENCES");
 	});
 
-	it("reads the desktop's presence off the bridge at the start of each step", async () => {
+	it("reads the desktop's presence off the deployment at the start of each step", async () => {
 		const online = { value: false };
+		const desktops: Connect = () =>
+			({
+				query: (reference: unknown) =>
+					getFunctionName(reference as FunctionReference<"query">) ===
+					"desktops:mine"
+						? Promise.resolve({ connected: online.value })
+						: nothingStored(reference),
+				mutation: nothingStored,
+			}) as unknown as ReturnType<Connect>;
 		const desktop: Desktop = {
-			connected: () => online.value,
 			open: async () => ({
 				start: async () => {},
 				send: async () => {},
@@ -92,7 +100,7 @@ describe("the agent the app serves", () => {
 			running: () => true,
 			settings: async () => undefined,
 		};
-		const extensions = await workspaceExtensions(WORKSPACE, offline, {
+		const extensions = await workspaceExtensions(WORKSPACE, desktops, {
 			desktop,
 		});
 		const interp = new Interp({ extensions });

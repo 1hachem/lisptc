@@ -54,7 +54,9 @@ describe("the desktop registry", () => {
 		await desktop.open(server);
 		registry.detach(peer);
 		expect(desktop.running("fs")).toBe(false);
-		expect(desktop.connected()).toBe(false);
+		await expect(desktop.open(server)).rejects.toThrow(
+			"no desktop connected for this user",
+		);
 	});
 
 	it("binds a desktop to one user, so another user's machine is never reached", async () => {
@@ -62,11 +64,9 @@ describe("the desktop registry", () => {
 		const peer = fakeDesktop(registry);
 		registry.attach(user, "m1", peer);
 		const other = registry.for("user-2" as Id<"users">);
-		expect(other.connected()).toBe(false);
 		await expect(other.open(server)).rejects.toThrow(
 			"no desktop connected for this user",
 		);
-		expect(registry.for(user).connected()).toBe(true);
 		await registry.for(user).open(server);
 		expect(peer.sent.map((message) => message.type)).toEqual(["open"]);
 	});
@@ -153,16 +153,6 @@ describe("the desktop registry", () => {
 		await expect(opening).rejects.toThrow("desktop disconnected");
 	});
 
-	it("knows whether a user's desktop is connected right now", () => {
-		const registry = new DesktopRegistry();
-		const peer: DesktopPeer = { send() {}, close() {} };
-		expect(registry.connected(user)).toBe(false);
-		registry.attach(user, "m1", peer);
-		expect(registry.connected(user)).toBe(true);
-		registry.detach(peer);
-		expect(registry.connected(user)).toBe(false);
-	});
-
 	it("keeps the newest connection and closes the one it replaces", async () => {
 		const registry = new DesktopRegistry();
 		const first = fakeDesktop(registry);
@@ -187,7 +177,6 @@ describe("the desktop registry", () => {
 		expect(laptop.sent).toEqual([]);
 		expect(tower.sent.map((m) => m.type)).toEqual(["open"]);
 		registry.detach(tower);
-		expect(registry.connected(user)).toBe(true);
 		await registry.open(user, server);
 		expect(laptop.sent.map((m) => m.type)).toEqual(["open"]);
 	});
@@ -200,9 +189,11 @@ describe("the desktop registry", () => {
 		expect(first.desktops).toBe(second.desktops);
 		const peer = fakeDesktop(first.desktops);
 		first.desktops.attach(user, "m1", peer);
-		expect(second.desktops.connected(user)).toBe(true);
+		await second.desktops.for(user).open(server);
 		second.desktops.detach(peer);
-		expect(first.desktops.connected(user)).toBe(false);
+		await expect(first.desktops.for(user).open(server)).rejects.toThrow(
+			"no desktop connected for this user",
+		);
 	});
 });
 
