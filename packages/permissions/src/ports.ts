@@ -39,7 +39,7 @@ export interface ApprovalRequest {
 	readonly change?: true;
 }
 
-export type Scope = "once" | "session";
+export type Scope = "once" | "session" | "always";
 
 export interface Decision {
 	readonly id: string;

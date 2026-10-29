@@ -1,4 +1,5 @@
 import { convertToString, isNumeric } from "./arith.ts";
+import { LispHashTable, LispVector } from "./collections.ts";
 import {
 	Cell,
 	type List,
@@ -57,6 +58,11 @@ export function str(
 		return strCell(x, count, printed);
 	} else if (typeof x === "string") {
 		return quoteString ? quoted(x) : x;
+	} else if (x instanceof LispVector) {
+		const items = x.items.map((e) => ` ${str(e, true, count, printed)}`);
+		return `#<vector${items.join("")}>`;
+	} else if (x instanceof LispHashTable) {
+		return `#<hash-table ${x.size}>`;
 	} else if (Array.isArray(x)) {
 		const s = x.map((e) => str(e, true, count, printed)).join(", ");
 		return `[${s}]`;

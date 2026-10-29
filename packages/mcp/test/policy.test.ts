@@ -20,6 +20,7 @@ function interpWith(policy: McpPolicy): Interp {
 		extensions: [
 			mcpExtension({
 				...mcpHost,
+				commands: true,
 				client: localMcpClient({
 					host: recordingHost(),
 					oauth: new MemoryOAuthStore(),
@@ -130,6 +131,7 @@ describe("load-mcp's name argument", () => {
 			extensions: [
 				mcpExtension({
 					...mcpHost,
+					commands: true,
 					toolkit: {
 						all: () => [
 							{ name: "shown", description: "A shown server.", url: "x" },

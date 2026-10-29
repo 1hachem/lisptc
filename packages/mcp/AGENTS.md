@@ -22,8 +22,18 @@ client an `OAuthStore`. The file one in `src/oauth-host.ts` is for the apps
 that run on the user's own machine, never for the served agent. The served
 agent keeps it in Convex, whichever container host it runs.
 
-`src/toolkit.ts` reads the bundled server registry, whose manifest lives in
-`@repo/toolkit`.
+**A server that only runs on the user's machine goes in
+`mcp.toolkit.local.json`, never in `mcp.toolkit.json`.** The bundled manifest
+holds only what a server-side host can run. A local entry is a command. A local
+entry that reuses a bundled name is that server's local setup: it is loaded only
+by `:local t`, so the agent never has to write the command line itself.
+
+**A local entry carries no `${VAR}`.** Expansion happens where the manifest is
+read, which for the served agent is the server, so a variable would carry the
+server's value onto the user's machine. Use what the command resolves itself.
+
+**Never offer the agent a local server it cannot load.** What it lists and what
+it is told follow the desktop's connection, not the deployment.
 
 **Never give a client a callback server of its own.** The OAuth callback server
 is one per port for the whole process, shared by every REPL in it, and reached

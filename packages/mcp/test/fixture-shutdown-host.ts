@@ -9,7 +9,7 @@ const FIXTURE = fileURLToPath(
 );
 
 const interp = new Interp({
-	extensions: [mcpExtension(mcpHost)],
+	extensions: [mcpExtension({ ...mcpHost, commands: true })],
 });
 runSync(interp, prelude);
 await (runSync(

@@ -150,7 +150,7 @@ function UserRow({
 		<SidebarFooter
 			className={
 				expanded
-					? "flex-row items-center gap-2 px-2.5 pb-3.5 text-[11px] text-dim"
+					? "flex-row items-center gap-2 px-3.5 pb-3.5 text-[11px] text-dim"
 					: "items-center gap-2 pb-3.5 text-dim"
 			}
 		>

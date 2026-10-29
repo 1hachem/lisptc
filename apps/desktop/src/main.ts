@@ -1,0 +1,392 @@
+import path from "node:path";
+import { DESKTOP_USER_AGENT } from "@repo/desktop-protocol";
+import { desktopEnv } from "@repo/env/desktop";
+import type { DesktopPreferences } from "@repo/shared/desktop";
+import {
+	app,
+	BrowserWindow,
+	dialog,
+	type IpcMainInvokeEvent,
+	ipcMain,
+	Menu,
+	nativeImage,
+	nativeTheme,
+	powerMonitor,
+	session,
+	shell,
+	Tray,
+} from "electron";
+import { type ConnectionState, DesktopBridge } from "./bridge.ts";
+import {
+	applyOpenAtLogin,
+	machine,
+	readSettings,
+	startedHidden,
+	writeSettings,
+} from "./settings.ts";
+import { startUpdates, type UpdateState, type Updates } from "./updates.ts";
+
+const ERR_ABORTED = -3;
+const RETRY_MS = 4000;
+const LOADING_PAGE = path.join(__dirname, "loading.html");
+const TRAY_ICON = path.join(__dirname, "tray.png");
+const PRELOAD = path.join(__dirname, "preload.cjs");
+const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+const ZOOM_KEYS: Record<string, ZoomDirection> = {
+	"=": "in",
+	"+": "in",
+	"-": "out",
+	_: "out",
+	"0": "reset",
+};
+
+type ZoomDirection = "in" | "out" | "reset";
+
+function originOf(url: string): string | undefined {
+	try {
+		return new URL(url).origin;
+	} catch {
+		return undefined;
+	}
+}
+
+function targets(): string[] {
+	const primary = desktopEnv.LISPTC_DESKTOP_URL;
+	const fallback = desktopEnv.LISPTC_DESKTOP_FALLBACK_URL;
+	return originOf(primary) === originOf(fallback)
+		? [primary]
+		: [primary, fallback];
+}
+
+const candidates = targets();
+let current = 0;
+let bridge: DesktopBridge | undefined;
+let settings: DesktopPreferences;
+let tray: Tray | undefined;
+let quitting = false;
+let retryTimer: NodeJS.Timeout | undefined;
+let updates: Updates | undefined;
+let connection: ConnectionState = { status: "connecting" };
+
+function target(): string {
+	return candidates[current] ?? desktopEnv.LISPTC_DESKTOP_URL;
+}
+
+function sameOrigin(url: string): boolean {
+	return originOf(url) === originOf(target());
+}
+
+function bridgeTo(origin: string | undefined): void {
+	if (origin === undefined || origin === bridge?.origin) return;
+	void bridge?.stop();
+	bridge = new DesktopBridge(
+		origin,
+		update,
+		outdated,
+		machine(),
+		connectionChanged,
+	);
+	bridge.start();
+}
+
+function showLoading(window: BrowserWindow, state: "loading" | "retry"): void {
+	void window.loadFile(LOADING_PAGE, {
+		query: { state, target: originOf(target()) ?? "" },
+	});
+}
+
+function loadTarget(window: BrowserWindow): void {
+	console.log(`salsal desktop on ${target()}`);
+	bridgeTo(originOf(target()));
+	void window.loadURL(target()).catch(() => undefined);
+}
+
+function onFailure(window: BrowserWindow): void {
+	if (current < candidates.length - 1) {
+		current += 1;
+		loadTarget(window);
+		return;
+	}
+	showLoading(window, "retry");
+	clearTimeout(retryTimer);
+	retryTimer = setTimeout(() => {
+		if (!window.isDestroyed()) loadTarget(window);
+	}, RETRY_MS);
+}
+
+function retryNow(window: BrowserWindow): void {
+	clearTimeout(retryTimer);
+	current = 0;
+	showLoading(window, "loading");
+	window.webContents.once("did-finish-load", () => loadTarget(window));
+}
+
+function reveal(): void {
+	const [window] = BrowserWindow.getAllWindows();
+	if (window === undefined) {
+		open(true);
+		return;
+	}
+	if (window.isMinimized()) window.restore();
+	window.show();
+	window.focus();
+}
+
+function settingsChange(input: unknown): Partial<DesktopPreferences> {
+	if (typeof input !== "object" || input === null) return {};
+	const change: Partial<DesktopPreferences> = {};
+	if ("closeToTray" in input && typeof input.closeToTray === "boolean")
+		change.closeToTray = input.closeToTray;
+	if ("openAtLogin" in input && typeof input.openAtLogin === "boolean")
+		change.openAtLogin = input.openAtLogin;
+	return change;
+}
+
+function update(input: unknown): DesktopPreferences {
+	const change = settingsChange(input);
+	if (Object.keys(change).length === 0) return settings;
+	settings = { ...settings, ...change };
+	writeSettings(settings);
+	if (change.openAtLogin !== undefined) applyOpenAtLogin(settings.openAtLogin);
+	buildTray();
+	for (const window of BrowserWindow.getAllWindows())
+		window.webContents.send("desktop:settings-changed", settings);
+	return settings;
+}
+
+function updateChanged(state: UpdateState): void {
+	buildTray();
+	for (const window of BrowserWindow.getAllWindows())
+		window.webContents.send("desktop:update-changed", state);
+}
+
+function connectionChanged(state: ConnectionState): void {
+	connection = state;
+	for (const window of BrowserWindow.getAllWindows())
+		window.webContents.send("desktop:connection-changed", state);
+}
+
+async function outdated(): Promise<void> {
+	const state = updates?.state();
+	if (state?.status === "downloaded") {
+		const { response } = await dialog.showMessageBox({
+			type: "info",
+			buttons: ["Restart to update", "Later"],
+			defaultId: 0,
+			cancelId: 1,
+			message: "Update salsal",
+			detail: `This version of the desktop app can no longer run local MCP servers. Version ${state.version} is ready.`,
+		});
+		if (response === 0) updates?.install();
+		return;
+	}
+	updates?.check();
+	await dialog.showMessageBox({
+		type: "info",
+		message: "Update salsal",
+		detail:
+			"This version of the desktop app can no longer run local MCP servers. The new version is downloading, and the bottom bar shows when it is ready to install.",
+	});
+}
+
+function zoomedFactor(factor: number, direction: ZoomDirection): number {
+	if (direction === "reset") return 1;
+	const steps = direction === "in" ? ZOOM_STEPS : [...ZOOM_STEPS].reverse();
+	return (
+		steps.find((step) =>
+			direction === "in" ? step > factor : step < factor,
+		) ?? factor
+	);
+}
+
+function zoom(window: BrowserWindow, direction: ZoomDirection): void {
+	const contents = window.webContents;
+	const factor = zoomedFactor(contents.getZoomFactor(), direction);
+	contents.setZoomFactor(factor);
+	contents.send("desktop:zoom-changed", factor);
+}
+
+function isZoomDirection(input: unknown): input is ZoomDirection {
+	return input === "in" || input === "out" || input === "reset";
+}
+
+function fromApp(event: IpcMainInvokeEvent): boolean {
+	return sameOrigin(event.senderFrame?.url ?? "");
+}
+
+function serveSettings(): void {
+	ipcMain.handle("desktop:settings", (event) =>
+		fromApp(event) ? settings : undefined,
+	);
+	ipcMain.on("desktop:retry", (event) => {
+		const window = BrowserWindow.fromWebContents(event.sender);
+		if (window && event.senderFrame?.url.startsWith("file:")) retryNow(window);
+	});
+	ipcMain.handle("desktop:update-settings", (event, input: unknown) =>
+		fromApp(event) ? update(input) : undefined,
+	);
+	ipcMain.handle("desktop:update", (event) =>
+		fromApp(event) ? updates?.state() : undefined,
+	);
+	ipcMain.handle("desktop:connection", (event) =>
+		fromApp(event) ? connection : undefined,
+	);
+	ipcMain.handle("desktop:reconnect", (event) => {
+		if (fromApp(event)) bridge?.reconnect();
+	});
+	ipcMain.handle("desktop:zoom", (event) =>
+		fromApp(event) ? event.sender.getZoomFactor() : undefined,
+	);
+	ipcMain.handle("desktop:set-zoom", (event, direction: unknown) => {
+		const window = BrowserWindow.fromWebContents(event.sender);
+		if (window && fromApp(event) && isZoomDirection(direction))
+			zoom(window, direction);
+	});
+	ipcMain.handle("desktop:install-update", (event) => {
+		if (fromApp(event)) updates?.install();
+	});
+}
+
+function buildTray(): void {
+	if (tray === undefined) {
+		tray = new Tray(nativeImage.createFromPath(TRAY_ICON));
+		tray.setToolTip("salsal");
+		tray.on("click", reveal);
+	}
+	const ready = updates?.state();
+	tray.setContextMenu(
+		Menu.buildFromTemplate([
+			{ label: "Open salsal", click: reveal },
+			...(ready?.status === "downloaded"
+				? [
+						{
+							label: `Restart to update to ${ready.version}`,
+							click: () => updates?.install(),
+						},
+					]
+				: []),
+			{ type: "separator" },
+			{
+				label: "Keep running when closed",
+				type: "checkbox",
+				checked: settings.closeToTray,
+				click: (item) => update({ closeToTray: item.checked }),
+			},
+			{
+				label: "Start at login",
+				type: "checkbox",
+				checked: settings.openAtLogin,
+				enabled: app.isPackaged,
+				click: (item) => update({ openAtLogin: item.checked }),
+			},
+			{ type: "separator" },
+			{ label: "Quit", click: () => app.quit() },
+		]),
+	);
+}
+
+function open(visible: boolean): BrowserWindow {
+	const window = new BrowserWindow({
+		width: 1280,
+		height: 840,
+		title: "salsal",
+		show: false,
+		backgroundColor: nativeTheme.shouldUseDarkColors ? "#1d2021" : "#f9f5d7",
+		webPreferences: {
+			contextIsolation: true,
+			sandbox: true,
+			preload: PRELOAD,
+		},
+	});
+	window.once("ready-to-show", () => {
+		if (visible) window.show();
+	});
+	window.on("close", (event) => {
+		if (quitting || !settings.closeToTray) return;
+		event.preventDefault();
+		window.hide();
+	});
+	window.webContents.on("before-input-event", (event, input) => {
+		const direction = ZOOM_KEYS[input.key];
+		if (input.type !== "keyDown" || direction === undefined) return;
+		if (!(input.control || input.meta) || input.alt) return;
+		event.preventDefault();
+		zoom(window, direction);
+	});
+	window.webContents.on("zoom-changed", (_event, direction) =>
+		zoom(window, direction),
+	);
+	window.webContents.on("console-message", ({ level, message, sourceId }) => {
+		if (level === "error" || level === "warning")
+			console.error(`[page ${level}] ${message} (${sourceId})`);
+	});
+	window.webContents.on("did-fail-load", (_event, code, description, url) =>
+		console.error(`[load failed] ${code} ${description} ${url}`),
+	);
+	window.webContents.on("did-navigate", (_event, url, status) => {
+		if (status < 500 || url.startsWith("file:")) return;
+		console.error(`[load failed] HTTP ${status} ${url}`);
+		onFailure(window);
+	});
+	window.webContents.setWindowOpenHandler(({ url }) => {
+		if (sameOrigin(url)) return { action: "allow" };
+		void shell.openExternal(url);
+		return { action: "deny" };
+	});
+	window.webContents.on("will-navigate", (event, url) => {
+		if (sameOrigin(url) || url.startsWith("file:")) return;
+		event.preventDefault();
+		void shell.openExternal(url);
+	});
+	window.webContents.on(
+		"did-fail-load",
+		(_event, code, _description, url, isMainFrame) => {
+			if (!isMainFrame || code === ERR_ABORTED || url.startsWith("file:"))
+				return;
+			onFailure(window);
+		},
+	);
+	showLoading(window, "loading");
+	window.webContents.once("did-finish-load", () => loadTarget(window));
+	return window;
+}
+
+if (!app.requestSingleInstanceLock()) app.quit();
+
+app.setAsDefaultProtocolClient("salsal");
+
+app.on("second-instance", reveal);
+
+const macMenu = () =>
+	Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }]);
+
+app.whenReady().then(() => {
+	session.defaultSession.setUserAgent(
+		`${session.defaultSession.getUserAgent()} ${DESKTOP_USER_AGENT}/${app.getVersion()}`,
+	);
+	Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null);
+	settings = readSettings();
+	applyOpenAtLogin(settings.openAtLogin);
+	buildTray();
+	serveSettings();
+	open(!startedHidden());
+	updates = startUpdates(updateChanged, () => {
+		quitting = true;
+	});
+	app.on("activate", () => {
+		reveal();
+	});
+	powerMonitor.on("suspend", () => bridge?.pause());
+	powerMonitor.on("lock-screen", () => bridge?.pause());
+	powerMonitor.on("resume", () => bridge?.resume());
+	powerMonitor.on("unlock-screen", () => bridge?.resume());
+});
+
+app.on("before-quit", () => {
+	quitting = true;
+	void bridge?.stop();
+});
+
+app.on("window-all-closed", () => {
+	if (process.platform !== "darwin" && !settings.closeToTray) app.quit();
+});

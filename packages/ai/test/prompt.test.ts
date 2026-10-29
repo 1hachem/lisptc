@@ -161,8 +161,8 @@ describe("the language reference", () => {
 		"floor",
 		"expt",
 		"sqrt",
-	])("warns that %s does not exist", (name) => {
-		expect(PROMPT).toMatch(new RegExp(`There are NO[^.]*\\b${name}\\b`, "s"));
+	])("documents %s", (name) => {
+		expect(PROMPT).toMatch(names(name));
 	});
 
 	it("states the closed-world rule outright", () => {

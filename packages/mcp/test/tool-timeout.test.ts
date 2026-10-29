@@ -39,7 +39,7 @@ function stallingClient(): { client: McpClient; calls: ToolCall[] } {
 
 async function loaded(client: McpClient): Promise<Interp> {
 	const interp = new Interp({
-		extensions: [mcpExtension({ ...mcpHost, client })],
+		extensions: [mcpExtension({ ...mcpHost, commands: true, client })],
 	});
 	runSync(interp, prelude);
 	await (runSync(

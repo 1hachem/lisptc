@@ -24,4 +24,11 @@ crons.interval(
 	{},
 );
 
+crons.interval(
+	"forget desktops whose server stopped beating",
+	{ minutes: 1 },
+	internal.desktops.sweep,
+	{},
+);
+
 export default crons;

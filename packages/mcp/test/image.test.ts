@@ -20,7 +20,9 @@ const LOAD = `(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings"
 
 const opened: Interp[] = [];
 
-function mcpInterp(host: McpExtensionHost = mcpHost): Interp {
+function mcpInterp(
+	host: McpExtensionHost = { ...mcpHost, commands: true },
+): Interp {
 	const interp = new Interp({ extensions: [mcpExtension(host)] });
 	opened.push(interp);
 	return interp;
@@ -68,7 +70,10 @@ describe("a loaded MCP server in an image", () => {
 
 	it("reconnects on its first tool call and returns the result", async () => {
 		const connects: ConnConfig[] = [];
-		const back = imaged(await loaded(), countingHost(mcpHost, connects));
+		const back = imaged(
+			await loaded(),
+			countingHost({ ...mcpHost, commands: true }, connects),
+		);
 		expect(await evalStr(back, '(fx/echo :message "hi")')).toBe('"hi"');
 		expect(await evalStr(back, "(list-mcps)")).toContain('("fx" :loaded 3)');
 		expect(await evalStr(back, '(fx/echo :message "again")')).toBe('"again"');
@@ -77,7 +82,10 @@ describe("a loaded MCP server in an image", () => {
 
 	it("reconnects once for two calls made at the same time", async () => {
 		const connects: ConnConfig[] = [];
-		const back = imaged(await loaded(), countingHost(mcpHost, connects));
+		const back = imaged(
+			await loaded(),
+			countingHost({ ...mcpHost, commands: true }, connects),
+		);
 		const calls = [
 			evalStr(back, '(fx/echo :message "a")'),
 			evalStr(back, '(fx/echo :message "b")'),
@@ -92,7 +100,11 @@ describe("a loaded MCP server in an image", () => {
 	it("is marked failed with the reason when the reconnect fails", async () => {
 		const back = imaged(
 			await loaded(),
-			countingHost(mcpHost, [], new Error("no route to fx")),
+			countingHost(
+				{ ...mcpHost, commands: true },
+				[],
+				new Error("no route to fx"),
+			),
 		);
 		await expect(runAsync(back, '(fx/echo :message "hi")')).rejects.toThrow(
 			"no route to fx",
@@ -125,7 +137,9 @@ describe("a load-mcp pending in an image", () => {
 		const image = JSON.parse(JSON.stringify(snapshot(interp)));
 		interp.dispose();
 		const connects: ConnConfig[] = [];
-		const back = mcpInterp(countingHost(mcpHost, connects));
+		const back = mcpInterp(
+			countingHost({ ...mcpHost, commands: true }, connects),
+		);
 		restore(back, image);
 		await (back.getGlobal(newSym("loading")) as LispPromise);
 		expect(connects.map((conf) => conf.name)).toEqual(["fx"]);

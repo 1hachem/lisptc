@@ -30,7 +30,7 @@ function hangingClient(): { client: McpClient; aborts: () => number } {
 
 function mcpInterp(client: McpClient): Interp {
 	const interp = new Interp({
-		extensions: [mcpExtension({ ...mcpHost, client })],
+		extensions: [mcpExtension({ ...mcpHost, commands: true, client })],
 	});
 	runSync(interp, prelude);
 	return interp;

@@ -16,6 +16,7 @@ async function loaded(host: ReturnType<typeof recordingHost>): Promise<Interp> {
 		extensions: [
 			mcpExtension({
 				...mcpHost,
+				commands: true,
 				client: localMcpClient({ host, oauth: new MemoryOAuthStore() }),
 			}),
 		],

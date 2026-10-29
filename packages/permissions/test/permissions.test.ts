@@ -58,9 +58,12 @@ describe("the permissions guard", () => {
 						title: "string-upcase",
 						detail: '"a"',
 						prompt: "This call needs your approval.",
-						choices: ["Deny", "Allow for session", "Allow once"].map((label) =>
-							expect.objectContaining({ label }),
-						),
+						choices: [
+							"Deny",
+							"Always allow",
+							"Allow for session",
+							"Allow once",
+						].map((label) => expect.objectContaining({ label })),
 					},
 				],
 			},
@@ -129,6 +132,27 @@ describe("the permissions guard", () => {
 		});
 		expect((await s.step(UPCASE)).value).toBe('"A"');
 		expect((await s.step('(string-upcase "b")')).value).toBe('"B"');
+	});
+
+	it("saves an always grant as an allow rule a fresh session obeys", async () => {
+		const s = session("(permission/ask string-upcase)");
+		const [request] = (await s.step(UPCASE)).requests;
+		await s.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: "true",
+			scope: "always",
+		});
+		const listed = (await s.step("(permission/list)")).value ?? "";
+		expect(listed).toContain("(permission/allow string-upcase)");
+		const fresh = session("(permission/allow string-upcase)", undefined, [
+			"string-*",
+		]);
+		expect((await fresh.step(UPCASE)).value).toBe('"A"');
+	});
+
+	it("asks for every name under a glob it was handed", async () => {
+		const s = session("", undefined, ["string-*"]);
+		expect((await s.step(UPCASE)).held).toBe(true);
 	});
 
 	it("grants nothing on a denial, and says so", async () => {

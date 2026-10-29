@@ -15,7 +15,7 @@ describe("secret registry (revealed only into an MCP call)", () => {
 	const interp = new Interp({
 		extensions: [
 			secretsExtension({ ...secretsHost, store }),
-			mcpExtension({ ...mcpHost, client }),
+			mcpExtension({ ...mcpHost, commands: true, client }),
 		],
 	});
 	runSync(interp, prelude);

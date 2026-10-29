@@ -78,7 +78,10 @@ function followUp({ request, refused }: Settled, decision: Decision): string {
 			: `I denied ${request.name}, so the permissions config is unchanged.`;
 	if (!decision.approved)
 		return `I denied ${request.name}. Do not call it again; find another way or tell me what you need.`;
-	const lasting =
-		decision.scope === "once" ? "for one call" : "for the rest of this session";
+	const lasting = {
+		once: "for one call",
+		session: "for the rest of this session",
+		always: `for good, saved as (permission/allow ${request.name})`,
+	}[decision.scope];
 	return `I approved ${request.name} ${lasting}. Carry on with what you were doing.`;
 }

@@ -12,7 +12,11 @@ function replWith(servers: Record<string, MockServer>): Interp {
 	const interp = new Interp({
 		extensions: [
 			promisesExtension(promisesHost),
-			mcpExtension({ ...mcpHost, client: mockMcpClient(servers) }),
+			mcpExtension({
+				...mcpHost,
+				commands: true,
+				client: mockMcpClient(servers),
+			}),
 		],
 	});
 	runSync(interp, prelude);

@@ -1,12 +1,7 @@
-import { webEnv } from "@repo/env/web";
 import { createMiddleware } from "@tanstack/react-start";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { verifyToken } from "../token.ts";
 import { edge } from "./edge.ts";
 import { HttpError } from "./error.ts";
-
-const jwks = createRemoteJWKSet(
-	new URL("/api/auth/convex/jwks", webEnv.CONVEX_SITE_URL),
-);
 
 export interface Session {
 	token: string;
@@ -18,20 +13,22 @@ function bearer(header: string | null): string {
 	return header.slice(7).trim();
 }
 
+export async function sessionOf(token: string): Promise<Session | null> {
+	const verdict = await verifyToken(token);
+	if (!verdict.signed || verdict.subject === undefined) return null;
+	return { token, subject: verdict.subject };
+}
+
 const session = createMiddleware({ type: "request" }).server(
 	async ({ request, next }) => {
 		const token = bearer(request.headers.get("authorization"));
 		if (token === "") {
 			throw new HttpError(401, "missing bearer token");
 		}
-		const verified = await jwtVerify(token, jwks, {
-			issuer: webEnv.CONVEX_SITE_URL,
-			audience: "convex",
-		}).catch(() => null);
-		if (verified === null || typeof verified.payload.sub !== "string") {
+		const current = await sessionOf(token);
+		if (current === null) {
 			throw new HttpError(401, "invalid bearer token");
 		}
-		const current: Session = { token, subject: verified.payload.sub };
 		return next({ context: { session: current } });
 	},
 );

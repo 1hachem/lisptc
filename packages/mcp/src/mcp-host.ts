@@ -2,18 +2,25 @@ import { oauthEnv } from "@repo/env/oauth";
 import { systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { LocalProcessHost } from "./local-host.ts";
+import { cachedMachine } from "./machine.ts";
 import type { McpExtensionHost } from "./mcp.ts";
 import { mcpClient } from "./mcp-client.ts";
 import { completeAuthorization } from "./mcp-oauth.ts";
 import { MemoryOAuthStore } from "./oauth-host.ts";
 import type { McpClient, McpHost, OAuthStore } from "./ports.ts";
 import { miniSearchEngine } from "./search.ts";
-import { bundledToolkit } from "./toolkit.ts";
+import {
+	bridgedEntries,
+	bundledToolkit,
+	desktopToolkit,
+	localToolkit,
+} from "./toolkit.ts";
 
 export interface McpHostOptions {
 	scope?: string;
 	oauth: OAuthStore;
 	host?: McpHost;
+	desktop?: () => Promise<boolean>;
 }
 
 export function localMcpClient(options: McpHostOptions): McpClient {
@@ -41,10 +48,26 @@ export function finishAuthorization(
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
+function desktopParts(
+	presence: () => Promise<boolean>,
+): Pick<McpExtensionHost, "toolkit" | "machine"> {
+	const bundled = bundledToolkit();
+	const bridged = bridgedEntries(bundled, localToolkit());
+	const machine = cachedMachine(presence, () =>
+		[...bridged.own, ...bridged.variants].map((conf) => conf.name),
+	);
+	return {
+		toolkit: desktopToolkit(bundled, bridged, () => machine.connected()),
+		machine,
+	};
+}
+
 export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 	return {
 		client: localMcpClient(options),
-		toolkit: bundledToolkit(),
+		...(options.desktop === undefined
+			? { toolkit: bundledToolkit() }
+			: desktopParts(options.desktop)),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
 		clock: systemClock,
