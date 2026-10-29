@@ -15,6 +15,7 @@ import {
 	createContext,
 	type DragEvent,
 	type ReactNode,
+	type Ref,
 	useContext,
 	useState,
 } from "react";
@@ -34,6 +35,7 @@ export function TreeFolder({
 	onToggle,
 	onCreate,
 	createLabel,
+	createRef,
 	depth = 0,
 	children,
 }: {
@@ -43,6 +45,7 @@ export function TreeFolder({
 	onToggle: () => void;
 	onCreate?: (() => void) | "disabled";
 	createLabel?: string;
+	createRef?: Ref<HTMLButtonElement>;
 	depth?: number;
 	children?: ReactNode;
 }) {
@@ -65,6 +68,7 @@ export function TreeFolder({
 				</button>
 				{onCreate && (
 					<button
+						ref={createRef}
 						type="button"
 						title={createLabel ?? `new in ${name}/`}
 						disabled={onCreate === "disabled"}
