@@ -27,12 +27,7 @@ interface Box {
 }
 
 function sameBox(a: Box | undefined, b: Box | undefined): boolean {
-	return (
-		a?.top === b?.top &&
-		a?.left === b?.left &&
-		a?.width === b?.width &&
-		a?.height === b?.height
-	);
+	return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function useBox(element: HTMLElement | undefined): Box | undefined {
