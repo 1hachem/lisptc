@@ -52,6 +52,7 @@ function bridge(): Desktop & {
 		close: async (name) => {
 			closed.push(name);
 		},
+		connected: () => true,
 		running: () => true,
 		settings: async () => undefined,
 	};
@@ -117,6 +118,7 @@ describe("BridgedHost", () => {
 					throw new Error("no desktop connected for this user");
 				},
 				close: async () => {},
+				connected: () => false,
 				running: () => true,
 				settings: async () => undefined,
 			},

@@ -15,11 +15,13 @@ export async function announce(
 		machineId: machine.id,
 		connection: crypto.randomUUID(),
 	};
-	await convexAsServer.mutation(internal.desktops.attach, {
-		...presence,
-		label: machine.label,
-		instance,
-	});
+	await convexAsServer
+		.mutation(internal.desktops.attach, {
+			...presence,
+			label: machine.label,
+			instance,
+		})
+		.catch(() => {});
 	return presence;
 }
 

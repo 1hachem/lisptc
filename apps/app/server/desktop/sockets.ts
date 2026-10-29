@@ -66,15 +66,8 @@ export class DesktopSockets {
 		if (message.type !== "auth") return socket.close(4401, "auth first");
 		const userId = await this.ports.authenticate(message.token);
 		if (userId === null) return socket.close(4401, "invalid token");
-		const presence = this.ports.announce(userId, message.machine);
-		entry.presence = presence;
-		try {
-			await presence;
-		} catch {
-			this.live.delete(socket);
-			return socket.close(1011, "could not record the desktop as connected");
-		}
 		this.ports.registry.attach(userId, message.machine.id, entry.peer);
+		entry.presence = this.ports.announce(userId, message.machine);
 		entry.seenAt = this.ports.now();
 		reply(socket, { type: "welcome" });
 	}
