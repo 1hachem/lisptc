@@ -30,6 +30,7 @@ export function AppShell({
 				className="h-full min-h-0"
 			>
 				<LeftSidebar onSignOut={onSignOut} />
+				<Onboarding />
 				<SidebarProvider
 					open={rightOpen}
 					onOpenChange={setRightOpen}
@@ -43,7 +44,6 @@ export function AppShell({
 					<PreferencesPanel />
 				</SidebarProvider>
 			</SidebarProvider>
-			<Onboarding />
 		</div>
 	);
 }
