@@ -2,7 +2,6 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { JsonView } from "@repo/components/json-view.tsx";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
@@ -23,6 +22,10 @@ import { Markdown } from "./markdown.tsx";
 
 const StlViewer = lazy(async () => ({
 	default: (await import("@repo/components/stl-viewer.tsx")).StlViewer,
+}));
+
+const JsonView = lazy(async () => ({
+	default: (await import("@repo/components/json-view.tsx")).JsonView,
 }));
 
 type MediaViewer = Exclude<KnowledgeViewer, TextViewer>;
@@ -119,7 +122,11 @@ const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 		</MediaFrame>
 	),
 	markdown: (text) => <Markdown>{text}</Markdown>,
-	json: (text) => <JsonView text={text} />,
+	json: (text) => (
+		<Suspense fallback={<div className="text-dim">loading…</div>}>
+			<JsonView text={text} />
+		</Suspense>
+	),
 	text: (text) => (
 		<pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>
 	),

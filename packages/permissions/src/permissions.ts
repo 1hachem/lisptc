@@ -73,7 +73,7 @@ function strongest(rulings: readonly Ruling[]): Ruling | undefined {
 }
 
 export class SessionRules {
-	private readonly asks: ReadonlySet<string>;
+	private readonly asks: readonly string[];
 	private read: PermissionRules;
 
 	constructor(
@@ -81,7 +81,7 @@ export class SessionRules {
 		asks: readonly string[] = [],
 		private readonly bounds: readonly PermissionRules[] = [],
 	) {
-		this.asks = new Set(asks);
+		this.asks = asks;
 		this.read = parseRules(store.source());
 	}
 
@@ -129,7 +129,11 @@ export class SessionRules {
 		const ruling = held.decide(name);
 		if (
 			ruling.verdict !== "allow" ||
-			!this.asks.has(name) ||
+			!this.asks.some((asked) =>
+				asked.endsWith("*")
+					? name.startsWith(asked.slice(0, -1))
+					: asked === name,
+			) ||
 			held.named(name) !== undefined
 		)
 			return ruling;
@@ -168,12 +172,25 @@ export function permissionsExtension(
 	>();
 
 	host.approvals.onResolved((request, decision) => {
+		const saving =
+			decision.approved && decision.scope === "always" && !request.change
+				? remember(request.name)
+				: undefined;
 		const waiting = holding.get(request.id);
-		if (waiting !== undefined) {
+		if (waiting === undefined) saving?.catch(() => undefined);
+		else {
 			holding.delete(request.id);
 			if (decision.approved) {
 				host.approvals.consume(request.name);
-				waiting.hold.release();
+				if (saving === undefined) waiting.hold.release();
+				else
+					saving.then(
+						() => waiting.hold.release(),
+						(error: unknown) =>
+							waiting.hold.refuse(
+								error instanceof Error ? error : new Error(String(error)),
+							),
+					);
 			} else
 				waiting.hold.refuse(
 					new PermissionRefusal(
@@ -295,6 +312,11 @@ export function permissionsExtension(
 		return form.car === DELETE_SYM
 			? rules.current.without(deleted(form))
 			: rules.current.with(form);
+	}
+
+	async function remember(name: string): Promise<void> {
+		const form = readOne(`(permission/allow ${name})`);
+		if (form instanceof Cell) await commit(form);
 	}
 
 	function commit(form: Cell): unknown {

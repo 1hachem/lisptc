@@ -12,6 +12,7 @@ export function preferencesHostFor(
 		store: options.store ?? new MemoryPreferencesStore(),
 		fonts: options.fonts ?? [],
 		motions: options.motions ?? [],
+		...(options.desktop === undefined ? {} : { desktop: options.desktop }),
 		prompt: preferencesPrompt,
 	};
 }

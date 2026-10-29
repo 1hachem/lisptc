@@ -26,7 +26,9 @@ async function evalOutput(interp: Interp, code: string): Promise<string> {
 }
 
 function mcpInterp(): Interp {
-	return new Interp({ extensions: [mcpExtension(mcpHost)] });
+	return new Interp({
+		extensions: [mcpExtension({ ...mcpHost, commands: true })],
+	});
 }
 
 function start(interp: Interp, form: string): LispPromise {
@@ -231,6 +233,7 @@ describe("MCP search engine", () => {
 		extensions: [
 			mcpExtension({
 				...mcpHost,
+				commands: true,
 				search,
 				toolkit: jsonToolkit(toolkitJson),
 			}),
@@ -296,7 +299,11 @@ describe("loading a toolkit server by name", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
+			mcpExtension({
+				...mcpHost,
+				commands: true,
+				toolkit: jsonToolkit(toolkitJson),
+			}),
 		],
 	});
 	runSync(interp, prelude);
@@ -337,7 +344,11 @@ describe("a url server the interpreter starts for you", () => {
 	]);
 	const interp = new Interp({
 		extensions: [
-			mcpExtension({ ...mcpHost, toolkit: jsonToolkit(toolkitJson) }),
+			mcpExtension({
+				...mcpHost,
+				commands: true,
+				toolkit: jsonToolkit(toolkitJson),
+			}),
 		],
 	});
 	runSync(interp, prelude);
@@ -370,6 +381,7 @@ describe("a toolkit server bundled with the repo", () => {
 		extensions: [
 			mcpExtension({
 				...mcpHost,
+				commands: true,
 				toolkit: jsonToolkit(
 					toolkitJson,
 					undefined,

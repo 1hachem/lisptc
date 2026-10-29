@@ -1,0 +1,13 @@
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
+import { convexAs } from "../agent/convex.ts";
+import { sessionOf } from "../agent/session.ts";
+
+export async function authenticate(token: string): Promise<Id<"users"> | null> {
+	const session = await sessionOf(token);
+	if (session === null) return null;
+	const me = await convexAs(session)
+		.query(api.users.me, {})
+		.catch(() => null);
+	return me?._id ?? null;
+}

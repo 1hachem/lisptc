@@ -26,6 +26,11 @@ export const purge = internalMutation({
 			.withIndex("by_user", (q) => q.eq("userId", userId))
 			.unique();
 		if (preferences !== null) await ctx.db.delete(preferences._id);
+		const desktops = await ctx.db
+			.query("desktops")
+			.withIndex("by_user", (q) => q.eq("userId", userId))
+			.collect();
+		for (const desktop of desktops) await ctx.db.delete(desktop._id);
 		const workspaces = await ctx.db
 			.query("workspaces")
 			.withIndex("by_owner", (q) => q.eq("ownerId", userId))

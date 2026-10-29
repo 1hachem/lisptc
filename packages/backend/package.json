@@ -23,7 +23,8 @@
     "./oauth-store": "./src/oauth-store.ts",
     "./oauth-callback": "./src/oauth-callback.ts",
     "./server-client": "./src/server-client.ts",
-    "./thread-host": "./src/thread-host.ts"
+    "./thread-host": "./src/thread-host.ts",
+    "./desktop-bridge": "./src/desktop-bridge.ts"
   },
   "scripts": {
     "dev": "convex dev",

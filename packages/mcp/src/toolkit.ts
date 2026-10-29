@@ -1,7 +1,19 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { TOOLKIT_URL } from "@repo/toolkit";
-import type { ConnConfig, EnvLookup, ToolkitRegistry } from "./ports.ts";
+import type {
+	ConnConfig,
+	EnvLookup,
+	StdioConnConfig,
+	ToolkitRegistry,
+} from "./ports.ts";
+
+const LOCAL_TOOLKIT_URL = new URL(
+	import.meta.url.endsWith(".ts")
+		? "../mcp.toolkit.local.json"
+		: "./mcp.toolkit.local.json",
+	import.meta.url,
+);
 
 export const processEnv: EnvLookup = {
 	// biome-ignore lint/style/noProcessEnv: mcp.toolkit.json names the variable, so it is only known at runtime
@@ -38,10 +50,54 @@ export function jsonToolkit(
 	return { all: () => configs };
 }
 
-export function bundledToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
+function fileToolkit(url: URL, env: EnvLookup): ToolkitRegistry {
 	try {
-		return jsonToolkit(readFileSync(TOOLKIT_URL, "utf8"), env);
+		return jsonToolkit(readFileSync(url, "utf8"), env);
 	} catch {
 		return { all: () => [] };
 	}
+}
+
+export function bundledToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
+	return fileToolkit(TOOLKIT_URL, env);
+}
+
+export function localToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
+	return fileToolkit(LOCAL_TOOLKIT_URL, env);
+}
+
+export interface Bridged {
+	readonly own: StdioConnConfig[];
+	readonly variants: StdioConnConfig[];
+}
+
+export function bridgedEntries(
+	bundled: ToolkitRegistry,
+	local: ToolkitRegistry,
+): Bridged {
+	const taken = new Set(bundled.all().map((conf) => conf.name));
+	const commands = local
+		.all()
+		.flatMap((conf): StdioConnConfig[] =>
+			"url" in conf || "image" in conf ? [] : [{ ...conf, local: true }],
+		);
+	return {
+		own: commands.filter((conf) => !taken.has(conf.name)),
+		variants: commands.filter((conf) => taken.has(conf.name)),
+	};
+}
+
+export function desktopToolkit(
+	bundled: ToolkitRegistry,
+	bridged: Bridged,
+	connected: () => boolean,
+): ToolkitRegistry {
+	return {
+		all: () =>
+			connected() ? [...bundled.all(), ...bridged.own] : bundled.all(),
+		local: (name) =>
+			connected()
+				? bridged.variants.find((conf) => conf.name === name)
+				: undefined,
+	};
 }

@@ -31,6 +31,7 @@ export const record = internalQuery({
 	returns: v.object({
 		workspaceId: v.id("workspaces"),
 		ownerId: v.id("users"),
+		callerId: v.id("users"),
 		parentId: v.optional(v.id("chats")),
 		title: v.string(),
 		model: v.optional(modelChoice),
@@ -45,6 +46,7 @@ export const record = internalQuery({
 		return {
 			workspaceId: chat.workspaceId,
 			ownerId: workspace.ownerId,
+			callerId: chat.userId,
 			...(chat.parentChatId === undefined
 				? {}
 				: { parentId: chat.parentChatId }),

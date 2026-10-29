@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { preferencesHost } from "../src/preferences-host.ts";
-import { world } from "./helpers.ts";
+import { desktopMachine, world } from "./helpers.ts";
 
 const HELD = {
 	font: "geist",
@@ -8,7 +8,17 @@ const HELD = {
 	input: { lisp: true },
 	sidebar: ["home", "chat", "memories", "README.md"],
 	hidden: ["memories"],
-	statusBar: ["gap", "panes", "clock"],
+	statusBar: [
+		"panes",
+		"gap-1",
+		"gap-2",
+		"gap-3",
+		"gap-4",
+		"gap-5",
+		"gap-6",
+		"desktop",
+		"clock",
+	],
 	statusBarHidden: [],
 	motion: "slide",
 	panelMotion: true,
@@ -16,11 +26,28 @@ const HELD = {
 	traceLink: true,
 };
 
+describe("a stored bottom bar from before nine slots", () => {
+	it("still accepts the desktop item and every gap", async () => {
+		const { ev } = await world({
+			...HELD,
+			statusBar: ["panes", "gap", "clock"],
+		});
+		await ev('(preferences/set :status-bar \'("desktop" "gap-4" "panes"))');
+		expect(await ev("(preferences)")).toContain(
+			':status-bar ("desktop" "gap-4" "panes" "clock" "gap-1" "gap-2" "gap-3" "gap-5" "gap-6")',
+		);
+		await ev('(preferences/set :status-bar-hidden \'("desktop"))');
+		expect(await ev("(preferences)")).toContain(
+			':status-bar-hidden ("desktop")',
+		);
+	});
+});
+
 describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("gap" "panes" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
+			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
 		);
 	});
 
@@ -136,8 +163,38 @@ describe("changing preferences", () => {
 		const { ev, store } = await world(HELD);
 		expect(
 			await ev('(preferences/set :status-bar \'("clock" "panes"))'),
-		).toContain(':status-bar ("clock" "panes" "gap")');
-		expect(store.read().statusBar).toEqual(["clock", "panes", "gap"]);
+		).toContain(
+			':status-bar ("clock" "panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop")',
+		);
+		expect(store.read().statusBar).toEqual([
+			"clock",
+			"panes",
+			"gap-1",
+			"gap-2",
+			"gap-3",
+			"gap-4",
+			"gap-5",
+			"gap-6",
+			"desktop",
+		]);
+	});
+
+	it("places the desktop status anywhere, apart from the clock, with gaps between", async () => {
+		const { ev, store } = await world(HELD);
+		await ev(
+			'(preferences/set :status-bar \'("desktop" "gap-3" "gap-1" "panes"))',
+		);
+		expect(store.read().statusBar).toEqual([
+			"desktop",
+			"gap-3",
+			"gap-1",
+			"panes",
+			"gap-2",
+			"gap-4",
+			"gap-5",
+			"gap-6",
+			"clock",
+		]);
 	});
 
 	it("hides bottom bar items and shows them again", async () => {
@@ -153,7 +210,7 @@ describe("changing preferences", () => {
 		await expect(
 			ev('(preferences/set :status-bar-hidden \'("weather"))'),
 		).rejects.toThrow(
-			/unknown status bar item, there are "gap" "panes" "clock"/,
+			/unknown status bar item, there are "panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock"/,
 		);
 		expect(store.read()).toEqual(HELD);
 	});
@@ -218,5 +275,39 @@ describe("the prompt", () => {
 			"(motions)",
 		])
 			expect(prompt).toContain(form);
+	});
+});
+
+describe("desktop preferences", () => {
+	it("sets the desktop app's preferences while a desktop is connected", async () => {
+		const desktop = desktopMachine(() => true);
+		const { ev } = await world(HELD, desktop);
+		expect(await ev("(desktop-preferences)")).toBe(
+			"(:close-to-tray t :open-at-login nil)",
+		);
+		expect(
+			await ev("(desktop-preferences/set :open-at-login t :close-to-tray nil)"),
+		).toBe("(:close-to-tray nil :open-at-login t)");
+		expect(desktop.held).toEqual({ closeToTray: false, openAtLogin: true });
+	});
+
+	it("refuses desktop preferences when no desktop is connected", async () => {
+		const { ev } = await world(
+			HELD,
+			desktopMachine(() => false),
+		);
+		await expect(ev("(desktop-preferences)")).rejects.toThrow(
+			/no desktop app connected/,
+		);
+		await expect(
+			ev("(desktop-preferences/set :close-to-tray nil)"),
+		).rejects.toThrow(/no desktop app connected/);
+	});
+
+	it("refuses desktop preferences on a host with no desktop at all", async () => {
+		const { ev } = await world(HELD);
+		await expect(ev("(desktop-preferences)")).rejects.toThrow(
+			/no desktop app connected/,
+		);
 	});
 });

@@ -41,7 +41,7 @@ function replFor(spec: MockSpec): Harness {
 		extensions: () => [
 			tracedSecretsExtension(),
 			promisesExtension(promisesHost),
-			mockedMcpExtension(),
+			mockedMcpExtension({ commands: true }),
 		],
 	});
 }

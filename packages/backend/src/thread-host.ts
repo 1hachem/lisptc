@@ -22,6 +22,7 @@ import {
 	type WorkspaceClient,
 	workspaceExtensions,
 } from "./agent-repl.ts";
+import type { DesktopFor } from "./desktop-bridge.ts";
 import { ConvexImageStore } from "./image-store.ts";
 import type { Owner, ServerClient } from "./server-client.ts";
 
@@ -109,6 +110,7 @@ export interface ThreadHostOptions {
 	readonly server: ServerClient;
 	readonly actAs: (owner: Owner) => WorkspaceClient;
 	readonly threads?: () => Threads;
+	readonly desktopFor?: DesktopFor;
 }
 
 const asChat = (threadId: string) => threadId as Id<"chats">;
@@ -287,8 +289,9 @@ export class ThreadHost {
 		images: ImageStore,
 		own: boolean,
 	): Promise<AgentRepl> {
-		const { workspaceId, ownerId, profile } = await this.record(chatId);
-		const { actAs, threads } = this.options;
+		const { workspaceId, ownerId, callerId, profile } =
+			await this.record(chatId);
+		const { actAs, threads, desktopFor } = this.options;
 		const owner = actAs({ userId: ownerId, workspaceId });
 		const supervisor =
 			own && threads !== undefined
@@ -311,6 +314,7 @@ export class ThreadHost {
 				...(profile.subAgent === undefined ? {} : { subAgent: true }),
 				...(own ? { chatId } : {}),
 				...(supervisor === undefined ? {} : { supervisor }),
+				...(desktopFor === undefined ? {} : { desktop: desktopFor(callerId) }),
 			}),
 			images,
 		});

@@ -1,0 +1,110 @@
+{
+  "name": "@lisptc/desktop",
+  "version": "0.0.0",
+  "description": "malleable AI agents workspaces",
+  "type": "module",
+  "private": true,
+  "main": "dist/main.cjs",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "build": "pnpm build:main && pnpm build:preload && pnpm build:loading && pnpm build:tray",
+    "build:preload": "esbuild src/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload.cjs",
+    "build:tray": "node -e \"for (const f of ['tray.png', 'tray@2x.png']) require('node:fs').copyFileSync('src/' + f, 'dist/' + f)\"",
+    "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/main.cjs",
+    "build:loading": "esbuild src/loading/loading.tsx --bundle --platform=browser --format=iife --minify --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\" --outfile=dist/loading.js && node -e \"require('node:fs').copyFileSync('src/loading/loading.html', 'dist/loading.html')\"",
+    "dev": "pnpm build && electron .",
+    "dist": "pnpm build && electron-builder",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@repo/shared": "workspace:*",
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "@hugeicons/core-free-icons": "^4.3.3",
+    "@hugeicons/react": "^1.1.10",
+    "@repo/components": "workspace:*",
+    "@repo/desktop-protocol": "workspace:*",
+    "@repo/env": "workspace:*",
+    "@repo/tsconfigs": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.3"
+  },
+  "build": {
+    "appId": "xyz.salsal.desktop",
+    "productName": "salsal",
+    "files": [
+      "dist/**"
+    ],
+    "protocols": [
+      {
+        "name": "salsal",
+        "schemes": [
+          "salsal"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "1hachem",
+        "repo": "lisptc"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "salsal-${arch}.${ext}",
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "salsal-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "shortcutName": "salsal"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "artifactName": "salsal.${ext}",
+      "category": "Development"
+    }
+  }
+}

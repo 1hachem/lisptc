@@ -185,7 +185,8 @@ describe("driving the view", () => {
 		const out = await r.invokeUi("a1");
 		expect(out.failed).toBe(true);
 		expect(out.model).toMatch(/no-such-fn/);
-		expect(out.user).toBe("");
+		expect(out.user).toMatch(/no-such-fn/);
+		expect(out.failure).toMatch(/no-such-fn/);
 		expect(view(out)).toBeUndefined();
 	});
 
