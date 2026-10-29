@@ -36,8 +36,8 @@ MCP SERVERS
   - Load fails with message if desktop app not open or user denied: say so,
     don't retry.
 - OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
-- Toolkit flags: (load-mcp "acme" :local t :headless t) . :local runs own
-  command on this machine, not container. :headless no browser window.
+- Toolkit server with own command: (load-mcp "acme" :local t) runs that
+  command, not container.
 - Several concurrently:
 (await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) . Settled,
   not all: one failing server discards no others.

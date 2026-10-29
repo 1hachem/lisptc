@@ -55,16 +55,15 @@ export type ContainerConnConfig = ConnMeta & {
 	path?: string;
 	command?: string;
 	args?: string[];
-	headless?: string[];
 	headers?: Record<string, string>;
 	env?: Record<string, string>;
+	flags?: Record<string, string[]>;
 };
 
 export type StdioConnConfig = ConnMeta & {
 	name: string;
 	command: string;
 	args?: string[];
-	headless?: string[];
 	env?: Record<string, string>;
 	local?: boolean;
 	flags?: Record<string, string[]>;

@@ -474,12 +474,7 @@ function connConfigFromArgs(
 const LOAD_KEYS = new Set(["name", "local"]);
 
 function flagsOf(conf: ConnConfig): Record<string, string[]> {
-	const headless: Record<string, string[]> =
-		"headless" in conf && conf.headless !== undefined
-			? { headless: conf.headless }
-			: {};
-	const flags = "flags" in conf && conf.flags !== undefined ? conf.flags : {};
-	return { ...headless, ...flags };
+	return "flags" in conf && conf.flags !== undefined ? conf.flags : {};
 }
 
 function withFlags(conf: ConnConfig, opts: Plist): ConnConfig {
@@ -525,6 +520,10 @@ function lookupLocal(
 	if (conf !== undefined) return conf;
 	const own = predefined.get(name);
 	if (own !== undefined && "local" in own && own.local === true) return own;
+	if (own !== undefined && "image" in own && own.command !== undefined) {
+		const { image: _image, port: _port, path: _path, ...rest } = own;
+		return { ...rest, command: own.command };
+	}
 	throw new EvalException(
 		predefined.has(name)
 			? `${name} has no local setup, or the desktop app is not connected: load it without :local`
@@ -628,12 +627,6 @@ const LOAD_MCP_OPTIONS: DocArg[] = [
 		type: "list",
 		required: false,
 		description: "OAuth scopes to request when `:oauth` is set.",
-	},
-	{
-		name: "headless",
-		type: "boolean",
-		required: false,
-		description: "Run a toolkit browser server without a window.",
 	},
 ];
 
