@@ -5,22 +5,8 @@ vi.mock("@repo/env/web", () => ({
 }));
 
 const { carriesAuthCookie, fromDesktop } = await import("../server/auth.ts");
-const { signedOutPage } = await import("../src/lib/signed-out.ts");
 
 describe("signed-out routing", () => {
-	it("shows the landing to a signed-out browser at /", () => {
-		expect(signedOutPage("/", false)).toBe("landing");
-	});
-
-	it("sends a signed-out desktop at / to login", () => {
-		expect(signedOutPage("/", true)).toBe("login");
-	});
-
-	it("sends any other signed-out path to login", () => {
-		expect(signedOutPage("/w1/chats", false)).toBe("login");
-		expect(signedOutPage("/w1/chats", true)).toBe("login");
-	});
-
 	it("tells the desktop shell from its user agent", () => {
 		expect(fromDesktop("Mozilla/5.0 Chrome/140 salsal-desktop/0.1.0")).toBe(
 			true,

@@ -36,7 +36,7 @@ export function PanelLink({
 }) {
 	return (
 		<Link
-			to="/$workspaceId/$"
+			to="/app/$workspaceId/$"
 			params={{ workspaceId, _splat: panelPath(content) ?? "" }}
 			className={className}
 			title={title}

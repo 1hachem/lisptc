@@ -10,12 +10,11 @@ Turbo tag: `product`.
 
 `src/routes/` is the route tree, file-based, generated into `routeTree.gen.ts`.
 Never edit the generated file. `__root.tsx` sets up auth, the Convex client and
-analytics; `_authed.tsx` is the layout that loads the current user and the
-workspace list, and everything under `_authed/$workspaceId/` is the product.
-`login.tsx`, `download.tsx` and `thanks.tsx` are the only
-unauthenticated pages, beside the
-landing page a signed-out browser sees at `/`. The desktop shell never shows
-the landing page, and any other signed-out visit lands on login.
+analytics; `app.tsx` is the layout that loads the current user and the
+workspace list, and everything under `/app` is the product. A signed-out
+visit there lands on login. `index.tsx`, `login.tsx`, `download.tsx` and
+`thanks.tsx` are the public pages, outside that layout. `/` is the landing
+page, and it sends a signed-in browser and the desktop shell to `/app`.
 
 `src/components/` holds the views, `src/lib/` the state and the glue: the chat
 session store, the agent state, the workspace context, the auth client, the

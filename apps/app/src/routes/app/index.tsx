@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { AppLoading } from "../../components/app-loading.tsx";
 import { useWorkspace } from "../../lib/workspace.tsx";
 
-export const Route = createFileRoute("/_authed/")({
+export const Route = createFileRoute("/app/")({
 	component: OpenWorkspace,
 });
 
@@ -14,7 +14,7 @@ function OpenWorkspace() {
 	useEffect(() => {
 		if (!workspace) return;
 		void navigate({
-			to: "/$workspaceId",
+			to: "/app/$workspaceId",
 			params: { workspaceId: workspace._id },
 			replace: true,
 		});
