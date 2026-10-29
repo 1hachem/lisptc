@@ -142,9 +142,9 @@ export const pages = {
 		"account",
 		"user settings: name, email, sign out, delete account",
 	),
-	settings: page("settings.ptc", "workspace settings: name, icon, model"),
+	settings: page("settings", "workspace settings: name, icon, model"),
 	preferences: page(
-		"preferences.ptc",
+		"preferences",
 		"look and feel: theme, font, what chat shows",
 	),
 	readme: page("README.md", "workspace readme the agent reads"),
