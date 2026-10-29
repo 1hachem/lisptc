@@ -4,13 +4,14 @@ import {
 	WindowsNewIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
 	DESKTOP_DOWNLOADS,
 	type DesktopDownload,
 	type DesktopOs,
 	primaryDownload,
+	startDownload,
 	visitorPlatform,
 } from "../lib/desktop-downloads.ts";
 import { inDesktopShell } from "../lib/desktop-shell.ts";
@@ -45,6 +46,12 @@ function Download() {
 	const [primary, setPrimary] = useState<DesktopDownload>();
 	const [shell, setShell] = useState(false);
 	const release = useLatestRelease();
+	const navigate = useNavigate();
+
+	const take = (download: DesktopDownload) => {
+		startDownload(download.url);
+		void navigate({ to: "/thanks", search: { file: download.id } });
+	};
 
 	useEffect(() => {
 		setPrimary(primaryDownload(visitorPlatform()));
@@ -69,9 +76,9 @@ function Download() {
 				) : (
 					<>
 						{primary ? (
-							<Link
-								to="/download/thanks"
-								search={{ file: primary.id }}
+							<button
+								type="button"
+								onClick={() => take(primary)}
 								className="flex items-center gap-2 bg-bg2 px-2.5 py-1 text-blue hover:brightness-125"
 							>
 								<HugeiconsIcon
@@ -79,14 +86,14 @@ function Download() {
 									className="size-icon-sm"
 								/>
 								download for {primary.label}
-							</Link>
+							</button>
 						) : null}
 						<div className="flex flex-col gap-1">
 							{others.map((download) => (
-								<Link
+								<button
+									type="button"
 									key={download.id}
-									to="/download/thanks"
-									search={{ file: download.id }}
+									onClick={() => take(download)}
 									className="flex items-center gap-2 text-dim hover:text-fg"
 								>
 									<HugeiconsIcon
@@ -94,7 +101,7 @@ function Download() {
 										className="size-icon-sm"
 									/>
 									{download.label}
-								</Link>
+								</button>
 							))}
 						</div>
 					</>

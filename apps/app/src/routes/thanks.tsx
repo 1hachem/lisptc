@@ -14,7 +14,7 @@ import { inDesktopShell } from "../lib/desktop-shell.ts";
 
 const DOCS = "https://github.com/1hachem/lisptc#readme";
 
-export const Route = createFileRoute("/download_/thanks")({
+export const Route = createFileRoute("/thanks")({
 	validateSearch: (
 		search: Record<string, unknown>,
 	): { file?: DesktopDownloadId } =>
@@ -40,11 +40,8 @@ function Thanks() {
 	const [shell, setShell] = useState(false);
 
 	useEffect(() => {
-		const inShell = inDesktopShell();
-		setShell(inShell);
-		const target = chosenDownload(file, visitorPlatform());
-		setChosen(target);
-		if (target !== undefined && !inShell) startDownload(target.url);
+		setShell(inDesktopShell());
+		setChosen(chosenDownload(file, visitorPlatform()));
 	}, [file]);
 
 	const intel = DESKTOP_DOWNLOADS.find((download) => download.id === "mac-x64");
