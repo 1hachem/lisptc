@@ -5,7 +5,7 @@ import {
 	createFileRoute,
 	Outlet,
 	redirect,
-	useLocation,
+	useRouterState,
 } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useEffect } from "react";
@@ -68,7 +68,9 @@ function LoadLogin() {
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const departure = useLeaveState();
-	const { pathname } = useLocation();
+	const pathname = useRouterState({
+		select: (state) => (state.resolvedLocation ?? state.location).pathname,
+	});
 
 	if (isLoading) return <AppLoading />;
 	if (!isAuthenticated)
