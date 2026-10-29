@@ -7,6 +7,7 @@ import {
 	DashboardSquare01Icon,
 	HelpCircleIcon,
 	InformationCircleIcon,
+	PencilEdit02Icon,
 	UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
@@ -62,9 +63,9 @@ export const CHANNELS: Channel[] = [
 	},
 	{
 		id: "edits",
+		icon: PencilEdit02Icon,
 		label: "edits",
 		hint: "what a step was written as, when it ran as something else",
-		dot: "bg-yellow",
 		text: "text-yellow",
 	},
 	{

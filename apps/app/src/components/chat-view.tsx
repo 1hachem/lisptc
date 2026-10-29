@@ -369,8 +369,9 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 			)}
 			{written && (
 				<div className="mb-2">
-					<ChannelLabel id="edits" />
-					<WrittenAs written={written} ran={messageText(message)} />
+					<Marked id="edits">
+						<WrittenAs written={written} ran={messageText(message)} />
+					</Marked>
 				</div>
 			)}
 			{isUserMessage(message) ? (
