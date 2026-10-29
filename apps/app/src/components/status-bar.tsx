@@ -21,13 +21,16 @@ const COLUMN_CLASS: readonly string[] = [
 	"col-start-5",
 	"col-start-6",
 	"col-start-7",
+	"col-start-8",
+	"col-start-9",
 ];
 
 function placeClass(place: number): string {
-	const column = COLUMN_CLASS[place - 1] ?? "col-start-7";
-	if (place === 1) return `${column} justify-self-start`;
-	if (place === SLOT_COUNT) return `${column} justify-self-end`;
-	return `${column} justify-self-center`;
+	const column = COLUMN_CLASS[place - 1] ?? "col-start-9";
+	const middle = (SLOT_COUNT + 1) / 2;
+	if (place < middle) return `${column} justify-start`;
+	if (place > middle) return `${column} justify-end`;
+	return `${column} justify-center`;
 }
 
 function clockTime(at: Date): string {
@@ -71,9 +74,9 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 				onReorder={reorder}
 				motion={motion}
 				axis="horizontal"
-				className="grid h-full grid-cols-[minmax(0,auto)_repeat(5,minmax(0,1fr))_minmax(0,auto)] items-center"
+				className="grid h-full grid-cols-9 items-center"
 				entryClassName={(item) =>
-					`row-start-1 flex h-full min-w-0 items-center overflow-hidden ${placeClass(placeOf(order, item))}`
+					`row-start-1 flex h-full w-full min-w-0 items-center overflow-hidden ${placeClass(placeOf(order, item))}`
 				}
 			>
 				{(slot) => (isGap(slot) || !shown.includes(slot) ? null : drawn[slot])}

@@ -2,7 +2,7 @@ const BAR_ITEMS = ["panes", "desktop", "clock"] as const;
 
 export type BarItem = (typeof BAR_ITEMS)[number];
 
-export const SLOT_COUNT = 7;
+export const SLOT_COUNT = 9;
 
 const GAPS = Array.from(
 	{ length: SLOT_COUNT - BAR_ITEMS.length },

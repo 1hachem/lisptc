@@ -15,15 +15,17 @@ describe("barOrder", () => {
 			"gap-2",
 			"gap-3",
 			"gap-4",
+			"gap-5",
+			"gap-6",
 			"desktop",
 			"clock",
 		]);
 		expect(order.map((slot) => placeOf(order, slot))).toEqual([
-			1, 2, 3, 4, 5, 6, 7,
+			1, 2, 3, 4, 5, 6, 7, 8, 9,
 		]);
 	});
 
-	it("always has seven slots", () => {
+	it("always has nine slots", () => {
 		expect(barOrder(undefined)).toHaveLength(SLOT_COUNT);
 		expect(barOrder(["clock"])).toHaveLength(SLOT_COUNT);
 		expect(barOrder(["gap-3", "desktop", "panes", "clock"])).toHaveLength(
@@ -37,6 +39,8 @@ describe("barOrder", () => {
 			"gap-2",
 			"gap-3",
 			"gap-4",
+			"gap-5",
+			"gap-6",
 			"gap-1",
 			"desktop",
 			"clock",
@@ -54,8 +58,8 @@ describe("barOrder", () => {
 			"clock",
 		]);
 		expect(placeOf(order, "desktop")).toBe(1);
-		expect(placeOf(order, "panes")).toBe(4);
-		expect(placeOf(order, "clock")).toBe(7);
+		expect(placeOf(order, "panes")).toBe(6);
+		expect(placeOf(order, "clock")).toBe(SLOT_COUNT);
 	});
 
 	it("keeps several stored gaps and drops unknown and repeated names", () => {
@@ -74,6 +78,8 @@ describe("barOrder", () => {
 			"clock",
 			"gap-3",
 			"gap-4",
+			"gap-5",
+			"gap-6",
 			"gap-2",
 			"gap-1",
 			"panes",
@@ -86,7 +92,17 @@ describe("shownItems", () => {
 	it("lists the items on show, never a gap", () => {
 		expect(
 			shownItems(
-				["panes", "gap-1", "gap-2", "gap-3", "gap-4", "desktop", "clock"],
+				[
+					"panes",
+					"gap-1",
+					"gap-2",
+					"gap-3",
+					"gap-4",
+					"gap-5",
+					"gap-6",
+					"desktop",
+					"clock",
+				],
 				["clock"],
 			),
 		).toEqual(["panes", "desktop"]);
