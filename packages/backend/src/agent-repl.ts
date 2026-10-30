@@ -53,6 +53,7 @@ import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 import { ConvexSourceFolder } from "./source-folder.ts";
+import { ConvexTourStore } from "./tour-store.ts";
 import { ConvexViewStore } from "./view-store.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
@@ -156,7 +157,10 @@ export async function workspaceExtensions(
 			panel: new ConvexLayoutStore(workspaceId, connect, chatId),
 			...(chatId === undefined
 				? {}
-				: { views: new ConvexViewStore(chatId, connect) }),
+				: {
+						views: new ConvexViewStore(chatId, connect),
+						tours: new ConvexTourStore(chatId, connect),
+					}),
 		}),
 	);
 	const exports = subAgentExtension(subAgentHost());

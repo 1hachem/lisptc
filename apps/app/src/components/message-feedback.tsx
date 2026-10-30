@@ -1,5 +1,6 @@
 import type { ExpressionId } from "@repo/bloub";
 import { MessageFeedback as Feedback, type Thumb } from "@repo/components";
+import { anchorOf } from "@repo/ui-catalog";
 import { useAgent } from "../lib/agent.tsx";
 import { captureFeedback } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
@@ -18,6 +19,7 @@ export function MessageFeedback({
 
 	return (
 		<Feedback
+			anchor={anchorOf("chat/feedback")}
 			capture={(properties) =>
 				captureFeedback({
 					...properties,

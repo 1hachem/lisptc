@@ -1,5 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
+import { contentRegion } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { DeleteAccount } from "./delete-account.tsx";
 
@@ -7,7 +8,10 @@ export function AccountPage() {
 	const { data: user } = useQuery(convexQuery(api.users.me, {}));
 
 	return (
-		<div className="min-h-0 flex-1 overflow-y-auto px-8 pt-6">
+		<div
+			{...contentRegion}
+			className="min-h-0 flex-1 overflow-y-auto px-8 pt-6"
+		>
 			<div className="mx-auto flex w-full max-w-[680px] flex-col gap-6">
 				<div className="font-mono text-[11.5px] text-dim">account</div>
 				<section className="flex flex-col gap-1 text-[12px]">

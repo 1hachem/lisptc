@@ -78,6 +78,14 @@ services:
         pnpm run env:seed
         pnpm exec convex deploy --typecheck disable --codegen disable
         exec pnpm run migrate
+    develop:
+      watch:
+        - action: rebuild
+          path: ./packages/backend/convex
+          ignore:
+            - _generated/
+        - action: rebuild
+          path: ./packages/ui-catalog/src
     environment:
       - CONVEX_SELF_HOSTED_URL=http://convex-backend:3210
       - CONVEX_SELF_HOSTED_ADMIN_KEY

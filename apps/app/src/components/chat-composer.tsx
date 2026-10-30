@@ -1,6 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Question } from "@repo/interpreter/annotations";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { attachingFiles } from "../lib/attached-files.ts";
@@ -82,15 +83,17 @@ export function ChatComposer({
 	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
 	return (
-		<ChatInput
-			placeholder={about ? `ask about ${about.path}` : "type a message"}
-			onSubmit={submit}
-			blocked={blocked}
-			files={{ upload: toAttachments.upload, discard: toAttachments.discard }}
-			assist={{ mentions, history, onCommand: runCommand, symbols }}
-			streaming={{ active: isLoading, onStop: stop }}
-			on={inputOn}
-			question={question}
-		/>
+		<div {...anchorOf("composer")}>
+			<ChatInput
+				placeholder={about ? `ask about ${about.path}` : "type a message"}
+				onSubmit={submit}
+				blocked={blocked}
+				files={{ upload: toAttachments.upload, discard: toAttachments.discard }}
+				assist={{ mentions, history, onCommand: runCommand, symbols }}
+				streaming={{ active: isLoading, onStop: stop }}
+				on={inputOn}
+				question={question}
+			/>
+		</div>
 	);
 }

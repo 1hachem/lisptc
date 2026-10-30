@@ -44,6 +44,7 @@ import type * as repls from "../repls.js";
 import type * as secrets from "../secrets.js";
 import type * as sources from "../sources.js";
 import type * as threads from "../threads.js";
+import type * as tours from "../tours.js";
 import type * as uploads from "../uploads.js";
 import type * as users from "../users.js";
 import type * as views from "../views.js";
@@ -92,6 +93,7 @@ declare const fullApi: ApiFromModules<{
   secrets: typeof secrets;
   sources: typeof sources;
   threads: typeof threads;
+  tours: typeof tours;
   uploads: typeof uploads;
   users: typeof users;
   views: typeof views;

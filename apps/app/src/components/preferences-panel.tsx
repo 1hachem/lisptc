@@ -22,6 +22,7 @@ import {
 	useSidebar,
 } from "@repo/ui";
 import { motions } from "@repo/ui/motions.ts";
+import { anchorOf } from "@repo/ui-catalog";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { inDesktopShell, useDesktopSettings } from "../lib/desktop-shell.ts";
@@ -92,7 +93,7 @@ function StatusBarList() {
 	const { order, shown, reorder, toggle } = useStatusBarOrder();
 	const { motion } = useSidebarMotion();
 	return (
-		<div className="px-4 text-[11.5px]">
+		<div {...anchorOf("right/status-bar")} className="px-4 text-[11.5px]">
 			<SortableTree order={order} onReorder={reorder} motion={motion}>
 				{(item) =>
 					isGap(item) ? (
@@ -130,7 +131,10 @@ function ThemeList({ open }: { open: boolean }) {
 	}, [open, shortlist]);
 
 	return (
-		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+		<div
+			{...anchorOf("right/theme")}
+			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+		>
 			{shown.map((candidate) => {
 				const chosen = candidate.id === theme.id;
 				return (
@@ -163,7 +167,10 @@ function ThemeList({ open }: { open: boolean }) {
 function FontList() {
 	const { font, chooseFont } = useAppearance();
 	return (
-		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+		<div
+			{...anchorOf("right/font")}
+			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+		>
 			{fonts.map((candidate) => {
 				const chosen = candidate.id === font.id;
 				return (
@@ -191,7 +198,10 @@ function FontList() {
 function PanelMotionToggle() {
 	const { panelMotion, setPanelMotion } = usePanelMotion();
 	return (
-		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+		<div
+			{...anchorOf("right/motion")}
+			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+		>
 			{[true, false].map((on) => {
 				const chosen = on === panelMotion;
 				return (
@@ -241,7 +251,10 @@ function DeveloperToggles() {
 	const { traceBesideChat, setTraceBesideChat } = useTraceBesideChat();
 	const { traceLink, setTraceLink } = useTraceLink();
 	return (
-		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+		<div
+			{...anchorOf("right/developer")}
+			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+		>
 			<OnOffToggle
 				label="trace beside chat"
 				on={traceBesideChat}
@@ -256,7 +269,10 @@ function DesktopToggles() {
 	const { settings, update } = useDesktopSettings();
 	if (settings === undefined) return null;
 	return (
-		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+		<div
+			{...anchorOf("right/desktop")}
+			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+		>
 			<OnOffToggle
 				label="keep running when closed"
 				on={settings.closeToTray}
@@ -274,7 +290,10 @@ function DesktopToggles() {
 function MotionList() {
 	const { motion, chooseMotion } = useSidebarMotion();
 	return (
-		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+		<div
+			{...anchorOf("right/motion")}
+			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+		>
 			{motions.map((candidate) => {
 				const chosen = candidate.id === motion;
 				return (
@@ -317,6 +336,7 @@ function SectionRail() {
 				(section) => (
 					<SidebarMenuItem key={section.name}>
 						<SidebarMenuButton
+							{...anchorOf("right/sections")}
 							tooltip={section.name}
 							className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
 							onClick={() => setOpen(true)}
@@ -338,18 +358,24 @@ export function PreferencesPanel() {
 			<SidebarContent>
 				{state === "expanded" ? <Preferences /> : <SectionRail />}
 			</SidebarContent>
-			<SidebarRail className="w-2 translate-x-0 hover:after:bg-transparent" />
+			<SidebarRail
+				{...anchorOf("right/toggle")}
+				className="w-2 translate-x-0 hover:after:bg-transparent"
+			/>
 		</Sidebar>
 	);
 }
 
-function Preferences() {
+export function Preferences() {
 	return (
 		<div className="flex h-full flex-col gap-5 overflow-y-auto py-3.5">
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 				metadata
 			</div>
-			<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			<div
+				{...anchorOf("right/metadata")}
+				className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+			>
 				{META_FIELDS.map((field) => (
 					<MetaToggle key={field.id} field={field} />
 				))}
@@ -357,7 +383,10 @@ function Preferences() {
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 				input
 			</div>
-			<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
+			<div
+				{...anchorOf("right/input")}
+				className="flex flex-col gap-1.5 px-4 text-[11.5px]"
+			>
 				{INPUT_HELPERS.map((helper) => (
 					<InputToggle key={helper.id} helper={helper} />
 				))}

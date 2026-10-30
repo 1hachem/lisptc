@@ -11,6 +11,7 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { stopChat, useChatSession } from "../lib/chat.tsx";
@@ -153,7 +154,7 @@ export function ChildThreadStrip({
 	const place = "absolute left-2 bottom-7 z-10";
 	if (!(opened ?? wide))
 		return (
-			<div ref={area} className={place}>
+			<div {...anchorOf("chat/children")} ref={area} className={place}>
 				<button
 					type="button"
 					data-child-threads="chip"
@@ -172,6 +173,7 @@ export function ChildThreadStrip({
 		);
 	return (
 		<div
+			{...anchorOf("chat/children")}
 			ref={area}
 			data-child-threads="card"
 			className={`${place} flex w-56 max-w-[calc(100%-1rem)] flex-col gap-1.5 border border-bg2 bg-bg1 px-3 py-2 text-[12px]`}

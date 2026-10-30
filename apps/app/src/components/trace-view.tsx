@@ -1,6 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
+import { contentRegion } from "@repo/ui-catalog";
 import {
 	type ComponentProps,
 	type RefObject,
@@ -442,7 +443,7 @@ export function TraceLines({
 		setShown((was) => ({ ...was, [id]: !was[id] }));
 	return (
 		<ChannelsShown shown={shown}>
-			<div className="flex h-full min-h-0 flex-col">
+			<div {...contentRegion} className="flex h-full min-h-0 flex-col">
 				<ChannelToggles shown={shown} toggle={toggle} />
 				<div
 					ref={scroller}

@@ -1,4 +1,5 @@
 import { cn } from "@repo/ui";
+import type { AnchorMark } from "@repo/ui-catalog";
 import type { ReactNode } from "react";
 
 export function InputShell({
@@ -35,6 +36,7 @@ export function InputAction({
 	onClick,
 	disabled,
 	title,
+	anchor,
 }: {
 	label: string;
 	glyph: string;
@@ -42,9 +44,11 @@ export function InputAction({
 	onClick?: () => void;
 	disabled?: boolean;
 	title?: string;
+	anchor?: AnchorMark;
 }) {
 	return (
 		<button
+			{...anchor}
 			type="button"
 			onClick={onClick}
 			disabled={disabled}

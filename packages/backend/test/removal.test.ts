@@ -55,6 +55,36 @@ describe("removing a chat", () => {
 		expect(left).toEqual([]);
 	});
 
+	it("takes its tours with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.tours.start, {
+			chatId,
+			tourId: "upload-files",
+			steps: [{ say: "hi", until: "next" }],
+		});
+		await alice.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("tours").collect()),
+			...(await ctx.db.query("pointers").collect()),
+		]);
+		expect(left).toEqual([]);
+	});
+
 	it("takes its repl checkpoints with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -542,6 +572,29 @@ describe("removing a user", () => {
 
 		const left = await t.run(
 			async (ctx) => await ctx.db.query("preferences").collect(),
+		);
+		expect(left).toEqual([]);
+	});
+
+	it("takes the tours they finished with them", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.tours.start, {
+			chatId,
+			tourId: "upload-files",
+			steps: [{ say: "hi", until: "next" }],
+		});
+		const tour = await alice.as.query(api.tours.active, {});
+		if (tour === null) throw new Error("no active tour");
+		await alice.as.mutation(api.tours.advance, { tour: tour._id, from: 0 });
+
+		await t.mutation(internal.users.purge, { userId: alice.user });
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("tourProgress").collect(),
 		);
 		expect(left).toEqual([]);
 	});

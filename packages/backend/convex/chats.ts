@@ -422,6 +422,9 @@ async function dropChat(ctx: MutationCtx, chat: Doc<"chats">): Promise<void> {
 	await ctx.scheduler.runAfter(0, internal.views.purge, {
 		chatId: chat._id,
 	});
+	await ctx.scheduler.runAfter(0, internal.tours.purge, {
+		chatId: chat._id,
+	});
 }
 
 export const remove = mutation({

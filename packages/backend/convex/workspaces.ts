@@ -170,6 +170,9 @@ export const purge = internalMutation({
 			await ctx.scheduler.runAfter(0, internal.views.purge, {
 				chatId: chat._id,
 			});
+			await ctx.scheduler.runAfter(0, internal.tours.purge, {
+				chatId: chat._id,
+			});
 		}
 		if (chats.length === PURGE_BATCH) {
 			await ctx.scheduler.runAfter(0, internal.workspaces.purge, {

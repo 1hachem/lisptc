@@ -3,8 +3,16 @@ import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { TAGS, widgetOf } from "@repo/ui-catalog";
+import {
+	ANCHOR_IDS,
+	PAGE_IDS,
+	pointer,
+	TAGS,
+	tourStep,
+	widgetOf,
+} from "@repo/ui-catalog";
 import { describe, expect, it } from "vitest";
+import { MemoryTourStore } from "../src/tour-store.ts";
 import {
 	fileTab,
 	joinMessages,
@@ -40,7 +48,7 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 							id: op.tab,
 							kind: op.content.kind,
 							title:
-								op.content.kind === "view" ? op.content.title : op.content.name,
+								op.content.kind === "file" ? op.content.name : op.content.title,
 							shown: true,
 							focused: true,
 						},
@@ -946,5 +954,227 @@ describe("a quoted call as an action", () => {
 		await expect(surface.invoke("a1", {})).rejects.toThrow(
 			/not defined.*no-such-fn|no-such-fn.*not defined/s,
 		);
+	});
+});
+
+describe("tours", () => {
+	function touring() {
+		const surface = new UiSurface();
+		const tours = new MemoryTourStore();
+		const host = uiHostFor({ panel: panelOf([]).panel, tours });
+		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
+		runSync(interp, prelude);
+		return {
+			surface,
+			tours,
+			interp,
+			ui: collector(interp),
+			ev: (code: string) => str(runSync(interp, code)),
+		};
+	}
+
+	it("points at an anchor without starting a tour", () => {
+		const { tours, ev } = touring();
+		expect(ev('(ui/point "knowledge/upload")')).toBe('"knowledge/upload"');
+		expect(tours.pointers).toEqual([
+			{
+				anchor: "knowledge/upload",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+			},
+		]);
+		expect(tours.tours.size).toBe(0);
+	});
+
+	it("carries the page a pointer opens once it is done", () => {
+		const { tours, ev } = touring();
+		ev('(ui/point "account" :open "account")');
+		expect(tours.pointers).toEqual([
+			{
+				anchor: "account",
+				mark: "arrow",
+				size: "medium",
+				click: true,
+				open: "account",
+			},
+		]);
+		for (const at of tours.pointers)
+			expect(pointer.safeParse(at).success).toBe(true);
+		expect(() => ev('(ui/point "account" :open "billing")')).toThrow(
+			/unknown page/,
+		);
+	});
+
+	it("names the buttons of a tour the agent labels", () => {
+		const { tours, ev } = touring();
+		ev(`(ui/tour "hello" '(:say "hi") :done "Got it" :skip "Later")`);
+		expect(tours.tours.get("hello")?.labels).toEqual({
+			done: "Got it",
+			skip: "Later",
+		});
+		ev(`(ui/tour "plain" '(:say "hi"))`);
+		expect(tours.tours.get("plain")?.labels).toBeUndefined();
+		expect(() => ev(`(ui/tour "t" '(:say "hi") :done 3)`)).toThrow(
+			/string expected for :done/,
+		);
+		expect(() => ev(`(ui/tour "t" '(:say "hi") :next "")`)).toThrow(
+			/string expected for :next/,
+		);
+	});
+
+	it("stores every step of a tour, each one valid against the catalog", () => {
+		const { tours, ev } = touring();
+		ev(`(ui/tour 'upload-files
+			'(:anchor knowledge/upload :say "Drop a PDF here" :until click)
+			'(:anchor "account" :say "Your account lives here")
+			'(:say "Now ask me about it"))`);
+		const tour = tours.tours.get("upload-files");
+		expect(tour?.steps).toEqual([
+			{ anchor: "knowledge/upload", say: "Drop a PDF here", until: "click" },
+			{ anchor: "account", say: "Your account lives here", until: "next" },
+			{ say: "Now ask me about it", until: "next" },
+		]);
+		for (const step of tour?.steps ?? [])
+			expect(tourStep.safeParse(step).success).toBe(true);
+	});
+
+	it("refuses an anchor the app does not mount", () => {
+		const { ev } = touring();
+		expect(() => ev('(ui/point "model-picker")')).toThrow(/unknown anchor/);
+		expect(() => ev(`(ui/tour "t" '(:anchor "nowhere" :say "x"))`)).toThrow(
+			/unknown anchor/,
+		);
+	});
+
+	it("refuses a click step without an anchor, an empty tour and a stray key", () => {
+		const { ev } = touring();
+		expect(() => ev(`(ui/tour "t" '(:say "x" :until click))`)).toThrow(
+			/needs an :anchor/,
+		);
+		expect(() => ev('(ui/tour "t")')).toThrow();
+		expect(() => ev(`(ui/tour "t" '(:say "x" :until hover))`)).toThrow(
+			/unknown :until/,
+		);
+		expect(() => ev(`(ui/tour "t" '(:say "x" :colour "red"))`)).toThrow(
+			/unknown option/,
+		);
+	});
+
+	it("tells the agent when the user finishes or skips a tour", async () => {
+		const { tours, surface, ui, ev } = touring();
+		ev(`(ui/tour "upload-files" '(:say "hi"))`);
+		const tour = tours.tours.get("upload-files");
+		if (tour?.done === undefined || tour.skip === undefined)
+			throw new Error("tour carries no end actions");
+		await surface.invoke(tour.done, {});
+		expect(ui.takeMessage()).toBe("I finished the upload-files tour.");
+		await surface.invoke(tour.skip, {});
+		expect(ui.takeMessage()).toBe("I skipped the upload-files tour.");
+	});
+
+	it("reads whether a tour was finished before", () => {
+		const { tours, ev } = touring();
+		expect(ev("(ui/tour-done? 'upload-files)")).toBe("nil");
+		tours.done.add("upload-files");
+		expect(ev("(ui/tour-done? 'upload-files)")).toBe("t");
+	});
+
+	it("opens a page of the app beside the chat", () => {
+		const { panel, ops } = panelOf([]);
+		const interp = new Interp({
+			extensions: [uiExtension(uiHostFor({ panel }))],
+		});
+		runSync(interp, prelude);
+		expect(str(runSync(interp, '(ui/open "account" :split "right")'))).toBe(
+			'"page:account"',
+		);
+		expect(ops).toEqual([
+			{
+				op: "open",
+				tab: "page:account",
+				split: "right",
+				content: { kind: "page", page: "account", title: "account" },
+			},
+		]);
+		expect(() => runSync(interp, '(ui/open "billing")')).toThrow(
+			/unknown page/,
+		);
+	});
+
+	it("carries the page a tour step opens", () => {
+		const { tours, ev } = touring();
+		ev(`(ui/tour "t" '(:page settings :say "your workspace settings"))`);
+		expect(tours.tours.get("t")?.steps).toEqual([
+			{ page: "settings", say: "your workspace settings", until: "next" },
+		]);
+		expect(() => ev(`(ui/tour "t" '(:page "billing" :say "x"))`)).toThrow(
+			/unknown page/,
+		);
+	});
+
+	it("names every anchor and page in the prompt", () => {
+		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		expect(prompt).not.toContain("{{anchors}}");
+		expect(prompt).not.toContain("{{pages}}");
+		for (const id of [...ANCHOR_IDS, ...PAGE_IDS])
+			expect(prompt).toContain(`- ${id}:`);
+	});
+
+	it("runs the tour the prompt shows", () => {
+		const prompt =
+			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
+		const example = prompt.slice(
+			prompt.indexOf('(ui/tour "upload-files"'),
+			prompt.indexOf("New tour replaces"),
+		);
+		const { tours, ev } = touring();
+		ev(example);
+		expect(tours.tours.get("upload-files")?.steps).toHaveLength(2);
+	});
+
+	it("runs the pointer the prompt shows", () => {
+		const prompt =
+			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
+		const start = prompt.indexOf('(ui/point "account"');
+		const example = prompt.slice(start, prompt.indexOf("\n", start));
+		const { tours, ev } = touring();
+		ev(example);
+		expect(tours.pointers).toEqual([
+			{
+				anchor: "account",
+				mark: "arrow",
+				size: "medium",
+				click: true,
+				open: "account",
+			},
+		]);
+	});
+
+	it("draws an oval round its anchor when asked", () => {
+		const { tours, ev } = touring();
+		ev('(ui/point "composer" :mark "oval")');
+		expect(tours.pointers).toEqual([
+			{ anchor: "composer", mark: "oval", size: "medium", click: false },
+		]);
+		expect(pointer.safeParse(tours.pointers[0]).success).toBe(true);
+		expect(() => ev('(ui/point "composer" :mark "box")')).toThrow(
+			/unknown :mark/,
+		);
+		ev('(ui/point "composer" :mark "oval" :size "large")');
+		expect(tours.pointers.at(-1)).toEqual({
+			anchor: "composer",
+			mark: "oval",
+			size: "large",
+			click: false,
+		});
+		expect(() => ev('(ui/point "composer" :size "huge")')).toThrow(
+			/unknown :size/,
+		);
+		ev('(ui/point "account" :click t)');
+		expect(tours.pointers.at(-1)).toMatchObject({
+			anchor: "account",
+			click: true,
+		});
 	});
 });

@@ -1,5 +1,6 @@
 import type { Question } from "@repo/interpreter/annotations";
 import { Button } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { answerOf } from "../lib/question.ts";
 import { InputAction, InputShell } from "./input-shell.tsx";
@@ -92,7 +93,10 @@ export function QuestionPicker({
 	});
 
 	return (
-		<div className="relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]">
+		<div
+			{...anchorOf("composer/question")}
+			className="relative mx-auto flex w-full max-w-[680px] flex-col font-mono text-[13px] leading-[1.7]"
+		>
 			<InputShell
 				prompt="?"
 				tone="text-yellow"

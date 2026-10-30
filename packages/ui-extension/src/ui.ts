@@ -21,7 +21,14 @@ import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import type { PromptSource } from "@repo/shared/host";
-import { ACTION_PROPS, FOLDERS, TAGS, type Tag } from "@repo/ui-catalog";
+import {
+	ACTION_PROPS,
+	FOLDERS,
+	PAGE_IDS,
+	pages,
+	TAGS,
+	type Tag,
+} from "@repo/ui-catalog";
 import { z } from "zod";
 import {
 	element,
@@ -36,10 +43,18 @@ import {
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
+	pageTab,
 	SPLITS,
 	type Split,
 	viewTab,
 } from "./panel.ts";
+import {
+	anchorPromptSection,
+	pageOf,
+	pagePromptSection,
+	registerTours,
+} from "./tour.ts";
+import type { TourStore } from "./tour-store.ts";
 import type { UiNode } from "./view.ts";
 import type { ViewStore } from "./view-store.ts";
 import { WIDGET_FORMS, widgetPromptSection, zString } from "./widgets.ts";
@@ -51,8 +66,14 @@ export {
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
+	pageTab,
 	viewTab,
 } from "./panel.ts";
+export {
+	MemoryTourStore,
+	type StartedTour,
+	type TourStore,
+} from "./tour-store.ts";
 export type { UiNode, UiValue } from "./view.ts";
 export {
 	MemoryViewStore,
@@ -434,6 +455,7 @@ function registerUi(
 	surface: UiSurface,
 	panel: PanelStore,
 	views: ViewStore,
+	tours: TourStore,
 ): void {
 	surface.bind(interp, views);
 	surface.reset();
@@ -445,6 +467,10 @@ function registerUi(
 	});
 
 	for (const tag of TAGS) defineWidget(interp, surface, tag);
+	registerTours(interp, tours, {
+		action: (form) => surface.action(form),
+		send: (text) => surface.send(text),
+	});
 
 	function* emit(op: PanelOp): Eval<void> {
 		yield* settled(panel.apply([op]));
@@ -486,6 +512,25 @@ function registerUi(
 				tab,
 				split: splitOf(plistOptions(rest, ["split"])),
 				content: { kind: "view", title, viewId: placed.viewId },
+			});
+			return tab;
+		},
+	);
+
+	interp.defGen(
+		"ui/open",
+		-2,
+		'(ui/open page [:split "right"])',
+		`Open a page of the app in a tab of the panel beside the chat. \`page\` is one of ${PAGE_IDS.join(" ")}. A page already open is focused instead. \`:split\` is as for \`ui/open-file\`. Returns the tab id.`,
+		z.tuple([zAny, zList]),
+		function* ([name, rest]): Eval {
+			const page = pageOf(name);
+			const tab = pageTab(page);
+			yield* emit({
+				op: "open",
+				tab,
+				split: splitOf(plistOptions(rest, ["split"])),
+				content: { kind: "page", page, title: pages[page].title },
 			});
 			return tab;
 		},
@@ -613,6 +658,7 @@ export interface UiHost {
 	prompt: PromptSource;
 	panel: PanelStore;
 	views: ViewStore;
+	tours: TourStore;
 }
 
 export interface UiOptions {
@@ -628,10 +674,14 @@ export function uiExtension(
 	const surface = options.surface ?? new UiSurface();
 	return Object.assign(
 		(interp: Interp): void =>
-			registerUi(interp, surface, host.panel, host.views),
+			registerUi(interp, surface, host.panel, host.views, host.tours),
 		{
 			surface,
-			prompt: host.prompt().replace("{{widgets}}", widgetPromptSection()),
+			prompt: host
+				.prompt()
+				.replace("{{widgets}}", widgetPromptSection())
+				.replace("{{anchors}}", anchorPromptSection())
+				.replace("{{pages}}", pagePromptSection()),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();

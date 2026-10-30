@@ -3,6 +3,7 @@ import { MessageMemories } from "@repo/components";
 import type { Progress } from "@repo/interpreter/annotations";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
+import { anchorOf, contentRegion } from "@repo/ui-catalog";
 import {
 	createContext,
 	memo,
@@ -153,11 +154,17 @@ function ChannelText({
 		setPage((p) => Math.min(pages - 1, Math.max(0, p + by)));
 	return (
 		<div className={`min-w-0 break-words ${tone}`}>
-			<div className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined}>
+			<div
+				{...contentRegion}
+				className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined}
+			>
 				<ChannelBody text={shown} code={code} />
 			</div>
 			{long && (
-				<div className="mt-1 flex items-center gap-3 text-dim">
+				<div
+					{...anchorOf("chat/read-more")}
+					className="mt-1 flex items-center gap-3 text-dim"
+				>
 					<button
 						type="button"
 						data-read-more
@@ -305,6 +312,7 @@ function AgentMessage({
 	if (!sender.parent)
 		return (
 			<button
+				{...anchorOf("chat/message")}
 				type="button"
 				data-agent-message
 				disabled={onTrace === undefined}
@@ -367,7 +375,9 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 			{isUserMessage(message) ? (
 				<UserMessage message={message} />
 			) : (
-				<ChannelBody text={messageText(message)} code />
+				<div {...contentRegion}>
+					<ChannelBody text={messageText(message)} code />
+				</div>
 			)}
 		</div>
 	);
@@ -386,6 +396,7 @@ function ScrollToLatest() {
 	if (isAtBottom) return null;
 	return (
 		<button
+			{...anchorOf("chat/latest")}
 			type="button"
 			onClick={() => scrollToBottom("instant")}
 			className="absolute bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-[7px] rounded-none bg-bg2 px-[9px] py-px text-[11.5px] text-fg hover:brightness-125"
@@ -477,7 +488,11 @@ function StepText({ message }: { message: ChatMessage }) {
 	const thinking = messageReasoning(message);
 	if (!prose && !thinking) return null;
 	return (
-		<div data-step-text className="flex min-w-0 flex-col gap-2 break-words">
+		<div
+			{...contentRegion}
+			data-step-text
+			className="flex min-w-0 flex-col gap-2 break-words"
+		>
 			{thinking && <StepThinking thinking={thinking} />}
 			{prose && (
 				<SkippedProse text={text} spans={spans}>
@@ -562,7 +577,11 @@ function TurnFoot({
 				</span>
 			)}
 			{!live && memories.length > 0 && (
-				<MessageMemories memories={memories} onOpen={onTrace} />
+				<MessageMemories
+					anchor={anchorOf("chat/meta")}
+					memories={memories}
+					onOpen={onTrace}
+				/>
 			)}
 			{!live && (stats || onTrace) && (
 				<MessageMeta

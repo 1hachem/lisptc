@@ -2,6 +2,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { TreeFile, TreeFolder } from "@repo/components";
+import type { AnchorMark } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { dragsAs, sourcePanel } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
@@ -13,10 +14,12 @@ function SourceFile({
 	workspaceId,
 	folder,
 	name,
+	anchor,
 }: {
 	workspaceId: Id<"workspaces">;
 	folder: string;
 	name: string;
+	anchor: AnchorMark;
 }) {
 	const remove = useConvexMutation(api.sources.remove);
 	const shown = useShown();
@@ -24,6 +27,7 @@ function SourceFile({
 
 	return (
 		<TreeFile
+			anchor={anchor}
 			name={name}
 			depth={1}
 			selected={shown(panel)}
@@ -65,6 +69,7 @@ export function SourceFolder({
 						workspaceId={workspaceId}
 						folder={folder.name}
 						name={name}
+						anchor={folder.toggleAnchor}
 					/>
 				)}
 			</Listing>

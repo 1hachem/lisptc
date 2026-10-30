@@ -846,6 +846,9 @@ importers:
       '@repo/ui':
         specifier: workspace:*
         version: link:../ui
+      '@repo/ui-catalog':
+        specifier: workspace:*
+        version: link:../ui-catalog
       '@repo/ui-extension':
         specifier: workspace:*
         version: link:../ui-extension

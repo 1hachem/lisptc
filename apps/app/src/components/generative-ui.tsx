@@ -1,7 +1,12 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { type PropsOf, type Tag, widgetOf } from "@repo/ui-catalog";
+import {
+	contentRegion,
+	type PropsOf,
+	type Tag,
+	widgetOf,
+} from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
@@ -323,7 +328,7 @@ function View({
 	};
 
 	return (
-		<div className="min-w-0 border-accent/40 border-l pl-3">
+		<div {...contentRegion} className="min-w-0 border-accent/40 border-l pl-3">
 			<Node node={node} fire={fire} busy={busy || expired} />
 			{expired && (
 				<div className="mt-2 text-dim">
