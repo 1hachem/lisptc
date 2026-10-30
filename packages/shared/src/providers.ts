@@ -33,6 +33,10 @@ export const PROVIDER_CATALOG = {
 			{ id: "google/gemma-4-31b-it", name: "Gemma 4 31B" },
 			{ id: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5" },
 			{ id: "openai/gpt-6-luna", name: "GPT-6 Luna" },
+			{
+				id: "deepseek/deepseek-v4.1-flash-1017",
+				name: "DeepSeek V4.1 Flash",
+			},
 		],
 	},
 } as const satisfies Record<
