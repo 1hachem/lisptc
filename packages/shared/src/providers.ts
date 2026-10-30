@@ -24,6 +24,7 @@ export const PROVIDER_CATALOG = {
 		models: [
 			{ id: "gemma-4-31B-it", name: "Gemma 4 31B" },
 			{ id: "anthropic-claude-5.5-haiku", name: "Claude Haiku 5.5" },
+			{ id: "glm-5.3-flash", name: "GLM-5.3 Flash" },
 		],
 	},
 	openrouter: {
@@ -55,7 +56,7 @@ export const CATALOGUED_CHOICES: readonly CataloguedChoice[] =
 
 export const DEFAULT_CHOICE: CataloguedChoice = {
 	provider: "openrouter",
-	model: "google/gemma-4-31b-it",
+	model: "anthropic/claude-haiku-5.5",
 };
 
 export function isCatalogued(choice: {
