@@ -140,22 +140,166 @@ export function isPage(id: string): id is PageId {
 	return Object.hasOwn(pages, id);
 }
 
+export const SIDEBAR_FOLDERS = [
+	"chat",
+	"memories",
+	"permissions",
+	"knowledge",
+	"attachments",
+	"bin",
+	"sub-agents",
+	"triggers",
+	"tasks",
+	"ui",
+	"tests",
+] as const;
+
+export type SidebarFolder = (typeof SIDEBAR_FOLDERS)[number];
+
 export type AnchorLocation =
 	| { kind: "shell" }
-	| { kind: "folder"; folder: (typeof FOLDERS)[number] }
+	| { kind: "sidebar" }
+	| { kind: "right" }
+	| { kind: "chat" }
+	| { kind: "folder"; folder: SidebarFolder }
 	| { kind: "page"; page: PageId };
 
-function anchor(doc: string, location: AnchorLocation) {
-	return { doc, location };
+function anchor(doc: string, location: AnchorLocation, opens?: PageId) {
+	return { doc, location, ...(opens === undefined ? {} : { opens }) };
+}
+
+const SHELL: AnchorLocation = { kind: "shell" };
+
+const SIDEBAR: AnchorLocation = { kind: "sidebar" };
+
+const RIGHT: AnchorLocation = { kind: "right" };
+
+const CHAT: AnchorLocation = { kind: "chat" };
+
+function inFolder(folder: SidebarFolder): AnchorLocation {
+	return { kind: "folder", folder };
 }
 
 export const anchors = {
-	composer: anchor("box where user types message", { kind: "shell" }),
-	"knowledge/upload": anchor("sidebar button: upload files to knowledge/", {
-		kind: "folder",
-		folder: "knowledge",
-	}),
-	settings: anchor("sidebar gear: account settings", { kind: "shell" }),
+	"sidebar/toggle": anchor(
+		"left edge of sidebar: click collapses or expands it",
+		SHELL,
+	),
+	workspace: anchor("workspace name, top left: switch workspace", SHELL),
+	"workspace/new": anchor("+ beside workspace name: new workspace", SIDEBAR),
+	home: anchor("sidebar entry home", SHELL),
+	"new-chat": anchor("sidebar entry new_chat: start chat", SHELL),
+	chats: anchor("sidebar folder chat: past chats", SHELL),
+	"chats/new": anchor("+ on chat folder: new chat", SIDEBAR),
+	"chats/search": anchor("search box in chat folder", inFolder("chat")),
+	"chats/item": anchor("chat in chat folder, click opens it", inFolder("chat")),
+	"chats/menu": anchor(
+		"... on chat row, on hover: rename, archive, delete",
+		inFolder("chat"),
+	),
+	"chats/sub-agents": anchor(
+		"toggle on chat row: its sub-agent threads",
+		inFolder("chat"),
+	),
+	"chats/more": anchor(
+		"more... at end of chat folder: older chats",
+		inFolder("chat"),
+	),
+	"chats/archived": anchor(
+		"archived folder inside chat folder",
+		inFolder("chat"),
+	),
+	memories: anchor("sidebar folder memories: what agent remembers", SHELL),
+	permissions: anchor("sidebar folder permissions: what agent may call", SHELL),
+	knowledge: anchor("sidebar folder knowledge: files user uploaded", SHELL),
+	"knowledge/upload": anchor("+ on knowledge folder: upload files", SIDEBAR),
+	attachments: anchor("sidebar folder attachments: files sent in chat", SHELL),
+	bin: anchor("sidebar folder bin: deleted files", SHELL),
+	"sub-agents": anchor("sidebar folder sub-agents", SHELL),
+	triggers: anchor("sidebar folder triggers, not ready yet", SIDEBAR),
+	tasks: anchor("sidebar folder tasks, not ready yet", SIDEBAR),
+	ui: anchor("sidebar folder ui, not ready yet", SIDEBAR),
+	tests: anchor("sidebar folder tests, not ready yet", SIDEBAR),
+	"files/search": anchor("search box in file folder", inFolder("knowledge")),
+	"files/item": anchor(
+		"file in file folder, click opens it",
+		inFolder("knowledge"),
+	),
+	"files/menu": anchor(
+		"... on file row: rename, move, delete",
+		inFolder("knowledge"),
+	),
+	"files/select": anchor(
+		"checkbox on file row: select several",
+		inFolder("knowledge"),
+	),
+	"files/bulk": anchor(
+		"bar for selected files: act on all",
+		inFolder("knowledge"),
+	),
+	readme: anchor("sidebar entry README.md", SHELL, "readme"),
+	settings: anchor("sidebar entry settings", SHELL, "settings"),
+	preferences: anchor("sidebar entry preferences", SHELL, "preferences"),
+	account: anchor("gear at bottom of sidebar", SHELL, "account"),
+	"sign-out": anchor("sign out, beside user name; click twice", SHELL),
+	"right/toggle": anchor(
+		"right edge of app: open or close quick preferences",
+		SHELL,
+	),
+	"right/sections": anchor(
+		"icons on right edge: quick preference sections",
+		SHELL,
+	),
+	"right/input": anchor("quick preferences: message box helpers", RIGHT),
+	"right/status-bar": anchor("quick preferences: what bottom bar shows", RIGHT),
+	"right/theme": anchor("quick preferences: theme", RIGHT),
+	"right/font": anchor("quick preferences: font", RIGHT),
+	"right/motion": anchor("quick preferences: animation", RIGHT),
+	"right/metadata": anchor("quick preferences: details under answers", RIGHT),
+	"right/developer": anchor("quick preferences: developer switches", RIGHT),
+	"right/desktop": anchor("quick preferences: desktop app switches", RIGHT),
+	composer: anchor("box where user types message", CHAT),
+	"composer/send": anchor("send button in message box", CHAT),
+	"composer/stop": anchor("stop button, while agent works", CHAT),
+	"composer/queue": anchor(
+		"queue button, while agent works and text typed",
+		CHAT,
+	),
+	"composer/attach": anchor("attach files button in message box", CHAT),
+	"composer/attachment": anchor("attached file chip, x removes it", CHAT),
+	"composer/menu": anchor("menu typing / or @ opens", CHAT),
+	"composer/question": anchor(
+		"choices in place of message box when you ask",
+		CHAT,
+	),
+	"chat/trace": anchor(
+		"button on chat tab: trace of agent steps beside chat",
+		CHAT,
+	),
+	"chat/trace-resize": anchor("handle between chat and trace: drag", CHAT),
+	"chat/latest": anchor("jump to newest message, when scrolled up", CHAT),
+	"chat/read-more": anchor("read more, on long message", CHAT),
+	"chat/attachment": anchor("file attached to message, click opens it", CHAT),
+	"chat/message": anchor("agent message, click opens its trace", CHAT),
+	"chat/meta": anchor("line under answer: model, cost, trace", CHAT),
+	"chat/ask": anchor("card asking user to allow or deny", CHAT),
+	"chat/feedback": anchor("feedback buttons under answer", CHAT),
+	"chat/todo": anchor("agent todo card, click folds it", CHAT),
+	"chat/queued": anchor("queued message, x removes it", CHAT),
+	"chat/children": anchor("sub-agent threads under message", CHAT),
+	"chat/avatar": anchor("agent avatar, click pokes it", CHAT),
+	"panel/tab": anchor("tab at top of panel, click switches", SHELL),
+	"panel/tab-close": anchor("x on tab, on hover: closes it", SHELL),
+	"panel/split": anchor("pane menu: split, maximize, close pane", SHELL),
+	"panel/resize": anchor("handle between panes: drag", SHELL),
+	"panel/new-chat": anchor("new chat button on empty workspace", SHELL),
+	"status-bar": anchor("bar at bottom of app", SHELL),
+	"status/panes": anchor("pane buttons in bottom bar: jump to pane", SHELL),
+	"status/zoom": anchor("zoom buttons in bottom bar, desktop app", SHELL),
+	"status/desktop": anchor(
+		"desktop app status in bottom bar: update, retry",
+		SHELL,
+	),
 };
 
 export type AnchorId = keyof typeof anchors;
@@ -165,6 +309,18 @@ export const ANCHOR_IDS = Object.keys(anchors) as AnchorId[];
 export function isAnchor(id: string): id is AnchorId {
 	return Object.hasOwn(anchors, id);
 }
+
+export const ANCHOR_ATTRIBUTE = "data-anchor";
+
+export const CONTENT_ATTRIBUTE = "data-anchor-content";
+
+export type AnchorMark = { readonly [ANCHOR_ATTRIBUTE]: AnchorId };
+
+export function anchorOf(id: AnchorId): AnchorMark {
+	return { [ANCHOR_ATTRIBUTE]: id };
+}
+
+export const contentRegion = { [CONTENT_ATTRIBUTE]: "" } as const;
 
 export const UNTILS = ["next", "click"] as const;
 
@@ -176,6 +332,40 @@ export const tourStep = z.strictObject({
 });
 
 export type TourStep = z.infer<typeof tourStep>;
+
+export const MAX_LABEL_CHARS = 40;
+
+const label = z.string().min(1).max(MAX_LABEL_CHARS);
+
+export const tourLabels = z.strictObject({
+	next: label.optional(),
+	done: label.optional(),
+	skip: label.optional(),
+});
+
+export type TourLabels = z.infer<typeof tourLabels>;
+
+export const TOUR_LABELS = Object.keys(
+	tourLabels.shape,
+) as (keyof TourLabels)[];
+
+export const MARKS = ["arrow", "oval"] as const;
+
+export type Mark = (typeof MARKS)[number];
+
+export const MARK_SIZES = ["small", "medium", "large"] as const;
+
+export type MarkSize = (typeof MARK_SIZES)[number];
+
+export const pointer = z.strictObject({
+	anchor: z.enum(ANCHOR_IDS as [AnchorId, ...AnchorId[]]),
+	mark: z.enum(MARKS),
+	size: z.enum(MARK_SIZES),
+	click: z.boolean(),
+	open: z.enum(PAGE_IDS as [PageId, ...PageId[]]).optional(),
+});
+
+export type Pointer = z.infer<typeof pointer>;
 
 export const TOUR_STATUSES = ["active", "paused", "done", "skipped"] as const;
 

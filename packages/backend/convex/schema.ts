@@ -30,6 +30,20 @@ export const tourStep = v.object({
 	until: v.union(v.literal("next"), v.literal("click")),
 });
 
+export const tourLabels = v.object({
+	next: v.optional(v.string()),
+	done: v.optional(v.string()),
+	skip: v.optional(v.string()),
+});
+
+export const pointerMark = v.union(v.literal("arrow"), v.literal("oval"));
+
+export const pointerSize = v.union(
+	v.literal("small"),
+	v.literal("medium"),
+	v.literal("large"),
+);
+
 export const tourStatus = v.union(
 	v.literal("active"),
 	v.literal("paused"),
@@ -310,12 +324,27 @@ export default defineSchema({
 		steps: v.array(tourStep),
 		current: v.number(),
 		status: tourStatus,
+		labels: v.optional(tourLabels),
 		done: v.optional(v.string()),
 		skip: v.optional(v.string()),
 		expiresAt: v.number(),
 	})
 		.index("by_chat_tour", ["chatId", "tourId"])
 		.index("by_user_status", ["userId", "status"]),
+
+	pointers: defineTable({
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		anchor: v.string(),
+		mark: pointerMark,
+		size: pointerSize,
+		click: v.boolean(),
+		open: v.optional(v.string()),
+		expiresAt: v.number(),
+	})
+		.index("by_user", ["userId"])
+		.index("by_chat", ["chatId"]),
 
 	tourProgress: defineTable({
 		userId: v.id("users"),

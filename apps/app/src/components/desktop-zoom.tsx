@@ -1,5 +1,6 @@
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { anchorOf } from "@repo/ui-catalog";
 import { useDesktopZoom } from "../lib/desktop-shell.ts";
 
 const BUTTON_CLASS =
@@ -9,7 +10,10 @@ export function DesktopZoom() {
 	const { factor, zoom } = useDesktopZoom();
 	if (factor === undefined) return null;
 	return (
-		<span className="flex h-full flex-none items-center px-1.5">
+		<span
+			{...anchorOf("status/zoom")}
+			className="flex h-full flex-none items-center px-1.5"
+		>
 			<button
 				type="button"
 				onClick={() => zoom("out")}

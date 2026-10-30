@@ -67,6 +67,7 @@ import {
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
+import type { Marker } from "./file-tree.tsx";
 import { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 
 const DRAG_AFTER_PX = 4;
@@ -148,6 +149,15 @@ export interface SplitViewProps<T> {
 	};
 	footer?: (indicator: ReactNode) => ReactNode;
 	minWidth?: (content: T) => number;
+	anchors?: SplitAnchors;
+}
+
+interface SplitAnchors {
+	tab?: Marker;
+	tabClose?: Marker;
+	split?: Marker;
+	resize?: Marker;
+	panes?: Marker;
 }
 
 export function SplitView<T>({
@@ -160,6 +170,7 @@ export function SplitView<T>({
 	external,
 	footer,
 	minWidth,
+	anchors = {},
 }: SplitViewProps<T>) {
 	const { moved, entrance } = useEntrance(layout);
 	const outside = useNativeDrag(external?.type);
@@ -185,6 +196,7 @@ export function SplitView<T>({
 		maximized,
 		maximize,
 		minWidth,
+		anchors,
 	};
 	return (
 		<ExternalDrop.Provider value={accepts}>
@@ -202,7 +214,13 @@ export function SplitView<T>({
 						animated={animated}
 						placeholder={placeholder}
 					/>
-					{footer?.(<PageIndicator layout={layout} pager={pager} />)}
+					{footer?.(
+						<PageIndicator
+							layout={layout}
+							pager={pager}
+							anchor={anchors.panes}
+						/>,
+					)}
 				</div>
 				{dragged && (
 					<DragGhost label={tabLabel(dragged.content)} pointer={pointer} />
@@ -530,6 +548,7 @@ interface View<T> {
 	maximized: Maximized | null;
 	maximize: (maximized: Maximized | null) => void;
 	minWidth: ((content: T) => number) | undefined;
+	anchors: SplitAnchors;
 }
 
 function useColumnsInView(
@@ -575,9 +594,11 @@ function useColumnsInView(
 function PageIndicator<T>({
 	layout,
 	pager,
+	anchor,
 }: {
 	layout: SplitLayout<T>;
 	pager: RefObject<HTMLDivElement | null>;
+	anchor?: Marker;
 }) {
 	const root = layout.root;
 	const columns =
@@ -600,7 +621,11 @@ function PageIndicator<T>({
 		scroller.scrollTo({ left, behavior: "smooth" });
 	};
 	return (
-		<nav aria-label="panes" className="flex h-full items-center gap-1 px-2">
+		<nav
+			{...anchor}
+			aria-label="panes"
+			className="flex h-full items-center gap-1 px-2"
+		>
 			{columns.map((column, i) => (
 				<button
 					key={column.id}
@@ -725,7 +750,7 @@ function GroupView<T>({
 			}}
 		>
 			{split.children.map((child, i) => (
-				<Split key={child.id} first={i === 0}>
+				<Split key={child.id} first={i === 0} anchor={view.anchors.resize}>
 					<ResizablePanel
 						id={child.id}
 						defaultSize={`${split.sizes[i] ?? 100 / count}%`}
@@ -750,10 +775,18 @@ function minSizeOf<T>(
 	return floor > 0 ? floor : MIN_SPLIT;
 }
 
-function Split({ first, children }: { first: boolean; children: ReactNode }) {
+function Split({
+	first,
+	anchor,
+	children,
+}: {
+	first: boolean;
+	anchor?: Marker;
+	children: ReactNode;
+}) {
 	return (
 		<>
-			{!first && <ResizableHandle />}
+			{!first && <ResizableHandle {...anchor} />}
 			{children}
 		</>
 	);
@@ -769,6 +802,7 @@ function PaneView<T>({
 	entrance,
 	maximized,
 	maximize,
+	anchors,
 }: {
 	pane: Pane<T>;
 	layout: SplitLayout<T>;
@@ -779,6 +813,7 @@ function PaneView<T>({
 	entrance: (pane: Pane<T>) => string;
 	maximized: Maximized | null;
 	maximize: (maximized: Maximized | null) => void;
+	anchors: SplitAnchors;
 }) {
 	const axes = axesAround(layout.root, pane.id);
 	const enlarged = maximized?.pane === pane.id;
@@ -830,6 +865,7 @@ function PaneView<T>({
 							tab={tab}
 							drop={{ pane: pane.id, index }}
 							label={tabLabel(tab.content)}
+							anchors={anchors}
 							onClose={
 								tab.fixed ? undefined : () => onChange(closeTab(layout, tab.id))
 							}
@@ -839,6 +875,7 @@ function PaneView<T>({
 				</TabsList>
 				<DropdownMenu>
 					<DropdownMenuTrigger
+						{...anchors.split}
 						aria-label="split menu"
 						className="flex h-full flex-none cursor-pointer items-center px-1.5 text-dim hover:text-fg"
 					>
@@ -971,11 +1008,13 @@ function TabHandle<T>({
 	tab,
 	drop,
 	label,
+	anchors,
 	onClose,
 }: {
 	tab: Tab<T>;
 	drop: Drop;
 	label: string;
+	anchors: SplitAnchors;
 	onClose?: () => void;
 }) {
 	const drag = useDraggable({ id: tab.id, data: { tab } });
@@ -988,6 +1027,7 @@ function TabHandle<T>({
 		>
 			<InsertMark shown={target.over} />
 			<TabsTrigger
+				{...anchors.tab}
 				ref={drag.setNodeRef}
 				{...drag.listeners}
 				{...drag.attributes}
@@ -999,6 +1039,7 @@ function TabHandle<T>({
 			</TabsTrigger>
 			{onClose && (
 				<button
+					{...anchors.tabClose}
 					type="button"
 					aria-label={`close ${label}`}
 					onClick={onClose}

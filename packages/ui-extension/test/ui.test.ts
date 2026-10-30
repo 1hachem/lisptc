@@ -6,6 +6,7 @@ import { str } from "@repo/interpreter/print";
 import {
 	ANCHOR_IDS,
 	PAGE_IDS,
+	pointer,
 	TAGS,
 	tourStep,
 	widgetOf,
@@ -972,26 +973,66 @@ describe("tours", () => {
 		};
 	}
 
-	it("points at an anchor with one step that waits for a click", () => {
+	it("points at an anchor without starting a tour", () => {
 		const { tours, ev } = touring();
-		expect(ev('(ui/point "knowledge/upload" "Upload here")')).toBe(
-			'"point:knowledge/upload"',
-		);
-		expect(tours.tours.get("point:knowledge/upload")?.steps).toEqual([
-			{ anchor: "knowledge/upload", say: "Upload here", until: "click" },
+		expect(ev('(ui/point "knowledge/upload")')).toBe('"knowledge/upload"');
+		expect(tours.pointers).toEqual([
+			{
+				anchor: "knowledge/upload",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+			},
 		]);
+		expect(tours.tours.size).toBe(0);
+	});
+
+	it("carries the page a pointer opens once it is done", () => {
+		const { tours, ev } = touring();
+		ev('(ui/point "account" :open "account")');
+		expect(tours.pointers).toEqual([
+			{
+				anchor: "account",
+				mark: "arrow",
+				size: "medium",
+				click: true,
+				open: "account",
+			},
+		]);
+		for (const at of tours.pointers)
+			expect(pointer.safeParse(at).success).toBe(true);
+		expect(() => ev('(ui/point "account" :open "billing")')).toThrow(
+			/unknown page/,
+		);
+	});
+
+	it("names the buttons of a tour the agent labels", () => {
+		const { tours, ev } = touring();
+		ev(`(ui/tour "hello" '(:say "hi") :done "Got it" :skip "Later")`);
+		expect(tours.tours.get("hello")?.labels).toEqual({
+			done: "Got it",
+			skip: "Later",
+		});
+		ev(`(ui/tour "plain" '(:say "hi"))`);
+		expect(tours.tours.get("plain")?.labels).toBeUndefined();
+		expect(() => ev(`(ui/tour "t" '(:say "hi") :done 3)`)).toThrow(
+			/string expected for :done/,
+		);
+		expect(() => ev(`(ui/tour "t" '(:say "hi") :next "")`)).toThrow(
+			/string expected for :next/,
+		);
 	});
 
 	it("stores every step of a tour, each one valid against the catalog", () => {
 		const { tours, ev } = touring();
 		ev(`(ui/tour 'upload-files
 			'(:anchor knowledge/upload :say "Drop a PDF here" :until click)
-			'(:anchor "settings" :say "Your account lives here")
+			'(:anchor "account" :say "Your account lives here")
 			'(:say "Now ask me about it"))`);
 		const tour = tours.tours.get("upload-files");
 		expect(tour?.steps).toEqual([
 			{ anchor: "knowledge/upload", say: "Drop a PDF here", until: "click" },
-			{ anchor: "settings", say: "Your account lives here", until: "next" },
+			{ anchor: "account", say: "Your account lives here", until: "next" },
 			{ say: "Now ask me about it", until: "next" },
 		]);
 		for (const step of tour?.steps ?? [])
@@ -1000,7 +1041,7 @@ describe("tours", () => {
 
 	it("refuses an anchor the app does not mount", () => {
 		const { ev } = touring();
-		expect(() => ev('(ui/point "model-picker" "x")')).toThrow(/unknown anchor/);
+		expect(() => ev('(ui/point "model-picker")')).toThrow(/unknown anchor/);
 		expect(() => ev(`(ui/tour "t" '(:anchor "nowhere" :say "x"))`)).toThrow(
 			/unknown anchor/,
 		);
@@ -1085,10 +1126,55 @@ describe("tours", () => {
 			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
 		const example = prompt.slice(
 			prompt.indexOf('(ui/tour "upload-files"'),
-			prompt.indexOf("New tour or point"),
+			prompt.indexOf("New tour replaces"),
 		);
 		const { tours, ev } = touring();
 		ev(example);
 		expect(tours.tours.get("upload-files")?.steps).toHaveLength(2);
+	});
+
+	it("runs the pointer the prompt shows", () => {
+		const prompt =
+			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
+		const start = prompt.indexOf('(ui/point "account"');
+		const example = prompt.slice(start, prompt.indexOf("\n", start));
+		const { tours, ev } = touring();
+		ev(example);
+		expect(tours.pointers).toEqual([
+			{
+				anchor: "account",
+				mark: "arrow",
+				size: "medium",
+				click: true,
+				open: "account",
+			},
+		]);
+	});
+
+	it("draws an oval round its anchor when asked", () => {
+		const { tours, ev } = touring();
+		ev('(ui/point "composer" :mark "oval")');
+		expect(tours.pointers).toEqual([
+			{ anchor: "composer", mark: "oval", size: "medium", click: false },
+		]);
+		expect(pointer.safeParse(tours.pointers[0]).success).toBe(true);
+		expect(() => ev('(ui/point "composer" :mark "box")')).toThrow(
+			/unknown :mark/,
+		);
+		ev('(ui/point "composer" :mark "oval" :size "large")');
+		expect(tours.pointers.at(-1)).toEqual({
+			anchor: "composer",
+			mark: "oval",
+			size: "large",
+			click: false,
+		});
+		expect(() => ev('(ui/point "composer" :size "huge")')).toThrow(
+			/unknown :size/,
+		);
+		ev('(ui/point "account" :click t)');
+		expect(tours.pointers.at(-1)).toMatchObject({
+			anchor: "account",
+			click: true,
+		});
 	});
 });

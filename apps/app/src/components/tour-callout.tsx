@@ -1,4 +1,5 @@
 import { Button } from "@repo/ui";
+import type { TourLabels } from "@repo/ui-catalog";
 import { type CSSProperties, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -18,7 +19,7 @@ const CALLOUT_WIDTH = 288;
 
 const RING = 4;
 
-function pageZoom(): number {
+export function pageZoom(): number {
 	const zoom = (document.body as HTMLElement & { currentCSSZoom?: number })
 		.currentCSSZoom;
 	return typeof zoom === "number" && zoom > 0 ? zoom : 1;
@@ -40,7 +41,10 @@ function boxOf(element: Element): Box | undefined {
 	};
 }
 
-function useBox(element: Element | null | undefined): Box | undefined {
+export function useBox(
+	element: Element | null | undefined,
+	measureBox: (element: Element) => Box | undefined = boxOf,
+): Box | undefined {
 	const [box, setBox] = useState<Box | undefined>(undefined);
 	useEffect(() => {
 		if (element === undefined || element === null) {
@@ -49,13 +53,13 @@ function useBox(element: Element | null | undefined): Box | undefined {
 		}
 		let frame = 0;
 		const measure = () => {
-			const next = boxOf(element);
+			const next = measureBox(element);
 			setBox((held) => (sameBox(held, next) ? held : next));
 			frame = requestAnimationFrame(measure);
 		};
 		measure();
 		return () => cancelAnimationFrame(frame);
-	}, [element]);
+	}, [element, measureBox]);
 	return box;
 }
 
@@ -130,30 +134,41 @@ function calloutPosition(placement: Placement | undefined): CSSProperties {
 function Controls({
 	at,
 	count,
+	labels,
+	waitsOnClick,
 	showNext,
 	onNext,
 	onSkip,
 }: {
 	at: number;
 	count: number;
+	labels: TourLabels | undefined;
+	waitsOnClick: boolean;
 	showNext: boolean;
 	onNext: () => void;
 	onSkip: () => void;
 }) {
+	const single = count === 1;
+	const skip = labels?.skip ?? (single && !waitsOnClick ? undefined : "skip");
+	const finish = labels?.done ?? (single ? "got it" : "done");
 	return (
-		<div className="flex items-center gap-2">
-			<span className="text-dim">
-				{at + 1}/{count}
-			</span>
-			<Button
-				type="button"
-				size="sm"
-				variant="ghost"
-				className="ml-auto rounded-none"
-				onClick={onSkip}
-			>
-				skip
-			</Button>
+		<div className="flex items-center justify-end gap-2">
+			{!single && (
+				<span className="mr-auto text-dim">
+					{at + 1}/{count}
+				</span>
+			)}
+			{skip !== undefined && (
+				<Button
+					type="button"
+					size="sm"
+					variant="ghost"
+					className="rounded-none"
+					onClick={onSkip}
+				>
+					{skip}
+				</Button>
+			)}
 			{showNext && (
 				<Button
 					type="button"
@@ -162,7 +177,7 @@ function Controls({
 					className="rounded-none"
 					onClick={onNext}
 				>
-					{at + 1 >= count ? "done" : "next"}
+					{at + 1 >= count ? finish : (labels?.next ?? "next")}
 				</Button>
 			)}
 		</div>
@@ -173,6 +188,7 @@ export function TourCallout({
 	step,
 	at,
 	count,
+	labels,
 	element,
 	gaveUp,
 	onNext,
@@ -181,6 +197,7 @@ export function TourCallout({
 	step: CalloutStep;
 	at: number;
 	count: number;
+	labels?: TourLabels;
 	element: HTMLElement | undefined;
 	gaveUp: boolean;
 	onNext: () => void;
@@ -206,6 +223,8 @@ export function TourCallout({
 				<Controls
 					at={at}
 					count={count}
+					labels={labels}
+					waitsOnClick={step.until === "click" && box !== undefined}
 					showNext={step.until === "next" || box === undefined}
 					onNext={onNext}
 					onSkip={onSkip}

@@ -66,14 +66,22 @@ describe("removing a chat", () => {
 			tourId: "upload-files",
 			steps: [{ say: "hi", until: "next" }],
 		});
+		await alice.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.chats.remove, { chatId });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const left = await t.run(
-			async (ctx) => await ctx.db.query("tours").collect(),
-		);
+		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("tours").collect()),
+			...(await ctx.db.query("pointers").collect()),
+		]);
 		expect(left).toEqual([]);
 	});
 

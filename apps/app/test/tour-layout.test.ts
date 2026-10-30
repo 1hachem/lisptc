@@ -53,6 +53,8 @@ describe("revealing an anchor", () => {
 		const calls: string[] = [];
 		const revealer: Revealer = {
 			openSidebar: () => calls.push("sidebar"),
+			openRight: () => calls.push("right"),
+			openChat: () => calls.push("chat"),
 			openFolder: (folder) => calls.push(`folder:${folder}`),
 			openPage: (content: PanelContent) =>
 				calls.push(`page:${content.kind === "page" ? content.page : "?"}`),
@@ -70,6 +72,14 @@ describe("revealing an anchor", () => {
 		const { calls, revealer } = recorder();
 		reveal({ kind: "folder", folder: "knowledge" }, revealer);
 		expect(calls).toEqual(["sidebar", "folder:knowledge"]);
+	});
+
+	it("opens what hides one in the sidebar, the right sidebar or a chat", () => {
+		const { calls, revealer } = recorder();
+		reveal({ kind: "sidebar" }, revealer);
+		reveal({ kind: "right" }, revealer);
+		reveal({ kind: "chat" }, revealer);
+		expect(calls).toEqual(["sidebar", "right", "chat"]);
 	});
 
 	it("opens the page for one on a page", () => {

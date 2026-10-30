@@ -5,6 +5,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { WORKSPACE_ICONS, workspaceIcon } from "@repo/backend/workspace-icons";
 import { DEFAULT_CHOICE } from "@repo/shared/providers";
 import { Button, Input } from "@repo/ui";
+import { contentRegion } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
@@ -118,7 +119,10 @@ export function SettingsPage({
 	const model = workspace.model ?? DEFAULT_CHOICE;
 
 	return (
-		<div className="flex h-full min-w-0 flex-col gap-5 overflow-y-auto p-4 text-[11.5px]">
+		<div
+			{...contentRegion}
+			className="flex h-full min-w-0 flex-col gap-5 overflow-y-auto p-4 text-[11.5px]"
+		>
 			<Field label="name">
 				<NameField
 					key={workspace.name}

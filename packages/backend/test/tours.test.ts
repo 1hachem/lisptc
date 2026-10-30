@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
-import { TOUR_TTL_MS } from "../convex/limits.ts";
+import { POINTER_TTL_MS, TOUR_TTL_MS } from "../convex/limits.ts";
 import { harness, signIn } from "./helpers.ts";
 
 afterEach(() => {
@@ -35,7 +35,7 @@ async function touring() {
 		if (tour === null) throw new Error("no active tour");
 		return tour;
 	};
-	return { alice, chatId, start, active };
+	return { t, alice, chatId, start, active };
 }
 
 describe("a tour", () => {
@@ -95,6 +95,25 @@ describe("a tour", () => {
 		expect(await alice.as.query(api.tours.active, {})).toBeNull();
 	});
 
+	it("carries the button labels the agent gave", async () => {
+		const { alice, chatId, active } = await touring();
+		await alice.as.mutation(api.tours.start, {
+			chatId,
+			tourId: "hello",
+			steps: [{ say: "hi", until: "next" }],
+			labels: { done: "got it" },
+		});
+		expect((await active()).labels).toEqual({ done: "got it" });
+		await expect(
+			alice.as.mutation(api.tours.start, {
+				chatId,
+				tourId: "hello",
+				steps: [{ say: "hi", until: "next" }],
+				labels: { done: "" },
+			}),
+		).rejects.toThrow(/TOUR_INVALID/);
+	});
+
 	it("stops moving once it expired", async () => {
 		vi.useFakeTimers();
 		const { alice, start, active } = await touring();
@@ -103,5 +122,77 @@ describe("a tour", () => {
 		vi.advanceTimersByTime(TOUR_TTL_MS + 1);
 		await alice.as.mutation(api.tours.advance, { tour: tour._id, from: 0 });
 		expect(await alice.as.query(api.tours.active, {})).toBeNull();
+	});
+});
+
+describe("a pointer", () => {
+	it("shows the latest one, and only for a moment", async () => {
+		vi.useFakeTimers();
+		const { alice, chatId } = await touring();
+		expect(await alice.as.query(api.tours.pointer, {})).toBeNull();
+		await alice.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+		});
+		await alice.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "account",
+			mark: "oval",
+			size: "medium",
+			click: false,
+			open: "account",
+		});
+		expect(await alice.as.query(api.tours.pointer, {})).toMatchObject({
+			anchor: "account",
+			mark: "oval",
+			size: "medium",
+			click: false,
+			open: "account",
+		});
+		vi.advanceTimersByTime(POINTER_TTL_MS + 1);
+		expect(await alice.as.query(api.tours.pointer, {})).toBeNull();
+	});
+
+	it("leaves no row behind once it expired", async () => {
+		vi.useFakeTimers();
+		const { alice, chatId, t } = await touring();
+		await alice.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+		});
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("pointers").collect(),
+		);
+		expect(left).toEqual([]);
+	});
+
+	it("refuses an anchor or a page the app does not have", async () => {
+		const { alice, chatId } = await touring();
+		await expect(
+			alice.as.mutation(api.tours.point, {
+				chatId,
+				anchor: "nowhere",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+			}),
+		).rejects.toThrow(/POINTER_INVALID/);
+		await expect(
+			alice.as.mutation(api.tours.point, {
+				chatId,
+				anchor: "account",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+				open: "billing",
+			}),
+		).rejects.toThrow(/POINTER_INVALID/);
 	});
 });

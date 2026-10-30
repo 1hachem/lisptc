@@ -1,9 +1,9 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Question } from "@repo/interpreter/annotations";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { useAnchor } from "../lib/anchors.ts";
 import { attachingFiles } from "../lib/attached-files.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
@@ -81,10 +81,9 @@ export function ChatComposer({
 		[about, question, send, sendAbout],
 	);
 	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
-	const anchor = useAnchor<HTMLDivElement>("composer");
 
 	return (
-		<div ref={anchor}>
+		<div {...anchorOf("composer")}>
 			<ChatInput
 				placeholder={about ? `ask about ${about.path}` : "type a message"}
 				onSubmit={submit}

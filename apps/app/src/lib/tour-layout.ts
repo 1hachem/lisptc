@@ -1,4 +1,9 @@
-import { type AnchorLocation, type PageId, pages } from "@repo/ui-catalog";
+import {
+	type AnchorLocation,
+	type PageId,
+	pages,
+	type SidebarFolder,
+} from "@repo/ui-catalog";
 import type { PanelContent } from "./panel-ops.ts";
 
 export interface Box {
@@ -86,13 +91,24 @@ export function pageContent(page: PageId): PanelContent {
 
 export interface Revealer {
 	openSidebar(): void;
-	openFolder(folder: string): void;
+	openRight(): void;
+	openChat(): void;
+	openFolder(folder: SidebarFolder): void;
 	openPage(content: PanelContent): void;
 }
 
 export function reveal(location: AnchorLocation, revealer: Revealer): void {
 	switch (location.kind) {
 		case "shell":
+			return;
+		case "sidebar":
+			revealer.openSidebar();
+			return;
+		case "right":
+			revealer.openRight();
+			return;
+		case "chat":
+			revealer.openChat();
 			return;
 		case "folder":
 			revealer.openSidebar();

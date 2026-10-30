@@ -1,3 +1,4 @@
+import type { Pointer } from "@repo/ui-catalog";
 import type { StartedTour, TourStore } from "@repo/ui-extension";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
@@ -15,6 +16,13 @@ export class ConvexTourStore implements TourStore {
 		await this.connect().mutation(api.tours.start, {
 			chatId: this.chatId,
 			...tour,
+		});
+	}
+
+	async point(pointer: Pointer): Promise<void> {
+		await this.connect().mutation(api.tours.point, {
+			chatId: this.chatId,
+			...pointer,
 		});
 	}
 

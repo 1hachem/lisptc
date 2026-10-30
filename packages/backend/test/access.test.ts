@@ -395,6 +395,32 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
+	it("refuses pointing in another user's chat, and shows no one else's", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		await expect(
+			alice.as.mutation(api.tours.point, {
+				chatId,
+				anchor: "composer",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+			}),
+		).rejects.toThrow();
+		await bob.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+		});
+		expect(await alice.as.query(api.tours.pointer, {})).toBeNull();
+	});
+
 	it("marks a view expired until it is written again", async () => {
 		const t = harness();
 		const bob = await signIn(t, "bob@example.com");

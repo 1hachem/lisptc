@@ -15,12 +15,13 @@ import {
 	createContext,
 	type DragEvent,
 	type ReactNode,
-	type Ref,
 	useContext,
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
 import { useEntryDragged } from "./sortable-tree.tsx";
+
+export type Marker = Readonly<Record<string, string>>;
 
 const INDENT_REM = 0.875;
 
@@ -35,7 +36,8 @@ export function TreeFolder({
 	onToggle,
 	onCreate,
 	createLabel,
-	createRef,
+	toggleAnchor,
+	createAnchor,
 	depth = 0,
 	children,
 }: {
@@ -45,7 +47,8 @@ export function TreeFolder({
 	onToggle: () => void;
 	onCreate?: (() => void) | "disabled";
 	createLabel?: string;
-	createRef?: Ref<HTMLButtonElement>;
+	toggleAnchor?: Marker;
+	createAnchor?: Marker;
 	depth?: number;
 	children?: ReactNode;
 }) {
@@ -55,6 +58,7 @@ export function TreeFolder({
 		<div data-open={shown}>
 			<div className="group/folder flex items-center">
 				<button
+					{...toggleAnchor}
 					type="button"
 					onClick={onToggle}
 					style={indent(depth)}
@@ -68,7 +72,7 @@ export function TreeFolder({
 				</button>
 				{onCreate && (
 					<button
-						ref={createRef}
+						{...createAnchor}
 						type="button"
 						title={createLabel ?? `new in ${name}/`}
 						disabled={onCreate === "disabled"}
@@ -94,10 +98,12 @@ function CheckBox({
 	name,
 	check,
 	glyph,
+	anchor,
 }: {
 	name: string;
 	check: TreeCheck;
 	glyph: ReactNode;
+	anchor?: Marker;
 }) {
 	const box = (
 		<HugeiconsIcon
@@ -107,6 +113,7 @@ function CheckBox({
 	);
 	return (
 		<label
+			{...anchor}
 			className={`relative flex flex-none cursor-pointer items-center py-1 pr-1.5 has-[:focus-visible]:text-fg ${
 				check.checked ? "text-fg" : "text-dim hover:text-fg"
 			}`}
@@ -147,6 +154,8 @@ export function TreeFile({
 	trailing,
 	onDragStart,
 	check,
+	anchor,
+	checkAnchor,
 }: {
 	name: string;
 	icon?: IconSvgElement;
@@ -159,6 +168,8 @@ export function TreeFile({
 	trailing?: ReactNode;
 	onDragStart?: (event: DragEvent<HTMLElement>) => void;
 	check?: TreeCheck;
+	anchor?: Marker;
+	checkAnchor?: Marker;
 }) {
 	const mark = (
 		<span title={iconLabel} className="flex flex-none">
@@ -174,6 +185,7 @@ export function TreeFile({
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: the whole row is what drags into a panel, while its link stays the control a keyboard reaches
 		<div
+			{...anchor}
 			draggable={onDragStart !== undefined || undefined}
 			onDragStart={onDragStart}
 			onPointerDown={
@@ -188,7 +200,14 @@ export function TreeFile({
 			}`}
 		>
 			<div style={indent(depth)} className="flex min-w-0 flex-1">
-				{check && <CheckBox name={name} check={check} glyph={mark} />}
+				{check && (
+					<CheckBox
+						name={name}
+						check={check}
+						glyph={mark}
+						anchor={checkAnchor}
+					/>
+				)}
 				{link(
 					<>
 						{!check && mark}
@@ -252,6 +271,7 @@ export function TreeSelection({
 	onClear,
 	failure,
 	busy = false,
+	anchor,
 	children,
 }: {
 	count: number;
@@ -264,11 +284,13 @@ export function TreeSelection({
 	onClear: () => void;
 	failure?: string | null;
 	busy?: boolean;
+	anchor?: Marker;
 	children: ReactNode;
 }) {
 	const floating = useContext(SelectionHost);
 	const toolbar = (
 		<div
+			{...anchor}
 			role="toolbar"
 			aria-label={label}
 			className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 border border-bg2 bg-bg1 px-3 py-1.5 font-mono text-[11.5px] text-dim shadow-lg"
@@ -327,14 +349,17 @@ export function TreePending({
 export function TreeCommand({
 	name,
 	onRun,
+	anchor,
 	depth = 0,
 }: {
 	name: string;
 	onRun: () => void;
+	anchor?: Marker;
 	depth?: number;
 }) {
 	return (
 		<button
+			{...anchor}
 			type="button"
 			onClick={onRun}
 			title={`run ${name}`}
@@ -355,10 +380,12 @@ const blank = <span aria-hidden className="size-icon-sm flex-none" />;
 export function TreeGroup({
 	label,
 	check,
+	checkAnchor,
 	depth = 1,
 }: {
 	label: string;
 	check?: TreeCheck;
+	checkAnchor?: Marker;
 	depth?: number;
 }) {
 	return (
@@ -371,6 +398,7 @@ export function TreeGroup({
 					name={`everything from ${label}`}
 					check={check}
 					glyph={blank}
+					anchor={checkAnchor}
 				/>
 			) : (
 				<span className="pr-1.5">{blank}</span>
@@ -385,16 +413,19 @@ export function TreeFilter({
 	onChange,
 	label,
 	check,
+	anchor,
 	depth = 1,
 }: {
 	value: string;
 	onChange: (value: string) => void;
 	label: string;
 	check?: TreeCheck;
+	anchor?: Marker;
 	depth?: number;
 }) {
 	return (
 		<div
+			{...anchor}
 			style={indent(depth)}
 			className={`group/row flex items-center pr-1 ${check ? "" : "gap-1.5"}`}
 		>
@@ -417,13 +448,16 @@ export function TreeFilter({
 
 export function TreeMore({
 	onMore,
+	anchor,
 	depth = 1,
 }: {
 	onMore: () => void;
+	anchor?: Marker;
 	depth?: number;
 }) {
 	return (
 		<button
+			{...anchor}
 			type="button"
 			onClick={onMore}
 			style={indent(depth)}

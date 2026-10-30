@@ -1,4 +1,8 @@
-import { tourStep as wireStep } from "@repo/ui-catalog";
+import {
+	tourLabels as wireLabels,
+	pointer as wirePointer,
+	tourStep as wireStep,
+} from "@repo/ui-catalog";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
@@ -9,8 +13,8 @@ import {
 	query,
 } from "./_generated/server.js";
 import { requireChat, requireUser, requireUserOrThread } from "./lib/auth.js";
-import { TOUR_TTL_MS } from "./limits.js";
-import { tourStep } from "./schema.js";
+import { POINTER_TTL_MS, TOUR_TTL_MS } from "./limits.js";
+import { pointerMark, pointerSize, tourLabels, tourStep } from "./schema.js";
 
 const PURGE_BATCH = 256;
 
@@ -84,16 +88,18 @@ export const start = mutation({
 		chatId: v.id("chats"),
 		tourId: v.string(),
 		steps: v.array(tourStep),
+		labels: v.optional(tourLabels),
 		done: v.optional(v.string()),
 		skip: v.optional(v.string()),
 	},
 	returns: v.null(),
-	handler: async (ctx, { chatId, tourId, steps, done, skip }) => {
+	handler: async (ctx, { chatId, tourId, steps, labels, done, skip }) => {
 		const { user, chat } = await requireChat(ctx, chatId);
 		if (
 			steps.length === 0 ||
 			steps.length > MAX_STEPS ||
-			!steps.every((step) => wireStep.safeParse(step).success)
+			!steps.every((step) => wireStep.safeParse(step).success) ||
+			(labels !== undefined && !wireLabels.safeParse(labels).success)
 		)
 			throw new ConvexError({ code: "TOUR_INVALID" });
 		const row = await ctx.db
@@ -106,20 +112,21 @@ export const start = mutation({
 			steps,
 			current: 0,
 			status: "active" as const,
+			labels,
 			done,
 			skip,
 			expiresAt: Date.now() + TOUR_TTL_MS,
 		};
+		if (row !== null) await ctx.db.patch(row._id, fields);
 		const id =
-			row === null
-				? await ctx.db.insert("tours", {
-						workspaceId: chat.workspaceId,
-						chatId,
-						userId: user._id,
-						tourId,
-						...fields,
-					})
-				: (await ctx.db.patch(row._id, fields), row._id);
+			row?._id ??
+			(await ctx.db.insert("tours", {
+				workspaceId: chat.workspaceId,
+				chatId,
+				userId: user._id,
+				tourId,
+				...fields,
+			}));
 		await pauseActive(ctx, user._id, id);
 		return null;
 	},
@@ -134,6 +141,7 @@ export const active = query({
 			tourId: v.string(),
 			steps: v.array(tourStep),
 			current: v.number(),
+			labels: v.optional(tourLabels),
 			done: v.optional(v.string()),
 			skip: v.optional(v.string()),
 			expiresAt: v.number(),
@@ -150,8 +158,28 @@ export const active = query({
 			.order("desc")
 			.first();
 		if (row === null || row.expiresAt <= Date.now()) return null;
-		const { _id, chatId, tourId, steps, current, done, skip, expiresAt } = row;
-		return { _id, chatId, tourId, steps, current, done, skip, expiresAt };
+		const {
+			_id,
+			chatId,
+			tourId,
+			steps,
+			current,
+			labels,
+			done,
+			skip,
+			expiresAt,
+		} = row;
+		return {
+			_id,
+			chatId,
+			tourId,
+			steps,
+			current,
+			labels,
+			done,
+			skip,
+			expiresAt,
+		};
 	},
 });
 
@@ -182,6 +210,77 @@ export const skip = mutation({
 	},
 });
 
+export const point = mutation({
+	args: {
+		chatId: v.id("chats"),
+		anchor: v.string(),
+		mark: pointerMark,
+		size: pointerSize,
+		click: v.boolean(),
+		open: v.optional(v.string()),
+	},
+	returns: v.null(),
+	handler: async (ctx, { chatId, anchor, mark, size, click, open }) => {
+		const { user, chat } = await requireChat(ctx, chatId);
+		if (!wirePointer.safeParse({ anchor, mark, size, click, open }).success)
+			throw new ConvexError({ code: "POINTER_INVALID" });
+		const held = await ctx.db
+			.query("pointers")
+			.withIndex("by_user", (q) => q.eq("userId", user._id))
+			.collect();
+		for (const row of held) await ctx.db.delete(row._id);
+		const id = await ctx.db.insert("pointers", {
+			workspaceId: chat.workspaceId,
+			chatId,
+			userId: user._id,
+			anchor,
+			mark,
+			size,
+			click,
+			open,
+			expiresAt: Date.now() + POINTER_TTL_MS,
+		});
+		await ctx.scheduler.runAfter(POINTER_TTL_MS, internal.tours.forgetPointer, {
+			pointer: id,
+		});
+		return null;
+	},
+});
+
+export const forgetPointer = internalMutation({
+	args: { pointer: v.id("pointers") },
+	returns: v.null(),
+	handler: async (ctx, { pointer }) => {
+		if ((await ctx.db.get(pointer)) !== null) await ctx.db.delete(pointer);
+		return null;
+	},
+});
+
+export const pointer = query({
+	args: {},
+	returns: v.union(
+		v.object({
+			_id: v.id("pointers"),
+			anchor: v.string(),
+			mark: pointerMark,
+			size: pointerSize,
+			click: v.boolean(),
+			open: v.optional(v.string()),
+		}),
+		v.null(),
+	),
+	handler: async (ctx) => {
+		const user = await requireUser(ctx);
+		const row = await ctx.db
+			.query("pointers")
+			.withIndex("by_user", (q) => q.eq("userId", user._id))
+			.first();
+		if (row === null || row.expiresAt <= Date.now()) return null;
+		const { _id, anchor, mark, size, click, open } = row;
+		return { _id, anchor, mark, size, click, open };
+	},
+});
+
 export const finished = query({
 	args: { tourId: v.string() },
 	returns: v.boolean(),
@@ -206,7 +305,12 @@ export const purge = internalMutation({
 			.withIndex("by_chat_tour", (q) => q.eq("chatId", chatId))
 			.take(PURGE_BATCH);
 		for (const row of rows) await ctx.db.delete(row._id);
-		if (rows.length === PURGE_BATCH)
+		const pointers = await ctx.db
+			.query("pointers")
+			.withIndex("by_chat", (q) => q.eq("chatId", chatId))
+			.take(PURGE_BATCH);
+		for (const row of pointers) await ctx.db.delete(row._id);
+		if (rows.length === PURGE_BATCH || pointers.length === PURGE_BATCH)
 			await ctx.scheduler.runAfter(0, internal.tours.purge, { chatId });
 		return null;
 	},

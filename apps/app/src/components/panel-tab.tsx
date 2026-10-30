@@ -6,6 +6,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { GlyphCycle } from "@repo/components";
 import { Button } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { AgentProvider } from "../lib/agent.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
@@ -52,6 +53,7 @@ function SideTraceToggle() {
 	const open = control.trace.shown === "open";
 	return (
 		<Button
+			{...anchorOf("chat/trace")}
 			type="button"
 			variant="ghost"
 			size="icon-sm"

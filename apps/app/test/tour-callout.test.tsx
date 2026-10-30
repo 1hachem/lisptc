@@ -28,7 +28,10 @@ function shown(props: Partial<Parameters<typeof TourCallout>[0]>) {
 		),
 	);
 	const dialog = document.querySelector('[aria-label="tour"]');
-	return { dialog, close: () => act(() => root.unmount()) };
+	const buttons = [...(dialog?.querySelectorAll("button") ?? [])].map(
+		(button) => button.textContent,
+	);
+	return { dialog, buttons, close: () => act(() => root.unmount()) };
 }
 
 describe("the tour callout", () => {
@@ -48,5 +51,24 @@ describe("the tour callout", () => {
 		expect(dialog?.getAttribute("data-side")).toBe("center");
 		expect(dialog?.textContent).toContain("done");
 		close();
+	});
+
+	it("shows one button reading got it on a one-step tour", () => {
+		const { dialog, buttons, close } = shown({ count: 1 });
+		expect(buttons).toEqual(["got it"]);
+		expect(dialog?.textContent).not.toContain("1/1");
+		close();
+	});
+
+	it("reads the labels the agent gave its buttons", () => {
+		const first = shown({ labels: { next: "show me", skip: "later" } });
+		expect(first.buttons).toEqual(["later", "show me"]);
+		first.close();
+		const last = shown({ at: 1, labels: { done: "all set" } });
+		expect(last.buttons).toEqual(["skip", "all set"]);
+		last.close();
+		const single = shown({ count: 1, labels: { skip: "not now" } });
+		expect(single.buttons).toEqual(["not now", "got it"]);
+		single.close();
 	});
 });

@@ -115,23 +115,34 @@ auth", not a note, "user clicked search".
 **Showing user around the app**: point at part of the app itself, not a
 widget. Anchors, nothing else exists:
 {{anchors}}
-- (ui/point anchor text) spotlights anchor with callout until user clicks it.
-  (ui/point "knowledge/upload" "Upload PDF here")
-- (ui/tour id step...) walks user through steps, one at a time. Step is plist
+- (ui/point anchor [:open page] [:mark "oval"] [:size "small"] [:click t])
+  pointer on anchor few seconds, no overlay, no text. Say what it is in
+  your reply. :mark arrow (default) points at it; oval circles it. :size
+  small, medium (default) or large: pointer size, or how loose oval sits.
+  :click t shows pointer clicking anchor. :open: pointer clicks anchor,
+  then page opens beside chat, as if user clicked it. Returns anchor.
+- User asks where thing is, or asks to open page: ui/point its anchor with
+  :open first, never bare ui/open. User learns where it lives, then sees it.
+  Reply "Account settings live here, gear at bottom of sidebar." with
+  (ui/point "account" :open "account")
+- (ui/tour id step... [:next "next" :done "done" :skip "skip"]) walks user
+  through steps, one at a time. Step is plist
   (:anchor anchor :page page :say text :until next|click). No :anchor:
   callout in middle. :page opens that page beside chat as step starts, so
   anchor inside it is on screen. Anchor in closed folder or page: app
   reveals it first, no :page needed.
   :until next (default) waits for next button; click waits for click on
-  anchor, needs :anchor.
+  anchor, needs :anchor. :next :done :skip name buttons. One-step tour
+  shows only :done, "got it" unless named; :skip only when given.
 
   (ui/tour "upload-files"
     '(:anchor "knowledge/upload" :say "Drop PDF here" :until click)
     '(:say "Now ask me about it"))
 
-  New tour or point replaces one on screen. User may skip. Finish or skip
+  New tour replaces one on screen. User may skip. Finish or skip
   sends you message, "I finished the upload-files tour.", so you take next
   turn. New user message pauses tour; tours expire on their own.
 - (ui/tour-done? id) t if user finished tour before, any chat. Check before
   offering, do not replay finished tour unasked.
-- Use tour when user asks how to do something in app, not for chat content.
+- Point when user asks where thing is; tour when user asks how to do
+  something in app. Neither for chat content.

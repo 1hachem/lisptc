@@ -7,6 +7,7 @@ import {
 	YAW_MAX,
 } from "@repo/bloub";
 import { Typewriter } from "@repo/components";
+import { anchorOf } from "@repo/ui-catalog";
 import { useCallback, useEffect, useRef } from "react";
 import { type Utterance, useAgent } from "../lib/agent.tsx";
 import { usePrefersReducedMotion } from "../lib/motion.ts";
@@ -129,6 +130,7 @@ export function AgentAvatar({
 				{label}
 			</span>
 			<button
+				{...anchorOf("chat/avatar")}
 				type="button"
 				aria-label="poke the agent"
 				onClick={poke}

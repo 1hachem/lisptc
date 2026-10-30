@@ -1,4 +1,5 @@
 import { TreeAction, TreeSelection } from "@repo/components";
+import { anchorOf } from "@repo/ui-catalog";
 import { useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { eachOf, saveAs, type useSelection } from "../lib/file-list.ts";
@@ -53,6 +54,7 @@ export function BulkToolbar({
 
 	return (
 		<TreeSelection
+			anchor={anchorOf("files/bulk")}
 			count={names.length}
 			total={total}
 			label={`${picked} in ${folder}/`}

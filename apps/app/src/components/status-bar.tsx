@@ -3,6 +3,7 @@ import {
 	STATUS_BAR_SLOT_COUNT,
 	type StatusBarItem,
 } from "@repo/shared/status-bar";
+import { anchorOf } from "@repo/ui-catalog";
 import { type ReactNode, useEffect, useState } from "react";
 import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
@@ -67,7 +68,10 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 		clock: <Clock />,
 	};
 	return (
-		<footer className="h-row flex-none border-sidebar border-t bg-sidebar text-[11px] text-dim">
+		<footer
+			{...anchorOf("status-bar")}
+			className="h-row flex-none border-sidebar border-t bg-sidebar text-[11px] text-dim"
+		>
 			<SortableTree
 				order={order}
 				onReorder={reorder}

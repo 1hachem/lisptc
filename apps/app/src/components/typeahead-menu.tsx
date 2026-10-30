@@ -3,6 +3,7 @@ import {
 	type MenuOption,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { cn } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import {
 	type ReactNode,
 	type RefObject,
@@ -153,7 +154,10 @@ export function TypeaheadMenu<T extends MenuOption>({
 				const selected =
 					selectedIndex === null ? undefined : options[selectedIndex];
 				return createPortal(
-					<div className="flex w-full flex-col border-b border-bg2 bg-bg1 font-mono text-[13px]">
+					<div
+						{...anchorOf("composer/menu")}
+						className="flex w-full flex-col border-b border-bg2 bg-bg1 font-mono text-[13px]"
+					>
 						<div
 							role="listbox"
 							className="flex max-h-menu flex-col overflow-y-auto py-1"
