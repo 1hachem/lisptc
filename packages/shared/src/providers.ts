@@ -21,16 +21,11 @@ export interface ModelEntry {
 export const PROVIDER_CATALOG = {
 	digitalocean: {
 		label: "DigitalOcean",
-		models: [
-			{ id: "gemma-4-31B-it", name: "Gemma 4 31B" },
-			{ id: "anthropic-claude-5.5-haiku", name: "Claude Haiku 5.5" },
-			{ id: "glm-5.3-flash", name: "GLM-5.3 Flash" },
-		],
+		models: [{ id: "glm-5.3-flash", name: "GLM-5.3 Flash" }],
 	},
 	openrouter: {
 		label: "OpenRouter",
 		models: [
-			{ id: "google/gemma-4-31b-it", name: "Gemma 4 31B" },
 			{ id: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5" },
 			{ id: "openai/gpt-6-luna", name: "GPT-6 Luna" },
 			{

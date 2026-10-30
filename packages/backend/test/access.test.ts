@@ -269,7 +269,7 @@ describe("workspace theme", () => {
 describe("workspace model", () => {
 	const model = {
 		provider: "openrouter",
-		model: "google/gemma-4-31b-it",
+		model: "deepseek/deepseek-v4.1-flash-1017",
 	} as const;
 
 	it("has none until one is chosen", async () => {

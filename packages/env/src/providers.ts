@@ -13,7 +13,7 @@ const providersEnv = createEnv({
 		LLM_PROVIDER: z.enum(PROVIDER_NAMES).default(DEFAULT_PROVIDER),
 		DO_API_KEY: z.string().optional(),
 		DO_BASE_URL: z.url().default("https://inference.do-ai.run/v1"),
-		DO_MODEL: z.string().default("gemma-4-31B-it"),
+		DO_MODEL: z.string().default("glm-5.3-flash"),
 		OPENROUTER_API_KEY: z.string().optional(),
 		OPENROUTER_BASE_URL: z.url().default("https://openrouter.ai/api/v1"),
 		OPENROUTER_MODEL: z.string().default("anthropic/claude-haiku-5.5"),
