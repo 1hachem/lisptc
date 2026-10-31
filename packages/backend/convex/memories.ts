@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
-import { MAX_MEMORIES, MAX_MEMORY_BYTES } from "./limits.js";
+import { MAX_ASKS_MEMORIES, MAX_MEMORIES, MAX_MEMORY_BYTES } from "./limits.js";
 
 const PURGE_BATCH = 256;
 
@@ -51,6 +51,10 @@ export const get = query({
 	},
 });
 
+function judged(on: string | undefined): boolean {
+	return on?.startsWith("(asks ") ?? false;
+}
+
 export const put = mutation({
 	args: { workspaceId: v.id("workspaces"), memory: v.object(stored) },
 	returns: v.null(),
@@ -66,15 +70,22 @@ export const put = mutation({
 				q.eq("workspaceId", workspaceId).eq("key", memory.key),
 			)
 			.unique();
+		const owned = async () =>
+			await ctx.db
+				.query("memories")
+				.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+				.take(MAX_MEMORIES);
+		if (judged(memory.on) && !judged(existing?.on)) {
+			const asking = (await owned()).filter((m) => judged(m.on));
+			if (asking.length >= MAX_ASKS_MEMORIES) {
+				throw new ConvexError({ code: "TOO_MANY_ASKS_MEMORIES" });
+			}
+		}
 		if (existing !== null) {
 			await ctx.db.replace(existing._id, { workspaceId, ...memory });
 			return null;
 		}
-		const owned = await ctx.db
-			.query("memories")
-			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-			.take(MAX_MEMORIES);
-		if (owned.length >= MAX_MEMORIES) {
+		if ((await owned()).length >= MAX_MEMORIES) {
 			throw new ConvexError({ code: "TOO_MANY_MEMORIES" });
 		}
 		await ctx.db.insert("memories", { workspaceId, ...memory });

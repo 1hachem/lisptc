@@ -1,6 +1,6 @@
 import { agentsExtension, subAgentExtension } from "@repo/agents-extension";
 import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
-import type { Threads } from "@repo/ai";
+import { appliesJudge, openRouterSystemOne, type Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -101,6 +101,7 @@ export async function workspaceExtensions(
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
+		judge: appliesJudge(openRouterSystemOne()),
 	});
 	const workspace = workspaceExtension(
 		workspaceHostFor({
