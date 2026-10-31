@@ -157,7 +157,7 @@ function LifetimeFrame({ span, view }: { span: Span; view: Pulls }) {
 }
 
 function LifetimeFinding({ rows }: { rows: PullRow[] }) {
-	const longest = [...rows]
+	const longest = rows
 		.filter((row) => row.hours !== null)
 		.sort((a, b) => (b.hours ?? 0) - (a.hours ?? 0))[0];
 	const fattest = [...rows].sort(

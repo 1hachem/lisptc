@@ -2,7 +2,7 @@ import { topic } from "@repo/interpreter/channels";
 import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
-import type { ModelDelta } from "@repo/interpreter/session";
+import type { ConversationEntry, ModelDelta } from "@repo/interpreter/session";
 import {
 	annotating,
 	type InterpExtension,
@@ -13,7 +13,7 @@ import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
+import type { TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
 import {
 	asking,
@@ -319,10 +319,6 @@ describe("the agent turn", () => {
 		await drain(history);
 
 		expect(seen[0].messages[0].content).toBe("hello\n\nyou are a pirate");
-		expect(snapshotConversation(history)["user-messages"]).toEqual([
-			"hello",
-			"what is 1 + 2?",
-		]);
 	});
 
 	test("a steer taken between steps reaches the next model call after the tool result", async () => {
@@ -546,6 +542,167 @@ describe("the agent turn", () => {
 		expect(events.find((e) => e.type === "assistant")).toMatchObject({
 			code: "(+ 2 2)",
 		});
+	});
+
+	test("an admitted rewrite is the code shown and run", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
+		const ran: string[] = [];
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) =>
+					next(interp, code.replace("(+ 1 2)", "(+ 2 2)")),
+				);
+				hooks.evalStep.use(async (ctx, next) => {
+					ran.push(ctx.code);
+					await next(ctx);
+				});
+			}),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(events.find((e) => e.type === "assistant")).toMatchObject({
+			code: "(+ 2 2)",
+			written: { text: "(+ 1 2)" },
+		});
+		expect(ran[0]).toBe("(+ 2 2)");
+	});
+
+	test("the model reads back what it wrote, and the repair it ran", async () => {
+		script = [[{ text: "(close-parens)" }], [{ text: "done." }]];
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) =>
+					code === "(close-parens)"
+						? {
+								code: "(+ 1 2)",
+								because: "edited the code the check stopped",
+								from: "(+ 1 2",
+							}
+						: next(interp, code),
+				);
+			}),
+		]);
+
+		await drain(ask, { repl });
+
+		const [assistant, tool] = seen[1].messages.slice(-2);
+		expect(assistant).toMatchObject({
+			role: "assistant",
+			content: "(close-parens)",
+		});
+		expect(JSON.parse(String(tool.content)).output).toMatch(
+			/^edited: \(\+ 1 2\)\n/,
+		);
+	});
+
+	test("a rejected step never runs and the model reads why", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+		const ran: string[] = [];
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) =>
+					code.startsWith("(")
+						? { code, rejected: "line 1: not checked" }
+						: next(interp, code),
+				);
+				hooks.evalStep.use(async (ctx, next) => {
+					ran.push(ctx.code);
+					await next(ctx);
+				});
+			}),
+		]);
+
+		const events = await drain(ask, { repl });
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"result",
+			"delta",
+			"assistant",
+			"halt",
+		]);
+		expect(events.find((e) => e.type === "result")).toMatchObject({
+			step: 1,
+			output: "line 1: not checked",
+			error: true,
+			failed: true,
+			rejected: true,
+		});
+		expect(ran.filter((code) => code.startsWith("("))).toEqual([]);
+		expect(JSON.parse(String(seen[1].messages.at(-1)?.content))).toEqual({
+			type: "tool_result",
+			source: "lisp-check",
+			error: true,
+			output: "line 1: not checked",
+		});
+	});
+
+	test("every entry the conversation grows by is recorded in order", async () => {
+		script = [
+			[{ text: "(+ 1 2)" }],
+			[{ text: "(car 5)" }],
+			[{ text: "done." }],
+		];
+		const recorded: ConversationEntry[] = [];
+		let rejecting = true;
+		const repl = testRepl([
+			extension((hooks) => {
+				hooks.admit.use(async (interp, code, next) => {
+					if (!rejecting) return next(interp, code);
+					rejecting = false;
+					return {
+						code,
+						rejected: "line 1: not checked",
+						problems: [{ line: 1, message: "not checked" }],
+					};
+				});
+				hooks.recorded.use((interp, entry, next) => {
+					recorded.push(entry);
+					next(interp, entry);
+				});
+			}),
+		]);
+
+		await drain(
+			[
+				{ role: "assistant", content: "earlier" },
+				{ role: "user", content: "heads up", event: { source: "cron" } },
+				...ask,
+			],
+			{ repl },
+		);
+
+		expect(recorded).toEqual([
+			{ role: "system", content: "heads up" },
+			{ role: "user", content: "what is 1 + 2?" },
+			{ role: "assistant", content: "(+ 1 2)" },
+			{
+				role: "tool",
+				content: "line 1: not checked",
+				problems: [{ line: 1, message: "not checked" }],
+			},
+			{ role: "assistant", content: "(car 5)" },
+			{
+				role: "tool",
+				content: expect.stringContaining("list expected: 5"),
+			},
+			{ role: "assistant", content: "done." },
+		]);
+	});
+
+	test("a hook that rejects every step still stops at the cap", async () => {
+		script = [[{ text: "(+ 1 2)" }]];
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.admit.use(async (_interp, code) => ({ code, rejected: "no" })),
+			),
+		]);
+
+		const events = await drain(ask, { repl, maxSteps: 2 });
+
+		expect(events.at(-1)).toEqual({ type: "capped", steps: 2 });
 	});
 
 	test("a hook can keep the turn going past an answer", async () => {

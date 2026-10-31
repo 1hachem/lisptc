@@ -26,7 +26,7 @@ export const memorySearchEngine: SearchEngine = {
 			idField: "id",
 			extractField: fieldText,
 		});
-		index.addAll([...documents]);
+		index.addAll(documents);
 		return index
 			.search(query, {
 				prefix: (term) => term.length >= MIN_PREFIX,

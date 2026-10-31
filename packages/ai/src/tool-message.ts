@@ -1,6 +1,6 @@
-import type { StepAnnotations } from "@repo/interpreter/session";
+import type { Problem, StepAnnotations } from "@repo/interpreter/session";
 import type { MessageKwargs } from "@repo/shared/messages";
-import { replResultContent } from "./repl.ts";
+import { checkResultContent, replResultContent } from "./repl.ts";
 
 export interface ToolMessage {
 	type: "tool";
@@ -19,6 +19,8 @@ export interface ToolOutcome {
 	results: readonly string[];
 	annotations: StepAnnotations;
 	quiet?: boolean;
+	rejected?: true;
+	problems?: readonly Problem[];
 }
 
 export function toolMessage(outcome: ToolOutcome, id: string): ToolMessage {
@@ -31,7 +33,9 @@ export function toolMessage(outcome: ToolOutcome, id: string): ToolMessage {
 	if (outcome.quiet) extras.quiet = true;
 	return {
 		type: "tool",
-		content: replResultContent(outcome.output, outcome.error),
+		content: outcome.rejected
+			? checkResultContent(outcome.output, outcome.problems)
+			: replResultContent(outcome.output, outcome.error),
 		id,
 		...(Object.keys(extras).length > 0 ? { additional_kwargs: extras } : {}),
 	};

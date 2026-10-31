@@ -3,16 +3,22 @@ import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
 import type { Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
+import { conversationExtension } from "@repo/conversation-extension";
+import { conversationHost } from "@repo/conversation-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
 import { diagnosticsHost } from "@repo/diagnostics-extension/host";
 import { intentExtension } from "@repo/intent-extension";
 import { intentHost } from "@repo/intent-extension/host";
 import type { Image } from "@repo/interpreter/image";
-import type { InterpExtension } from "@repo/interpreter/session";
+import type {
+	ConversationEntry,
+	InterpExtension,
+} from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
 import { knowledgeExtension } from "@repo/knowledge-extension";
 import { knowledgeHostFor } from "@repo/knowledge-extension/host";
+import { lintExtension } from "@repo/lint-extension";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
@@ -28,6 +34,8 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import { recoveryExtension } from "@repo/recovery-extension";
+import { recoveryHost } from "@repo/recovery-extension/host";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
@@ -72,12 +80,17 @@ const themeChoices = themes.map((theme) => ({
 
 export type ChildRecord = Infer<typeof subAgent>;
 
+export interface ChildSeed {
+	readonly image?: Image;
+	readonly conversation: readonly ConversationEntry[];
+}
+
 export interface Supervisor {
 	readonly threads: Threads;
 	spawn(
 		parent: Id<"chats">,
 		agent: ChildRecord,
-		image?: Image,
+		seed: ChildSeed,
 	): Promise<Id<"chats">>;
 	copyTranscript(from: Id<"chats">, to: Id<"chats">): Promise<void>;
 	child(parent: Id<"chats">, name: string): Promise<Id<"chats"> | undefined>;
@@ -193,6 +206,9 @@ export async function workspaceExtensions(
 		knowledge,
 		preferences,
 		proseExtension(proseHost),
+		conversationExtension(conversationHost),
+		recoveryExtension(recoveryHost),
+		lintExtension(),
 		ui,
 		intentExtension(intentHost),
 		diagnosticsExtension(diagnosticsHost),

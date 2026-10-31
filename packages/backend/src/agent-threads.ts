@@ -39,11 +39,15 @@ export class SupervisedAgents implements AgentThreads {
 			...(roster === undefined ? {} : { roster: [...roster] }),
 			...(budget === undefined ? {} : { budget }),
 		};
-		const image = seed.from === "fork" ? seed.image : undefined;
+		const conversation = chat.from === "fork" ? chat.entries : [];
+		const childSeed =
+			seed.from === "fork"
+				? { image: seed.image, conversation }
+				: { conversation };
 		const child = (await this.supervisor.threads.spawn(
 			this.parent,
 			name,
-			() => this.supervisor.spawn(this.parent, record, image),
+			() => this.supervisor.spawn(this.parent, record, childSeed),
 			budget === undefined ? undefined : { steps: budget },
 		)) as Id<"chats">;
 		this.children.set(name, child);

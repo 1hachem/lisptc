@@ -7,6 +7,7 @@ import {
 	DashboardSquare01Icon,
 	HelpCircleIcon,
 	InformationCircleIcon,
+	PencilEdit02Icon,
 	UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
@@ -16,6 +17,7 @@ export type ChannelId =
 	| "ui"
 	| "attachments"
 	| "thinking"
+	| "edits"
 	| "memory"
 	| "asks"
 	| "model"
@@ -58,6 +60,13 @@ export const CHANNELS: Channel[] = [
 		label: "thinking",
 		hint: "what the model reasoned before it answered",
 		text: "text-blue",
+	},
+	{
+		id: "edits",
+		icon: PencilEdit02Icon,
+		label: "edits",
+		hint: "what a step was written as, when it ran as something else",
+		text: "text-yellow",
 	},
 	{
 		id: "memory",

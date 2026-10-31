@@ -53,6 +53,10 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
 ```
   packages/compaction     @repo/compaction-extension. Bounded output, so a
                           large result never floods the context.
+  packages/conversation   @repo/conversation-extension. The conversation as
+                          data the agent reads and extensions consume.
+  packages/lint           @repo/lint-extension. The static check: what is
+                          wrong with source before it runs.
   packages/llm            @repo/llm-extension. The language model as a
                           callable value.
   packages/mcp            @repo/mcp-extension. MCP servers, their tools, and
@@ -63,6 +67,8 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
                           synchronous evaluator.
   packages/prose          @repo/prose-extension. The prose the model writes
                           around its forms.
+  packages/recovery       @repo/recovery-extension. Repairing a step the
+                          check stopped, by editing it instead of rewriting.
   packages/secrets        @repo/secrets-extension. The secret registry, with
                           taint-tracked redaction.
   packages/ui-extension   @repo/ui-extension. Widgets the agent renders to a

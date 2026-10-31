@@ -3,7 +3,11 @@ import { extract, type Image, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
-import type { ChildRecord, Supervisor } from "../../src/agent-repl.ts";
+import type {
+	ChildRecord,
+	ChildSeed,
+	Supervisor,
+} from "../../src/agent-repl.ts";
 import { SupervisedAgents } from "../../src/agent-threads.ts";
 
 const PARENT = "parent-1" as Id<"chats">;
@@ -14,7 +18,7 @@ function world() {
 	const seen = {
 		limits: [] as unknown[],
 		titles: [] as string[],
-		records: [] as { agent: ChildRecord; image?: Image }[],
+		records: [] as ({ agent: ChildRecord } & ChildSeed)[],
 		copied: [] as [string, string][],
 		asked: [] as unknown[][],
 		cancelled: [] as string[],
@@ -56,8 +60,8 @@ function world() {
 	} as unknown as Threads;
 	const supervisor: Supervisor = {
 		threads,
-		spawn: async (_parent, agent, image) => {
-			seen.records.push(image === undefined ? { agent } : { agent, image });
+		spawn: async (_parent, agent, seed) => {
+			seen.records.push({ agent, ...seed });
 			return CHILD;
 		},
 		copyTranscript: async (from, to) => {
@@ -100,6 +104,7 @@ describe("the agent threads adapter", () => {
 					roster: ["scout"],
 					budget: 12,
 				},
+				conversation: [],
 			},
 		]);
 		expect(seen.titles).toEqual(["lead"]);
@@ -113,9 +118,12 @@ describe("the agent threads adapter", () => {
 		await agents.spawn({
 			definition: { name: "s", prompt: "p" },
 			seed: { from: "fork", image },
-			chat: { from: "fork" },
+			chat: { from: "fork", entries: [{ role: "user", content: "hi" }] },
 		});
 		expect(seen.records[0]?.image).toBe(image);
+		expect(seen.records[0]?.conversation).toEqual([
+			{ role: "user", content: "hi" },
+		]);
 		expect(seen.copied).toEqual([[PARENT, CHILD]]);
 	});
 

@@ -25,11 +25,27 @@ describe("arityOf", () => {
 		expect(interp.arityOf("f")).toEqual({ min: 1, max: undefined });
 	});
 
+	it("does not count optional keyword slots as required", () => {
+		const interp = freshInterp();
+		runSync(interp, "(defun kpi (&key label value unit) label)");
+		expect(interp.arityOf("kpi")).toEqual({ min: 0, max: 3 });
+	});
+
 	it("is undefined for a name that holds no function", () => {
 		const interp = freshInterp();
 		runSync(interp, "(setq n 1)");
 		expect(interp.arityOf("n")).toBeUndefined();
 		expect(interp.arityOf("no-such-name")).toBeUndefined();
+	});
+});
+
+describe("isMacro", () => {
+	it("tells a macro from a function and from an unbound name", () => {
+		const interp = freshInterp();
+		runSync(interp, "(setq m (macro (x) x))");
+		expect(interp.isMacro("m")).toBe(true);
+		expect(interp.isMacro("car")).toBe(false);
+		expect(interp.isMacro("no-such-name")).toBe(false);
 	});
 });
 

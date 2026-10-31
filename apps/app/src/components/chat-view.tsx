@@ -69,6 +69,7 @@ import {
 } from "../lib/turn-groups.ts";
 import { placeTimeline, type TimelineEntry } from "../lib/turn-timeline.ts";
 import { useUI } from "../lib/ui.tsx";
+import { messageWritten } from "../lib/written.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { AskCard } from "./ask-card.tsx";
 import { AttachedFiles } from "./attached-files.tsx";
@@ -81,6 +82,7 @@ import { SteerQueue } from "./steer-queue.tsx";
 import { TodoCard } from "./todo-card.tsx";
 import { CallTimeline, ProgressBar } from "./turn-intent.tsx";
 import { UserLine } from "./user-line.tsx";
+import { WrittenAs } from "./written-as.tsx";
 
 const CHAT_FOLD = { lines: 25, chars: Number.POSITIVE_INFINITY };
 const TRACE_FOLD = { lines: 6, chars: 480 };
@@ -355,12 +357,20 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
+	const written = shown.edits ? messageWritten(message) : undefined;
 	return (
 		<div className="min-w-0 break-words text-fg">
 			{reasoning && (
 				<div className="mb-2">
 					<Marked id="thinking">
 						<ChannelText text={reasoning} tone="text-dim italic" />
+					</Marked>
+				</div>
+			)}
+			{written && (
+				<div className="mb-2">
+					<Marked id="edits">
+						<WrittenAs written={written} ran={messageText(message)} />
 					</Marked>
 				</div>
 			)}

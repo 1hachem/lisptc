@@ -3,6 +3,7 @@ import {
 	recordActivity,
 } from "@repo/interpreter/annotations";
 import { topic } from "@repo/interpreter/channels";
+import { conversationSlot } from "@repo/interpreter/conversation";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { implant, snapshot } from "@repo/interpreter/image";
@@ -20,7 +21,11 @@ import {
 import { keyName } from "@repo/interpreter/plist";
 import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
-import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import type {
+	ConversationEntry,
+	InterpExtension,
+	SessionHooks,
+} from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
@@ -86,11 +91,23 @@ function reportActivity(hooks: SessionHooks): void {
 }
 
 export function agentsExtension(host: AgentsHost): AgentsExtension {
-	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
-		prompt: host.prompt(),
-		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
-		session: reportActivity,
-	});
+	let session: SessionHooks | undefined;
+	return Object.assign(
+		(interp: Interp): void =>
+			registerAgents(
+				interp,
+				host,
+				(of) => session?.filled(conversationSlot)?.entries(of) ?? [],
+			),
+		{
+			prompt: host.prompt(),
+			asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
+			session(hooks: SessionHooks): void {
+				session = hooks;
+				reportActivity(hooks);
+			},
+		},
+	);
 }
 
 export function subAgentExtension(host: SubAgentHost): InterpExtension {
@@ -207,9 +224,14 @@ function seedOf(interp: Interp, value: unknown): ReplSeed {
 	throw new EvalException("spawn: :repl is :fresh or :fork", value);
 }
 
-function chatOf(value: unknown): ChatSeed {
+function chatOf(
+	interp: Interp,
+	value: unknown,
+	conversation: Transcript,
+): ChatSeed {
 	const from = value === undefined ? "fresh" : nameOf("spawn", value);
-	if (from === "fresh" || from === "fork") return { from };
+	if (from === "fresh") return { from };
+	if (from === "fork") return { from, entries: conversation(interp) };
 	throw new EvalException("spawn: :chat is :fresh or :fork", value);
 }
 
@@ -246,7 +268,13 @@ function definitionFrom(
 
 const DEFINE_KEYS = ["prompt", "roster", "budget"];
 
-export function registerAgents(interp: Interp, host: AgentsHost): void {
+type Transcript = (interp: Interp) => readonly ConversationEntry[];
+
+export function registerAgents(
+	interp: Interp,
+	host: AgentsHost,
+	conversation: Transcript,
+): void {
 	const handles = new Handles(
 		interp.state(
 			"agents/spawned",
@@ -431,7 +459,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 					name,
 				);
 			const seed = seedOf(interp, options.get("repl"));
-			const chat = chatOf(options.get("chat"));
+			const chat = chatOf(interp, options.get("chat"), conversation);
 			const definition = await definitionOf(name, options);
 			const port = threads("spawn");
 			const child = await port.spawn({ definition, seed, chat });

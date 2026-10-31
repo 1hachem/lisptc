@@ -51,6 +51,8 @@ describe("diagnosticsForCalls", () => {
 			start: { line: 0, character: 1 },
 			end: { line: 0, character: 9 },
 		});
+		expect(diagnostics[0].severity).toBe("error");
+		expect(diagnostics[0].code).toBe("missing-argument");
 	});
 
 	it("does not flag a call that supplies every required :arg", () => {
@@ -74,6 +76,7 @@ describe("diagnosticsForCalls", () => {
 			new Map([["car", { arity: { min: 1, max: 1 } }]]),
 		);
 		expect(diagnostics[0].message).toBe("car: expected 1 argument, got 0");
+		expect(diagnostics[0].code).toBe("arity");
 	});
 
 	it("flags a positional binding called with too many arguments", () => {
@@ -194,7 +197,7 @@ describe("diagnosticsForCalls", () => {
 describe("callDiagnostics", () => {
 	it("checks every call in the text against the docs it is given", () => {
 		const diagnostics = callDiagnostics(
-			"(foo) (foo :bar 1) (baz)",
+			'(foo) (foo :bar "x") (baz)',
 			new Map([
 				["foo", { args: [{ name: "bar", type: "string", required: true }] }],
 			]),
@@ -203,5 +206,20 @@ describe("callDiagnostics", () => {
 		expect(diagnostics[0].message).toBe(
 			'foo: missing required argument ":bar"',
 		);
+	});
+
+	it("flags a literal keyword argument of the wrong type", () => {
+		const diagnostics = callDiagnostics(
+			"(foo :bar 1)",
+			new Map([
+				["foo", { args: [{ name: "bar", type: "string", required: true }] }],
+			]),
+		);
+		expect(diagnostics).toEqual([
+			expect.objectContaining({
+				code: "type",
+				message: "foo: :bar takes a string, got 1",
+			}),
+		]);
 	});
 });

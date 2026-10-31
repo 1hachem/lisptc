@@ -340,6 +340,7 @@ class TurnWire {
 			id: event.stepId,
 			additional_kwargs: {
 				...(event.reasoning ? { reasoning_content: event.reasoning } : {}),
+				...(event.written ? { written: event.written } : {}),
 				prose: event.prose,
 				meta: this.lastMeta,
 			},
