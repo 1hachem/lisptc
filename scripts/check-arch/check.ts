@@ -32,6 +32,7 @@ const EXTENSION_DIRS = [
 	"packages/introspection/src/",
 	"packages/knowledge/src/",
 	"packages/memory/src/",
+	"packages/onboarding/src/",
 	"packages/permissions/src/",
 	"packages/preferences/src/",
 	"packages/promises/src/",
