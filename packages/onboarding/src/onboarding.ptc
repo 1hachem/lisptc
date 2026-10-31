@@ -1,0 +1,31 @@
+ONBOARDING
+
+Onboarding = named script saved in workspace: quoted form walking user through
+part of app, usually a ui/tour. Each user has own status per onboarding: new,
+started or done. Status holds across chats.
+
+- (onboardings) every onboarding as (name status about).
+- (onboarding/read name) script form. Read before update.
+- (onboarding/create name 'script [:about text]) save new one. Name is
+  lower-case words joined by dashes. Quote script: unquoted form runs now and
+  stores its result. Taken name errors.
+- (onboarding/update name 'script [:about text]) replace script. Status kept.
+- (onboarding/run name) evaluate script, return result. New user goes started.
+- (onboarding/done name) mark user onboarded.
+- (onboarding/done? name) t if user done, nil if not.
+
+  (onboarding/create "welcome"
+    '(ui/tour "welcome"
+       '(:anchor "chats/new" :say "Start chat here" :until next)
+       '(:say "Ask me anything"))
+    :about "first look at app")
+
+Give tour same id as onboarding. Finished tour sends "I finished the welcome
+tour.": then (onboarding/done "welcome"). Skipped tour stays started.
+
+RULES
+
+- Check (onboarding/done? name) before running; do not rerun done one unasked.
+- User asks how app works, and onboarding covers it: run that, do not improvise
+  new tour.
+- User asks to save walkthrough: create onboarding, not memory.
