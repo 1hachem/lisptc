@@ -36,6 +36,19 @@ export interface ChatLine {
 	text: string;
 }
 
+export interface ChatSearch {
+	text: string;
+	limit: number;
+	except?: string;
+}
+
+export interface ChatHit {
+	chatId: string;
+	title: string;
+	role: string;
+	text: string;
+}
+
 export interface WorkspaceStore {
 	settings(): Awaitable<Settings>;
 	rename(name: string): Awaitable<void>;
@@ -47,6 +60,7 @@ export interface WorkspaceStore {
 	archive(chatId: string): Awaitable<void>;
 	unarchive(chatId: string): Awaitable<void>;
 	transcript(chatId: string): Awaitable<ChatLine[]>;
+	search(query: ChatSearch): Awaitable<ChatHit[]>;
 }
 
 export interface WorkspaceHost {
@@ -120,6 +134,23 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
 
 	transcript(chatId: string): ChatLine[] {
 		return this.chat(chatId).lines;
+	}
+
+	search({ text, limit, except }: ChatSearch): ChatHit[] {
+		const wanted = text.toLowerCase();
+		return this.chatsHeld
+			.filter((chat) => chat.id !== except)
+			.flatMap((chat) =>
+				chat.lines
+					.filter((line) => line.text.toLowerCase().includes(wanted))
+					.map((line) => ({
+						chatId: chat.id,
+						title: chat.title,
+						role: line.role,
+						text: line.text,
+					})),
+			)
+			.slice(0, limit);
 	}
 
 	private chat(chatId: string): HeldChat {

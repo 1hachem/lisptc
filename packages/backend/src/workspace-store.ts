@@ -1,9 +1,11 @@
 import { CATALOGUED_CHOICES, DEFAULT_CHOICE } from "@repo/shared/providers";
 import { defaultThemeId, themes } from "@repo/ui/themes";
 import type {
+	ChatHit,
 	ChatLine,
 	ChatPage,
 	ChatQuery,
+	ChatSearch,
 	Settings,
 	WorkspaceStore,
 } from "@repo/workspace-extension/ports";
@@ -126,5 +128,14 @@ export class ConvexWorkspaceStore implements WorkspaceStore {
 			role: message.type,
 			text: message.content,
 		}));
+	}
+
+	async search({ text, limit, except }: ChatSearch): Promise<ChatHit[]> {
+		return await this.connect().query(api.messages.search, {
+			workspaceId: this.workspaceId,
+			text,
+			limit,
+			exceptChatId: except as Id<"chats"> | undefined,
+		});
 	}
 }
