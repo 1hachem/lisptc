@@ -24,9 +24,12 @@ sidebar; every change shows there at once.
   (chat/unarchive id) puts one back in sidebar.
 - (chat/read id :last 10) gives another chat's last messages as (role . text).
   User approves it: it brings whole other conversation into this one.
+- (chat/search "redirect loop" :limit 5) finds messages of other chats by
+  their words, best match first, as (:id id :title title :role role :text
+  excerpt). User approves it. Then (chat/read id) for more of that chat.
 
 GOTCHAS
 
-- Ids come from (chats), or (chats :archived t) for archived ones. Never guess
-  one.
+- Ids come from (chats), (chats :archived t) or (chat/search "…"). Never
+  guess one.
 - Cannot archive current chat.

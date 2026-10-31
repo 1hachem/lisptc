@@ -70,6 +70,20 @@ describe("the convex workspace store", () => {
 		expect(`${choice.provider}/${choice.model}`).toBe(model);
 	});
 
+	it("searches the workspace's messages, leaving out the chat it is in", async () => {
+		const { client, sent } = spyClient({ [named(api.messages.search)]: [] });
+		const store = new ConvexWorkspaceStore(WORKSPACE, () => client);
+		expect(
+			await store.search({ text: "login", limit: 5, except: "c1" }),
+		).toEqual([]);
+		expect(sent).toEqual([
+			[
+				named(api.messages.search),
+				{ workspaceId: WORKSPACE, text: "login", limit: 5, exceptChatId: "c1" },
+			],
+		]);
+	});
+
 	it("refuses a model the catalogue does not hold", async () => {
 		const { client, sent } = spyClient({});
 		const store = new ConvexWorkspaceStore(WORKSPACE, () => client);

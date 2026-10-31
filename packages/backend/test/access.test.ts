@@ -349,6 +349,18 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
+	it("refuses searching the messages of another user's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await expect(
+			alice.as.query(api.messages.search, {
+				workspaceId: bob.workspace,
+				text: "secret",
+			}),
+		).rejects.toThrow();
+	});
+
 	it("refuses reading or writing a view of another user's chat", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -622,6 +634,72 @@ describe("messages", () => {
 				kwargs: { added: 1 },
 			}),
 		).rejects.toThrow(/MESSAGE_NOT_FOUND/);
+	});
+
+	it("searches what was said in the workspace's chats, skipping tool output, the chat asked from and sub-agents", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const login = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "login",
+		});
+		const here = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+			title: "here",
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: login,
+			messages: [
+				{ type: "human", content: "why does the redirect loop" },
+				{ type: "tool", content: "redirect redirect redirect" },
+				{
+					type: "ai",
+					content: `${"x ".repeat(100)}the redirect drops a cookie`,
+				},
+			],
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: here,
+			messages: [{ type: "human", content: "find the redirect chat" }],
+		});
+		const child = await alice.as.mutation(api.chats.spawn, {
+			chatId: login,
+			agent: { name: "r", prompt: "dig", bounds: [] },
+		});
+		await alice.as.mutation(api.messages.append, {
+			chatId: child,
+			messages: [{ type: "human", content: "trace the redirect" }],
+		});
+		const hits = await alice.as.query(api.messages.search, {
+			workspaceId: alice.workspace,
+			text: "redirect",
+			exceptChatId: here,
+		});
+		expect(
+			hits.map(({ chatId, title, role }) => ({ chatId, title, role })),
+		).toEqual(
+			expect.arrayContaining([
+				{ chatId: login, title: "login", role: "human" },
+				{ chatId: login, title: "login", role: "ai" },
+			]),
+		);
+		expect(hits).toHaveLength(2);
+		expect(hits.find((h) => h.role === "ai")?.text).toMatch(
+			/^…x .*the redirect drops a cookie$/,
+		);
+		expect(
+			await alice.as.query(api.messages.search, {
+				workspaceId: alice.workspace,
+				text: "redirect",
+				limit: 1,
+			}),
+		).toHaveLength(1);
+		expect(
+			await alice.as.query(api.messages.search, {
+				workspaceId: alice.workspace,
+				text: "  ",
+			}),
+		).toEqual([]);
 	});
 
 	it("stamps the chat with its last activity", async () => {

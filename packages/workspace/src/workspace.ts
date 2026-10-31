@@ -14,6 +14,7 @@ import type { InterpExtension } from "@repo/interpreter/session";
 import { z } from "zod";
 import type {
 	ChatEntry,
+	ChatHit,
 	Settings,
 	ThemeChoice,
 	WorkspaceHost,
@@ -22,9 +23,11 @@ import type {
 const SETTINGS_SET = "settings/set";
 const CHAT_ARCHIVE = "chat/archive";
 const CHAT_READ = "chat/read";
+const CHAT_SEARCH = "chat/search";
 
 const DEFAULT_CHATS = 20;
 const DEFAULT_LINES = 20;
+const DEFAULT_HITS = 10;
 
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
@@ -72,6 +75,15 @@ function chatList(chat: ChatEntry): List {
 	return plist([
 		["id", chat.id],
 		["title", chat.title],
+	]);
+}
+
+function hitList(hit: ChatHit): List {
+	return plist([
+		["id", hit.chatId],
+		["title", hit.title],
+		["role", hit.role],
+		["text", hit.text],
 	]);
 }
 
@@ -302,13 +314,40 @@ export function registerWorkspace(interp: Interp, host: WorkspaceHost): void {
 			);
 		},
 	);
+
+	interp.defGen(
+		CHAT_SEARCH,
+		-1,
+		'(chat/search "…" [:limit n])',
+		"Find the messages of the workspace's other chats that hold these words, best match first, as a list of (:id id :title title :role role :text excerpt). The user approves it first.",
+		z.tuple([zList]),
+		function* ([rest]): Eval {
+			const { values, options } = splitKeywordArgs(rest, ["limit"]);
+			const wanted = text(
+				"search text",
+				values instanceof Cell ? values.car : undefined,
+			);
+			const hits = yield* settled(
+				store.search({
+					text: wanted,
+					limit: count(
+						"limit",
+						plistOptions(options, ["limit"]).get("limit"),
+						DEFAULT_HITS,
+					),
+					except: host.chatId,
+				}),
+			);
+			return arrayToList(hits.map(hitList));
+		},
+	);
 }
 
 export function workspaceExtension(host: WorkspaceHost): WorkspaceExtension {
 	return Object.assign(
 		(interp: Interp): void => registerWorkspace(interp, host),
 		{
-			asks: [SETTINGS_SET, CHAT_ARCHIVE, CHAT_READ],
+			asks: [SETTINGS_SET, CHAT_ARCHIVE, CHAT_READ, CHAT_SEARCH],
 			prompt: host.prompt(),
 		},
 	);

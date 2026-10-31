@@ -40,6 +40,7 @@ describe("the agent the app serves", () => {
 			"settings/set",
 			"chat/archive",
 			"chat/read",
+			"chat/search",
 			"knowledge/write",
 			"knowledge/delete",
 			"knowledge/keep",

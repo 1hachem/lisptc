@@ -215,7 +215,11 @@ export default defineSchema({
 		.index("by_chat_seq", ["chatId", "seq"])
 		.index("by_chat_wire", ["chatId", "wireId"])
 		.index("by_workspace_type", ["workspaceId", "type"])
-		.index("by_layer", ["layerId"]),
+		.index("by_layer", ["layerId"])
+		.searchIndex("search_content", {
+			searchField: "content",
+			filterFields: ["workspaceId"],
+		}),
 
 	secrets: defineTable({
 		workspaceId: v.id("workspaces"),

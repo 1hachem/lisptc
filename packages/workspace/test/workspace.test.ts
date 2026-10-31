@@ -158,10 +158,31 @@ describe("chats", () => {
 			'(("ai" . "second") ("human" . "third"))',
 		);
 	});
+
+	it("finds the messages of other chats by their words", async () => {
+		const { ev } = await world("c1");
+		expect(await ev('(chat/search "Redirect")')).toBe(
+			'((:id "c2" :title "plan q4" :role "human" :text "why does the login redirect loop"))',
+		);
+		expect(await ev('(chat/search "ir" :limit 1)')).toBe(
+			'((:id "c2" :title "plan q4" :role "human" :text "why does the login redirect loop"))',
+		);
+		expect(await ev('(length (chat/search "ir"))')).toBe("3");
+	});
+
+	it("leaves the chat it is in out of a search", async () => {
+		const { ev } = await world("c2");
+		expect(await ev('(chat/search "redirect")')).toBe("nil");
+	});
+
+	it("refuses an empty search", async () => {
+		const { ev } = await world();
+		await expect(ev('(chat/search "  ")')).rejects.toThrow(/non-empty/);
+	});
 });
 
 describe("what waits on the user", () => {
-	it("asks before changing settings, archiving or reading another chat", async () => {
+	it("asks before changing settings, archiving, or reading or searching other chats", async () => {
 		const { store } = await world();
 		const extension = workspaceExtension(
 			workspaceHostFor({ store, models: MODELS, icons: ICONS, themes: THEMES }),
@@ -170,6 +191,7 @@ describe("what waits on the user", () => {
 			"settings/set",
 			"chat/archive",
 			"chat/read",
+			"chat/search",
 		]);
 	});
 });

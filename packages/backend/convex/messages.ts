@@ -19,6 +19,16 @@ import { messageType } from "./schema.js";
 
 const MAX_SENT = 200;
 
+const SEARCH_PAGE = 10;
+
+const MAX_SEARCH = 50;
+
+const SEARCH_SCAN = 4;
+
+const EXCERPT_BEFORE = 80;
+
+const EXCERPT_AFTER = 160;
+
 const PURGE_BATCH = 256;
 
 const message = v.object({
@@ -112,6 +122,70 @@ export const sent = query({
 			.order("desc")
 			.take(MAX_SENT);
 		return rows.reverse().map((row) => row.content);
+	},
+});
+
+function excerpt(content: string, term: string): string {
+	const flat = content.replace(/\s+/g, " ").trim();
+	const lower = flat.toLowerCase();
+	const found = term
+		.toLowerCase()
+		.split(/\s+/)
+		.map((word) => (word === "" ? -1 : lower.indexOf(word)))
+		.filter((at) => at >= 0);
+	const at = found.length === 0 ? 0 : Math.min(...found);
+	const start = Math.max(0, at - EXCERPT_BEFORE);
+	const end = Math.min(flat.length, at + EXCERPT_AFTER);
+	return `${start > 0 ? "…" : ""}${flat.slice(start, end)}${end < flat.length ? "…" : ""}`;
+}
+
+const hit = v.object({
+	chatId: v.id("chats"),
+	title: v.string(),
+	role: messageType,
+	text: v.string(),
+});
+
+export const search = query({
+	args: {
+		workspaceId: v.id("workspaces"),
+		text: v.string(),
+		limit: v.optional(v.number()),
+		exceptChatId: v.optional(v.id("chats")),
+	},
+	returns: v.array(hit),
+	handler: async (ctx, { workspaceId, text, limit, exceptChatId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const term = text.trim();
+		if (term === "") return [];
+		const wanted = Math.min(
+			Math.max(1, Math.floor(limit ?? SEARCH_PAGE)),
+			MAX_SEARCH,
+		);
+		const rows = await ctx.db
+			.query("messages")
+			.withSearchIndex("search_content", (q) =>
+				q.search("content", term).eq("workspaceId", workspaceId),
+			)
+			.take(wanted * SEARCH_SCAN);
+		const chats = new Map<Id<"chats">, Doc<"chats"> | null>();
+		const hits: Infer<typeof hit>[] = [];
+		for (const row of rows) {
+			if (hits.length === wanted) break;
+			if (row.type !== "human" && row.type !== "ai") continue;
+			if (row.chatId === exceptChatId) continue;
+			if (!chats.has(row.chatId))
+				chats.set(row.chatId, await ctx.db.get(row.chatId));
+			const chat = chats.get(row.chatId);
+			if (chat == null || chat.parentChatId !== undefined) continue;
+			hits.push({
+				chatId: row.chatId,
+				title: chat.title,
+				role: row.type,
+				text: excerpt(row.content, term),
+			});
+		}
+		return hits;
 	},
 });
 
