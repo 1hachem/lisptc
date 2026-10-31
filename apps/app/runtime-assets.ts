@@ -20,6 +20,7 @@ export const PROMPT_ROOTS = [
 	rootOf(require.resolve("@repo/llm-extension/llm-extension")),
 	rootOf(require.resolve("@repo/mcp-extension")),
 	rootOf(require.resolve("@repo/memory-extension")),
+	rootOf(require.resolve("@repo/onboarding-extension")),
 	rootOf(require.resolve("@repo/permissions-extension")),
 	rootOf(require.resolve("@repo/preferences-extension")),
 	rootOf(require.resolve("@repo/promises-extension")),

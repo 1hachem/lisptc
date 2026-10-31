@@ -143,6 +143,7 @@ export function isPage(id: string): id is PageId {
 export const SIDEBAR_FOLDERS = [
 	"chat",
 	"memories",
+	"onboarding",
 	"permissions",
 	"knowledge",
 	"attachments",
@@ -210,6 +211,7 @@ export const anchors = {
 		inFolder("chat"),
 	),
 	memories: anchor("sidebar folder memories: what agent remembers", SHELL),
+	onboarding: anchor("sidebar folder onboarding: app walkthroughs", SHELL),
 	permissions: anchor("sidebar folder permissions: what agent may call", SHELL),
 	knowledge: anchor("sidebar folder knowledge: files user uploaded", SHELL),
 	"knowledge/upload": anchor("+ on knowledge folder: upload files", SIDEBAR),

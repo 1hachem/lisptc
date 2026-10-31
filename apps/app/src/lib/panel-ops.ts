@@ -10,7 +10,13 @@ import { PAGE_IDS } from "@repo/ui-catalog";
 
 export type Folder = "attachments" | "knowledge";
 
-const PAGES = [...PAGE_IDS, "memory", "permission", "bin"] as const;
+const PAGES = [
+	...PAGE_IDS,
+	"memory",
+	"onboarding",
+	"permission",
+	"bin",
+] as const;
 
 export type Page = (typeof PAGES)[number];
 

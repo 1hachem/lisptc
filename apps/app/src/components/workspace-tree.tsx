@@ -10,6 +10,7 @@ import {
 	Home01Icon,
 	InformationCircleIcon,
 	PaintBoardIcon,
+	Route01Icon,
 	Settings02Icon,
 	ShieldKeyIcon,
 	StickyNote01Icon,
@@ -64,6 +65,7 @@ const PLACEHOLDERS = [
 const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	chat: BubbleChatIcon,
 	memories: StickyNote01Icon,
+	onboarding: Route01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
 	attachments: Attachment01Icon,
@@ -78,6 +80,7 @@ const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 const FOLDER_ANCHORS: Record<SidebarFolder, AnchorMark> = {
 	chat: anchorOf("chats"),
 	memories: anchorOf("memories"),
+	onboarding: anchorOf("onboarding"),
 	permissions: anchorOf("permissions"),
 	knowledge: anchorOf("knowledge"),
 	attachments: anchorOf("attachments"),
@@ -109,6 +112,15 @@ export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
 
 function memoryPage(key: string): PanelContent {
 	return { kind: "page", page: "memory", id: key, title: `memories/${key}` };
+}
+
+function onboardingPage(name: string): PanelContent {
+	return {
+		kind: "page",
+		page: "onboarding",
+		id: name,
+		title: `onboarding/${name}`,
+	};
 }
 
 function permissionPage(index: number, name: string): PanelContent {
@@ -186,6 +198,36 @@ function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 				/>
 			}
 			link={linkTo(memory.workspaceId, page)}
+		/>
+	);
+}
+
+function OnboardingFile({ onboarding }: { onboarding: Doc<"onboardings"> }) {
+	const removeOnboarding = useConvexMutation(api.onboardings.remove);
+	const shown = useShown();
+	const page = onboardingPage(onboarding.name);
+
+	return (
+		<TreeFile
+			anchor={FOLDER_ANCHORS.onboarding}
+			name={onboarding.name}
+			depth={1}
+			selected={shown(page)}
+			onDragStart={dragsAs(page)}
+			trailing={
+				<FileMenu
+					name={onboarding.name}
+					confirm="drop this onboarding?"
+					onDelete={async () => {
+						requestPanelClosed(page);
+						await removeOnboarding({
+							workspaceId: onboarding.workspaceId,
+							name: onboarding.name,
+						});
+					}}
+				/>
+			}
+			link={linkTo(onboarding.workspaceId, page)}
 		/>
 	);
 }
@@ -290,6 +332,9 @@ export function WorkspaceTree({
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
+	const { data: onboardings } = useQuery(
+		convexQuery(api.onboardings.list, { workspaceId }),
+	);
 
 	const { shown, reorder } = useSidebarOrder();
 	const { motion } = useSidebarMotion();
@@ -321,6 +366,15 @@ export function WorkspaceTree({
 			<TreeFolder {...folder("memories")}>
 				<Listing items={memories} empty="no memories yet">
 					{(memory) => <MemoryFile key={memory._id} memory={memory} />}
+				</Listing>
+			</TreeFolder>
+		),
+		onboarding: () => (
+			<TreeFolder {...folder("onboarding")}>
+				<Listing items={onboardings} empty="no onboarding yet">
+					{(onboarding) => (
+						<OnboardingFile key={onboarding._id} onboarding={onboarding} />
+					)}
 				</Listing>
 			</TreeFolder>
 		),

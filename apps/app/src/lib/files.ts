@@ -23,6 +23,18 @@ export function memorySource(
 	return `${lines.join("\n")})`;
 }
 
+export function onboardingSource(
+	onboarding: Pick<Doc<"onboardings">, "name" | "about" | "script">,
+): string {
+	const lines = [
+		`(onboarding/create ${quoted(onboarding.name)}`,
+		`  '${onboarding.script}`,
+	];
+	if (onboarding.about !== "")
+		lines.push(`  :about ${quoted(onboarding.about)}`);
+	return `${lines.join("\n")})`;
+}
+
 export function fileContext(file: OpenFile, text: string): string {
 	const fence = "```";
 	return `about \`${file.path}\`:\n${fence}${file.language ?? "lisp"}\n${file.source}\n${fence}\n\n${text}`;
