@@ -57,6 +57,22 @@ describe("extensions", () => {
 	it("carries only the language reference with no extension", () => {
 		expect(freshInterp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
 	});
+
+	it("collects the built-in memories each extension carries, in order, out of the prompt", () => {
+		const first: Installable = Object.assign(() => {}, {
+			memories: '(memory "a")\nfirst',
+		});
+		const bare: Installable = () => {};
+		const second: Installable = Object.assign(() => {}, {
+			memories: '(memory "b")\nsecond',
+		});
+		const interp = freshInterp({ extensions: [first, bare, second] });
+		expect(interp.builtinMemories()).toEqual([
+			'(memory "a")\nfirst',
+			'(memory "b")\nsecond',
+		]);
+		expect(interp.systemPrompt()).toBe(LANGUAGE_REFERENCE);
+	});
 });
 
 describe("the language reference", () => {

@@ -129,6 +129,7 @@ export interface Contents {
 export interface Installable {
 	(interp: Interp): void;
 	readonly prompt?: string;
+	readonly memories?: string;
 }
 
 export interface InterpOptions {
@@ -194,6 +195,8 @@ export class Interp {
 
 	private readonly prompts: string[] = [];
 
+	private readonly memories: string[] = [];
+
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);
 	}
@@ -256,11 +259,16 @@ export class Interp {
 		for (const extension of options.extensions ?? []) {
 			extension(this);
 			if (extension.prompt) this.prompts.push(extension.prompt);
+			if (extension.memories) this.memories.push(extension.memories);
 		}
 	}
 
 	systemPrompt(): string {
 		return [LANGUAGE_REFERENCE, ...this.prompts].join("\n\n");
+	}
+
+	builtinMemories(): readonly string[] {
+		return this.memories;
 	}
 
 	def<T extends z.ZodType>(
