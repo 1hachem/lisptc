@@ -44,6 +44,11 @@ export const pointerSize = v.union(
 	v.literal("large"),
 );
 
+export const onboardingStatus = v.union(
+	v.literal("started"),
+	v.literal("done"),
+);
+
 export const tourStatus = v.union(
 	v.literal("active"),
 	v.literal("paused"),
@@ -112,6 +117,7 @@ export const panelContent = v.union(
 		kind: v.literal("page"),
 		page: v.union(
 			v.literal("memory"),
+			v.literal("onboarding"),
 			v.literal("permission"),
 			v.literal("readme"),
 			v.literal("settings"),
@@ -386,6 +392,22 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_server", ["workspaceId", "serverKey"])
 		.index("by_pending_state", ["pendingState"]),
+
+	onboardings: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		about: v.string(),
+		script: v.string(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"]),
+
+	onboardingProgress: defineTable({
+		onboardingId: v.id("onboardings"),
+		userId: v.id("users"),
+		status: onboardingStatus,
+		at: v.number(),
+	}).index("by_onboarding_user", ["onboardingId", "userId"]),
 
 	memories: defineTable({
 		workspaceId: v.id("workspaces"),

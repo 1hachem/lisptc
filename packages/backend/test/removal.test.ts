@@ -408,6 +408,8 @@ async function remaining(t: TestConvex<typeof schema>) {
 		replLayers: await ctx.db.query("replLayers").collect(),
 		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
+		onboardings: await ctx.db.query("onboardings").collect(),
+		onboardingProgress: await ctx.db.query("onboardingProgress").collect(),
 		sources: await ctx.db.query("sources").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
@@ -427,6 +429,8 @@ const nothing = {
 	replLayers: [],
 	replLayerChunks: [],
 	memories: [],
+	onboardings: [],
+	onboardingProgress: [],
 	sources: [],
 	secrets: [],
 	oauthRecords: [],
@@ -487,7 +491,7 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
+	it("takes its memories, onboardings, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.sources.put, {
@@ -521,6 +525,15 @@ describe("deleting an account", () => {
 		await alice.as.mutation(api.permissions.put, {
 			workspaceId: alice.workspace,
 			source: "(permission/deny eval)",
+		});
+		await alice.as.mutation(api.onboardings.put, {
+			workspaceId: alice.workspace,
+			onboarding: { name: "doomed", about: "", script: "(+ 1 2)" },
+		});
+		await alice.as.mutation(api.onboardings.mark, {
+			workspaceId: alice.workspace,
+			name: "doomed",
+			status: "done",
 		});
 		await t.run(async (ctx) => {
 			await ctx.db.insert("memories", {
