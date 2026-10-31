@@ -48,6 +48,8 @@ export function finishAuthorization(
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
+const mcpMemories = filePrompt(new URL("./mcp.memories.ptc", import.meta.url));
+
 function desktopParts(
 	presence: () => Promise<boolean>,
 ): Pick<McpExtensionHost, "toolkit" | "machine"> {
@@ -70,6 +72,7 @@ export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 			: desktopParts(options.desktop)),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
+		memories: mcpMemories,
 		clock: systemClock,
 	};
 }
