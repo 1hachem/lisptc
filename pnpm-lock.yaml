@@ -770,6 +770,9 @@ importers:
       posthog-node:
         specifier: ^5.51.6
         version: 5.51.6
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@repo/journal-catalog':
         specifier: workspace:*
