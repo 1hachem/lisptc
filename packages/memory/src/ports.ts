@@ -9,10 +9,12 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
+import { Reader } from "@repo/interpreter/reader";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 import type { SearchEngine } from "@repo/shared/search";
 
 export const INITIAL_SCORE = 1;
+export const LINKED_FIRES_AT = 2;
 
 export const TRIGGER_KINDS = [
 	"call",
@@ -23,6 +25,7 @@ export const TRIGGER_KINDS = [
 	"user",
 	"recall",
 	"start",
+	"asks",
 ] as const;
 
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
@@ -103,6 +106,11 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 			value.car,
 		);
 	const rest = value.cdr;
+	if (rest === null && kind === "asks")
+		throw new EvalException(
+			'an asks trigger says in words when the memory applies: write (asks "user wants to automate a browser")',
+			value,
+		);
 	if (rest === null) return { kind };
 	if (!(rest instanceof Cell))
 		throw new EvalException("trigger pattern expected after the kind", rest);
@@ -115,6 +123,11 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 	if (kind === "call" && typeof pattern === "string")
 		throw new EvalException(
 			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',
+			pattern,
+		);
+	if (kind === "asks" && typeof pattern !== "string")
+		throw new EvalException(
+			"an asks trigger is judged against what the user said, so its pattern is one string describing when it applies",
 			pattern,
 		);
 	if (kind !== "call" && !isTextPattern(pattern))
@@ -184,9 +197,79 @@ export function formToMemory(form: unknown): Memory | undefined {
 	};
 }
 
+const BUILTIN_HEADER = /^\(memory\s/;
+
+function builtinHeader(line: string, body: string): Memory {
+	const reader = new Reader();
+	reader.push(line);
+	const form = reader.read();
+	if (
+		!(form instanceof Cell) ||
+		!(form.car instanceof Sym) ||
+		form.car.name !== "memory"
+	)
+		throw new EvalException(
+			'a built-in memory opens with a header line, (memory "key" :on (kind "pattern") :links ("key"...)), and its body is the text below it',
+			line,
+		);
+	const rest = form.cdr;
+	if (!(rest instanceof Cell) || typeof rest.car !== "string")
+		throw new EvalException("a built-in memory needs a string key", line);
+	if (body === "")
+		throw new EvalException("a built-in memory needs a body", rest.car);
+	const opts = plistOptions(rest.cdr as List, ["on", "links"]);
+	const links = new Map<string, number>();
+	for (const linked of listToArray((opts.get("links") ?? null) as List)) {
+		if (typeof linked !== "string")
+			throw new EvalException("a link is the key of another memory", linked);
+		links.set(linked, LINKED_FIRES_AT);
+	}
+	return {
+		key: rest.car,
+		body,
+		on: parseTrigger(opts.get("on")),
+		links,
+		score: INITIAL_SCORE,
+		used: 0,
+		lastUsed: 0,
+	};
+}
+
+export function readBuiltins(source: string): Memory[] {
+	const memories: Memory[] = [];
+	let header: string | undefined;
+	let body: string[] = [];
+	const close = (): void => {
+		if (header !== undefined)
+			memories.push(builtinHeader(header, body.join("\n").trim()));
+	};
+	for (const line of source.split("\n")) {
+		if (BUILTIN_HEADER.test(line)) {
+			close();
+			header = line;
+			body = [];
+		} else if (header !== undefined) body.push(line);
+		else if (line.trim() !== "")
+			throw new EvalException(
+				"text before the first (memory ...) header belongs to no memory",
+				line,
+			);
+	}
+	close();
+	return memories;
+}
+
+export type MemoryJudge = (
+	message: string,
+	asks: readonly string[],
+) => Awaitable<ReadonlyMap<string, number>>;
+
+export const unjudged: MemoryJudge = () => new Map();
+
 export interface MemoryHost {
 	store: MemoryStore;
 	clock: Clock;
 	prompt: PromptSource;
 	search: SearchEngine;
+	judge: MemoryJudge;
 }

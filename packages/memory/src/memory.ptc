@@ -23,7 +23,7 @@ be read as code in an aside.
 FIRING BY ITSELF
 
 With :on a memory watches for an event and loads itself, unasked. Trigger is a
-quoted form of kind and pattern. Eight kinds:
+quoted form of kind and pattern. Nine kinds:
 
   call     a form about to be evaluated, at any depth, so it catches a call
            nested inside a setq or a let
@@ -35,6 +35,9 @@ quoted form of kind and pattern. Eight kinds:
   user     words in what the user just said
   recall   another memory being retrieved
   start    the user's first message, once, with no pattern: written (start)
+  asks     what the user just said, judged by meaning, not regex. Pattern is
+           one string saying when it applies:
+           (asks "user wants to automate a web browser")
 
 For call the pattern is A FORM, written like the call, matched structurally:
 
@@ -75,6 +78,14 @@ CHAINING
 Retrieval is an event, so one memory can hook another and both arrive
 together. Say so outright with :links, a list of keys. Also automatic:
 memories firing in the same step get wired together.
+
+BUILT-IN MEMORIES
+
+Tool ships its own memories: how-to depth behind each extension, loaded when
+its trigger fires. Listed in (memories), found by memory/recall like yours.
+Read-only: remember, revise, forget on a built-in key error. Never fade. Once
+loaded, stays in context; loads again only after its text leaves context.
+Need one now? Recall it by key or words.
 
 STRENGTH AND FORGETTING
 

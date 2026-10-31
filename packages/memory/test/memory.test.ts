@@ -22,7 +22,6 @@ import { describe, expect, it } from "vitest";
 import {
 	FORGET_BELOW,
 	HALF_LIFE_MS,
-	LINKED_FIRES_AT,
 	MAX_CASCADE_DEPTH,
 	MAX_RECALL_WORDS,
 	MemoryBank,
@@ -35,7 +34,7 @@ import {
 	memoryHost,
 	scopedMemoryStore,
 } from "../src/memory-host.ts";
-import { VolatileStore } from "../src/ports.ts";
+import { LINKED_FIRES_AT, VolatileStore } from "../src/ports.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
