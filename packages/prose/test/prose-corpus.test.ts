@@ -166,6 +166,42 @@ describe("prose corpus: text a model writes around its code", () => {
 	});
 });
 
+describe("prose corpus: code quoted in markdown", () => {
+	it.each([
+		"Form 1 (`(echo (car))`) passes car nothing.",
+		"`(failed-forms)` lists them, last one last.",
+		"Close it: `(echo (+ 1 2)` is still open.",
+		"Try `'(1 2)` or `(list 1 2)`.",
+	])("runs nothing for %j", (text) => {
+		const { value, output, skipped } = tolerantly(text);
+		expect(value).toBe(NOTHING);
+		expect(output).toBe("");
+		expect(skipped.length).toBeGreaterThan(0);
+	});
+
+	it("says it was written in backticks", () => {
+		expect(tolerantly("`(echo (car))` fails").skipped).toEqual([
+			"`(echo (car))` — written in backticks, so this was read as prose",
+		]);
+	});
+
+	it("leaves backticks inside a form's string alone", () => {
+		const run = tolerantly('(echo "run `(car x)` now")');
+		expect(run.output).toBe("run `(car x)` now\n");
+		expect(run.skipped).toEqual([]);
+	});
+
+	it("still reads a quasiquote written as code", () => {
+		expect(tolerantly("(setq x 2)\n`(1 ,x) `(2 ,x)").value).toBe("(2 2)");
+	});
+
+	it("runs the code beside it", () => {
+		const run = tolerantly("The sum (`(+ 1 2)`) is:\n(+ 1 2)");
+		expect(run.value).toBe("3");
+		expect(run.skipped).toHaveLength(1);
+	});
+});
+
 describe("prose corpus: lisptc that reads like English", () => {
 	it.each(REPLIES)("evaluates %j to %s, skipping nothing", (source, value) => {
 		const run = tolerantly(source);

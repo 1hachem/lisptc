@@ -9,7 +9,8 @@ import type {
 	TurnSetup,
 	WireMessage,
 } from "@repo/ai";
-import type { Image } from "@repo/interpreter/image";
+import { conversationSlot } from "@repo/interpreter/conversation";
+import { type Image, snapshot } from "@repo/interpreter/image";
 import { type ImageStore, MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { DEFAULT_CHOICE } from "@repo/shared/providers";
@@ -19,6 +20,7 @@ import type { Id } from "../convex/_generated/dataModel.js";
 import { MAX_SPAWN_DEPTH, TURN_DEADLINE_MS } from "../convex/limits.js";
 import {
 	type ChildRecord,
+	type ChildSeed,
 	type WorkspaceClient,
 	workspaceExtensions,
 } from "./agent-repl.ts";
@@ -211,17 +213,20 @@ export class ThreadHost {
 	async spawn(
 		parent: Id<"chats">,
 		agent: ChildRecord,
-		image?: Image,
+		{ image, conversation }: ChildSeed,
 	): Promise<Id<"chats">> {
 		const { server } = this.options;
 		const chatId = await server.mutation(internal.threads.spawn, {
 			chatId: parent,
 			agent,
 		});
-		if (image !== undefined) {
-			const replId = await server.mutation(internal.threads.repl, { chatId });
-			await new ConvexImageStore(replId, server).save(image);
-		}
+		if (image === undefined && conversation.length === 0) return chatId;
+		const replId = await server.mutation(internal.threads.repl, { chatId });
+		const images = new ConvexImageStore(replId, server);
+		if (image !== undefined) await images.save(image);
+		const repl = await this.build(chatId, images, false);
+		repl.hooks.filled(conversationSlot)?.replace(repl.interp, conversation);
+		await images.save(snapshot(repl.interp));
 		return chatId;
 	}
 
@@ -297,8 +302,8 @@ export class ThreadHost {
 			own && threads !== undefined
 				? {
 						threads: threads(),
-						spawn: (parent: Id<"chats">, agent: ChildRecord, image?: Image) =>
-							this.spawn(parent, agent, image),
+						spawn: (parent: Id<"chats">, agent: ChildRecord, seed: ChildSeed) =>
+							this.spawn(parent, agent, seed),
 						copyTranscript: (from: Id<"chats">, to: Id<"chats">) =>
 							this.copyTranscript(from, to),
 						child: (parent: Id<"chats">, name: string) =>

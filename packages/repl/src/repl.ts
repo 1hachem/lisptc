@@ -22,20 +22,17 @@ import {
 } from "@repo/interpreter/hooks";
 import { type Image, restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import {
-	EndOfFile,
-	jsonToLisp,
-	newSym,
-	Unspecified,
-} from "@repo/interpreter/objects";
+import { EndOfFile, Unspecified } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import {
+	type Admission,
 	type AgentEnd,
 	type AgentStep,
 	type AgentTurn,
 	type Annotations,
 	type Bounded,
+	type ConversationEntry,
 	type InterpExtension,
 	type ModelDelta,
 	type ModelRequest,
@@ -240,7 +237,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
 	private recorder: FormRecorder | undefined;
-	private betweenSteps:
+	protected betweenSteps:
 		| {
 				channels: Channels;
 				buffer: ChannelBuffer;
@@ -283,7 +280,6 @@ export class MemoryRepl implements InMemoryRepl {
 			return value;
 		});
 		runSync(interp, prelude);
-		this.setup(interp);
 		return interp;
 	}
 
@@ -337,12 +333,6 @@ export class MemoryRepl implements InMemoryRepl {
 			.then(() => images.save(image, origin))
 			.catch(() => undefined);
 		return result;
-	}
-
-	protected setup(_interp: Interp): void {}
-
-	protected currentInterpOrUndefined(): Interp | undefined {
-		return this.currentInterp as Interp | undefined;
 	}
 
 	async evalOutput(
@@ -581,16 +571,6 @@ export class MemoryRepl implements InMemoryRepl {
 
 export class AgentRepl extends MemoryRepl {
 	private pendingProse: string[] = [];
-	private conversationNames: string[] = [];
-
-	protected override setup(interp: Interp): void {
-		const previous = this.currentInterpOrUndefined();
-		for (const name of this.conversationNames ?? []) {
-			const sym = newSym(name);
-			if (previous?.hasGlobal(sym))
-				defineConversationVar(interp, name, previous.getGlobal(sym));
-		}
-	}
 
 	async evalMessage(code: string, origin?: string): Promise<EvalOutput> {
 		return render(await this.evaluate(code, origin));
@@ -692,6 +672,34 @@ export class AgentRepl extends MemoryRepl {
 		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
 	}
 
+	async admit(code: string): Promise<Admission> {
+		const between = this.betweenSteps;
+		if (between === undefined) return this.runAdmit(code);
+		between.detach();
+		const reading = bufferTransport();
+		const detach = between.channels.pipe(reading);
+		try {
+			return await this.runAdmit(code);
+		} finally {
+			detach();
+			for (const envelope of reading.envelopes)
+				if (envelope.topic !== note.name) between.buffer.send(envelope);
+			between.detach = between.channels.pipe(between.buffer);
+		}
+	}
+
+	private runAdmit(code: string): Promise<Admission> {
+		return this.hooks.admit.run(
+			async (_i, c) => ({ code: c }),
+			this.interp,
+			code,
+		);
+	}
+
+	recorded(entry: ConversationEntry): void {
+		this.hooks.recorded.run(() => {}, this.interp, entry);
+	}
+
 	stepEnd(
 		turn: AgentTurn,
 		step: AgentStep,
@@ -759,12 +767,6 @@ export class AgentRepl extends MemoryRepl {
 		};
 	}
 
-	setConversationVars(vars: Record<string, unknown>): void {
-		this.conversationNames = Object.keys(vars);
-		for (const [name, value] of Object.entries(vars))
-			defineConversationVar(this.interp, name, jsonToLisp(value));
-	}
-
 	takeProseFeedback(): string {
 		const notes = this.pendingProse;
 		this.pendingProse = [];
@@ -796,19 +798,6 @@ function outermost<A extends unknown[], R>(
 	around: Middleware<A, R> | undefined,
 ): Chain<A, R> {
 	return around === undefined ? chain : chain.wrappedBy(around);
-}
-
-function defineConversationVar(
-	interp: Interp,
-	name: string,
-	value: unknown,
-): void {
-	const sym = newSym(name);
-	interp.defineGlobal(sym, value, {
-		signature: name,
-		doc: "Read-only live conversation state (auto-updated each step).",
-	});
-	interp.seal(sym, "repl");
 }
 
 function carriedOn(printed: string): string {

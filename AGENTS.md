@@ -114,9 +114,11 @@ named only at a composition root:
 
 - `packages/agents` (`@repo/agents-extension`) — what the language asks of the harness: what reaches the agent, and when, and the sub-agents it starts.
 - `packages/compaction` (`@repo/compaction-extension`) — bounded output.
+- `packages/conversation` (`@repo/conversation-extension`) — the conversation as data the agent reads and other extensions consume.
 - `packages/intent` (`@repo/intent-extension`) — what the agent shows the user of its intent: what it does now, its todo, the question it asks.
 - `packages/introspection` (`@repo/introspection-extension`) — reading what is defined.
 - `packages/knowledge` (`@repo/knowledge-extension`) — the files the user uploaded to a workspace, read and written by the agent.
+- `packages/lint` (`@repo/lint-extension`) — the static check: what is wrong with source before it runs.
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
@@ -124,6 +126,7 @@ named only at a composition root:
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
 - `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
+- `packages/recovery` (`@repo/recovery-extension`) — repairing a step the check stopped, by editing it.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
 - `packages/workspace` (`@repo/workspace-extension`) — the workspace's settings and its chats.
@@ -450,7 +453,9 @@ sections, this order:
 - `## Test prompts`: numbered list of prompts to paste to agent as is. Each in
   own fenced code block, so one click copies it. At least one per new form, plus
   one per place in blast radius. Each prompt asks for something change makes
-  possible, not "test X". Under each, one line: what passing answer shows.
+  possible, not "test X". Prompt names exact code or message to send, so it
+  reproduces without waiting for model to make mistake on own. Under each, one
+  line: what passing answer shows.
 
 Keep description true. Push adds, renames or removes form, or widens blast
 radius? Agent edits description with `gh pr edit` same turn, without being

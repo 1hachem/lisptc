@@ -122,6 +122,9 @@ importers:
       '@repo/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@repo/conversation-extension':
+        specifier: workspace:*
+        version: link:../../packages/conversation
       '@repo/desktop-protocol':
         specifier: workspace:*
         version: link:../../packages/desktop-protocol
@@ -167,6 +170,9 @@ importers:
       '@repo/prose-extension':
         specifier: workspace:*
         version: link:../../packages/prose
+      '@repo/recovery-extension':
+        specifier: workspace:*
+        version: link:../../packages/recovery
       '@repo/secrets-extension':
         specifier: workspace:*
         version: link:../../packages/secrets
@@ -553,9 +559,9 @@ importers:
       '@repo/introspection-extension':
         specifier: workspace:*
         version: link:../../packages/introspection
-      '@repo/language-service':
+      '@repo/lint-extension':
         specifier: workspace:*
-        version: link:../../packages/language-service
+        version: link:../../packages/lint
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -627,6 +633,9 @@ importers:
       '@repo/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@repo/conversation-extension':
+        specifier: workspace:*
+        version: link:../../packages/conversation
       '@repo/env':
         specifier: workspace:*
         version: link:../../packages/env
@@ -798,6 +807,9 @@ importers:
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../compaction
+      '@repo/conversation-extension':
+        specifier: workspace:*
+        version: link:../conversation
       '@repo/diagnostics-extension':
         specifier: workspace:*
         version: link:../diagnostics
@@ -813,6 +825,9 @@ importers:
       '@repo/knowledge-extension':
         specifier: workspace:*
         version: link:../knowledge
+      '@repo/lint-extension':
+        specifier: workspace:*
+        version: link:../lint
       '@repo/llm-extension':
         specifier: workspace:*
         version: link:../llm
@@ -834,6 +849,9 @@ importers:
       '@repo/prose-extension':
         specifier: workspace:*
         version: link:../prose
+      '@repo/recovery-extension':
+        specifier: workspace:*
+        version: link:../recovery
       '@repo/repl':
         specifier: workspace:*
         version: link:../repl
@@ -1027,6 +1045,28 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@24.19.2)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
+
+  packages/conversation:
+    dependencies:
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
 
   packages/desktop-protocol:
     dependencies:
@@ -1268,6 +1308,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
 
+  packages/lint:
+    dependencies:
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+      '@repo/language-service':
+        specifier: workspace:*
+        version: link:../language-service
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
+
   packages/llm:
     dependencies:
       '@langchain/core':
@@ -1487,6 +1552,31 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^3.2.7
         version: 3.2.7(vitest@3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1))
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.13.0)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)
+
+  packages/recovery:
+    dependencies:
+      '@repo/interpreter':
+        specifier: workspace:*
+        version: link:../interpreter
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@repo/tsconfigs':
+        specifier: workspace:*
+        version: link:../tsconfigs
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -13981,6 +14071,10 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.5
 
+  fdir@6.5.0(picomatch@4.0.7):
+    optionalDependencies:
+      picomatch: 4.0.7
+
   fetchdts@0.1.7: {}
 
   fflate@0.4.9: {}
@@ -15801,8 +15895,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tinypool@1.1.1: {}
 
@@ -15928,7 +16022,7 @@ snapshots:
   unplugin@3.3.0(esbuild@0.28.2)(rolldown@1.2.5)(rollup@4.62.2)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.1)(yaml@2.9.1)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       esbuild: 0.28.2
@@ -16119,7 +16213,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 0.30.21
       pathe: 2.0.3
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       std-env: 3.10.0
       tinybench: 2.9.0
       tinyexec: 0.3.2
@@ -16163,7 +16257,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 0.30.21
       pathe: 2.0.3
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       std-env: 3.10.0
       tinybench: 2.9.0
       tinyexec: 0.3.2

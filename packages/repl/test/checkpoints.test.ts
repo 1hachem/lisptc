@@ -5,7 +5,7 @@ import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { MAX_DELTA_RUN, MemoryImageStore } from "../src/image-store.ts";
-import { AgentRepl, MemoryRepl } from "../src/repl.ts";
+import { MemoryRepl } from "../src/repl.ts";
 
 function repl(
 	images = new MemoryImageStore(),
@@ -158,19 +158,5 @@ describe("checkpoints", () => {
 		expect(await resumed.resume()).toBe(MAX_DELTA_RUN + 4);
 		expect(resumed.interp.getGlobal(newSym("v0"))).toBeNull();
 		expect(resumed.interp.getGlobal(newSym("v34"))).toBe(34n);
-	});
-
-	it("keeps the conversation globals in the image, still sealed", async () => {
-		const images = new MemoryImageStore();
-		const first = new AgentRepl({ extensions: [], images });
-		first.setConversationVars({ "user-messages": ["hi"] });
-		await first.evalOutput("(setq seen (length user-messages))");
-		await settle();
-		const second = new AgentRepl({ extensions: [], images });
-		await second.resume();
-		expect(second.interp.getGlobal(newSym("seen"))).toBe(1n);
-		expect((await second.evalOutput("(setq user-messages nil)")).failed).toBe(
-			true,
-		);
 	});
 });

@@ -11,8 +11,12 @@ Two files. `src/server.ts` declares the tools and speaks the protocol.
 `src/repl.ts` builds the REPL they run against.
 
 The tools are the whole surface: evaluate source in a REPL that persists across
-calls, reset that REPL to a fresh prelude, and check source for syntax errors
-without evaluating it. Read their exact names in `src/server.ts`.
+calls, reset that REPL to a fresh prelude, and check source without evaluating
+it. Read their exact names in `src/server.ts`.
+
+The check is `@repo/lint-extension`'s, run against this REPL's interpreter, so
+a client is told what the agent's own check would stop. Do not write a second
+one here.
 
 ## Rules
 

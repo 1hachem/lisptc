@@ -1,4 +1,5 @@
 import type { Fragment, Image } from "@repo/interpreter/image";
+import type { ConversationEntry } from "@repo/interpreter/session";
 import type { Awaitable } from "@repo/shared/host";
 
 export const PARENT_NAME = "parent";
@@ -15,7 +16,9 @@ export type ReplSeed =
 	| { readonly from: "fresh" }
 	| { readonly from: "fork"; readonly image: Image };
 
-export type ChatSeed = { readonly from: "fresh" } | { readonly from: "fork" };
+export type ChatSeed =
+	| { readonly from: "fresh" }
+	| { readonly from: "fork"; readonly entries: readonly ConversationEntry[] };
 
 export interface Spawn {
 	readonly definition: AgentDefinition;

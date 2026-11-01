@@ -54,9 +54,11 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				...proseSkipped(interp, code),
 			]);
 			hooks.answered.use((ctx, out, next) => {
-				if (formsOnly(ctx.code).trim() === "") return true;
+				const code = unquoted(ctx.code);
+				if (formsOnly(code).trim() === "") return true;
 				if (out.model !== "" || out.skipped.length === 0) return next(ctx, out);
-				return !isTruncated(ctx.code);
+				if (ranCode(ctx.interp, ctx.code)) return next(ctx, out);
+				return !isTruncated(code);
 			});
 		},
 	});
@@ -70,6 +72,49 @@ const proseJudge: FormJudge = {
 		return `${abbreviate(text.slice(start, end))} — ${reason}, so this was read as prose`;
 	},
 };
+
+const QUOTED = "written in backticks";
+
+function closingBacktick(text: string, at: number): number {
+	const close = text.indexOf("`", at + 1);
+	const line = text.indexOf("\n", at);
+	if (close <= at + 1 || (line >= 0 && line < close)) return -1;
+	return /[('`,@\w]/.test(text[close + 1] ?? "") ? -1 : close;
+}
+
+function quotedSpans(text: string): FormSpan[] {
+	const spans: FormSpan[] = [];
+	let i = 0;
+	while (i < text.length) {
+		if (text[i] === "(") {
+			const end = endOfForm(text, i);
+			i = end < 0 ? i + 1 : end;
+			continue;
+		}
+		const close = text[i] === "`" ? closingBacktick(text, i) : -1;
+		if (close < 0) {
+			i++;
+			continue;
+		}
+		if (text.slice(i, close).includes("(")) spans.push([i, close + 1]);
+		i = close + 1;
+	}
+	return spans;
+}
+
+function blanked(text: string, spans: readonly FormSpan[]): string {
+	let out = text;
+	for (const [start, end] of spans)
+		out =
+			out.slice(0, start) +
+			out.slice(start, end).replace(/[^\n]/g, " ") +
+			out.slice(end);
+	return out;
+}
+
+function unquoted(text: string): string {
+	return blanked(text, quotedSpans(text));
+}
 
 function unreadableReason(
 	text: string,
@@ -85,12 +130,19 @@ export function stripProse(
 	text: string,
 	onSkip?: (what: string) => void,
 ): string {
-	return formsOnly(text, proseJudge, onSkip);
+	const quoted = quotedSpans(text);
+	for (const [start, end] of quoted)
+		onSkip?.(
+			`${abbreviate(text.slice(start, end))} — ${QUOTED}, so this was read as prose`,
+		);
+	return formsOnly(blanked(text, quoted), proseJudge, onSkip);
 }
 
 export function proseSkipped(interp: Interp, text: string): Skipped[] {
-	const skipped: Skipped[] = [];
-	for (const span of formSpans(text)) {
+	const quoted = quotedSpans(text);
+	const skipped: Skipped[] = quoted.map((span) => ({ span, reason: QUOTED }));
+	const code = blanked(text, quoted);
+	for (const span of formSpans(code)) {
 		const [start, end] = span;
 		const unreadable = unreadableReason(text, start, end);
 		if (unreadable !== undefined) {
@@ -106,6 +158,18 @@ export function proseSkipped(interp: Interp, text: string): Skipped[] {
 			skipped.push({ span: gap, reason: classification.reason });
 	}
 	return skipped;
+}
+
+function ranCode(interp: Interp, text: string): boolean {
+	const prose = proseSkipped(interp, text).map((s) => s.span);
+	const covered = (at: number) =>
+		prose.some(([start, end]) => at >= start && at < end);
+	for (const [start, end] of formSpans(unquoted(text))) {
+		if (unreadableReason(text, start, end) !== undefined) continue;
+		for (let at = start; at < end; at++)
+			if (!/\s/.test(text[at] ?? "") && !covered(at)) return true;
+	}
+	return false;
 }
 
 function ranSpans(

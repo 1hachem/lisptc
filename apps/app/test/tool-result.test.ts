@@ -1,5 +1,6 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, it, test, vi } from "vitest";
 import type { ChatMessage } from "../src/lib/chat.tsx";
+import { toolEnvelope } from "../src/lib/tool-result.ts";
 
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 
@@ -9,6 +10,33 @@ const modelRead = JSON.stringify({
 	source: "lisp-repl",
 	output: '(("playwright" 7 :unloaded))',
 	error: false,
+});
+
+describe("toolEnvelope", () => {
+	it("unwraps a result whatever its source, keeping its error flag", () => {
+		const stopped = JSON.stringify({
+			type: "tool_result",
+			source: "lisp-check",
+			error: true,
+			output: "line 1: car: expected 1 argument, got 0",
+		});
+		expect(toolEnvelope(stopped)).toEqual({
+			output: "line 1: car: expected 1 argument, got 0",
+			error: true,
+		});
+		const ran = JSON.stringify({
+			type: "tool_result",
+			source: "lisp-repl",
+			error: false,
+			output: "3",
+		});
+		expect(toolEnvelope(ran)).toEqual({ output: "3", error: false });
+	});
+
+	it("leaves text that is no tool result alone", () => {
+		expect(toolEnvelope("plain output")).toBeUndefined();
+		expect(toolEnvelope('{"type":"other"}')).toBeUndefined();
+	});
 });
 
 describe("what a step shows the person", () => {

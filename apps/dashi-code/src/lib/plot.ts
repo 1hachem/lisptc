@@ -77,7 +77,7 @@ export function squarify<T>(
 ): Tile<T>[] {
 	const total = items.reduce((sum, item) => sum + item.value, 0);
 	if (total <= 0) return [];
-	const nodes = [...items]
+	const nodes = items
 		.filter((item) => item.value > 0)
 		.sort((a, b) => b.value - a.value)
 		.map((item) => ({ ...item, area: (item.value / total) * width * height }));

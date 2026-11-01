@@ -557,6 +557,7 @@ describe("the trace", () => {
 			content: "(draw-chart)",
 			additional_kwargs: {
 				reasoning_content: "THINKING-MARK",
+				written: { text: "(EDITS-MARK)" },
 				meta: { durationMs: 5, memories: [{ key: "remembered", body: "b" }] },
 			},
 		},
@@ -602,6 +603,7 @@ describe("the trace", () => {
 		ui: "UI-MARK",
 		attachments: "USER-FILE.pdf",
 		thinking: "THINKING-MARK",
+		edits: "EDITS-MARK",
 		memory: "1 memory recalled",
 		asks: "ASKS-MARK",
 		model: "MODEL-MARK",
@@ -953,7 +955,7 @@ describe("long text in the trace", () => {
 		{
 			id: "t1",
 			type: "tool",
-			content: `{"source":"lisp-repl","output":"${lines}"}`,
+			content: `{"type":"tool_result","output":"${lines}"}`,
 		},
 	];
 

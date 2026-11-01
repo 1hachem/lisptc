@@ -170,6 +170,15 @@ describe("prose with parentheses in it", () => {
 			expect(r.takeProseFeedback()).toContain('unexpected ")" on line 1');
 		});
 
+		it("is raised for an answer that quotes its code in backticks", async () => {
+			const r = agentRepl();
+			const out = await r.evalOutput(
+				"`(echo (car))` passed car nothing; `(failed-forms)` lists it.",
+			);
+			expect(out.model).not.toMatch(/quasiquote/);
+			expect(ends(out.effects)).toBe(true);
+		});
+
 		it("is not raised when a form ran alongside the aside", async () => {
 			expect(await ended("almost (see above): (+ 1 2)")).toBe(false);
 		});

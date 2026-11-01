@@ -97,6 +97,25 @@ describe("parseForms", () => {
 		]);
 	});
 
+	it("marks a quoted or backquoted list and leaves an unquoted one bare", () => {
+		const forms = parseForms(tokenizeWithPositions("'(a) `(b) (c ,(d))"));
+		expect(forms.map((f) => f.kind === "list" && f.quoted)).toEqual([
+			true,
+			true,
+			undefined,
+		]);
+	});
+
+	it("marks a quoted atom", () => {
+		const [form] = parseForms(tokenizeWithPositions("(f 'x y)"));
+		if (form.kind !== "list") throw new Error("expected a list");
+		expect(form.items.map((n) => n.kind === "atom" && n.quoted)).toEqual([
+			undefined,
+			true,
+			undefined,
+		]);
+	});
+
 	it("is best-effort on a stray unmatched close paren", () => {
 		expect(() => parseForms(tokenizeWithPositions("(foo))"))).not.toThrow();
 	});

@@ -37,6 +37,7 @@ import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { type Sequenced, timelineOf } from "./timeline.ts";
+import { type ToolEnvelope, toolEnvelope } from "./tool-result.ts";
 import { isFreshChat } from "./turns.ts";
 import { shownMessages, useWatch, type Watched } from "./watch.ts";
 
@@ -804,30 +805,12 @@ export function toolAnswers(
 	return answersOf(message.additional_kwargs);
 }
 
-export function toolModelOutput(message: ChatMessage): {
-	output: string;
-	error: boolean;
-} {
+export function toolModelOutput(message: ChatMessage): ToolEnvelope {
 	const text = messageText(message);
-	try {
-		const parsed = JSON.parse(text) as {
-			source?: unknown;
-			output?: unknown;
-			error?: unknown;
-		};
-		if (parsed?.source === "lisp-repl")
-			return {
-				output: String(parsed.output ?? ""),
-				error: Boolean(parsed.error),
-			};
-	} catch {}
-	return { output: text, error: false };
+	return toolEnvelope(text) ?? { output: text, error: false };
 }
 
-export function toolResult(message: ChatMessage): {
-	output: string;
-	error: boolean;
-} {
+export function toolResult(message: ChatMessage): ToolEnvelope {
 	const { display, failed } = envelopeOf(message.additional_kwargs);
 	return {
 		output: display ?? "",

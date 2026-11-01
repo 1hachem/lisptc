@@ -37,8 +37,8 @@ import {
 	type BuiltInFuncBody,
 	type BuiltInFuncGen,
 	Closure,
+	callableArity,
 	type DefinedFunc,
-	Func,
 	type FuncFactory,
 	Lambda,
 	Macro,
@@ -237,13 +237,12 @@ export class Interp {
 		this.docTable.set(name, { signature, doc, args });
 	}
 
+	isMacro(name: string): boolean {
+		return this.globals.get(newSym(name)) instanceof Macro;
+	}
+
 	arityOf(name: string): Arity | undefined {
-		const value = this.globals.get(newSym(name));
-		if (!(value instanceof Func)) return undefined;
-		return {
-			min: value.fixedArgs,
-			max: value.hasRest ? undefined : value.arity,
-		};
+		return callableArity(this.globals.get(newSym(name)));
 	}
 
 	constructor(options: InterpOptions = {}) {

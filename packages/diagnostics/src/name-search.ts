@@ -23,7 +23,7 @@ export const nameSearchEngine: SearchEngine = {
 			idField: "id",
 			tokenize: indexTokens,
 		});
-		index.addAll([...documents]);
+		index.addAll(documents);
 		return index
 			.search(query, {
 				tokenize: (text) => [text],
