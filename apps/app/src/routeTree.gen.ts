@@ -9,27 +9,34 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as DownloadRouteImport } from './routes/download'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
-import { Route as AuthedWorkspaceIdRouteRouteImport } from './routes/_authed/$workspaceId/route'
+import { Route as ThanksRouteImport } from './routes/thanks'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as ApiReleaseRouteImport } from './routes/api.release'
 import { Route as ApiSymbolsRouteImport } from './routes/api.symbols'
 import { Route as ApiUiActionRouteImport } from './routes/api.ui-action'
-import { Route as DownloadThanksRouteImport } from './routes/download_.thanks'
+import { Route as AppIndexRouteImport } from './routes/app/index'
+import { Route as AppWorkspaceIdRouteRouteImport } from './routes/app/$workspaceId/route'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
-import { Route as AuthedWorkspaceIdIndexRouteImport } from './routes/_authed/$workspaceId/index'
-import { Route as AuthedWorkspaceIdSplatRouteImport } from './routes/_authed/$workspaceId/$'
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
 import { Route as ApiChatStopRouteImport } from './routes/api.chat.stop'
 import { Route as ApiChatWatchRouteImport } from './routes/api.chat.watch'
 import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
+import { Route as AppWorkspaceIdIndexRouteImport } from './routes/app/$workspaceId/index'
+import { Route as AppWorkspaceIdSplatRouteImport } from './routes/app/$workspaceId/$'
 
-const AuthedRoute = AuthedRouteImport.update({
-  id: '/_authed',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DownloadRoute = DownloadRouteImport.update({
@@ -47,15 +54,10 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedIndexRoute = AuthedIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedWorkspaceIdRouteRoute = AuthedWorkspaceIdRouteRouteImport.update({
-  id: '/$workspaceId',
-  path: '/$workspaceId',
-  getParentRoute: () => AuthedRoute,
+const ThanksRoute = ThanksRouteImport.update({
+  id: '/thanks',
+  path: '/thanks',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
@@ -77,25 +79,20 @@ const ApiUiActionRoute = ApiUiActionRouteImport.update({
   path: '/api/ui-action',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DownloadThanksRoute = DownloadThanksRouteImport.update({
-  id: '/download_/thanks',
-  path: '/download/thanks',
-  getParentRoute: () => rootRouteImport,
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWorkspaceIdRouteRoute = AppWorkspaceIdRouteRouteImport.update({
+  id: '/$workspaceId',
+  path: '/$workspaceId',
+  getParentRoute: () => AppRoute,
 } as any)
 const OauthCallbackRoute = OauthCallbackRouteImport.update({
   id: '/oauth/callback',
   path: '/oauth/callback',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AuthedWorkspaceIdIndexRoute = AuthedWorkspaceIdIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedWorkspaceIdRouteRoute,
-} as any)
-const AuthedWorkspaceIdSplatRoute = AuthedWorkspaceIdSplatRouteImport.update({
-  id: '/$',
-  path: '/$',
-  getParentRoute: () => AuthedWorkspaceIdRouteRoute,
 } as any)
 const ApiChatSteerRoute = ApiChatSteerRouteImport.update({
   id: '/steer',
@@ -117,146 +114,172 @@ const ApiOauthCallbackRoute = ApiOauthCallbackRouteImport.update({
   path: '/api/oauth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppWorkspaceIdIndexRoute = AppWorkspaceIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppWorkspaceIdRouteRoute,
+} as any)
+const AppWorkspaceIdSplatRoute = AppWorkspaceIdSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AppWorkspaceIdRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AuthedIndexRoute
+  '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
   '/download': typeof DownloadRoute
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
-  '/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/thanks': typeof ThanksRoute
+  '/app/$workspaceId': typeof AppWorkspaceIdRouteRouteWithChildren
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/release': typeof ApiReleaseRoute
   '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
-  '/download/thanks': typeof DownloadThanksRoute
   '/oauth/callback': typeof OauthCallbackRoute
-  '/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
+  '/app/': typeof AppIndexRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
-  '/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
+  '/app/$workspaceId/$': typeof AppWorkspaceIdSplatRoute
+  '/app/$workspaceId/': typeof AppWorkspaceIdIndexRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof IndexRoute
   '/download': typeof DownloadRoute
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
+  '/thanks': typeof ThanksRoute
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/release': typeof ApiReleaseRoute
   '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
-  '/download/thanks': typeof DownloadThanksRoute
   '/oauth/callback': typeof OauthCallbackRoute
-  '/': typeof AuthedIndexRoute
-  '/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
+  '/app': typeof AppIndexRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
-  '/$workspaceId': typeof AuthedWorkspaceIdIndexRoute
+  '/app/$workspaceId/$': typeof AppWorkspaceIdSplatRoute
+  '/app/$workspaceId': typeof AppWorkspaceIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_authed': typeof AuthedRouteWithChildren
+  '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
   '/download': typeof DownloadRoute
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
-  '/_authed/$workspaceId': typeof AuthedWorkspaceIdRouteRouteWithChildren
+  '/thanks': typeof ThanksRoute
+  '/app/$workspaceId': typeof AppWorkspaceIdRouteRouteWithChildren
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/release': typeof ApiReleaseRoute
   '/api/symbols': typeof ApiSymbolsRoute
   '/api/ui-action': typeof ApiUiActionRoute
-  '/download_/thanks': typeof DownloadThanksRoute
   '/oauth/callback': typeof OauthCallbackRoute
-  '/_authed/': typeof AuthedIndexRoute
-  '/_authed/$workspaceId/$': typeof AuthedWorkspaceIdSplatRoute
+  '/app/': typeof AppIndexRoute
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
-  '/_authed/$workspaceId/': typeof AuthedWorkspaceIdIndexRoute
+  '/app/$workspaceId/$': typeof AppWorkspaceIdSplatRoute
+  '/app/$workspaceId/': typeof AppWorkspaceIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/app'
     | '/download'
     | '/health'
     | '/login'
-    | '/$workspaceId'
+    | '/thanks'
+    | '/app/$workspaceId'
     | '/api/chat'
     | '/api/release'
     | '/api/symbols'
     | '/api/ui-action'
-    | '/download/thanks'
     | '/oauth/callback'
-    | '/$workspaceId/$'
+    | '/app/'
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
     | '/api/oauth/callback'
-    | '/$workspaceId/'
+    | '/app/$workspaceId/$'
+    | '/app/$workspaceId/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/'
     | '/download'
     | '/health'
     | '/login'
+    | '/thanks'
     | '/api/chat'
     | '/api/release'
     | '/api/symbols'
     | '/api/ui-action'
-    | '/download/thanks'
     | '/oauth/callback'
-    | '/'
-    | '/$workspaceId/$'
+    | '/app'
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
     | '/api/oauth/callback'
-    | '/$workspaceId'
+    | '/app/$workspaceId/$'
+    | '/app/$workspaceId'
   id:
     | '__root__'
-    | '/_authed'
+    | '/'
+    | '/app'
     | '/download'
     | '/health'
     | '/login'
-    | '/_authed/$workspaceId'
+    | '/thanks'
+    | '/app/$workspaceId'
     | '/api/chat'
     | '/api/release'
     | '/api/symbols'
     | '/api/ui-action'
-    | '/download_/thanks'
     | '/oauth/callback'
-    | '/_authed/'
-    | '/_authed/$workspaceId/$'
+    | '/app/'
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
     | '/api/oauth/callback'
-    | '/_authed/$workspaceId/'
+    | '/app/$workspaceId/$'
+    | '/app/$workspaceId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AuthedRoute: typeof AuthedRouteWithChildren
+  IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
   DownloadRoute: typeof DownloadRoute
   HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRoute
+  ThanksRoute: typeof ThanksRoute
   ApiChatRoute: typeof ApiChatRouteWithChildren
   ApiReleaseRoute: typeof ApiReleaseRoute
   ApiSymbolsRoute: typeof ApiSymbolsRoute
   ApiUiActionRoute: typeof ApiUiActionRoute
-  DownloadThanksRoute: typeof DownloadThanksRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
   ApiOauthCallbackRoute: typeof ApiOauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_authed': {
-      id: '/_authed'
-      path: ''
+    '/': {
+      id: '/'
+      path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof AuthedRouteImport
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/download': {
@@ -280,19 +303,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authed/': {
-      id: '/_authed/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AuthedIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/$workspaceId': {
-      id: '/_authed/$workspaceId'
-      path: '/$workspaceId'
-      fullPath: '/$workspaceId'
-      preLoaderRoute: typeof AuthedWorkspaceIdRouteRouteImport
-      parentRoute: typeof AuthedRoute
+    '/thanks': {
+      id: '/thanks'
+      path: '/thanks'
+      fullPath: '/thanks'
+      preLoaderRoute: typeof ThanksRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
       id: '/api/chat'
@@ -322,12 +338,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUiActionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/download_/thanks': {
-      id: '/download_/thanks'
-      path: '/download/thanks'
-      fullPath: '/download/thanks'
-      preLoaderRoute: typeof DownloadThanksRouteImport
-      parentRoute: typeof rootRouteImport
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/$workspaceId': {
+      id: '/app/$workspaceId'
+      path: '/$workspaceId'
+      fullPath: '/app/$workspaceId'
+      preLoaderRoute: typeof AppWorkspaceIdRouteRouteImport
+      parentRoute: typeof AppRoute
     }
     '/oauth/callback': {
       id: '/oauth/callback'
@@ -335,20 +358,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/oauth/callback'
       preLoaderRoute: typeof OauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_authed/$workspaceId/': {
-      id: '/_authed/$workspaceId/'
-      path: '/'
-      fullPath: '/$workspaceId/'
-      preLoaderRoute: typeof AuthedWorkspaceIdIndexRouteImport
-      parentRoute: typeof AuthedWorkspaceIdRouteRoute
-    }
-    '/_authed/$workspaceId/$': {
-      id: '/_authed/$workspaceId/$'
-      path: '/$'
-      fullPath: '/$workspaceId/$'
-      preLoaderRoute: typeof AuthedWorkspaceIdSplatRouteImport
-      parentRoute: typeof AuthedWorkspaceIdRouteRoute
     }
     '/api/chat/steer': {
       id: '/api/chat/steer'
@@ -378,37 +387,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/$workspaceId/': {
+      id: '/app/$workspaceId/'
+      path: '/'
+      fullPath: '/app/$workspaceId/'
+      preLoaderRoute: typeof AppWorkspaceIdIndexRouteImport
+      parentRoute: typeof AppWorkspaceIdRouteRoute
+    }
+    '/app/$workspaceId/$': {
+      id: '/app/$workspaceId/$'
+      path: '/$'
+      fullPath: '/app/$workspaceId/$'
+      preLoaderRoute: typeof AppWorkspaceIdSplatRouteImport
+      parentRoute: typeof AppWorkspaceIdRouteRoute
+    }
   }
 }
 
-interface AuthedWorkspaceIdRouteRouteChildren {
-  AuthedWorkspaceIdSplatRoute: typeof AuthedWorkspaceIdSplatRoute
-  AuthedWorkspaceIdIndexRoute: typeof AuthedWorkspaceIdIndexRoute
+interface AppWorkspaceIdRouteRouteChildren {
+  AppWorkspaceIdSplatRoute: typeof AppWorkspaceIdSplatRoute
+  AppWorkspaceIdIndexRoute: typeof AppWorkspaceIdIndexRoute
 }
 
-const AuthedWorkspaceIdRouteRouteChildren: AuthedWorkspaceIdRouteRouteChildren =
-  {
-    AuthedWorkspaceIdSplatRoute: AuthedWorkspaceIdSplatRoute,
-    AuthedWorkspaceIdIndexRoute: AuthedWorkspaceIdIndexRoute,
-  }
-
-const AuthedWorkspaceIdRouteRouteWithChildren =
-  AuthedWorkspaceIdRouteRoute._addFileChildren(
-    AuthedWorkspaceIdRouteRouteChildren,
-  )
-
-interface AuthedRouteChildren {
-  AuthedWorkspaceIdRouteRoute: typeof AuthedWorkspaceIdRouteRouteWithChildren
-  AuthedIndexRoute: typeof AuthedIndexRoute
+const AppWorkspaceIdRouteRouteChildren: AppWorkspaceIdRouteRouteChildren = {
+  AppWorkspaceIdSplatRoute: AppWorkspaceIdSplatRoute,
+  AppWorkspaceIdIndexRoute: AppWorkspaceIdIndexRoute,
 }
 
-const AuthedRouteChildren: AuthedRouteChildren = {
-  AuthedWorkspaceIdRouteRoute: AuthedWorkspaceIdRouteRouteWithChildren,
-  AuthedIndexRoute: AuthedIndexRoute,
+const AppWorkspaceIdRouteRouteWithChildren =
+  AppWorkspaceIdRouteRoute._addFileChildren(AppWorkspaceIdRouteRouteChildren)
+
+interface AppRouteChildren {
+  AppWorkspaceIdRouteRoute: typeof AppWorkspaceIdRouteRouteWithChildren
+  AppIndexRoute: typeof AppIndexRoute
 }
 
-const AuthedRouteWithChildren =
-  AuthedRoute._addFileChildren(AuthedRouteChildren)
+const AppRouteChildren: AppRouteChildren = {
+  AppWorkspaceIdRouteRoute: AppWorkspaceIdRouteRouteWithChildren,
+  AppIndexRoute: AppIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface ApiChatRouteChildren {
   ApiChatSteerRoute: typeof ApiChatSteerRoute
@@ -426,15 +445,16 @@ const ApiChatRouteWithChildren =
   ApiChatRoute._addFileChildren(ApiChatRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  AuthedRoute: AuthedRouteWithChildren,
+  IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
   DownloadRoute: DownloadRoute,
   HealthRoute: HealthRoute,
   LoginRoute: LoginRoute,
+  ThanksRoute: ThanksRoute,
   ApiChatRoute: ApiChatRouteWithChildren,
   ApiReleaseRoute: ApiReleaseRoute,
   ApiSymbolsRoute: ApiSymbolsRoute,
   ApiUiActionRoute: ApiUiActionRoute,
-  DownloadThanksRoute: DownloadThanksRoute,
   OauthCallbackRoute: OauthCallbackRoute,
   ApiOauthCallbackRoute: ApiOauthCallbackRoute,
 }

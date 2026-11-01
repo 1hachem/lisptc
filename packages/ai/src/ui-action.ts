@@ -1,7 +1,7 @@
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Repls } from "./repl-store.ts";
 
-export interface UiActionResult extends Record<string, unknown> {
+export interface UiActionResult {
 	output: string;
 	error: boolean;
 	message?: string;
@@ -28,7 +28,6 @@ export async function uiActionOn(
 			values,
 		);
 		return {
-			...annotations.output,
 			output: user,
 			error: failed,
 			message,

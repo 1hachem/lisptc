@@ -8,6 +8,7 @@
     "apps/trace-viewer/evals/**/*.eval.ts"
   ],
   "usedClassMembers": [
+    "toString",
     { "extends": "TextNode", "members": ["isSimpleText", "isUnmergeable"] }
   ],
   "rules": {

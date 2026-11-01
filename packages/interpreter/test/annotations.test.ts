@@ -35,11 +35,12 @@ describe("an annotation key", () => {
 		expect(readAnnotation(undefined, asksKey)).toBeUndefined();
 	});
 
-	test("reads a whole view, and nothing from one with a malformed child", () => {
-		const card = { tag: "card", props: { title: "t" }, children: [] };
-		expect(readAnnotation({ ui: card }, viewKey)).toEqual(card);
+	test("reads a view reference, and nothing from a view tree", () => {
+		expect(readAnnotation({ ui: { viewId: "v1" } }, viewKey)).toEqual({
+			viewId: "v1",
+		});
 		expect(
-			readAnnotation({ ui: { ...card, children: [{ no: 1 }] } }, viewKey),
+			readAnnotation({ ui: { tag: "card", props: {}, children: [] } }, viewKey),
 		).toBeUndefined();
 	});
 });

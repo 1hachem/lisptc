@@ -269,7 +269,7 @@ describe("workspace theme", () => {
 describe("workspace model", () => {
 	const model = {
 		provider: "openrouter",
-		model: "google/gemma-4-31b-it",
+		model: "deepseek/deepseek-v4.1-flash-1017",
 	} as const;
 
 	it("has none until one is chosen", async () => {
@@ -347,6 +347,47 @@ describe("chat access", () => {
 		await expect(
 			alice.as.query(api.messages.light, { chatId }),
 		).rejects.toThrow();
+	});
+
+	it("refuses reading or writing a view of another user's chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 1, expired: false },
+		);
+		await expect(
+			alice.as.query(api.views.get, { chatId, viewId: "v1" }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.views.put, { chatId, viewId: "v1", node }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.views.expire, { chatId, viewId: "v1" }),
+		).rejects.toThrow();
+	});
+
+	it("marks a view expired until it is written again", async () => {
+		const t = harness();
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		await bob.as.mutation(api.views.expire, { chatId, viewId: "v1" });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 2, expired: true },
+		);
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 3, expired: false },
+		);
 	});
 
 	it("refuses appending to another user's chat", async () => {
@@ -763,8 +804,8 @@ describe("panel layout access", () => {
 						split: "here",
 						content: {
 							kind: "view",
-							title: "big",
-							node: "x".repeat(300_000),
+							title: "x".repeat(300_000),
+							viewId: "view:big",
 						},
 					},
 				],
@@ -868,7 +909,7 @@ describe("panel layout access", () => {
 							content: {
 								kind: "view" as const,
 								title: "My Linear Issues",
-								node: { tag: "card", props: {}, children: [] },
+								viewId: "view:My Linear Issues",
 								chatId: "c1",
 							},
 						},
@@ -898,7 +939,7 @@ describe("panel layout access", () => {
 					content: {
 						kind: "view" as const,
 						title: "t",
-						node: null,
+						viewId: "view:t",
 						chatId: "c1",
 					},
 				},

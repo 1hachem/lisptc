@@ -12,6 +12,11 @@ import {
 	type PreferencesClient,
 } from "../src/preferences-store.ts";
 import {
+	ConvexViewStore,
+	VIEW_WRITE_INTERVAL_MS,
+	type ViewClock,
+} from "../src/view-store.ts";
+import {
 	ConvexWorkspaceStore,
 	OFFERED_MODELS,
 	type WorkspaceStoreClient,
@@ -197,7 +202,11 @@ describe("the convex panel reader", () => {
 							},
 							{
 								id: "view:counts",
-								content: { kind: "view", title: "counts", node: null },
+								content: {
+									kind: "view",
+									title: "counts",
+									viewId: "view:counts",
+								},
 							},
 						],
 					},
@@ -237,6 +246,88 @@ describe("the convex panel reader", () => {
 		const { client } = spyClient({});
 		const reader = new ConvexLayoutStore(WORKSPACE, () => client);
 		expect(await reader.tabs()).toEqual([]);
+	});
+});
+
+describe("the convex view store", () => {
+	it("writes a view into the chat it was opened for", async () => {
+		const { client, sent } = spyClient({});
+		const chatId = "chat-1" as Id<"chats">;
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await new ConvexViewStore(chatId, () => client).put({ viewId: "v1", node });
+		expect(sent).toEqual([
+			[named(api.views.put), { chatId, viewId: "v1", node }],
+		]);
+	});
+
+	it("expires a view and writes it again even when unchanged", async () => {
+		const { client, sent } = spyClient({});
+		const chatId = "chat-1" as Id<"chats">;
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		const store = new ConvexViewStore(chatId, () => client);
+		await store.put({ viewId: "v1", node });
+		await store.expire("v1");
+		await store.put({ viewId: "v1", node });
+		expect(sent).toEqual([
+			[named(api.views.put), { chatId, viewId: "v1", node }],
+			[named(api.views.expire), { chatId, viewId: "v1" }],
+			[named(api.views.put), { chatId, viewId: "v1", node }],
+		]);
+	});
+
+	function manualClock(): ViewClock & { advance(ms: number): void } {
+		let now = 0;
+		let due: Array<[number, () => void]> = [];
+		return {
+			now: () => now,
+			after: (ms, run) => {
+				due.push([now + ms, run]);
+			},
+			advance(ms) {
+				now += ms;
+				const ready = due.filter(([at]) => at <= now);
+				due = due.filter(([at]) => at > now);
+				for (const [, run] of ready) run();
+			},
+		};
+	}
+
+	const text = (t: string) => ({
+		tag: "text",
+		props: { text: t },
+		children: [],
+	});
+
+	it("writes a view at most once an interval, ending on its last state", async () => {
+		const { client, sent } = spyClient({});
+		const clock = manualClock();
+		const store = new ConvexViewStore(
+			"chat-1" as Id<"chats">,
+			() => client,
+			clock,
+		);
+		await store.put({ viewId: "v1", node: text("a") });
+		await store.put({ viewId: "v1", node: text("b") });
+		await store.put({ viewId: "v1", node: text("c") });
+		expect(sent.map(([, args]) => args.node)).toEqual([text("a")]);
+		clock.advance(VIEW_WRITE_INTERVAL_MS);
+		await Promise.resolve();
+		expect(sent.map(([, args]) => args.node)).toEqual([text("a"), text("c")]);
+	});
+
+	it("skips a write that would not change the view", async () => {
+		const { client, sent } = spyClient({});
+		const clock = manualClock();
+		const store = new ConvexViewStore(
+			"chat-1" as Id<"chats">,
+			() => client,
+			clock,
+		);
+		await store.put({ viewId: "v1", node: text("a") });
+		clock.advance(VIEW_WRITE_INTERVAL_MS);
+		await store.put({ viewId: "v1", node: text("a") });
+		await store.put({ viewId: "v2", node: text("a") });
+		expect(sent.map(([, args]) => args.viewId)).toEqual(["v1", "v2"]);
 	});
 });
 

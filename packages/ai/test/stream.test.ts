@@ -322,7 +322,7 @@ describe("chat stream", () => {
 
 	test("carries what a turn attached to a message into the next turn, its thinking included", async () => {
 		const shown = {
-			ui: { tag: "text", props: { text: "a widget" }, children: [] },
+			ui: { viewId: "v1" },
 			display: "for the person",
 		};
 		const messages = await finalMessages(

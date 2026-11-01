@@ -6,7 +6,7 @@ describe("landing in the app after sign in", () => {
 	it("loads the app as a full page so the server renders it with its data", () => {
 		const replace = vi.fn();
 		landInApp({ replace });
-		expect(replace).toHaveBeenCalledWith("/");
+		expect(replace).toHaveBeenCalledWith("/app");
 	});
 
 	it("fetches the workspace chunks while auth is still in flight", () => {
@@ -14,10 +14,10 @@ describe("landing in the app after sign in", () => {
 		const route = (id: string) => ({ id });
 		const router = {
 			routesById: {
-				"/_authed": route("/_authed"),
-				"/_authed/": route("/_authed/"),
-				"/_authed/$workspaceId": route("/_authed/$workspaceId"),
-				"/_authed/$workspaceId/": route("/_authed/$workspaceId/"),
+				"/app": route("/app"),
+				"/app/": route("/app/"),
+				"/app/$workspaceId": route("/app/$workspaceId"),
+				"/app/$workspaceId/": route("/app/$workspaceId/"),
 				"/login": route("/login"),
 			},
 			loadRouteChunk: (r: { id: string }) => {
@@ -27,10 +27,10 @@ describe("landing in the app after sign in", () => {
 		} as unknown as AnyRouter;
 		preloadAppChunks(router, "now");
 		expect(loaded).toEqual([
-			"/_authed",
-			"/_authed/",
-			"/_authed/$workspaceId",
-			"/_authed/$workspaceId/",
+			"/app",
+			"/app/",
+			"/app/$workspaceId",
+			"/app/$workspaceId/",
 		]);
 	});
 });

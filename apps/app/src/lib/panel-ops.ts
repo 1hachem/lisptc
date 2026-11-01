@@ -29,7 +29,7 @@ export interface SideTrace {
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
 	| { kind: "source"; folder: string; name: string }
-	| { kind: "view"; title: string; node: unknown; chatId?: string }
+	| { kind: "view"; title: string; viewId: string; chatId?: string }
 	| { kind: "chat"; chatId: string | null; title: string; trace?: SideTrace }
 	| { kind: "page"; page: Page; id?: string; title: string }
 	| { kind: "trace"; chatId: string; title: string; turn?: string };
@@ -113,11 +113,12 @@ function sourceOf(content: Fields): PanelContent | undefined {
 }
 
 function viewOf(content: Fields): PanelContent | undefined {
-	if (typeof content.title !== "string") return undefined;
+	if (typeof content.title !== "string" || typeof content.viewId !== "string")
+		return undefined;
 	return {
 		kind: "view",
 		title: content.title,
-		node: content.node,
+		viewId: content.viewId,
 		...(typeof content.chatId === "string" ? { chatId: content.chatId } : {}),
 	};
 }

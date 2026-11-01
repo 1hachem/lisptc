@@ -41,20 +41,14 @@ export function readAnnotation<T>(
 		: key.schema.safeParse(bag[key.name]).data;
 }
 
-const viewNode = z.object({
-	tag: z.string(),
-	props: z.record(z.string(), z.json()),
-	get children() {
-		return z.array(viewNode);
-	},
-});
+const viewRef = z.object({ viewId: z.string() });
 
-export type ViewNode = z.infer<typeof viewNode>;
+export type ViewRef = z.infer<typeof viewRef>;
 
 export const viewKey = annotationKey({
 	name: "ui",
 	lane: "output",
-	schema: viewNode,
+	schema: viewRef,
 });
 
 const todo = z.object({ label: z.string(), done: z.boolean() });

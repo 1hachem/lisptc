@@ -5,7 +5,6 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { GlyphCycle } from "@repo/components";
-import { viewKey } from "@repo/interpreter/annotations";
 import { Button } from "@repo/ui";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { AgentProvider } from "../lib/agent.tsx";
@@ -218,16 +217,13 @@ function PageTab({
 
 function ViewTab({
 	workspaceId,
-	node,
+	viewId,
 	chatId,
 }: {
 	workspaceId: Id<"workspaces">;
-	node: unknown;
+	viewId: string;
 	chatId: string | undefined;
 }) {
-	const drawn = viewKey.schema.safeParse(node).data;
-	if (drawn === undefined)
-		return <div className="p-3 text-dim">this view cannot be drawn</div>;
 	if (chatId === undefined)
 		return (
 			<div className="p-3 text-dim">
@@ -241,7 +237,7 @@ function ViewTab({
 			onOpened={() => {}}
 		>
 			<div className="p-3">
-				<GenerativeUI key={JSON.stringify(drawn)} node={drawn} />
+				<GenerativeUI chatId={chatId as Id<"chats">} viewId={viewId} />
 			</div>
 		</ChatProvider>
 	);
@@ -299,7 +295,7 @@ export function PanelTab({
 			{content.kind === "view" && (
 				<ViewTab
 					workspaceId={workspaceId}
-					node={content.node}
+					viewId={content.viewId}
 					chatId={content.chatId}
 				/>
 			)}

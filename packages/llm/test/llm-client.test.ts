@@ -89,7 +89,7 @@ describe("the langchain client against a stubbed fetch", () => {
 		expect(str(reply.value)).toBe('"{\\"words\\":[\\"one\\",\\"two\\"]}"');
 		expect(seen.at(-1)?.url).toBe("http://openrouter.test/v1/chat/completions");
 		expect(seen.at(-1)?.body).toMatchObject({
-			model: "google/gemma-4-31b-it",
+			model: "anthropic/claude-haiku-5.5",
 			stream: false,
 			max_tokens: 32,
 			messages: [{ role: "user", content: "hi" }],

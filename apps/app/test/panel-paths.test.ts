@@ -51,7 +51,7 @@ describe("panel paths", () => {
 
 	it("has no path for a drawn view", () => {
 		expect(
-			panelPath({ kind: "view", title: "chart", node: {} }),
+			panelPath({ kind: "view", title: "chart", viewId: "view:chart" }),
 		).toBeUndefined();
 	});
 

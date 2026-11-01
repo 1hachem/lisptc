@@ -148,9 +148,9 @@ function useUrlFocus(
 		const replace = focused === undefined || before?.has(focused.id) !== false;
 		void navigate(
 			shown === ""
-				? { to: "/$workspaceId", params: { workspaceId }, replace }
+				? { to: "/app/$workspaceId", params: { workspaceId }, replace }
 				: {
-						to: "/$workspaceId/$",
+						to: "/app/$workspaceId/$",
 						params: { workspaceId, _splat: shown },
 						replace,
 					},

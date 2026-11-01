@@ -32,7 +32,7 @@ function WorkspaceItems() {
 			key={candidate._id}
 			onSelect={() =>
 				void navigate({
-					to: "/$workspaceId",
+					to: "/app/$workspaceId",
 					params: { workspaceId: candidate._id },
 				})
 			}
@@ -143,7 +143,7 @@ export function WorkspaceMenu({
 	const [name, setName] = useState("");
 
 	const open = (workspaceId: Id<"workspaces">) =>
-		navigate({ to: "/$workspaceId", params: { workspaceId } });
+		navigate({ to: "/app/$workspaceId", params: { workspaceId } });
 
 	const refresh = () =>
 		queryClient.invalidateQueries(convexQuery(api.workspaces.list, {}));

@@ -33,6 +33,28 @@ describe("removing a chat", () => {
 		expect(left).toEqual([]);
 	});
 
+	it("takes its rendered views with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.views.put, {
+			chatId,
+			viewId: "v1",
+			node: { tag: "text", props: { text: "hi" }, children: [] },
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("views").collect(),
+		);
+		expect(left).toEqual([]);
+	});
+
 	it("takes its repl checkpoints with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -137,17 +159,26 @@ describe("removing a workspace", () => {
 			whole: true,
 			chunks: ["{}"],
 		});
+		await alice.as.mutation(api.views.put, {
+			chatId,
+			viewId: "v1",
+			node: { tag: "text", props: { text: "hi" }, children: [] },
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { chats, messages, repls, replLayers } = await t.run(async (ctx) => ({
-			chats: await ctx.db.query("chats").collect(),
-			messages: await ctx.db.query("messages").collect(),
-			repls: await ctx.db.query("repls").collect(),
-			replLayers: await ctx.db.query("replLayers").collect(),
-		}));
+		const { chats, messages, repls, replLayers, views } = await t.run(
+			async (ctx) => ({
+				chats: await ctx.db.query("chats").collect(),
+				messages: await ctx.db.query("messages").collect(),
+				repls: await ctx.db.query("repls").collect(),
+				replLayers: await ctx.db.query("replLayers").collect(),
+				views: await ctx.db.query("views").collect(),
+			}),
+		);
+		expect(views).toEqual([]);
 		expect(chats).toEqual([]);
 		expect(messages).toEqual([]);
 		expect(repls).toEqual([]);
