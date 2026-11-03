@@ -29,7 +29,7 @@ Bash)
   if grep -qE '(^|[|;&] *)(rg|find|ag|tree)\b|grep +-[a-zA-Z]*[rR]|ls +-[a-zA-Z]*R' <<<"$cmd"; then
     agent="explore"
     what="a recursive search"
-  elif grep -qE '\bpnpm\b[^|;&]*\b(test|typecheck|build|lint|knip|boundaries|check:[a-z]+)\b|\b(turbo +run|vitest|tsc +--noEmit|docker +(compose +)?logs|task +up|journalctl)' <<<"$cmd"; then
+  elif grep -qE '\bpnpm\b[^|;&]*\b(test|typecheck|build|lint|knip|boundaries|check:[a-z]+)\b|\b(turbo +run|vitest|tsc +--noEmit|docker +(compose +)?logs|task +up|tilt +(up|ci|logs)|journalctl)' <<<"$cmd"; then
     agent="script"
     what="a long-output run"
   elif grep -qE '\bchrome-agent +(attach|launch)' <<<"$cmd"; then
