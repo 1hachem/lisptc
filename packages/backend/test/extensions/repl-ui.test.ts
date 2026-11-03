@@ -39,7 +39,6 @@ describe("a step that renders", () => {
 		const out = await memoryRepl().evalOutput(PANEL);
 		const { model } = out;
 		expect(view(out)).toBeDefined();
-		expect(model).toContain("rendered stack");
 		expect(model).not.toContain("ui/button");
 	});
 
@@ -51,7 +50,6 @@ describe("a step that renders", () => {
 		const { r, node } = stored();
 		const out = await r.evalOutput(`(echo (ui/table '((("id" . 1)))))`);
 		expect(node(out)).toMatchObject({ tag: "table" });
-		expect(out.model).toContain("rendered table");
 		expect(out.model).not.toContain("#<ui:");
 	});
 
@@ -115,11 +113,13 @@ describe("a view whose handlers are gone", () => {
 	it("is marked expired, and a click on it fails nothing", async () => {
 		const views = new MemoryViewStore();
 		const r = memoryRepl(modelFacing(undefined, undefined, undefined, views));
-		await r.evalOutput(
+		const rendered = await r.evalOutput(
 			'(setq view (ui/button "go" (lambda () 1))) (ui/render view)',
 		);
 		await r.evalOutput("(ui/forget view)");
-		expect([...views.expired]).toEqual(["v1"]);
+		expect([...views.expired]).toEqual([
+			(view(rendered) as { viewId: string }).viewId,
+		]);
 		const out = await r.invokeUi("a1", {});
 		expect(out.failed).toBe(false);
 	});

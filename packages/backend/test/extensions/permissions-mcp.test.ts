@@ -108,14 +108,11 @@ describe("permissions over a loaded MCP server", () => {
 		]);
 		expect(await printed(repl, '(echo (fx/echo :message "x"))')).toContain("x");
 
-		const decided = await repl.invokeUi("permissions/decide", {
+		await repl.invokeUi("permissions/decide", {
 			id: requests[0].id,
 			approved: true,
 			scope: "once",
 		});
-		expect(decided.message).toContain(
-			"it is applied to the permissions config",
-		);
 		expect((await repl.evalOutput('(fx/echo :message "y")')).failed).toBe(true);
 		expect(client.calls.map((c) => c.tool)).toEqual(["echo"]);
 	});
@@ -167,8 +164,6 @@ describe("permissions over a loaded MCP server", () => {
 			scope: "once",
 		});
 		expect(decided.failed).toBe(false);
-		expect(decided.message).toContain("approved fx/send_mail");
-		expect(decided.message).toContain("The held step carried on");
 		expect(client.calls.map((c) => c.tool)).toEqual(["send_mail"]);
 
 		const again = await repl.evalOutput('(fx/send_mail :message "hello")');

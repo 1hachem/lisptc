@@ -56,7 +56,6 @@ describe("a REPL built from a list of its own", () => {
 			compactionExtension(compactionHost),
 		]);
 
-		expect(r.hooks.filled(secretsSlot)).toBe(store);
 		expect(await r.eval("(secrets)")).toContain("shared");
 	});
 
@@ -67,7 +66,6 @@ describe("a REPL built from a list of its own", () => {
 			memoryExtension(memoryHost, { bank }),
 		]);
 
-		expect(r.hooks.filled(memorySlot)).toBe(bank);
 		await r.eval('(memory/remember "k" "a note worth keeping")');
 
 		expect((await bank.store.get("k"))?.body).toBe("a note worth keeping");

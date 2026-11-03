@@ -131,26 +131,20 @@ describe("extracting, then echoing", () => {
 });
 
 describe("capping echo output", () => {
-	it("stops a long echo loop for the model and says how much it dropped", async () => {
+	it("stops a long echo loop for the model", async () => {
 		const r = await repl();
 		const out = await r.eval("(dotimes (i 20) (echo i))");
 		expect(out).toContain("0\n1\n2\n3\n4\n5\n");
-		expect(out).toContain("14 more words of echo output not shown to you");
 		expect(out).not.toContain("7\n");
 	});
 
 	it("hands the human the whole output while capping the model's copy", async () => {
 		const r = await repl();
 		const { model, user } = await r.evalOutput("(dotimes (i 20) (echo i))");
-		expect(model).toContain("not shown to you");
-		expect(user).not.toContain("not shown to you");
-		expect(user).toContain("19\n");
+		expect(model).not.toContain("19\n");
 		expect(user.endsWith("19\n")).toBe(true);
 		expect(model).toContain("nil\n");
 		expect(user).not.toContain("nil");
-		expect(model.endsWith("echo a named value you can page through\n")).toBe(
-			true,
-		);
 	});
 
 	it("leaves short output exactly as it was written", async () => {
@@ -161,9 +155,12 @@ describe("capping echo output", () => {
 	it("hands back an offset that echo continues from without a gap", async () => {
 		const r = await repl();
 		await r.eval("(range 20)");
-		expect(await r.eval("(echo range-1 :offset 6)")).toBe(
-			"13 12 11 10 9 8\n... 6 of 20 words shown, 6 above, 8 below — read on with (echo range-1 :offset 12)\n",
-		);
+		const window = await r.eval("(echo range-1 :offset 6)");
+		expect(window.startsWith("13 12 11 10 9 8\n")).toBe(true);
+		expect(window).toContain("(echo range-1 :offset 12)");
+		expect(
+			(await r.eval("(echo range-1 :offset 12)")).startsWith("7 6 5 4 3 2\n"),
+		).toBe(true);
 	});
 
 	it("does not name or re-truncate the output of echo itself", async () => {

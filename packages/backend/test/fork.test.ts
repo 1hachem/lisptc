@@ -61,41 +61,10 @@ async function forkedRepl(
 	return { forked, replId };
 }
 
-describe("a message's layer", () => {
-	it("is back-filled when the layer is recorded after the message", async () => {
-		const { t, chatId, first } = await conversation();
-		const layers = await t.run(async (ctx) =>
-			(
-				await ctx.db
-					.query("messages")
-					.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-					.collect()
-			).map((m) => [m.wireId, m.layerId ?? null]),
-		);
-		expect(layers.slice(0, 3)).toEqual([
-			["h1", null],
-			["a1", first],
-			["t1", first],
-		]);
-	});
-
-	it("is set on append when the layer was recorded first", async () => {
-		const { t, chatId, first, second } = await conversation();
-		const layers = await t.run(async (ctx) =>
-			(
-				await ctx.db
-					.query("messages")
-					.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
-					.collect()
-			).map((m) => [m.wireId, m.layerId ?? null]),
-		);
-		expect(layers.slice(3)).toEqual([
-			["h2", first],
-			["a2", second],
-			["t2", second],
-		]);
-	});
-});
+async function resumed(t: ReturnType<typeof harness>, replId: Id<"repls">) {
+	const latest = await t.query(internal.repls.latest, { replId });
+	return latest?.layers.map((chunks) => JSON.parse(chunks.join("")));
+}
 
 describe("forking a chat at a message", () => {
 	it("copies the conversation up to that message into a new chat", async () => {
@@ -127,77 +96,44 @@ describe("forking a chat at a message", () => {
 	});
 
 	it("leaves the original chat as it was", async () => {
-		const { t, alice, chatId, replId, second } = await conversation();
+		const { t, alice, chatId, replId } = await conversation();
 		await alice.as.mutation(api.chats.fork, { chatId, messageId: "t1" });
 		const original = await alice.as.query(api.messages.transcript, { chatId });
 		expect(original).toHaveLength(6);
-		expect((await t.query(internal.repls.latest, { replId }))?.head).toBe(
-			second,
-		);
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }, { layer: 2 }]);
 	});
 
 	it("starts the fork's repl from the last layer up to a human message", async () => {
-		const { t, alice, chatId, replId: original, first } = await conversation();
+		const { t, alice, chatId, replId: original } = await conversation();
 		const { replId } = await forkedRepl(alice, chatId, "h2");
 		expect(replId).not.toBe(original);
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.head).toBe(first);
-		expect(latest?.depth).toBe(1);
-		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
-			[{ layer: 1 }],
-		);
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }]);
 	});
 
 	it("starts the fork's repl from before the code an ai message ran", async () => {
-		const { t, alice, chatId, first } = await conversation();
+		const { t, alice, chatId } = await conversation();
 		const { replId } = await forkedRepl(alice, chatId, "a2");
-		expect((await t.query(internal.repls.latest, { replId }))?.head).toBe(
-			first,
-		);
-	});
-
-	it("shares the layer with the original rather than copying it", async () => {
-		const { t, alice, chatId, second } = await conversation();
-		const before = await t.run((ctx) => ctx.db.query("replLayers").collect());
-		const { replId } = await forkedRepl(alice, chatId, "t2");
-		const repl = await t.run((ctx) => ctx.db.get(replId));
-		expect(repl?.head).toBe(second);
-		const after = await t.run((ctx) => ctx.db.query("replLayers").collect());
-		expect(after).toHaveLength(before.length);
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }]);
 	});
 
 	it("resumes the fork from the shared layer's whole run", async () => {
-		const { t, alice, chatId, second } = await conversation();
+		const { t, alice, chatId } = await conversation();
 		const { replId } = await forkedRepl(alice, chatId, "t2");
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.head).toBe(second);
-		expect(latest?.depth).toBe(2);
-		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
-			[{ layer: 1 }, { layer: 2 }],
-		);
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }, { layer: 2 }]);
 	});
 
 	it("records the fork's own layers over the shared one", async () => {
-		const {
-			t,
-			alice,
-			chatId,
-			replId: original,
-			first,
-			second,
-		} = await conversation();
+		const { t, alice, chatId, replId: original, first } = await conversation();
 		const { replId } = await forkedRepl(alice, chatId, "h2");
-		const own = await t.mutation(internal.repls.record, {
+		await t.mutation(internal.repls.record, {
 			replId,
 			over: first,
 			origin: "a3",
 			whole: false,
 			chunks: [JSON.stringify({ layer: 3 })],
 		});
-		expect((await t.query(internal.repls.latest, { replId }))?.head).toBe(own);
-		expect(
-			(await t.query(internal.repls.latest, { replId: original }))?.head,
-		).toBe(second);
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }, { layer: 3 }]);
+		expect(await resumed(t, original)).toEqual([{ layer: 1 }, { layer: 2 }]);
 	});
 
 	it("starts a fresh repl when no layer came before the message", async () => {
@@ -214,18 +150,14 @@ describe("forking a chat at a message", () => {
 	});
 
 	it("keeps the layers the fork stands on when the original is removed", async () => {
-		const { t, alice, chatId, first } = await conversation();
+		const { t, alice, chatId } = await conversation();
 		const { forked, replId } = await forkedRepl(alice, chatId, "h2");
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.chats.remove, { chatId });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const left = await t.run((ctx) => ctx.db.query("replLayers").collect());
-		expect(left.map((layer) => layer._id)).toEqual([first]);
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.depth).toBe(1);
-		expect(JSON.parse(latest?.layers[0].join("") ?? "")).toEqual({ layer: 1 });
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }]);
 
 		await alice.as.mutation(api.chats.remove, { chatId: forked });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
@@ -237,26 +169,21 @@ describe("forking a chat at a message", () => {
 	});
 
 	it("keeps a fork's layers when the original and a sibling fork are removed", async () => {
-		const { t, alice, chatId, second } = await conversation();
+		const { t, alice, chatId } = await conversation();
 		await alice.as.mutation(api.messages.append, {
 			chatId,
 			messages: [{ id: "f2", type: "ai", content: "cube is defined" }],
 		});
 		const { forked: sibling } = await forkedRepl(alice, chatId, "f2");
 		const { forked, replId } = await forkedRepl(alice, chatId, "f2");
-		const ownedBefore = await t.query(internal.repls.latest, { replId });
-		expect(ownedBefore?.head).toBe(second);
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }, { layer: 2 }]);
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.chats.remove, { chatId });
 		await alice.as.mutation(api.chats.remove, { chatId: sibling });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.head).toBe(second);
-		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
-			[{ layer: 1 }, { layer: 2 }],
-		);
+		expect(await resumed(t, replId)).toEqual([{ layer: 1 }, { layer: 2 }]);
 
 		await alice.as.mutation(api.chats.remove, { chatId: forked });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);

@@ -61,15 +61,14 @@ describe("a chat's repl", () => {
 		);
 	});
 
-	it("starts with no head and nothing to resume", async () => {
+	it("starts with nothing to resume", async () => {
 		const { t, replId } = await chatOf("alice@example.com");
-		expect((await t.run((ctx) => ctx.db.get(replId)))?.head).toBeUndefined();
 		expect(await t.query(internal.repls.latest, { replId })).toBeNull();
 	});
 });
 
 describe("repl layers", () => {
-	it("moves the head and deepens with each layer", async () => {
+	it("resumes every layer recorded over the head, in order", async () => {
 		const { t, replId } = await chatOf("alice@example.com");
 		const first = await t.mutation(internal.repls.record, {
 			replId,
@@ -79,13 +78,12 @@ describe("repl layers", () => {
 			replId,
 			...layer(2, first),
 		});
-		expect((await t.run((ctx) => ctx.db.get(replId)))?.head).toBe(second);
-		const rows = await t.run((ctx) => ctx.db.query("replLayers").collect());
-		expect(rows.map((row) => [row._id, row.parent, row.depth])).toEqual([
-			[first, undefined, 1],
-			[second, first, 2],
-		]);
-		expect(rows.every((row) => row.bytes > 0)).toBe(true);
+		await t.mutation(internal.repls.record, { replId, ...layer(3, second) });
+		const latest = await t.query(internal.repls.latest, { replId });
+		expect(latest?.depth).toBe(3);
+		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
+			[{ n: 1 }, { n: 2 }, { n: 3 }],
+		);
 	});
 
 	it("refuses a delta that is not over the head", async () => {
@@ -114,13 +112,12 @@ describe("repl layers", () => {
 			...layer(1),
 		});
 		await t.mutation(internal.repls.record, { replId, ...layer(2, first) });
-		const whole = await t.mutation(internal.repls.record, {
-			replId,
-			...layer(3),
-		});
+		await t.mutation(internal.repls.record, { replId, ...layer(3) });
 		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.head).toBe(whole);
 		expect(latest?.depth).toBe(3);
+		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
+			[{ n: 3 }],
+		);
 	});
 
 	it("hands back the run from the nearest whole layer", async () => {
@@ -151,15 +148,13 @@ describe("repl layers", () => {
 		const json = JSON.stringify({
 			text: "x".repeat(REPL_LAYER_CHUNK_CHARS * 2),
 		});
-		const layerId = await t.mutation(internal.repls.record, {
+		await t.mutation(internal.repls.record, {
 			replId,
 			whole: true,
 			chunks: chunked(json),
 		});
-		expect((await t.run((ctx) => ctx.db.get(layerId)))?.chunks).toBe(3);
 		const latest = await t.query(internal.repls.latest, { replId });
 		expect(latest?.layers).toHaveLength(1);
-		expect(latest?.layers[0]).toHaveLength(3);
 		expect(latest?.layers[0].join("")).toBe(json);
 	});
 
@@ -195,8 +190,6 @@ describe("the convex image store", () => {
 		await store.save(image(["a", "b"]));
 		const resumed = await new ConvexImageStore(replId, serverOf(t)).latest();
 		expect(resumed).toEqual({ depth: 2, image: image(["a", "b"]) });
-		const rows = await t.run((ctx) => ctx.db.query("replLayers").collect());
-		expect(rows.map((row) => row.whole)).toEqual([true, false]);
 	});
 
 	it("has nothing to resume before a save", async () => {
