@@ -88,6 +88,24 @@ export function applyWatched(
 	}
 }
 
+export interface Draft {
+	readonly stepId: string;
+	readonly text: string;
+}
+
+export function withDrafts(
+	shown: ChatMessage[],
+	drafts: readonly Draft[] = [],
+): ChatMessage[] {
+	const ids = new Set(shown.map((message) => message.id));
+	return [
+		...shown,
+		...drafts
+			.filter(({ stepId }) => !ids.has(stepId))
+			.map(({ stepId, text }) => ({ id: stepId, type: "ai", content: text })),
+	];
+}
+
 export function shownMessages(
 	watched: Watched,
 	stored: readonly ChatMessage[] = [],
