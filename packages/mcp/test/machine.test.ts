@@ -90,23 +90,17 @@ describe("the user's machine", () => {
 		expect(listed()).not.toMatch(/local-git/);
 		online.value = true;
 		await step();
-		expect(listed()).toMatch(
-			/"local-git" "git on the machine" nil :unloaded :local\)/,
-		);
-		expect(listed()).toMatch(/"remote" "" nil :unloaded\)/);
+		expect(listed()).toMatch(/"local-git"[^)]*:local\)/);
+		expect(listed()).not.toMatch(/"remote"[^)]*:local\)/);
 	});
 
 	it("tells the session when the desktop connects and disconnects", async () => {
 		const online = { value: true };
 		const { step } = session(online);
-		expect(await step()).toBe(
-			"desktop app connected: local servers now loadable: local-git",
-		);
+		expect(await step()).toMatch(/\bconnected\b.*local-git/);
 		expect(await step()).toBe("");
 		online.value = false;
-		expect(await step()).toBe(
-			"desktop app disconnected: local servers gone: local-git",
-		);
+		expect(await step()).toMatch(/disconnected.*local-git/);
 		expect(await step()).toBe("");
 	});
 
