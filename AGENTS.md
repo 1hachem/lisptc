@@ -329,6 +329,20 @@ instead; their own `AGENTS.md` says so.
 A package with shared test helpers has them in `test/helpers.ts`, and a test
 should use them rather than assembling the world by hand.
 
+**A test pins behaviour, never the implementation.** It drives what a caller
+drives: Lisp through the REPL, a module through its exports, a component
+through what a user does to it, a Convex function through `api`. It asserts what
+that caller gets back: the value, the error it can tell apart, the text a user
+reads, the row read back through a public query. A refactor that keeps the
+behaviour leaves every test green.
+
+So a test does not assert the wording of a prompt or a message, a field or id
+the caller never reads, a raw row, a `data-*` attribute, a class name, the shape
+of the markup, or what a fake was handed and how often. It does not compare a
+constant with itself, or compute the expected value the way the code does. When
+a behaviour can only be seen through one of those, it lacks a public surface,
+and that is what to add. A test's title says what its body checks.
+
 A test belongs to the package that owns what it asserts. A surface an extension
 owns is tested in that extension's package, never in the interpreter, whose
 helpers build an interpreter with nothing installed. A runtime package's tests
