@@ -343,6 +343,11 @@ constant with itself, or compute the expected value the way the code does. When
 a behaviour can only be seen through one of those, it lacks a public surface,
 and that is what to add. A test's title says what its body checks.
 
+A fake that stands in for a port is the exception. What an extension hands its
+host is that extension's output, so a test may assert the call a port receives,
+such as the command a server is launched with. It still asserts nothing the
+port's contract leaves out.
+
 A test belongs to the package that owns what it asserts. A surface an extension
 owns is tested in that extension's package, never in the interpreter, whose
 helpers build an interpreter with nothing installed. A runtime package's tests
