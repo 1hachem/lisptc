@@ -531,6 +531,29 @@ describe("the agent turn", () => {
 		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "replayed." });
 	});
 
+	test("a model port answers in place of the provider, told its step", async () => {
+		const calls: { system: string; stepId: string; model?: string }[] = [];
+		const events = await drain(ask, {
+			repl: testRepl(),
+			config: { system: "base", model: "m" },
+			async *model(request, { config, stepId }) {
+				calls.push({ system: request.system, stepId, model: config.model });
+				yield { text: "ported." };
+			},
+		});
+
+		expect(seen).toHaveLength(0);
+		const step = events.find((e) => e.type === "delta");
+		expect(calls).toEqual([
+			{
+				system: "base",
+				stepId: step?.type === "delta" ? step.stepId : "",
+				model: "m",
+			},
+		]);
+		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "ported." });
+	});
+
 	test("a hook can rewrite the code before it runs", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 		const repl = testRepl([

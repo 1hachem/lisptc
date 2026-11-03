@@ -44,7 +44,22 @@ export interface TurnOptions {
 	inbox?: () => Promise<Envelope[]>;
 	runsForms?: boolean;
 	received?: Annotations;
+	model?: ModelStream;
 }
+
+export interface ModelCallOptions {
+	readonly config: AgentConfig;
+	readonly stepId: string;
+	readonly signal?: AbortSignal;
+}
+
+export type ModelStream = (
+	request: ModelRequest,
+	options: ModelCallOptions,
+) => AsyncIterable<ModelDelta>;
+
+const providerModel: ModelStream = (request, { config, signal }) =>
+	streamAgent([...request.messages], config, { signal });
 
 export type TurnEvent =
 	| { type: "delta"; stepId: string; text?: string; reasoning?: string }
@@ -197,10 +212,10 @@ async function* callModel(
 	repl: AgentRepl,
 	request: ModelRequest,
 	stepId: string,
-	call: (request: ModelRequest) => AsyncIterable<ModelDelta>,
+	call: ModelCall,
 ): AsyncGenerator<TurnEvent, Reply> {
 	const reply: Reply = { full: "", reasoning: "" };
-	for await (const delta of repl.modelCall(request, call)) {
+	for await (const delta of repl.modelCall(request, (r) => call(r, stepId))) {
 		if (delta.usage) {
 			reply.usage = delta.usage;
 			continue;
@@ -226,12 +241,16 @@ interface Turn {
 	readonly inbox?: () => Promise<Envelope[]>;
 	readonly runsForms: boolean;
 	readonly received?: Annotations;
+	readonly model: ModelStream;
 	readonly agent: AgentTurn;
 	readonly telemetry: TurnTelemetry;
 	steps: number;
 }
 
-type ModelCall = (request: ModelRequest) => AsyncIterable<ModelDelta>;
+type ModelCall = (
+	request: ModelRequest,
+	stepId: string,
+) => AsyncIterable<ModelDelta>;
 
 function* collect(annotations: StepAnnotations): Generator<TurnEvent> {
 	if (Object.keys(annotations.step).length > 0)
@@ -265,12 +284,12 @@ async function* openTurn(
 	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,
-		call: (request) =>
-			streamAgent(
-				[...request.messages],
-				{ ...traced, system: request.system },
-				{ signal },
-			),
+		call: (request, stepId) =>
+			turn.model(request, {
+				config: { ...traced, system: request.system },
+				stepId,
+				signal,
+			}),
 	};
 }
 
@@ -467,6 +486,7 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 		inbox,
 		runsForms: options.runsForms ?? true,
 		received: options.received,
+		model: options.model ?? providerModel,
 		steps: 0,
 	};
 }

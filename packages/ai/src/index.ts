@@ -30,6 +30,7 @@ export {
 	withRequestContext,
 } from "./telemetry.ts";
 export {
+	type ModelHost,
 	type Posted,
 	type PostOptions,
 	Thread,
@@ -50,6 +51,8 @@ export {
 	type ThreadsOptions,
 } from "./threads.ts";
 export {
+	type ModelCallOptions,
+	type ModelStream,
 	runAgentTurn,
 	type TurnEvent,
 	type TurnOptions,

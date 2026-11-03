@@ -1,6 +1,9 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
-import type { ProviderSpec as SharedProviderSpec } from "@repo/shared/providers";
+import type {
+	ProviderName,
+	ProviderSpec as SharedProviderSpec,
+} from "@repo/shared/providers";
 
 export interface ModelOptions {
 	model?: string;
@@ -48,3 +51,19 @@ export function defineProvider(spec: ProviderSpec): Provider {
 		});
 	};
 }
+
+export const providerShapes: Record<
+	ProviderName,
+	Pick<ProviderSpec, "extraBody" | "variant">
+> = {
+	digitalocean: {
+		extraBody: (opts) => ({
+			reasoning_effort: opts.reasoningEffort ?? "low",
+			...repetitionPenaltyBody(opts),
+		}),
+	},
+	openrouter: {
+		extraBody: repetitionPenaltyBody,
+		variant: (model) => (model.endsWith(":nitro") ? model : `${model}:nitro`),
+	},
+};
