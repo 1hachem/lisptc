@@ -2,6 +2,7 @@ import type {
 	ChatMessageInput,
 	Lineage,
 	Mailbox,
+	ModelHost,
 	ThreadStatus,
 	Threads,
 	ThreadsHost,
@@ -24,6 +25,7 @@ import {
 } from "./agent-repl.ts";
 import type { DesktopFor } from "./desktop-bridge.ts";
 import { ConvexImageStore } from "./image-store.ts";
+import { ConvexModelHost } from "./model-host.ts";
 import type { Owner, ServerClient } from "./server-client.ts";
 
 export type RecordLineage = FunctionReturnType<
@@ -111,6 +113,7 @@ export interface ThreadHostOptions {
 	readonly actAs: (owner: Owner) => WorkspaceClient;
 	readonly threads?: () => Threads;
 	readonly desktopFor?: DesktopFor;
+	readonly siteUrl?: string;
 }
 
 const asChat = (threadId: string) => threadId as Id<"chats">;
@@ -118,9 +121,12 @@ const asChat = (threadId: string) => threadId as Id<"chats">;
 export class ThreadHost {
 	readonly transcript: TranscriptStore;
 	readonly status: ThreadStatus;
+	readonly model?: ModelHost;
 
 	constructor(private readonly options: ThreadHostOptions) {
-		const { server } = options;
+		const { server, siteUrl } = options;
+		if (siteUrl !== undefined)
+			this.model = new ConvexModelHost(server, siteUrl);
 		this.transcript = {
 			async read(threadId) {
 				return toInput(
@@ -201,6 +207,7 @@ export class ThreadHost {
 				mailbox,
 				transcript: this.transcript,
 				status: this.status,
+				...(this.model === undefined ? {} : { model: this.model }),
 				setup: (threadId) => this.setup(threadId),
 			},
 			repl: (threadId) => this.repl(asChat(threadId)),

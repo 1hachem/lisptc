@@ -10,7 +10,7 @@ import {
 	MAX_SPAWN_DEPTH,
 	STREAMING_LEASE_MS,
 } from "../convex/limits.ts";
-import { harness, signIn } from "./helpers.ts";
+import { draft, harness, signIn } from "./helpers.ts";
 
 describe("a thread acting as its record's owner", () => {
 	it("reaches the owner's workspace with no session behind it", async () => {
@@ -493,6 +493,21 @@ describe("chat access", () => {
 		await expect(
 			bob.as.mutation(api.chats.unarchive, { chatId }),
 		).rejects.toThrow();
+	});
+});
+
+describe("draft access", () => {
+	it("refuses another user's drafts", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await draft(t, chatId, "s1", "private.");
+		await expect(bob.as.query(api.drafts.list, { chatId })).rejects.toThrow(
+			/FORBIDDEN/,
+		);
 	});
 });
 

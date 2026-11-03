@@ -13,6 +13,7 @@ import type * as bin from "../bin.js";
 import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
 import type * as desktops from "../desktops.js";
+import type * as drafts from "../drafts.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as layouts from "../layouts.js";
@@ -23,8 +24,10 @@ import type * as lib_bin from "../lib/bin.js";
 import type * as lib_chunks from "../lib/chunks.js";
 import type * as lib_claimed from "../lib/claimed.js";
 import type * as lib_clamp from "../lib/clamp.js";
+import type * as lib_deltas from "../lib/deltas.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_files from "../lib/files.js";
+import type * as lib_model from "../lib/model.js";
 import type * as lib_names from "../lib/names.js";
 import type * as lib_preferenceDefaults from "../lib/preferenceDefaults.js";
 import type * as lib_slug from "../lib/slug.js";
@@ -61,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   chats: typeof chats;
   crons: typeof crons;
   desktops: typeof desktops;
+  drafts: typeof drafts;
   files: typeof files;
   http: typeof http;
   layouts: typeof layouts;
@@ -71,8 +75,10 @@ declare const fullApi: ApiFromModules<{
   "lib/chunks": typeof lib_chunks;
   "lib/claimed": typeof lib_claimed;
   "lib/clamp": typeof lib_clamp;
+  "lib/deltas": typeof lib_deltas;
   "lib/env": typeof lib_env;
   "lib/files": typeof lib_files;
+  "lib/model": typeof lib_model;
   "lib/names": typeof lib_names;
   "lib/preferenceDefaults": typeof lib_preferenceDefaults;
   "lib/slug": typeof lib_slug;
@@ -127,5 +133,6 @@ export declare const internal: FilterApi<
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
+  persistentTextStreaming: import("@convex-dev/persistent-text-streaming/_generated/component.js").ComponentApi<"persistentTextStreaming">;
   posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };

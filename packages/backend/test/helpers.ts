@@ -1,7 +1,8 @@
 /// <reference types="vite/client" />
 import betterAuthTest from "@convex-dev/better-auth/test";
+import persistentTextStreamingTest from "@convex-dev/persistent-text-streaming/test";
 import { convexTest, type TestConvex } from "convex-test";
-import { components } from "../convex/_generated/api.js";
+import { components, internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import schema from "../convex/schema.ts";
 
@@ -18,6 +19,7 @@ export interface Signed {
 export function harness(): TestConvex<typeof schema> {
 	const t = convexTest(schema, modules);
 	betterAuthTest.register(t);
+	persistentTextStreamingTest.register(t);
 	return t;
 }
 
@@ -82,4 +84,22 @@ export async function signIn(
 			typeof schema
 		>,
 	};
+}
+
+export async function draft(
+	t: TestConvex<typeof schema>,
+	chatId: Id<"chats">,
+	stepId: string,
+	text: string,
+) {
+	const opened = await t.mutation(internal.drafts.open, { chatId, stepId });
+	await t.run(
+		async (ctx) =>
+			await ctx.runMutation(components.persistentTextStreaming.lib.addChunk, {
+				streamId: opened.streamId,
+				text,
+				final: false,
+			}),
+	);
+	return opened;
 }

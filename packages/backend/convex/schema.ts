@@ -1,3 +1,4 @@
+import { StreamIdValidator } from "@convex-dev/persistent-text-streaming";
 import { CATALOGUED_CHOICES, type ProviderName } from "@repo/shared/providers";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
@@ -216,6 +217,16 @@ export default defineSchema({
 		.index("by_chat_wire", ["chatId", "wireId"])
 		.index("by_workspace_type", ["workspaceId", "type"])
 		.index("by_layer", ["layerId"]),
+
+	drafts: defineTable({
+		chatId: v.id("chats"),
+		stepId: v.string(),
+		streamId: StreamIdValidator,
+		token: v.string(),
+		claimed: v.boolean(),
+	})
+		.index("by_chat_step", ["chatId", "stepId"])
+		.index("by_stream", ["streamId"]),
 
 	secrets: defineTable({
 		workspaceId: v.id("workspaces"),

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import type schema from "../convex/schema.ts";
-import { harness, type Signed, signIn } from "./helpers.ts";
+import { draft, harness, type Signed, signIn } from "./helpers.ts";
 
 const PAST_A_BATCH = 257;
 
@@ -29,6 +29,24 @@ describe("removing a chat", () => {
 
 		const left = await t.run(
 			async (ctx) => await ctx.db.query("messages").collect(),
+		);
+		expect(left).toEqual([]);
+	});
+
+	it("takes its drafts with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await draft(t, chatId, "s1", "half a reply.");
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("drafts").collect(),
 		);
 		expect(left).toEqual([]);
 	});

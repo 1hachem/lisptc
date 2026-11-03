@@ -40,6 +40,7 @@
     "@better-auth/passkey": "~1.6.33",
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/migrations": "^0.3.6",
+    "@convex-dev/persistent-text-streaming": "^0.3.5",
     "@posthog/convex": "^2.1.5",
     "@repo/agents-extension": "workspace:*",
     "@repo/ai": "workspace:*",
