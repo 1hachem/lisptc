@@ -189,7 +189,7 @@ What the extensions add on top:
   pnpm test:evals        the agent evals, against real models
   pnpm test:nvim         the Neovim integration test
 
-  task up                build and run the whole stack in docker, live reload
+  task up                run the whole stack on the local k3s under tilt, live reload
   task down              stop it (pass -- -v to drop its data)
   task evals:run         run the eval suite
   task evals:open        build the trace viewer, serve it, open a browser

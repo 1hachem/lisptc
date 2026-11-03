@@ -10,8 +10,20 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      {{- with .Values.imagePullSecret }}
       imagePullSecrets:
-        - name: {{ .Values.imagePullSecret }}
+        - name: {{ . }}
+      {{- end }}
+      {{- if .Values.dev.enabled }}
+      {{- with .Values.dev.node }}
+      nodeSelector:
+        kubernetes.io/hostname: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+        - name: deployment-env
+          secret:
+            secretName: lisptc-convex-deploy
       containers:
         - name: convex-deploy
           image: "{{ .Values.convexDeploy.image.repository }}:{{ include "lisptc.imageTag" (list . .Values.convexDeploy.image.tag) }}"
@@ -22,12 +34,16 @@ spec:
               until node -e 'fetch(process.env.CONVEX_SELF_HOSTED_URL + "/version").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'; do
                 sleep 2
               done
-              pnpm run env:seed
+              pnpm exec convex env set --force --from-file /convex-deploy/deployment.env
+              {{- if .Values.preview.enabled }}
+              pnpm exec convex env set SITE_URL "$SITE_URL"
+              {{- end }}
               pnpm exec convex deploy --typecheck disable --codegen disable
               exec pnpm run migrate
-          envFrom:
-            - secretRef:
-                name: lisptc-convex-deploy
+          volumeMounts:
+            - name: deployment-env
+              mountPath: /convex-deploy
+              readOnly: true
           env:
             - name: CONVEX_SELF_HOSTED_URL
               value: http://convex-backend:3210

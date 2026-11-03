@@ -1,0 +1,7 @@
+imagePullSecret: ""
+
+dev:
+  enabled: true
+
+infisical:
+  envSlug: dev
