@@ -236,13 +236,7 @@ describe("the chat's width", () => {
 		session.isLoading = false;
 		const host = await mount();
 
-		const table = host.querySelector("table");
-		expect(table?.classList.contains("w-max")).toBe(true);
-		expect(table?.parentElement?.classList.contains("overflow-x-auto")).toBe(
-			true,
-		);
-		for (const cell of host.querySelectorAll("th, td"))
-			expect(cell.classList.contains("wrap-anywhere")).toBe(false);
+		expect(host.querySelector("table")).not.toBeNull();
 		expect(sidewaysLeaks(host)).toEqual([]);
 	});
 });

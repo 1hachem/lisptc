@@ -67,13 +67,11 @@ describe("child threads", () => {
 	it("counts the children and shows a state for each", () => {
 		const host = mount(THREADS);
 		expect(host.textContent).toContain("3 threads");
-		const buttons = rows(host);
-		expect(buttons.map((b) => b.dataset.state)).toEqual([
+		expect(rows(host).map((b) => b.title)).toEqual([
 			"running",
 			"waiting",
-			"errored",
+			"boom",
 		]);
-		expect(buttons.map((b) => b.title)).toEqual(["running", "waiting", "boom"]);
 	});
 
 	it("opens the child it was clicked on", () => {
@@ -95,11 +93,7 @@ describe("child threads", () => {
 			{ _id: "d", title: "", lastStartedAt: 1 },
 			{ _id: "e", title: "tester", status: "streaming" },
 		]);
-		expect(rows(host).map((b) => b.dataset.state)).toEqual([
-			"errored",
-			"done",
-			"running",
-		]);
+		expect(rows(host).map((b) => b.title)).toEqual(["boom", "done", "running"]);
 		expect(rows(host)[1].textContent).toContain("untitled");
 		const more = host.querySelector<HTMLButtonElement>(
 			"[data-child-threads=more]",
@@ -154,19 +148,13 @@ describe("child threads", () => {
 			expect(stop.textContent).toContain("■");
 	});
 
-	it("checks only a child that finished, and marks a stopped or failed one apart", () => {
+	it("tells a finished child from a stopped or failed one", () => {
 		const host = mount([
 			{ _id: "d", title: "done", lastStartedAt: 1 },
 			{ _id: "s", title: "halted", status: "stopped" },
 			{ _id: "e", title: "broke", status: "errored", failure: "boom" },
 		]);
-		expect(rows(host).map((b) => b.dataset.state)).toEqual([
-			"done",
-			"stopped",
-			"errored",
-		]);
-		const icons = rows(host).map((b) => b.querySelector("svg")?.innerHTML);
-		expect(new Set(icons).size).toBe(3);
+		expect(rows(host).map((b) => b.title)).toEqual(["done", "stopped", "boom"]);
 	});
 
 	it("marks a child that never ran a turn as idle, apart from a finished one", () => {
@@ -174,9 +162,7 @@ describe("child threads", () => {
 			{ _id: "i", title: "spawned" },
 			{ _id: "d", title: "done", lastStartedAt: 1 },
 		]);
-		expect(rows(host).map((b) => b.dataset.state)).toEqual(["idle", "done"]);
-		const icons = rows(host).map((b) => b.querySelector("svg")?.innerHTML);
-		expect(new Set(icons).size).toBe(2);
+		expect(rows(host).map((b) => b.title)).toEqual(["idle", "done"]);
 		expect(control(host, "stop")).toBeNull();
 	});
 

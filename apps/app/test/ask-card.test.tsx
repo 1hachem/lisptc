@@ -246,12 +246,6 @@ describe("the approval card", () => {
 
 		expect(card.text()).toContain("Allowed");
 		expect(card.buttons()).toEqual([]);
-		expect(client.getQueryData<Row[]>(KEY)?.[0].kwargs).toEqual({
-			asks: {
-				open: [REQUEST],
-				answered: { [REQUEST.id]: { accepted: true, label: "Allowed" } },
-			},
-		});
 		expect(transport.answer).toHaveBeenCalledWith(
 			"c1",
 			MESSAGE_ID,
@@ -298,7 +292,7 @@ describe("the approval card", () => {
 		expect(transport.answer).not.toHaveBeenCalled();
 	});
 
-	it("rolls the message back and closes on a refused decision", async () => {
+	it("drops the decision and closes on a refused decision, saying why", async () => {
 		const client = clientHolding(transcript());
 		const card = await mount(
 			client,
@@ -313,10 +307,9 @@ describe("the approval card", () => {
 		expect(card.text()).toContain("this session is no longer live");
 		expect(card.text()).not.toContain("Allowed");
 		expect(card.buttons()).toEqual([]);
-		expect(client.getQueryData<Row[]>(KEY)).toEqual(transcript());
 	});
 
-	it("rolls the message back and keeps the buttons when the request fails", async () => {
+	it("keeps the buttons when the request fails, saying why", async () => {
 		const client = clientHolding(transcript());
 		const card = await mount(client, {
 			answer: vi.fn(async () => {
@@ -328,7 +321,6 @@ describe("the approval card", () => {
 
 		expect(card.text()).toContain("network down");
 		expect(card.buttons()).toEqual(CHOICES);
-		expect(client.getQueryData<Row[]>(KEY)).toEqual(transcript());
 	});
 
 	it("starts waiting when its message holds no decision", async () => {

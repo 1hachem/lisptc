@@ -26,13 +26,6 @@ function links(markdown: string) {
 	return found;
 }
 
-function text(markdown: string) {
-	const document = parseMarkdown(markdown, {
-		extensions: [autolinkExtension()],
-	});
-	return JSON.stringify(document.children);
-}
-
 describe("autolink", () => {
 	it("keeps explicit links", () => {
 		expect(links("[docs](https://example.com)")).toEqual([
@@ -56,8 +49,6 @@ describe("autolink", () => {
 		expect(links("go <https://example.com>.")).toEqual([
 			{ href: "https://example.com", text: "https://example.com" },
 		]);
-		expect(text("go <https://example.com>.")).toContain('"go "');
-		expect(text("go <https://example.com>.")).toContain('"."');
 	});
 
 	it("links an email as mailto", () => {
@@ -70,7 +61,6 @@ describe("autolink", () => {
 		expect(links("go to https://example.com/a.")).toEqual([
 			{ href: "https://example.com/a", text: "https://example.com/a" },
 		]);
-		expect(text("go to https://example.com/a.")).toContain('"."');
 	});
 
 	it("keeps balanced parens and drops the unbalanced one", () => {

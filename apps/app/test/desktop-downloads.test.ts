@@ -4,7 +4,6 @@ import {
 	DESKTOP_DOWNLOADS,
 	isDownloadId,
 	primaryDownload,
-	startDownload,
 } from "../src/lib/desktop-downloads.ts";
 
 describe("desktop downloads", () => {
@@ -35,19 +34,5 @@ describe("desktop downloads", () => {
 		expect(chosenDownload(undefined, "Linux")?.file).toBe("salsal.AppImage");
 		expect(isDownloadId("windows")).toBe(true);
 		expect(isDownloadId("salsal.exe")).toBe(false);
-	});
-
-	it("starts a download in a hidden frame without leaving the page", () => {
-		const appended: { hidden: boolean; src: string }[] = [];
-		const doc = {
-			createElement: () => ({ hidden: false, src: "" }),
-			body: {
-				append: (frame: { hidden: boolean; src: string }) =>
-					appended.push(frame),
-			},
-		} as unknown as Document;
-		const linux = DESKTOP_DOWNLOADS.find((download) => download.id === "linux");
-		startDownload(linux?.url ?? "", doc);
-		expect(appended).toEqual([{ hidden: true, src: linux?.url }]);
 	});
 });

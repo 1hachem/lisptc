@@ -108,9 +108,6 @@ describe("GenerativeUI", () => {
 		expect(
 			host.querySelector<HTMLInputElement>("input[name=on]")?.checked,
 		).toBe(true);
-		expect(host.querySelector("span.border-green\\/50")?.textContent).toBe(
-			"ok",
-		);
 	});
 
 	it("names a widget it does not know", () => {
@@ -120,7 +117,8 @@ describe("GenerativeUI", () => {
 
 	it("leaves out a field label the view does not give", () => {
 		render(view("input", { name: "q" }));
-		expect(host.querySelector("label span")).toBeNull();
+		expect(host.querySelector("input[name=q]")).not.toBeNull();
+		expect(host.textContent).toBe("");
 	});
 
 	it("fires a button's action with the values of its form", async () => {

@@ -34,7 +34,7 @@ describe("what the watch stream shows", () => {
 	test("reads an event split across chunks", () => {
 		const whole = sse("values", { messages: [human] });
 		const watched = watch(whole.slice(0, 9), whole.slice(9));
-		expect(watched.snapshot).toEqual([human]);
+		expect(shownMessages(watched)).toEqual([human]);
 	});
 
 	test("follows a turn it did not start through its statuses", () => {

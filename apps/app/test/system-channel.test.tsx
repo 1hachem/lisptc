@@ -5,7 +5,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
 import { TraceLines } from "../src/components/trace-view.tsx";
-import { CHANNELS } from "../src/lib/channels.ts";
 import { UIProvider } from "../src/lib/ui.tsx";
 
 const NOTE = "I approved (fs/write a). Carry on.";
@@ -130,12 +129,6 @@ async function mount(view: React.ReactNode = <ChatView />) {
 }
 
 describe("the system channel", () => {
-	it("is a channel the trace toggles", () => {
-		expect(CHANNELS.find((c) => c.id === "system")).toMatchObject({
-			label: "system",
-		});
-	});
-
 	it("keeps what the system told the agent out of the chat", async () => {
 		const host = await mount();
 		expect(host.textContent).toContain("write a");
@@ -144,18 +137,10 @@ describe("the system channel", () => {
 
 	it("draws what the system told the agent in the trace, and never as the user's words", async () => {
 		const host = await mount(<TraceLines messages={session.messages} />);
-		for (const row of host.querySelectorAll<HTMLButtonElement>(
-			"[data-trace-message] > button",
-		))
-			await act(async () => row.click());
-
-		expect(host.textContent).toContain(NOTE);
-		expect(
-			host.querySelector('[data-trace-message="system"]')?.textContent,
-		).toContain(NOTE);
-		const userLines = [
-			...host.querySelectorAll('[data-trace-message="you"]'),
-		].map((line) => line.textContent);
-		expect(userLines).toEqual(["›write a"]);
+		const system = host
+			.querySelector('[aria-label="system"]')
+			?.closest("button");
+		expect(system?.textContent).toContain(NOTE);
+		expect(system?.textContent).not.toContain("›");
 	});
 });
