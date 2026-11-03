@@ -28,6 +28,8 @@ spec:
           envFrom:
             - secretRef:
                 name: lisptc-convex-deploy
+            - secretRef:
+                name: lisptc-ai
           env:
             - name: CONVEX_SELF_HOSTED_URL
               value: http://convex-backend:3210
