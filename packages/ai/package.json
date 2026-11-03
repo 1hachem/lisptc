@@ -5,6 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./model-stream": "./src/model-stream.ts",
+    "./provider/core": "./src/provider/core.ts",
     "./repl-store": "./src/repl-store.ts"
   },
   "engines": {

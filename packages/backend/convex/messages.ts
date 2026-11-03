@@ -10,6 +10,7 @@ import {
 	type QueryCtx,
 	query,
 } from "./_generated/server.js";
+import { dropDrafts } from "./drafts.js";
 import { checkAttachments } from "./lib/attached.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
@@ -169,6 +170,11 @@ export async function appendTo(
 		);
 		seq += 1;
 	}
+	await dropDrafts(
+		ctx,
+		chatId,
+		messages.flatMap(({ id }) => (id === undefined ? [] : [id])),
+	);
 	await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
 	return ids;
 }

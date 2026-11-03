@@ -38,7 +38,7 @@ import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { type Sequenced, timelineOf } from "./timeline.ts";
 import { isFreshChat } from "./turns.ts";
-import { shownMessages, useWatch, type Watched } from "./watch.ts";
+import { shownMessages, useWatch, type Watched, withDrafts } from "./watch.ts";
 
 export interface ChatMessage {
 	id?: string;
@@ -508,13 +508,19 @@ export function useBriefing(chatId: Id<"chats"> | null): ChatMessage[] {
 function useTranscript(chatId: Id<"chats"> | null) {
 	const watched = useWatch(chatId);
 	const persisted = usePersisted(chatId);
+	const { data: drafts } = useQuery(
+		convexQuery(api.drafts.list, chatId ? { chatId } : "skip"),
+	);
 	const streamed = useMemo(
 		() =>
-			shownMessages(
-				watched,
-				persisted.map(({ message }) => message),
+			withDrafts(
+				shownMessages(
+					watched,
+					persisted.map(({ message }) => message),
+				),
+				drafts,
 			),
-		[watched, persisted],
+		[watched, persisted, drafts],
 	);
 	const running = useStreaming(chatId);
 	return { watched, persisted, streamed, running };

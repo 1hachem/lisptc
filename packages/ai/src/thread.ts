@@ -1,3 +1,4 @@
+import type { ModelDelta, ModelRequest } from "@repo/interpreter/session";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import type { MessageKwargs } from "@repo/shared/messages";
@@ -14,7 +15,12 @@ import {
 	Watchers,
 	type WireMessage,
 } from "./stream.ts";
-import { runAgentTurn, type TurnEvent } from "./turn.ts";
+import {
+	type ModelCallOptions,
+	type ModelStream,
+	runAgentTurn,
+	type TurnEvent,
+} from "./turn.ts";
 
 export interface TranscriptStore {
 	read(threadId: string): Promise<ChatMessageInput[]>;
@@ -42,8 +48,17 @@ export interface ThreadBudget {
 	charge(usage: Usage): void;
 }
 
+export interface ModelHost {
+	stream(
+		threadId: string,
+		request: ModelRequest,
+		options: ModelCallOptions,
+	): AsyncIterable<ModelDelta>;
+}
+
 export interface ThreadPorts {
 	mailbox: Mailbox;
+	model?: ModelHost;
 	budget?: ThreadBudget;
 	repl(threadId: string): Awaitable<AgentRepl>;
 	transcript: TranscriptStore;
@@ -78,6 +93,15 @@ function openingMessage(envelope: Envelope): WireMessage {
 			? {}
 			: { additional_kwargs: envelope.annotations }),
 	};
+}
+
+function modelFor(
+	host: ModelHost | undefined,
+	threadId: string,
+): { model?: ModelStream } {
+	return host === undefined
+		? {}
+		: { model: (request, options) => host.stream(threadId, request, options) };
 }
 
 function stepCap(...caps: (number | undefined)[]): { maxSteps?: number } {
@@ -291,6 +315,7 @@ export class Thread {
 						identity: setup.identity,
 						runsForms: setup.runsForms,
 						received,
+						...modelFor(ports.model, id),
 						...stepCap(budget.maxSteps, setup.maxSteps, left.steps),
 						inbox: async () => {
 							const taken = await ports.mailbox.take(id);

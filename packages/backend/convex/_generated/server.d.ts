@@ -31,12 +31,21 @@ type Env = {
   readonly CONVEX_CLOUD_URL: string;
   readonly CONVEX_SITE_URL: string;
   readonly BETTER_AUTH_SECRET: string;
+  readonly DO_API_KEY: string | undefined;
+  readonly DO_BASE_URL: string | undefined;
+  readonly DO_MODEL: string | undefined;
   readonly GITHUB_CLIENT_ID: string | undefined;
   readonly GITHUB_CLIENT_SECRET: string | undefined;
   readonly GOOGLE_CLIENT_ID: string | undefined;
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
+  readonly LLM_PROVIDER: string | undefined;
+  readonly OPENROUTER_API_KEY: string | undefined;
+  readonly OPENROUTER_BASE_URL: string | undefined;
+  readonly OPENROUTER_MODEL: string | undefined;
   readonly POSTHOG_API_KEY: string;
+  readonly POSTHOG_ENVIRONMENT: string | undefined;
   readonly POSTHOG_HOST: string | undefined;
+  readonly POSTHOG_PRIVACY_MODE: string | undefined;
   readonly SITE_URL: string;
 };
 

@@ -10,6 +10,7 @@ import {
 	shownMessages,
 	UNWATCHED,
 	type Watched,
+	withDrafts,
 } from "../src/lib/watch.ts";
 
 function sse(event: string, data: unknown): string {
@@ -54,6 +55,20 @@ describe("what the watch stream shows", () => {
 			sse("messages", [{ id: "a", type: "ai", content: "llo" }, {}]),
 		);
 		expect(shownMessages(watched).at(-1)).toMatchObject({ content: "hello" });
+	});
+
+	test("shows a stored draft only where the watch has lost its reply", () => {
+		const live = watch(
+			sse("values", { messages: [human] }),
+			sse("messages", [{ id: "a", type: "ai", content: "live" }, {}]),
+		);
+		const drafts = [{ stepId: "a", text: "stored." }];
+		expect(withDrafts(shownMessages(live), drafts).at(-1)).toMatchObject({
+			content: "live",
+		});
+		expect(withDrafts(shownMessages(UNWATCHED), drafts)).toEqual([
+			{ id: "a", type: "ai", content: "stored." },
+		]);
 	});
 
 	test("never places a relayed message above what the turn carries", () => {

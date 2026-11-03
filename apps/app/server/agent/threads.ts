@@ -9,6 +9,7 @@ import {
 import type { Id } from "@repo/backend/dataModel";
 import { MAX_SPAWN_DEPTH } from "@repo/backend/limits";
 import { ThreadHost } from "@repo/backend/thread-host";
+import { webEnv } from "@repo/env/web";
 import { desktops } from "../desktop/registry.ts";
 import { convexActingAs, convexAsServer } from "./convex.ts";
 
@@ -22,6 +23,7 @@ const host: ThreadHost = new ThreadHost({
 	actAs: convexActingAs,
 	threads: () => threads,
 	desktopFor: (user) => desktops.for(user),
+	siteUrl: webEnv.CONVEX_SITE_URL,
 });
 
 const telemetry = new Map<string, Identity>();

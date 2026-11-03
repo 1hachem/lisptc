@@ -87,7 +87,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: dev
-          PATHS: "/convex /auth"
+          PATHS: "/convex /auth /ai /analytics"
           CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
@@ -106,7 +106,7 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: dev
-          PATHS: "/convex /auth"
+          PATHS: "/convex /auth /ai /analytics"
           CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
 
   r2:

@@ -8,6 +8,7 @@ import {
 	type QueryCtx,
 	query,
 } from "./_generated/server.js";
+import { dropDrafts } from "./drafts.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { waitsOnUser } from "./lib/waiting.js";
 import { MAX_SPAWN_DEPTH, STREAMING_LEASE_MS } from "./limits.js";
@@ -224,6 +225,7 @@ export async function startChat(
 	chatId: Id<"chats">,
 ): Promise<void> {
 	const since = Date.now();
+	await dropDrafts(ctx, chatId);
 	await ctx.db.patch(chatId, {
 		status: "streaming",
 		streamingSince: since,
@@ -414,6 +416,7 @@ async function dropChat(ctx: MutationCtx, chat: Doc<"chats">): Promise<void> {
 		.withIndex("by_parent", (q) => q.eq("parentChatId", chat._id))
 		.collect();
 	for (const child of children) await dropChat(ctx, child);
+	await dropDrafts(ctx, chat._id);
 	await ctx.db.delete(chat._id);
 	await dropRepl(ctx, chat);
 	await ctx.scheduler.runAfter(0, internal.messages.purge, {
