@@ -168,6 +168,12 @@ tasks:
       - task: _infisical-run
         vars: { ENV: prod, PATHS: "/argocd /tailnet", CMD: 'docker run --rm -i --network host --add-host lisptc-argocd.\$TAILNET_DOMAIN:\$(tailscale ip -4 lisptc-argocd) -e ARGOCD_BASE_URL -e ARGOCD_API_TOKEN node:22-alpine npx --yes argocd-mcp@0.9.0 stdio' }
 
+  mcp:convex:
+    desc: serve the Convex MCP server on stdio, against the self-hosted convex-backend in lisptc-dev
+    cmds:
+      - task: _infisical-run
+        vars: { ENV: '{{.ENV | default "dev"}}', PATHS: "/convex", CMD: "CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210 ./scripts/with-convex.sh pnpm --silent --filter @repo/backend exec convex mcp start --project-dir ." }
+
   repl:
     desc: run the interactive REPL against a local (private) interpreter
     cmd: pnpm repl
