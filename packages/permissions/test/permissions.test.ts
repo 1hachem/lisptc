@@ -286,7 +286,7 @@ describe("a bound the session cannot change", () => {
 		expect((await s.step("(+ 1 2)")).value).toBe("3");
 	});
 
-	it("hides a server's tool the config shows", () => {
+	it("hides a server the config hides", () => {
 		const s = session("", undefined, undefined, [
 			"(permission/hide-server fx)",
 		]);

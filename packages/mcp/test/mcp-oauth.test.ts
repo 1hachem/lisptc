@@ -1,5 +1,5 @@
 import { mkdtempSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -312,19 +312,41 @@ describe("CallbackServer (ingress)", () => {
 	});
 });
 
+const lanAddress = Object.values(networkInterfaces())
+	.flat()
+	.find((a) => a?.family === "IPv4" && !a.internal)?.address;
+
 describe("createAuthCallback", () => {
-	it("binds 0.0.0.0 and advertises a given ingress URL", async () => {
+	it("advertises a given ingress URL", async () => {
 		const cb = await createAuthCallback(
 			8919,
 			"https://mcp.example.com/oauth/callback",
 		);
 		try {
-			expect(cb).toBeInstanceOf(CallbackServer);
 			expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
 		} finally {
 			await cb.close();
 		}
 	});
+
+	it.skipIf(!lanAddress)(
+		"takes the callback on an address beyond loopback behind an ingress",
+		async () => {
+			const cb = await createAuthCallback(
+				8921,
+				"https://mcp.example.com/oauth/callback",
+			);
+			try {
+				const waiting = cb.waitForCode("s");
+				await fetch(
+					`http://${lanAddress}:8921/oauth/callback?code=lan&state=s`,
+				);
+				expect(await waiting).toBe("lan");
+			} finally {
+				await cb.close();
+			}
+		},
+	);
 
 	it("binds a local loopback server when no ingress URL is given", async () => {
 		const cb = await createAuthCallback(8920);

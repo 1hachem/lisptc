@@ -51,12 +51,24 @@ function spyClient(answers: Record<string, unknown>): {
 }
 
 describe("the convex workspace store", () => {
-	it("names the model as provider/model, falling back to the default", async () => {
+	it("names the stored model as provider/model", async () => {
+		const { client } = spyClient({
+			[named(api.workspaces.get)]: {
+				name: "personal",
+				model: { provider: "acme", model: "lab/small" },
+			},
+		});
+		const store = new ConvexWorkspaceStore(WORKSPACE, () => client);
+		const settings = await store.settings();
+		expect(settings.name).toBe("personal");
+		expect(settings.model).toBe("acme/lab/small");
+	});
+
+	it("falls back to a model it offers when none is stored", async () => {
 		const { client } = spyClient({
 			[named(api.workspaces.get)]: { name: "personal" },
 		});
 		const store = new ConvexWorkspaceStore(WORKSPACE, () => client);
-		expect((await store.settings()).name).toBe("personal");
 		expect(OFFERED_MODELS).toContain((await store.settings()).model);
 	});
 
