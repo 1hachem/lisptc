@@ -148,6 +148,7 @@ export default defineSchema({
 
 	preferences: defineTable({
 		userId: v.id("users"),
+		workspaceId: v.optional(v.id("workspaces")),
 		font: v.optional(v.string()),
 		themeUses: v.optional(v.record(v.string(), v.number())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
@@ -160,7 +161,9 @@ export default defineSchema({
 		panelMotion: v.optional(v.boolean()),
 		traceBesideChat: v.optional(v.boolean()),
 		traceLink: v.optional(v.boolean()),
-	}).index("by_user", ["userId"]),
+	})
+		.index("by_user_workspace", ["userId", "workspaceId"])
+		.index("by_workspace", ["workspaceId"]),
 
 	workspaces: defineTable({
 		ownerId: v.id("users"),

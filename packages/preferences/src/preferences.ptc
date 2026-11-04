@@ -1,8 +1,9 @@
 PREFERENCES
 
-User's own preferences: font, which metadata fields chat shows, which
-helpers chat input runs. Belong to person you work for, not workspace; follow them into every
-workspace. App applies change at once, while they watch.
+This workspace's preferences: font, which metadata fields chat shows, which
+helpers chat input runs, sidebar, bottom bar. Each workspace keeps own set,
+like theme; change here leaves other workspaces alone. App applies change at
+once, while user watches.
 
 - (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t).
 - (preferences/set :font "geist") changes only keys you give.
@@ -13,11 +14,12 @@ workspace. App applies change at once, while they watch.
   (preferences/set :input '(:lisp nil)).
 - :sidebar is order of sidebar's top-level entries, top first.
   (preferences/set :sidebar '("README.md" "chat")) moves those two to top,
-  keeps rest in their order. User also drags them by hand.
+  keeps rest in their order. User also drags them in sidebar or in
+  preferences panel.
 - :hidden is every sidebar entry hidden. Replaces whole list:
   (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
   '() shows all. Attachments and bin hidden until user
-  shows them.
+  shows them. User also toggles them in preferences panel.
 - :status-bar is bottom bar's 9 slots, left to right. Items: "panes",
   "desktop" (desktop app status, shows only while connected), "clock". Each
   empty slot is gap with own name: "gap-1" through "gap-6".

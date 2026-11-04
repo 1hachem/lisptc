@@ -143,7 +143,7 @@ export async function workspaceExtensions(
 	);
 	const preferences = preferencesExtension(
 		preferencesHostFor({
-			store: new ConvexPreferencesStore(connect),
+			store: new ConvexPreferencesStore(workspaceId, connect),
 			fonts,
 			motions,
 			...(desktop === undefined

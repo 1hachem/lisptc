@@ -242,7 +242,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
+		'Return this workspace\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). Each workspace keeps its own, as it keeps its theme, and the app applies them live. The theme itself is read with (settings).',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -253,7 +253,7 @@ export function registerPreferences(
 		"preferences/set",
 		-1,
 		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
-		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
+		"Change this workspace's preferences. Only the keys given change, and other workspaces keep theirs; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
