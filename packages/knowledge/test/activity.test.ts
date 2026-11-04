@@ -4,8 +4,9 @@ import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import {
 	type ActivityEntry,
-	activityOf as activityIn,
+	activityKind,
 } from "@repo/journal-catalog/activity";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
@@ -52,7 +53,7 @@ async function activityOf(
 	} finally {
 		detach();
 	}
-	return activityIn(buffer.collect(journal));
+	return view(buffer.collect(journal), activityKind);
 }
 
 describe("a knowledge file read or write", () => {

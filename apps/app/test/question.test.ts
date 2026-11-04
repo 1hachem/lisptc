@@ -48,7 +48,10 @@ describe("the open question", () => {
 	test("is read off a step that carries it", () => {
 		expect(
 			openQuestion([
-				{ type: "tool", entries: [{ kind: "question", value: question }] },
+				{
+					type: "tool",
+					entries: [{ id: "e1", kind: "question", value: question }],
+				},
 			]),
 		).toEqual(question);
 	});

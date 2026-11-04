@@ -4,10 +4,9 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import {
 	type ActivityEntry,
-	activityOf as activityIn,
 	activityKind,
 } from "@repo/journal-catalog/activity";
-import { entriesOf } from "@repo/shared/journal";
+import { every, view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { type Generate, llmExtension } from "../src/llm.ts";
 import { llmHost } from "../src/llm-host.ts";
@@ -42,8 +41,8 @@ async function activityOf(
 	}
 	const entries = buffer.collect(journal);
 	return {
-		activity: activityIn(entries),
-		states: entriesOf(entries, activityKind).map((a) => a.state),
+		activity: view(entries, activityKind),
+		states: view(entries, { ...activityKind, fold: every }).map((a) => a.state),
 	};
 }
 

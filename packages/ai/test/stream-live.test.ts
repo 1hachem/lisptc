@@ -1,7 +1,7 @@
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, ModelDelta } from "@repo/interpreter/session";
-import { ENTRY_TYPE } from "@repo/shared/messages";
+import { ENTRY_TYPE } from "@repo/shared/journal";
 import { describe, expect, test, vi } from "vitest";
 import type { WireMessage } from "../src/stream.ts";
 import { recording, streamChat, testRepl } from "./helpers.ts";
@@ -25,6 +25,13 @@ function progressing(): InterpExtension {
 			newSym("progress"),
 			interp.makeBuiltIn("progress", 1, (n: unknown) => {
 				recording(interp.channels, "progress", Number(n));
+				return 0;
+			}),
+		);
+		interp.defineGlobal(
+			newSym("doing"),
+			interp.makeBuiltIn("doing", 1, (n: unknown) => {
+				recording(interp.channels, "doing", Number(n), true);
 				return 0;
 			}),
 		);
@@ -89,5 +96,35 @@ describe("a step that is still running", () => {
 		]);
 		expect(shape(recorded)).toEqual(["ai", "entry:1", "entry:2", "tool", "ai"]);
 		expect(new Set(recorded.map((m) => m.id)).size).toBe(recorded.length);
+	});
+});
+
+describe("a step that keeps restating one fact", () => {
+	test("stores one row for it, holding the last value, and sends fewer snapshots than it recorded entries", async () => {
+		TURNS[0] = [
+			{
+				text: "(doing 1) (doing 2) (doing 3) (doing 4) (doing 5) (pause 250)",
+			},
+		];
+		turn = 0;
+		const recorded: WireMessage[] = [];
+		const body = await streamChat(
+			{ messages: [{ type: "human", content: "work" }] },
+			{
+				repl: testRepl([progressing()]),
+				onStep: (produced) => {
+					recorded.push(...produced);
+				},
+				onTurn: (rest) => {
+					recorded.push(...rest);
+				},
+			},
+		).text();
+
+		expect(shape(recorded)).toEqual(["ai", "entry:5", "tool", "ai"]);
+		const live = snapshots(body).filter((m) =>
+			m.some((message) => message.type === ENTRY_TYPE),
+		);
+		expect(live.length).toBeLessThan(5);
 	});
 });

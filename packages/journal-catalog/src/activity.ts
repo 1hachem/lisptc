@@ -1,4 +1,4 @@
-import { type Entry, entriesOf, entryKind } from "@repo/shared/journal";
+import { entryKind } from "@repo/shared/journal";
 import { z } from "zod";
 
 const activityIcons = ["tool", "model", "agent", "read", "write"] as const;
@@ -29,17 +29,17 @@ const activityEntry = z.object({
 
 export type ActivityEntry = z.infer<typeof activityEntry>;
 
+function mergedById(entries: readonly ActivityEntry[]): ActivityEntry[] {
+	const merged = new Map<string, ActivityEntry>();
+	for (const entry of entries) {
+		const held = merged.get(entry.id);
+		merged.set(entry.id, held === undefined ? entry : { ...held, ...entry });
+	}
+	return [...merged.values()];
+}
+
 export const activityKind = entryKind({
 	name: "activity",
 	schema: activityEntry,
+	fold: mergedById,
 });
-
-export function activityOf(entries: readonly Entry[]): ActivityEntry[] {
-	const merged: ActivityEntry[] = [];
-	for (const entry of entriesOf(entries, activityKind)) {
-		const at = merged.findIndex((e) => e.id === entry.id);
-		if (at === -1) merged.push(entry);
-		else merged[at] = { ...merged[at], ...entry };
-	}
-	return merged;
-}

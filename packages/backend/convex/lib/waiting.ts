@@ -1,7 +1,6 @@
-import { asksOf, unansweredAsks } from "@repo/journal-catalog/asks";
+import { asksKind, unansweredAsks } from "@repo/journal-catalog/asks";
 import { questionKind } from "@repo/journal-catalog/intent";
-import { latest } from "@repo/shared/journal";
-import { entriesIn } from "@repo/shared/messages";
+import { entriesIn, view } from "@repo/shared/journal";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 
@@ -27,7 +26,7 @@ export async function waitsOnUser(
 		.take(TURN_SCAN);
 	const entries = entriesIn(latestTurn(newestFirst));
 	return (
-		unansweredAsks(asksOf(entries)).length > 0 ||
-		latest(entries, questionKind) !== undefined
+		unansweredAsks(view(entries, asksKind)).length > 0 ||
+		view(entries, questionKind) !== undefined
 	);
 }

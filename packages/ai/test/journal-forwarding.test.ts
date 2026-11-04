@@ -31,7 +31,27 @@ const journaling = extension((hooks) => {
 });
 
 describe("the loop and the journal", () => {
+	it("marks what each step recorded with the id of the step it is about", async () => {
+		turn = 0;
+		const events: TurnEvent[] = [];
+		for await (const event of runAgentTurn(
+			[{ role: "user", content: "what is 1 + 2?" }],
+			{ repl: testRepl([journaling]) },
+		))
+			events.push(event);
+
+		const steps = events.flatMap((e) =>
+			e.type === "assistant" ? [e.stepId] : [],
+		);
+		const about = events.flatMap((e) =>
+			e.type === "entry" ? [e.entry.about] : [],
+		);
+		expect(steps).toHaveLength(2);
+		expect(about).toEqual([steps[0], steps[0], steps[0], steps[1], steps[1]]);
+	});
+
 	it("forwards every entry as it was recorded, in order, interpreting none", async () => {
+		turn = 0;
 		const events: TurnEvent[] = [];
 		for await (const event of runAgentTurn(
 			[{ role: "user", content: "what is 1 + 2?" }],
@@ -40,7 +60,11 @@ describe("the loop and the journal", () => {
 			events.push(event);
 
 		expect(
-			events.flatMap((e) => (e.type === "entry" ? [e.entry] : [])),
+			events.flatMap((e) =>
+				e.type === "entry"
+					? [{ kind: e.entry.kind, value: e.entry.value }]
+					: [],
+			),
 		).toEqual([
 			{ kind: "before-model", value: unread },
 			{ kind: "during-step", value: "(+ 1 2)" },

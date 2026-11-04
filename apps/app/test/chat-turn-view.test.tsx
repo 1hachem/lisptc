@@ -17,7 +17,12 @@ import { UIProvider } from "../src/lib/ui.tsx";
 
 const PROSE = "Here is your chart.";
 
-const entry = (kind: string, value: unknown) => ({ kind, value });
+let entryIds = 0;
+const entry = (kind: string, value: unknown) => ({
+	id: `e${++entryIds}`,
+	kind,
+	value,
+});
 
 const activities = (...values: unknown[]) =>
 	values.map((value) => entry("activity", value));

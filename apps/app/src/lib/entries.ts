@@ -1,15 +1,10 @@
-import type { Entry } from "@repo/shared/journal";
-import { ENTRY_TYPE, entryOf, envelopeOf } from "@repo/shared/messages";
+import { ENTRY_TYPE, type Entry, entryOf } from "@repo/shared/journal";
+import { envelopeOf } from "@repo/shared/messages";
 import type { ChatMessage } from "./chat.tsx";
 
 interface Pending {
 	readonly row: ChatMessage;
 	readonly entry: Entry;
-}
-
-function aboutOf(row: ChatMessage): string | undefined {
-	const about = row.additional_kwargs?.about;
-	return typeof about === "string" ? about : undefined;
 }
 
 export type Placement = "carried" | "standing" | "dropped";
@@ -27,7 +22,10 @@ class Folding {
 	readonly out: ChatMessage[] = [];
 	private readonly carried = new Map<ChatMessage, Entry[]>();
 
-	constructor(private readonly place: (entry: Entry) => Placement) {}
+	constructor(
+		private readonly place: (entry: Entry) => Placement,
+		private readonly about: ReadonlyMap<string, ChatMessage>,
+	) {}
 
 	carry(carrier: ChatMessage, entry: Entry): void {
 		const held = this.carried.get(carrier);
@@ -35,10 +33,11 @@ class Folding {
 		else held.push(entry);
 	}
 
-	private claimed(row: ChatMessage): ChatMessage | undefined {
-		const about = aboutOf(row);
-		if (about !== undefined)
-			return this.out.find((message) => message.id === about);
+	private claimed(row: ChatMessage, entry: Entry): ChatMessage | undefined {
+		if (entry.about !== undefined) {
+			const target = this.about.get(entry.about);
+			if (target !== undefined) return target;
+		}
 		const { holding } = envelopeOf(row.additional_kwargs);
 		if (holding === undefined) return undefined;
 		for (let at = this.out.length - 1; at >= 0; at--) {
@@ -58,7 +57,7 @@ class Folding {
 		for (const { row, entry } of run) {
 			const placement = this.place(entry);
 			if (placement === "dropped") continue;
-			const claimed = this.claimed(row);
+			const claimed = this.claimed(row, entry);
 			if (claimed !== undefined) {
 				this.carry(claimed, entry);
 				continue;
@@ -96,12 +95,28 @@ class Folding {
 	}
 }
 
+function targetsById(
+	messages: readonly ChatMessage[],
+): Map<string, ChatMessage> {
+	const shown = messages.filter((message) => !isEntryMessage(message));
+	const targets = new Map<string, ChatMessage>();
+	shown.forEach((message, at) => {
+		if (message.id === undefined) return;
+		const result = shown[at + 1];
+		targets.set(
+			message.id,
+			message.type === "ai" && result?.type === "tool" ? result : message,
+		);
+	});
+	return targets;
+}
+
 export function foldEntries(
 	messages: readonly ChatMessage[],
 	place: (entry: Entry) => Placement = () => "carried",
 ): ChatMessage[] {
 	if (!messages.some(isEntryMessage)) return [...messages];
-	const folding = new Folding(place);
+	const folding = new Folding(place, targetsById(messages));
 	let run: Pending[] = [];
 	for (const message of messages) {
 		if (isEntryMessage(message)) {

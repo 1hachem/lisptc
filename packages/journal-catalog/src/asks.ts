@@ -1,4 +1,4 @@
-import { type Entry, entriesOf, entryKind } from "@repo/shared/journal";
+import { entryKind } from "@repo/shared/journal";
 import { z } from "zod";
 
 const askAnswer = z
@@ -50,20 +50,20 @@ const asks = z
 
 export type Asks = z.infer<typeof asks>;
 
-export const asksKind = entryKind({ name: "asks", schema: asks });
-
-export function asksOf(entries: readonly Entry[]): Asks {
+function folded(added: readonly Asks[]): Asks {
 	const open: Ask[] = [];
 	let answered: Record<string, Answered> = {};
-	for (const added of entriesOf(entries, asksKind)) {
-		open.push(...(added.open ?? []));
-		answered = { ...answered, ...added.answered };
+	for (const one of added) {
+		open.push(...(one.open ?? []));
+		answered = { ...answered, ...one.answered };
 	}
 	return {
 		...(open.length > 0 ? { open } : {}),
 		...(Object.keys(answered).length > 0 ? { answered } : {}),
 	};
 }
+
+export const asksKind = entryKind({ name: "asks", schema: asks, fold: folded });
 
 export function unansweredAsks(asks: Asks | undefined): readonly Ask[] {
 	const answered = asks?.answered ?? {};

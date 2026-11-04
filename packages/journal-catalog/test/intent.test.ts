@@ -1,20 +1,22 @@
-import { type Entry, readEntry } from "@repo/shared/journal";
+import { type Entry, view } from "@repo/shared/journal";
 import { describe, expect, test } from "vitest";
 import { intentKind, questionKind } from "../src/intent.ts";
 
-const entry = (kind: string, value: unknown): Entry => ({ kind, value });
+let ids = 0;
+const entry = (kind: string, value: unknown): Entry => ({
+	id: `e${++ids}`,
+	kind,
+	value,
+});
 
 describe("intent and question kinds", () => {
-	const intent = (value: unknown) =>
-		readEntry(entry("intent", value), intentKind);
+	const intent = (value: unknown) => view([entry("intent", value)], intentKind);
 
 	test("read back an intent and a question of the right shape", () => {
 		const doing = { doing: "d", todos: [{ label: "a", done: true }] };
 		const question = { id: "q1", prompt: "p", choices: ["A"], multi: false };
 		expect(intent(doing)).toEqual(doing);
-		expect(readEntry(entry("question", question), questionKind)).toEqual(
-			question,
-		);
+		expect(view([entry("question", question)], questionKind)).toEqual(question);
 	});
 
 	test("read nothing from an intent of the wrong shape", () => {
@@ -65,7 +67,7 @@ describe("intent and question kinds", () => {
 	test("read nothing from a question of the wrong shape", () => {
 		const question = { id: "q1", prompt: "p", choices: ["A"], multi: false };
 		const read = (value: unknown) =>
-			readEntry(entry("question", value), questionKind);
+			view([entry("question", value)], questionKind);
 		expect(read({ ...question, choices: [] })).toBeUndefined();
 		expect(read({ ...question, multi: "no" })).toBeUndefined();
 		expect(read({ prompt: "p" })).toBeUndefined();

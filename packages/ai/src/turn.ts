@@ -175,10 +175,11 @@ function ride(transcript: TranscriptEntry[], text: string): boolean {
 async function* prepareStep(
 	repl: AgentRepl,
 	transcript: TranscriptEntry[],
+	stepId: string,
 ): AsyncGenerator<TurnEvent> {
 	repl.setConversationVars(snapshotConversation(transcript));
 	const { emitted, entries } = await repl.beginStep();
-	yield* recorded(entries);
+	yield* recorded(entries, stepId);
 	if (emitted !== "" && ride(transcript, emitted))
 		yield { type: "rode", text: emitted };
 }
@@ -229,8 +230,15 @@ interface Turn {
 
 type ModelCall = (request: ModelRequest) => AsyncIterable<ModelDelta>;
 
-function* recorded(entries: readonly Entry[]): Generator<TurnEvent> {
-	for (const entry of entries) yield { type: "entry", entry };
+function* recorded(
+	entries: readonly Entry[],
+	about?: string,
+): Generator<TurnEvent> {
+	for (const entry of entries)
+		yield {
+			type: "entry",
+			entry: about === undefined ? entry : { ...entry, about },
+		};
 }
 
 async function* openTurn(
@@ -277,10 +285,11 @@ interface Answered {
 }
 
 async function* whileRunning<T extends { entries: readonly Entry[] }>(
+	stepId: string,
 	run: (live: LiveEntries) => Promise<T>,
 ): AsyncGenerator<TurnEvent, T> {
 	const waiting: Entry[] = [];
-	const seen = new Set<Entry>();
+	const seen = new Set<string>();
 	let done = false;
 	let wake = () => {};
 	const running = run((entry) => {
@@ -295,8 +304,8 @@ async function* whileRunning<T extends { entries: readonly Entry[] }>(
 	for (;;) {
 		const entry = waiting.shift();
 		if (entry !== undefined) {
-			seen.add(entry);
-			yield { type: "entry", entry };
+			seen.add(entry.id);
+			yield* recorded([entry], stepId);
 			continue;
 		}
 		if (done) break;
@@ -305,7 +314,10 @@ async function* whileRunning<T extends { entries: readonly Entry[] }>(
 		});
 	}
 	const ran = await running;
-	yield* recorded(ran.entries.filter((entry) => !seen.has(entry)));
+	yield* recorded(
+		ran.entries.filter((entry) => !seen.has(entry.id)),
+		stepId,
+	);
 	return ran;
 }
 
@@ -327,7 +339,7 @@ async function* evaluateStep(
 
 	const evalStartedAt = Date.now();
 	const { output, display, error, effects, emitted, failed, held, results } =
-		yield* whileRunning((live) => evalCode(repl, code, stepId, live));
+		yield* whileRunning(stepId, (live) => evalCode(repl, code, stepId, live));
 	turn.steps += 1;
 	const step = turn.steps;
 
@@ -398,8 +410,8 @@ async function* runStep(
 	opened: { system: string; call: ModelCall },
 ): AsyncGenerator<TurnEvent, Stepped> {
 	const { repl, transcript } = turn;
-	yield* prepareStep(repl, transcript);
 	const stepId = crypto.randomUUID();
+	yield* prepareStep(repl, transcript, stepId);
 	const startedAt = Date.now();
 	const messages = repl.context(toLlmMessages(transcript));
 	const reply = yield* callModel(

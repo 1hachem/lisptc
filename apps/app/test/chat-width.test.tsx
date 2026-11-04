@@ -140,6 +140,7 @@ const WIDE: ChatMessage[] = [
 		content: "",
 		entries: [
 			{
+				id: "intent",
 				kind: "intent",
 				value: {
 					doing: long,
@@ -149,6 +150,7 @@ const WIDE: ChatMessage[] = [
 				},
 			},
 			{
+				id: "activity",
 				kind: "activity",
 				value: {
 					id: "z",
@@ -159,6 +161,7 @@ const WIDE: ChatMessage[] = [
 				},
 			},
 			{
+				id: "ui",
 				kind: "ui",
 				value: storeView("wide", {
 					tag: "stack",
@@ -178,6 +181,7 @@ const WIDE: ChatMessage[] = [
 				}),
 			},
 			{
+				id: "asks",
 				kind: "asks",
 				value: {
 					open: [

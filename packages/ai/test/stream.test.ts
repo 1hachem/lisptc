@@ -427,15 +427,6 @@ describe("chat stream", () => {
 		const snapshots = records(text)
 			.filter((r) => r.event === "values")
 			.map((r) => (r.data as { messages: WireMessage[] }).messages);
-		const heard = snapshots.findIndex((m) =>
-			m.some((message) => message.type === "entry"),
-		);
-
-		expect(snapshots[heard].map((m) => m.type)).toEqual(["human", "entry"]);
-		expect(snapshots[heard][1].additional_kwargs).toMatchObject({
-			kind: "heard",
-			value: "a memory fired",
-		});
 		const final = snapshots.at(-1) ?? [];
 		expect(final.map((m) => m.type)).toEqual([
 			"human",
@@ -445,6 +436,10 @@ describe("chat stream", () => {
 			"entry",
 			"ai",
 		]);
+		expect(final[1].additional_kwargs).toMatchObject({
+			kind: "heard",
+			value: "a memory fired",
+		});
 		expect(final[0].additional_kwargs?.meta).toBeUndefined();
 	});
 

@@ -1,8 +1,15 @@
-import { type Entry, readEntry } from "@repo/shared/journal";
+import { type Entry, view } from "@repo/shared/journal";
 import { describe, expect, test } from "vitest";
-import { activityKind, activityOf } from "../src/activity.ts";
+import { activityKind } from "../src/activity.ts";
 
-const entry = (kind: string, value: unknown): Entry => ({ kind, value });
+const foldActivity = (entries: readonly Entry[]) => view(entries, activityKind);
+
+let ids = 0;
+const entry = (kind: string, value: unknown): Entry => ({
+	id: `e${++ids}`,
+	kind,
+	value,
+});
 
 describe("activityOf", () => {
 	const started = (id: string, label = id) => ({
@@ -12,7 +19,7 @@ describe("activityOf", () => {
 		id,
 	});
 	const of = (...values: unknown[]) =>
-		activityOf(values.map((value) => entry("activity", value)));
+		foldActivity(values.map((value) => entry("activity", value)));
 
 	test("keeps each id once, in the order it first appeared", () => {
 		expect(of(started("a"), started("b")).map((e) => e.id)).toEqual(["a", "b"]);
@@ -42,13 +49,13 @@ describe("activityOf", () => {
 
 	test("skips a malformed entry and an entry of another kind", () => {
 		expect(
-			activityOf([
+			foldActivity([
 				entry("activity", { ...started("a"), state: "x" }),
 				entry("memory", started("b")),
 			]),
 		).toEqual([]);
-		expect(readEntry(entry("activity", started("a")), activityKind)).toEqual(
+		expect(view([entry("activity", started("a"))], activityKind)).toEqual([
 			started("a"),
-		);
+		]);
 	});
 });

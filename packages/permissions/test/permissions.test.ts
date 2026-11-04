@@ -1,5 +1,6 @@
 import type { Hold } from "@repo/interpreter/drive";
-import { asksOf } from "@repo/journal-catalog/asks";
+import { asksKind } from "@repo/journal-catalog/asks";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
 import { SessionRules } from "../src/permissions.ts";
@@ -51,7 +52,7 @@ describe("the permissions guard", () => {
 			expect.objectContaining({ name: "string-upcase", args: '"a"' }),
 		]);
 		expect(run.requests[0].change).toBeUndefined();
-		expect(asksOf(run.entries)).toEqual({
+		expect(view(run.entries, asksKind)).toEqual({
 			open: [
 				{
 					id: run.requests[0].id,
@@ -184,7 +185,7 @@ describe("the permissions guard", () => {
 			id: "nope",
 			approved: true,
 		});
-		expect(asksOf(decided.entries)).toEqual({
+		expect(view(decided.entries, asksKind)).toEqual({
 			answered: { nope: { accepted: false, label: "Expired" } },
 		});
 	});
@@ -311,7 +312,7 @@ describe("evaluating a permissions form", () => {
 				reason: "changes the permissions config",
 			}),
 		]);
-		expect(asksOf(asked.entries)).toEqual({
+		expect(view(asked.entries, asksKind)).toEqual({
 			open: [expect.objectContaining({ answerApplies: true })],
 		});
 		expect((await s.step(UPCASE)).value).toBe('"A"');
@@ -718,7 +719,7 @@ describe("reporting a decision", () => {
 			scope: "once",
 		});
 		expect(decided.entries).toHaveLength(1);
-		expect(asksOf(decided.entries)).toEqual({
+		expect(view(decided.entries, asksKind)).toEqual({
 			answered: { [request.id]: { accepted: true, label: "Allowed" } },
 		});
 		expect(decided.message).toMatch(/approved/);
@@ -733,7 +734,7 @@ describe("reporting a decision", () => {
 			id: request.id,
 			approved: false,
 		});
-		expect(asksOf(denied.entries)).toEqual({
+		expect(view(denied.entries, asksKind)).toEqual({
 			answered: { [request.id]: { accepted: false, label: "Denied" } },
 		});
 		expect(denied.message).toMatch(/denied/);

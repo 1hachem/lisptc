@@ -95,34 +95,6 @@ export interface KwargMessage {
 	additional_kwargs?: MessageKwargs;
 }
 
-export const ENTRY_TYPE = "entry";
-
-const journalEntry = z.object({ kind: z.string(), value: z.unknown() });
-
-export type JournalEntry = z.infer<typeof journalEntry>;
-
-export function entryOf(message: {
-	type: string;
-	additional_kwargs?: Record<string, unknown>;
-}): JournalEntry | undefined {
-	if (message.type !== ENTRY_TYPE) return undefined;
-	return journalEntry.safeParse(message.additional_kwargs).data;
-}
-
-export function entriesIn(
-	messages: readonly {
-		type: string;
-		additional_kwargs?: Record<string, unknown>;
-	}[],
-): JournalEntry[] {
-	const entries: JournalEntry[] = [];
-	for (const message of messages) {
-		const entry = entryOf(message);
-		if (entry !== undefined) entries.push(entry);
-	}
-	return entries;
-}
-
 const TOOL_SHOWS: ReadonlySet<string> = new Set(["failed", "quiet"]);
 
 const USER_RUN_SHOWS: ReadonlySet<string> = new Set([

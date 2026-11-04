@@ -2,8 +2,8 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { type Ask, asksOf } from "@repo/journal-catalog/asks";
-import { entriesIn } from "@repo/shared/messages";
+import { type Ask, asksKind } from "@repo/journal-catalog/asks";
+import { entriesIn, view } from "@repo/shared/journal";
 import {
 	QueryClient,
 	QueryClientProvider,
@@ -154,7 +154,7 @@ function StoredCard({
 		<AskCard
 			ask={ask}
 			messageId={MESSAGE_ID}
-			answered={asksOf(entries).answered?.[ask.id]}
+			answered={view(entries, asksKind).answered?.[ask.id]}
 			transport={transport}
 		/>
 	);
@@ -410,9 +410,16 @@ describe("reading an ask off the journal", () => {
 	it("keeps a choice that names no answered label, labelled by itself", () => {
 		const { done: _done, ...bare } = AUTHORIZE;
 		const [ask] =
-			asksOf([
-				{ kind: "asks", value: { open: [{ ...SIGN_IN, choices: [bare] }] } },
-			]).open ?? [];
+			view(
+				[
+					{
+						id: "e1",
+						kind: "asks",
+						value: { open: [{ ...SIGN_IN, choices: [bare] }] },
+					},
+				],
+				asksKind,
+			).open ?? [];
 		expect(ask?.choices).toEqual([{ ...bare, done: "Authorize" }]);
 	});
 });

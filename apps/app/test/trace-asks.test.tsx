@@ -84,7 +84,7 @@ function tool(kind: string, value: unknown): ChatMessage {
 		id: "t1",
 		type: "tool",
 		content: "",
-		entries: [{ kind, value }],
+		entries: [{ id: kind, kind, value }],
 	};
 }
 

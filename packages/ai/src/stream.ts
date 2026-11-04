@@ -1,7 +1,6 @@
-import type { Entry, Received } from "@repo/shared/journal";
+import { ENTRY_TYPE, type Entry, type Received } from "@repo/shared/journal";
 import {
 	contentToText,
-	ENTRY_TYPE,
 	ENVELOPE_KEYS,
 	envelopeOf,
 	lighten,
@@ -55,9 +54,16 @@ export function entryMessage(
 		type: ENTRY_TYPE,
 		content: "",
 		id,
-		additional_kwargs: { ...kwargs, kind: entry.kind, value: entry.value },
+		additional_kwargs: {
+			...kwargs,
+			kind: entry.kind,
+			value: entry.value,
+			...(entry.about === undefined ? {} : { about: entry.about }),
+		},
 	};
 }
+
+const ENTRY_SNAPSHOT_MS = 100;
 
 function riding(message: { additional_kwargs?: MessageKwargs }) {
 	return envelopeOf(message.additional_kwargs).riding;
@@ -177,6 +183,7 @@ class TurnWire {
 	private lastMeta: Record<string, unknown> | undefined;
 	private lastAnswer = -1;
 	private flushed: number;
+	private pendingSnapshot: ReturnType<typeof setTimeout> | undefined;
 	private recorded: Promise<void> = Promise.resolve();
 	private sealed = false;
 
@@ -198,7 +205,51 @@ class TurnWire {
 	}
 
 	snapshot(): boolean {
+		this.settleSnapshot();
 		return this.write(sse("values", { messages: lighten(this.wire) }));
+	}
+
+	private settleSnapshot(): void {
+		if (this.pendingSnapshot === undefined) return;
+		clearTimeout(this.pendingSnapshot);
+		this.pendingSnapshot = undefined;
+	}
+
+	private snapshotSoon(): boolean {
+		this.pendingSnapshot ??= setTimeout(() => {
+			this.pendingSnapshot = undefined;
+			this.snapshot();
+		}, ENTRY_SNAPSHOT_MS);
+		return true;
+	}
+
+	private recordEntry(entry: Entry): void {
+		const superseded = entry.supersedes ? this.unflushedOf(entry) : -1;
+		if (superseded === -1) {
+			this.stepEntries.push(entry);
+			this.wire.push(entryMessage(entry));
+			return;
+		}
+		const { id } = this.wire[superseded];
+		this.wire[superseded] = entryMessage(entry, id);
+		const held = this.stepEntries.findIndex(
+			(e) => e.kind === entry.kind && e.about === entry.about,
+		);
+		if (held === -1) this.stepEntries.push(entry);
+		else this.stepEntries[held] = entry;
+	}
+
+	private unflushedOf(entry: Entry): number {
+		for (let at = this.wire.length - 1; at >= this.flushed; at--) {
+			const kwargs = this.wire[at].additional_kwargs;
+			if (
+				this.wire[at].type === ENTRY_TYPE &&
+				kwargs?.kind === entry.kind &&
+				kwargs?.about === entry.about
+			)
+				return at;
+		}
+		return -1;
 	}
 
 	flush(): void {
@@ -220,6 +271,7 @@ class TurnWire {
 	}
 
 	async unrecorded(): Promise<WireMessage[]> {
+		if (this.pendingSnapshot !== undefined) this.snapshot();
 		this.sealed = true;
 		this.flush();
 		await this.recorded;
@@ -231,9 +283,8 @@ class TurnWire {
 			case "delta":
 				return this.delta(event);
 			case "entry":
-				this.stepEntries.push(event.entry);
-				this.wire.push(entryMessage(event.entry));
-				return this.snapshot();
+				this.recordEntry(event.entry);
+				return this.snapshotSoon();
 			case "steered":
 				this.wire.push(
 					event.source === undefined

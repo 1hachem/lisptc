@@ -60,6 +60,43 @@ describe("folding the journal into a chat", () => {
 		]);
 	});
 
+	test("hands what a step recorded to its result by the step's id, wherever the row sits", () => {
+		expect(
+			shape(
+				foldEntries([
+					{ id: "h", type: "human", content: "go" },
+					row("e0", "memory", {}, { about: "s2" }),
+					{ id: "s1", type: "ai", content: "(x)" },
+					{ id: "t1", type: "tool", content: "" },
+					row("e1", "intent", {}, { about: "s2" }),
+					{ id: "s2", type: "ai", content: "(y)" },
+					{ id: "t2", type: "tool", content: "" },
+				]),
+			),
+		).toEqual([
+			["h", "human", []],
+			["s1", "ai", []],
+			["t1", "tool", []],
+			["s2", "ai", []],
+			["t2", "tool", ["memory", "intent"]],
+		]);
+	});
+
+	test("keeps what a step recorded on its own message when it ran into no result", () => {
+		expect(
+			shape(
+				foldEntries([
+					{ id: "s1", type: "ai", content: "done" },
+					row("e1", "intent", {}, { about: "s1" }),
+					{ id: "h", type: "human", content: "next" },
+				]),
+			),
+		).toEqual([
+			["s1", "ai", ["intent"]],
+			["h", "human", []],
+		]);
+	});
+
 	test("hands a sub-agent's held ask to the message that surfaced it", () => {
 		expect(
 			shape(

@@ -3,7 +3,7 @@ import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import type { AttachedFile } from "@repo/shared/files";
-import { entriesOf } from "@repo/shared/journal";
+import { view } from "@repo/shared/journal";
 import { attachmentsKind } from "../src/attached.ts";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
@@ -37,7 +37,7 @@ export async function world(
 	await runAsync(interp, prelude);
 	const shown: AttachedFile[] = [];
 	journal.on(interp.channels, (entry) =>
-		shown.push(...entriesOf([entry], attachmentsKind).flat()),
+		shown.push(...view([entry], attachmentsKind).flat()),
 	);
 	return {
 		store,

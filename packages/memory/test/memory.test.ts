@@ -17,7 +17,7 @@ import { str } from "@repo/interpreter/print";
 import { type InterpExtension, openSession } from "@repo/interpreter/session";
 import { memoryKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
-import { entriesOf } from "@repo/shared/journal";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import {
 	FORGET_BELOW,
@@ -209,7 +209,7 @@ describe("triggers", () => {
 
 		await f.step("(+ 1 1)");
 
-		expect(entriesOf(buffer.collect(journal), memoryKind)).toEqual([
+		expect(view(buffer.collect(journal), memoryKind)).toEqual([
 			{ key: "always", body: "here", on: "step" },
 		]);
 	});

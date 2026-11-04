@@ -1,4 +1,5 @@
-import { ENTRY_TYPE, lighten } from "@repo/shared/messages";
+import { ENTRY_TYPE } from "@repo/shared/journal";
+import { lighten } from "@repo/shared/messages";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";

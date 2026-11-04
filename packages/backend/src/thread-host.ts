@@ -12,7 +12,7 @@ import type {
 import type { Image } from "@repo/interpreter/image";
 import { type ImageStore, MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
-import { ENTRY_TYPE } from "@repo/shared/messages";
+import { ENTRY_TYPE } from "@repo/shared/journal";
 import { DEFAULT_CHOICE } from "@repo/shared/providers";
 import type { FunctionReturnType } from "convex/server";
 import { internal } from "../convex/_generated/api.js";

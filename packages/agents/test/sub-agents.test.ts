@@ -12,7 +12,8 @@ import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
-import { activityOf } from "@repo/journal-catalog/activity";
+import { activityKind } from "@repo/journal-catalog/activity";
+import { view } from "@repo/shared/journal";
 import { describe, expect, test } from "vitest";
 import {
 	agentsExtension,
@@ -622,7 +623,7 @@ describe("a spawn or a send", () => {
 		} finally {
 			detach();
 		}
-		expect(activityOf(buffer.collect(journal))).toEqual([
+		expect(view(buffer.collect(journal), activityKind)).toEqual([
 			{
 				kind: "agent",
 				icon: "agent",

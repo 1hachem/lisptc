@@ -6,10 +6,9 @@ import type { LispPromise } from "@repo/interpreter/promise";
 import { openSession } from "@repo/interpreter/session";
 import {
 	type ActivityEntry,
-	activityOf as activityIn,
 	activityKind,
 } from "@repo/journal-catalog/activity";
-import { entriesOf } from "@repo/shared/journal";
+import { every, view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -103,7 +102,7 @@ async function activityOf(
 		detach();
 	}
 	return {
-		activity: activityIn(buffer.collect(journal)),
+		activity: view(buffer.collect(journal), activityKind),
 		reported: buffer.envelopes
 			.filter((e) => e.topic === journal.name)
 			.map((e) => [
@@ -187,11 +186,10 @@ describe("loading a server", () => {
 			detach();
 		}
 		const entries = buffer.collect(journal);
-		expect(entriesOf(entries, activityKind).map((a) => a.state)).toEqual([
-			"started",
-			"done",
-		]);
-		expect(activityIn(entries)).toEqual([
+		expect(
+			view(entries, { ...activityKind, fold: every }).map((a) => a.state),
+		).toEqual(["started", "done"]);
+		expect(view(entries, activityKind)).toEqual([
 			{
 				kind: "mcp",
 				icon: [{ src: "https://acme.example/logo.svg" }],

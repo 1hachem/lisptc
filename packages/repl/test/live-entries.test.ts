@@ -8,13 +8,15 @@ import { agentRepl } from "./helpers.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+let ids = 0;
+
 function progressing(): InterpExtension {
 	return (interp: Interp): void => {
 		interp.defineGlobal(
 			newSym("progress"),
 			interp.makeBuiltIn("progress", 1, (n: unknown) => {
 				journal.emit(interp.channels, {
-					harness: { kind: "progress", value: Number(n) },
+					harness: { id: `p${++ids}`, kind: "progress", value: Number(n) },
 				});
 				return 0;
 			}),
@@ -24,7 +26,7 @@ function progressing(): InterpExtension {
 			interp.makeBuiltIn("later", 1, (n: unknown) => {
 				setTimeout(() =>
 					journal.emit(interp.channels, {
-						harness: { kind: "progress", value: Number(n) },
+						harness: { id: `p${++ids}`, kind: "progress", value: Number(n) },
 					}),
 				);
 				return 0;
@@ -60,9 +62,9 @@ describe("entries while a step runs", () => {
 		const quiet = await agentRepl([progressing()]).evalOutput(code);
 
 		expect(quiet.entries).toEqual([
-			{ kind: "progress", value: 1 },
-			{ kind: "progress", value: 1 },
-			{ kind: "progress", value: 2 },
+			expect.objectContaining({ kind: "progress", value: 1 }),
+			expect.objectContaining({ kind: "progress", value: 1 }),
+			expect.objectContaining({ kind: "progress", value: 2 }),
 		]);
 	});
 

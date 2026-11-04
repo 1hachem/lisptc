@@ -2,7 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
 import { memoryKind } from "@repo/journal-catalog/memory";
-import { latest } from "@repo/shared/journal";
+import { view } from "@repo/shared/journal";
 import {
 	type ComponentProps,
 	type RefObject,
@@ -89,7 +89,7 @@ function EntryLine({
 	const shown = useChannels();
 	if (!shown.memory) return null;
 	const entries = entriesOfMessage(message);
-	const memory = latest(entries, memoryKind);
+	const memory = view(entries, memoryKind).at(-1);
 	if (memory === undefined) return null;
 	return <MessageMemories memories={[memory]} focused={focused} />;
 }

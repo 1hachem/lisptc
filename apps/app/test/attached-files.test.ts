@@ -23,6 +23,7 @@ describe("what a user message attached", () => {
 				content: "",
 				entries: [
 					{
+						id: "e1",
 						kind: "attachments",
 						value: [{ folder: "attachments", name: "chart.svg" }],
 					},

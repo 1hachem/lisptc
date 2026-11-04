@@ -16,12 +16,23 @@ import {
 } from "../src/stream.ts";
 import { runAgentTurn, type TurnOptions } from "../src/turn.ts";
 
+let recorded = 0;
+
 export function recording(
 	channels: Channels | undefined,
 	kind: string,
 	value: unknown,
+	supersedes?: true,
 ): void {
-	journal.emit(channels, { harness: { kind, value } });
+	recorded += 1;
+	journal.emit(channels, {
+		harness: {
+			id: `t${recorded}`,
+			kind,
+			value,
+			...(supersedes ? { supersedes } : {}),
+		},
+	});
 }
 
 export function extension(

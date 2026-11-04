@@ -14,12 +14,15 @@ import { describe, expect, it } from "vitest";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 import { extension } from "./helpers.ts";
 
+let recorded = 0;
+
 function recording(
 	channels: Channels | undefined,
 	kind: string,
 	value: unknown,
 ): void {
-	journal.emit(channels, { harness: { kind, value } });
+	recorded += 1;
+	journal.emit(channels, { harness: { id: `r${recorded}`, kind, value } });
 }
 
 describe("an extension hooking the session", () => {
@@ -112,8 +115,8 @@ describe("an extension hooking the session", () => {
 
 		expect(user).toBe("hi\n");
 		expect(entries).toEqual([
-			{ kind: "before", value: 1 },
-			{ kind: "after", value: 2 },
+			expect.objectContaining({ kind: "before", value: 1 }),
+			expect.objectContaining({ kind: "after", value: 2 }),
 		]);
 	});
 
@@ -129,7 +132,7 @@ describe("an extension hooking the session", () => {
 		});
 
 		expect((await r.invokeUi("a1")).entries).toEqual([
-			{ kind: "view", value: "a1" },
+			expect.objectContaining({ kind: "view", value: "a1" }),
 		]);
 	});
 
@@ -267,7 +270,7 @@ describe("an extension hooking the turn", () => {
 		});
 
 		expect((await r.system("you are a repl")).entries).toEqual([
-			{ kind: "said", value: "you are a pirate" },
+			expect.objectContaining({ kind: "said", value: "you are a pirate" }),
 		]);
 	});
 
@@ -419,7 +422,7 @@ describe("an extension hooking the turn", () => {
 		});
 
 		expect((await r.beforeSettle(false)).entries).toEqual([
-			{ kind: "closed", value: "wrapped" },
+			expect.objectContaining({ kind: "closed", value: "wrapped" }),
 		]);
 		expect((await r.evalOutput("(+ 1 2)")).entries).toEqual([]);
 	});

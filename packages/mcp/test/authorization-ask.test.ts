@@ -4,7 +4,8 @@ import { journal } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { openSession } from "@repo/interpreter/session";
-import { type Asks, asksOf as asksIn } from "@repo/journal-catalog/asks";
+import { type Asks, asksKind } from "@repo/journal-catalog/asks";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -47,7 +48,7 @@ async function step(interp: Interp, run: () => Promise<unknown>) {
 }
 
 function asksOf(buffer: ReturnType<typeof bufferTransport>): Asks {
-	return asksIn(buffer.collect(journal));
+	return view(buffer.collect(journal), asksKind);
 }
 
 describe("a load that needs a login", () => {

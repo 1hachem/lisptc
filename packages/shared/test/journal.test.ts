@@ -1,54 +1,52 @@
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import {
+	checked,
+	ENTRY_TYPE,
 	type Entry,
-	entriesOf,
+	entriesIn,
 	entryKind,
-	latest,
-	readEntry,
+	every,
+	latestOnly,
 	readReceived,
+	view,
 } from "../src/journal.ts";
 
-const viewKind = entryKind({
+const viewKind = latestOnly({
 	name: "ui",
 	schema: z.object({ viewId: z.string() }),
 });
 const doingKind = entryKind({
 	name: "intent",
 	schema: z.object({ doing: z.string() }),
+	fold: every,
 });
-const askKind = entryKind({ name: "question", schema: z.string() });
+const doingNow = latestOnly(doingKind);
+const askKind = latestOnly({ name: "question", schema: z.string() });
 
-const entry = (kind: string, value: unknown): Entry => ({ kind, value });
+let ids = 0;
+const entry = (kind: string, value: unknown): Entry => ({
+	id: `e${++ids}`,
+	kind,
+	value,
+});
 
 describe("an entry kind", () => {
 	test("may not take a name the message envelope owns", () => {
-		expect(() => entryKind({ name: "display", schema: z.string() })).toThrow(
+		expect(() => latestOnly({ name: "display", schema: z.string() })).toThrow(
 			/envelope/,
 		);
 	});
 
-	test("reads a value only from an entry of its own kind", () => {
-		expect(readEntry(entry("ui", { viewId: "v1" }), viewKind)).toEqual({
-			viewId: "v1",
-		});
-		expect(
-			readEntry(entry("intent", { viewId: "v1" }), viewKind),
-		).toBeUndefined();
-	});
-
-	test("reads nothing from a value of the wrong shape", () => {
-		expect(readEntry(entry("ui", "a string"), viewKind)).toBeUndefined();
-		expect(
-			readEntry(
-				entry("ui", { tag: "card", props: {}, children: [] }),
-				viewKind,
-			),
-		).toBeUndefined();
+	test("checks a value against its schema before it is recorded", () => {
+		expect(checked(viewKind, { viewId: "v1" })).toEqual({ viewId: "v1" });
+		expect(() =>
+			checked(viewKind, { viewId: 1 } as unknown as { viewId: string }),
+		).toThrow(/"ui" entry does not fit/);
 	});
 });
 
-describe("reading a journal", () => {
+describe("viewing a journal through a kind", () => {
 	const entries = [
 		entry("intent", { doing: "a" }),
 		entry("memory", { key: "k", body: "b" }),
@@ -56,16 +54,37 @@ describe("reading a journal", () => {
 		entry("intent", { doing: "b" }),
 	];
 
-	test("keeps every well-formed value of a kind, in order", () => {
-		expect(entriesOf(entries, doingKind)).toEqual([
-			{ doing: "a" },
-			{ doing: "b" },
-		]);
+	test("folds every well-formed value of the kind, in order", () => {
+		expect(view(entries, doingKind)).toEqual([{ doing: "a" }, { doing: "b" }]);
 	});
 
-	test("takes the latest well-formed value of a kind", () => {
-		expect(latest(entries, doingKind)).toEqual({ doing: "b" });
-		expect(latest(entries, askKind)).toBeUndefined();
+	test("lets the kind decide the fold", () => {
+		expect(view(entries, doingNow)).toEqual({ doing: "b" });
+		expect(view(entries, askKind)).toBeUndefined();
+	});
+
+	test("reads nothing from a value of the wrong shape", () => {
+		expect(view([entry("ui", "a string")], viewKind)).toBeUndefined();
+	});
+});
+
+describe("entries stored as messages", () => {
+	test("takes the row's id as the entry's, and keeps what it is about", () => {
+		expect(
+			entriesIn([
+				{ type: "human", id: "h", additional_kwargs: { kind: "ui" } },
+				{
+					type: ENTRY_TYPE,
+					id: "r1",
+					additional_kwargs: {
+						kind: "ui",
+						value: { viewId: "v" },
+						about: "s1",
+					},
+				},
+				{ type: ENTRY_TYPE, id: "r2", additional_kwargs: { value: 1 } },
+			]),
+		).toEqual([{ id: "r1", kind: "ui", value: { viewId: "v" }, about: "s1" }]);
 	});
 });
 

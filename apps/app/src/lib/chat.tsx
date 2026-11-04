@@ -4,14 +4,8 @@ import type { Id } from "@repo/backend/dataModel";
 import {
 	type ActivityEntry,
 	activityKind,
-	activityOf,
 } from "@repo/journal-catalog/activity";
-import {
-	type Answered,
-	type Ask,
-	asksKind,
-	asksOf,
-} from "@repo/journal-catalog/asks";
+import { type Answered, type Ask, asksKind } from "@repo/journal-catalog/asks";
 import {
 	type Intent,
 	intentKind,
@@ -21,7 +15,7 @@ import {
 import { memoryKind } from "@repo/journal-catalog/memory";
 import { type ViewRef, viewKind } from "@repo/journal-catalog/view";
 import { ATTACHMENTS_KIND } from "@repo/shared/files";
-import { type Entry, latest } from "@repo/shared/journal";
+import { type Entry, view } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
 import { useQuery } from "@tanstack/react-query";
@@ -796,30 +790,30 @@ export function tracePlacement(entry: Entry): "carried" | "standing" {
 }
 
 export function toolUi(message: ChatMessage): ViewRef | undefined {
-	return latest(entriesOfMessage(message), viewKind);
+	return view(entriesOfMessage(message), viewKind);
 }
 
 export function toolActivity(message: ChatMessage): ActivityEntry[] {
-	return activityOf(entriesOfMessage(message));
+	return view(entriesOfMessage(message), activityKind);
 }
 
 export function toolIntent(message: ChatMessage): Intent | undefined {
-	return latest(entriesOfMessage(message), intentKind);
+	return view(entriesOfMessage(message), intentKind);
 }
 
 export function toolAsks(message: ChatMessage): Ask[] {
-	return [...(asksOf(entriesOfMessage(message)).open ?? [])];
+	return [...(view(entriesOfMessage(message), asksKind).open ?? [])];
 }
 
 export function toolQuestion(message: ChatMessage): Question | undefined {
-	return latest(entriesOfMessage(message), questionKind);
+	return view(entriesOfMessage(message), questionKind);
 }
 
 export function toolAnswers(
 	message: ChatMessage,
 ): ReadonlyMap<string, Answered> {
 	return new Map(
-		Object.entries(asksOf(entriesOfMessage(message)).answered ?? {}),
+		Object.entries(view(entriesOfMessage(message), asksKind).answered ?? {}),
 	);
 }
 

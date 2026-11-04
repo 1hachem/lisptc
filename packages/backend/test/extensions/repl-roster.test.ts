@@ -14,7 +14,7 @@ import { proseHost } from "@repo/prose-extension/host";
 import { MemoryRepl } from "@repo/repl/repl";
 import { secretsExtension, secretsSlot } from "@repo/secrets-extension";
 import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
-import { entriesOf } from "@repo/shared/journal";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { memoryRepl } from "./helpers.ts";
 
@@ -86,7 +86,7 @@ describe("a REPL built from a list of its own", () => {
 		const { model, entries, emitted } = await r.evalOutput("(+ 1 1)");
 
 		expect(emitted).toContain("k: the note");
-		expect(entriesOf(entries, memoryKind)).toEqual([
+		expect(view(entries, memoryKind)).toEqual([
 			{ key: "k", body: "the note", on: "step" },
 		]);
 		expect(model).not.toContain("the note");
@@ -101,9 +101,9 @@ describe("a REPL built from a list of its own", () => {
 			}),
 		]);
 
-		expect(
-			entriesOf((await r.evalOutput("(+ 1 1)")).entries, memoryKind),
-		).toEqual([]);
+		expect(view((await r.evalOutput("(+ 1 1)")).entries, memoryKind)).toEqual(
+			[],
+		);
 	});
 
 	it("has no bank when no memory extension is in it", () => {

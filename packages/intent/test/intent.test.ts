@@ -16,7 +16,7 @@ import {
 	type TurnOutcome,
 } from "@repo/interpreter/session";
 import { intentKind, questionKind } from "@repo/journal-catalog/intent";
-import { entriesOf } from "@repo/shared/journal";
+import { every, view } from "@repo/shared/journal";
 import { describe, expect, test } from "vitest";
 import { intentExtension } from "../src/intent.ts";
 import { intentHost } from "../src/intent-host.ts";
@@ -60,11 +60,11 @@ function watching(interp: Interp, run: () => void) {
 }
 
 function intents(buffer: ChannelBuffer) {
-	return entriesOf(buffer.collect(journal), intentKind);
+	return view(buffer.collect(journal), { ...intentKind, fold: every });
 }
 
 function questions(buffer: ChannelBuffer) {
-	return entriesOf(buffer.collect(journal), questionKind);
+	return view(buffer.collect(journal), { ...questionKind, fold: every });
 }
 
 function settle(interp: Interp, hooks: SessionHooks, outcome: TurnOutcome) {

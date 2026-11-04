@@ -1,4 +1,4 @@
-import { entryKind } from "@repo/shared/journal";
+import { entryKind, every } from "@repo/shared/journal";
 import { z } from "zod";
 
 const firedMemory = z.object({
@@ -9,4 +9,8 @@ const firedMemory = z.object({
 
 export type FiredMemory = z.infer<typeof firedMemory>;
 
-export const memoryKind = entryKind({ name: "memory", schema: firedMemory });
+export const memoryKind = entryKind({
+	name: "memory",
+	schema: firedMemory,
+	fold: every,
+});

@@ -1,4 +1,4 @@
-import { entryKind } from "@repo/shared/journal";
+import { latestOnly } from "@repo/shared/journal";
 import { z } from "zod";
 
 const todo = z.object({ label: z.string(), done: z.boolean() });
@@ -34,7 +34,7 @@ const intent = z.object({
 
 export type Intent = z.infer<typeof intent>;
 
-export const intentKind = entryKind({ name: "intent", schema: intent });
+export const intentKind = latestOnly({ name: "intent", schema: intent });
 
 const question = z.object({
 	id: z.string(),
@@ -45,4 +45,4 @@ const question = z.object({
 
 export type Question = z.infer<typeof question>;
 
-export const questionKind = entryKind({ name: "question", schema: question });
+export const questionKind = latestOnly({ name: "question", schema: question });

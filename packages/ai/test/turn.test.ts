@@ -185,7 +185,10 @@ describe("the agent turn", () => {
 		]);
 		expect(events[2]).toEqual({
 			type: "entry",
-			entry: { kind: "waiting", value: "approve the write" },
+			entry: expect.objectContaining({
+				kind: "waiting",
+				value: "approve the write",
+			}),
 		});
 		expect(events[3]).toMatchObject({
 			type: "result",
@@ -226,7 +229,7 @@ describe("the agent turn", () => {
 		]);
 		expect(events[2]).toEqual({
 			type: "entry",
-			entry: { kind: "asked", value: "Pick" },
+			entry: expect.objectContaining({ kind: "asked", value: "Pick" }),
 		});
 		expect(calls).toBe(1);
 	});
@@ -239,7 +242,10 @@ describe("the agent turn", () => {
 		});
 
 		expect(events.slice(-2)).toEqual([
-			{ type: "entry", entry: { kind: "closed", value: "wrapped" } },
+			{
+				type: "entry",
+				entry: expect.objectContaining({ kind: "closed", value: "wrapped" }),
+			},
 			expect.objectContaining({ type: "halt" }),
 		]);
 	});
@@ -266,7 +272,7 @@ describe("the agent turn", () => {
 		]);
 		expect(events[2]).toEqual({
 			type: "entry",
-			entry: { kind: "reported", value: "noted" },
+			entry: expect.objectContaining({ kind: "reported", value: "noted" }),
 		});
 	});
 
@@ -282,7 +288,7 @@ describe("the agent turn", () => {
 		).toEqual(["entry", "assistant", "entry", "assistant"]);
 		expect(events.find((e) => e.type === "entry")).toEqual({
 			type: "entry",
-			entry: { kind: "heard", value: "hi" },
+			entry: expect.objectContaining({ kind: "heard", value: "hi" }),
 		});
 	});
 

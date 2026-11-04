@@ -1,10 +1,11 @@
-import { asksOf } from "@repo/journal-catalog/asks";
+import { asksKind } from "@repo/journal-catalog/asks";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
 import { permissionsExtension } from "@repo/permissions-extension";
 import { textPermissionsHost } from "@repo/permissions-extension/host";
 import { MemoryRepl } from "@repo/repl/repl";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 
 function replWith(config: string): MemoryRepl {
@@ -28,7 +29,7 @@ describe("permissions over the memory extension", () => {
 		await repl.eval(REMEMBER);
 		const asked = await repl.evalOutput("(memory/forget-all)");
 		expect(asked.held).toBe(true);
-		const requests = asksOf(asked.entries).open ?? [];
+		const requests = view(asked.entries, asksKind).open ?? [];
 		expect(requests.map((r) => r.title)).toEqual(["memory/forget-all"]);
 		expect(await printed(repl, '(memory/recall "note")')).toContain("a note");
 	});

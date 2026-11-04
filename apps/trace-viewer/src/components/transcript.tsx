@@ -6,7 +6,7 @@ import type { EntryLine, ReportRow } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
 import { memoryKind } from "@repo/journal-catalog/memory";
-import { entriesOf } from "@repo/shared/journal";
+import { view } from "@repo/shared/journal";
 import type { ReactNode } from "react";
 import { Turn } from "@/components/ui.tsx";
 import { captureReview } from "@/lib/analytics.ts";
@@ -24,7 +24,7 @@ function EntryRow({ kind, children }: { kind: string; children: ReactNode }) {
 }
 
 function Entry({ line }: { line: EntryLine }) {
-	const [memory] = entriesOf([line], memoryKind);
+	const [memory] = view([{ ...line, id: line.kind }], memoryKind);
 	if (memory !== undefined)
 		return (
 			<EntryRow kind={line.kind}>

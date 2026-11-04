@@ -50,6 +50,8 @@ describe("a ui action", () => {
 		);
 
 		expect(result).not.toHaveProperty("ui");
-		expect(result.entries).toEqual([{ kind: "ui", value: { viewId: "v1" } }]);
+		expect(result.entries).toEqual([
+			expect.objectContaining({ kind: "ui", value: { viewId: "v1" } }),
+		]);
 	});
 });
