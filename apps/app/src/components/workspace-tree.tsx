@@ -78,8 +78,8 @@ export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
 	home: Home01Icon,
 	new_chat: Add01Icon,
 	"README.md": InformationCircleIcon,
-	"settings.ptc": Settings02Icon,
-	"preferences.ptc": File01Icon,
+	settings: Settings02Icon,
+	preferences: File01Icon,
 };
 
 function memoryPage(key: string): PanelContent {
@@ -207,11 +207,15 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 
 const ROOT_FILES: Record<
 	"readme" | "settings" | "preferences",
-	{ name: string; icon?: IconSvgElement }
+	{ name: string; title: string; icon?: IconSvgElement }
 > = {
-	readme: { name: "README.md", icon: InformationCircleIcon },
-	settings: { name: "settings.ptc" },
-	preferences: { name: "preferences.ptc" },
+	readme: {
+		name: "README.md",
+		title: "README.md",
+		icon: InformationCircleIcon,
+	},
+	settings: { name: "settings", title: "settings.ptc" },
+	preferences: { name: "preferences", title: "preferences.ptc" },
 };
 
 function RootFile({
@@ -225,7 +229,7 @@ function RootFile({
 	const content: PanelContent = {
 		kind: "page",
 		page,
-		title: ROOT_FILES[page].name,
+		title: ROOT_FILES[page].title,
 	};
 	return (
 		<TreeFile
@@ -300,10 +304,8 @@ export function WorkspaceTree({
 		ui: placeholder("ui"),
 		tests: placeholder("tests"),
 		"README.md": () => <RootFile workspaceId={workspaceId} page="readme" />,
-		"settings.ptc": () => (
-			<RootFile workspaceId={workspaceId} page="settings" />
-		),
-		"preferences.ptc": () => (
+		settings: () => <RootFile workspaceId={workspaceId} page="settings" />,
+		preferences: () => (
 			<RootFile workspaceId={workspaceId} page="preferences" />
 		),
 	};

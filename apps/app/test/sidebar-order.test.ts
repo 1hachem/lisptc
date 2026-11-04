@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	currentNames,
 	SIDEBAR_ENTRIES,
 	shownEntries,
 	sidebarOrder,
@@ -49,5 +50,21 @@ describe("toggling an entry", () => {
 	it("drops repeats and entries the sidebar no longer has", () => {
 		expect(toggledEntry(["gone", "bin", "bin"], "ui")).toEqual(["bin", "ui"]);
 		expect(toggledEntry(undefined, "home")).toEqual(["home"]);
+	});
+});
+
+describe("entries saved under their old .ptc names", () => {
+	it("keep their place and stay hidden under the new names", () => {
+		expect(sidebarOrder(["preferences.ptc", "chat"]).slice(0, 2)).toEqual([
+			"preferences",
+			"chat",
+		]);
+		const order = sidebarOrder(undefined);
+		expect(shownEntries(order, ["settings.ptc"])).not.toContain("settings");
+		expect(toggledEntry(["settings.ptc"], "settings")).toEqual([]);
+		expect(currentNames(["settings.ptc", "tests"])).toEqual([
+			"settings",
+			"tests",
+		]);
 	});
 });

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
 import { motionOf } from "./resolved-preferences.ts";
 import {
+	currentNames,
 	type SidebarEntry,
 	shownEntries,
 	sidebarOrder,
@@ -19,10 +20,17 @@ export function useSidebarOrder() {
 		[order, stored?.hidden],
 	);
 	const complete = stored?.sidebar?.join("\n") === order.join("\n");
+	const hiddenNow = currentNames(stored?.hidden);
+	const hiddenRenamed = stored?.hidden?.join("\n") !== hiddenNow.join("\n");
 
 	useEffect(() => {
 		if (stored !== undefined && !complete) put({ sidebar: order });
 	}, [stored, complete, order, put]);
+
+	useEffect(() => {
+		if (stored?.hidden !== undefined && hiddenRenamed)
+			put({ hidden: currentNames(stored.hidden) });
+	}, [stored?.hidden, hiddenRenamed, put]);
 
 	const reorder = useCallback(
 		(next: SidebarEntry[]) => put({ sidebar: withHidden(next, order) }),
@@ -35,7 +43,7 @@ export function useSidebarOrder() {
 		[put, stored?.hidden],
 	);
 
-	return { order, shown, hidden: stored?.hidden ?? [], reorder, toggle };
+	return { order, shown, hidden: hiddenNow, reorder, toggle };
 }
 
 export function useSidebarMotion() {
