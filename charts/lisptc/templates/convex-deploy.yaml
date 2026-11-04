@@ -1,3 +1,21 @@
+{{- if .Values.dev.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: convex-deploy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: convex-deploy
+  template:
+    metadata:
+      labels:
+        app: convex-deploy
+    spec:
+{{- else }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -10,6 +28,7 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+{{- end }}
       {{- with .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ . }}
@@ -38,8 +57,21 @@ spec:
               {{- if .Values.preview.enabled }}
               pnpm exec convex env set SITE_URL "$SITE_URL"
               {{- end }}
+              {{- if .Values.dev.enabled }}
+              pnpm exec convex dev --once --typecheck disable --codegen disable
+              pnpm run migrate
+              touch /tmp/pushed
+              exec pnpm exec convex dev --typecheck disable --codegen disable
+              {{- else }}
               pnpm exec convex deploy --typecheck disable --codegen disable
               exec pnpm run migrate
+              {{- end }}
+          {{- if .Values.dev.enabled }}
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/tmp/pushed"]
+            periodSeconds: 2
+          {{- end }}
           volumeMounts:
             - name: deployment-env
               mountPath: /convex-deploy

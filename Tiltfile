@@ -35,8 +35,12 @@ docker_build(
     'ghcr.io/1hachem/lisptc-convex-deploy',
     context='.',
     dockerfile='packages/backend/Dockerfile',
-    target='prod',
+    target='prod' if prod else 'dev',
     ignore=['apps'],
+    live_update=[] if prod else [
+        fall_back_on(manifests),
+        sync('packages', '/app/packages'),
+    ],
 )
 
 node = str(local('hostname', quiet=True)).strip()
@@ -77,8 +81,7 @@ k8s_resource(
     labels=['convex'],
 )
 k8s_resource(
-    named('Job')[0],
-    new_name='convex-deploy',
+    'convex-deploy',
     resource_deps=['convex-backend'],
     labels=['convex'],
 )
