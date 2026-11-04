@@ -245,8 +245,10 @@ bytes without knowing which extension produced them, or that it exists.
 
 Three kinds of thing cross the seam, and each has exactly one mechanism. Reach
 for the matching one, never for an import: behaviour goes through a chain, a
-capability goes through a slot, data goes through an annotation. Needing
-something new is never a reason to import across the seam.
+capability goes through a slot, data goes through the journal. A fact is
+recorded as its own entry when it happens, never folded onto a step, and each
+view filters the journal for the kinds it shows. Needing something new is never
+a reason to import across the seam.
 
 `check:arch` holds it in three rules: a function that takes an extension and
 digs a field out of it fails everywhere by shape; the files allowed to run the
