@@ -1,13 +1,10 @@
-import { topic } from "@repo/interpreter/channels";
+import { type Channels, topic } from "@repo/interpreter/channels";
 import { effect } from "@repo/interpreter/effects";
 import { StepHold } from "@repo/interpreter/errors";
+import { journal } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { note, output } from "@repo/interpreter/topics";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
@@ -18,6 +15,14 @@ import {
 	type TurnStreamOptions,
 } from "../src/stream.ts";
 import { runAgentTurn, type TurnOptions } from "../src/turn.ts";
+
+export function recording(
+	channels: Channels | undefined,
+	kind: string,
+	value: unknown,
+): void {
+	journal.emit(channels, { harness: { kind, value } });
+}
 
 export function extension(
 	session: (hooks: SessionHooks) => void,
@@ -41,38 +46,20 @@ export function noting(text: string): InterpExtension {
 	);
 }
 
-const reported = topic<string>("reported");
-
 export function reporting(text: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.evalStep.use((ctx, next) => {
-			reported.emit(ctx.interp.channels, { user: text });
+			recording(ctx.interp.channels, "reported", text);
 			return next(ctx);
-		});
-		hooks.annotate.use((buffer, into, next) => {
-			const seen = buffer.collect(reported);
-			return next(
-				buffer,
-				seen.length === 0 ? into : annotating(into, "step", { reported: seen }),
-			);
 		});
 	});
 }
 
-const heard = topic<string>("heard");
-
 export function hearing(text: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.beginStep.use(function* (ctx, next) {
-			heard.emit(ctx.interp.channels, { user: text });
+			recording(ctx.interp.channels, "heard", text);
 			yield* next(ctx);
-		});
-		hooks.annotate.use((buffer, into, next) => {
-			const seen = buffer.collect(heard);
-			return next(
-				buffer,
-				seen.length === 0 ? into : annotating(into, "step", { heard: seen }),
-			);
 		});
 	});
 }
@@ -129,11 +116,7 @@ export function testRepls(
 	return new TestRepls(extensions);
 }
 
-const waiting = topic<string>("waiting");
-
 const approved = topic<string>("approved");
-
-const decided = topic<string>("decided");
 
 export function holding(): InterpExtension {
 	return Object.assign(
@@ -141,31 +124,17 @@ export function holding(): InterpExtension {
 			interp.defineGlobal(
 				newSym("wait-for-human"),
 				interp.makeBuiltIn("wait-for-human", 0, () => {
-					waiting.emit(interp.channels, { user: "approve it" });
+					recording(interp.channels, "waiting", "approve it");
 					throw new StepHold("approve it");
 				}),
 			);
 		},
 		{
 			session: (hooks: SessionHooks) => {
-				hooks.annotate.use((buffer, into, next) => {
-					const seen = buffer.collect(waiting);
-					const answers = buffer.collect(decided);
-					const asked =
-						seen.length === 0
-							? into
-							: annotating(into, "output", { waiting: seen });
-					return next(
-						buffer,
-						answers.length === 0
-							? asked
-							: annotating(asked, "output", { decided: answers }),
-					);
-				});
 				hooks.invoke.use(async (ctx, next) => {
 					if (ctx.action !== "approve") return next(ctx);
 					approved.emit(ctx.interp.channels, { user: "approved, carry on" });
-					decided.emit(ctx.interp.channels, { user: "approve" });
+					recording(ctx.interp.channels, "decided", "approve");
 				});
 				hooks.message.use(
 					(buffer, next) => buffer.collect(approved)[0] ?? next(buffer),
@@ -191,40 +160,22 @@ export function streamChat(
 	);
 }
 
-const asked = topic<string>("asked");
-
 export function asking(question: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.evalStep.use((ctx, next) => {
-			asked.emit(ctx.interp.channels, { user: question });
+			recording(ctx.interp.channels, "asked", question);
 			effect.emit(ctx.interp.channels, { harness: { type: "end" } });
 			return next(ctx);
 		});
-		hooks.annotate.use((buffer, into, next) => {
-			const seen = buffer.collect(asked);
-			return next(
-				buffer,
-				seen.length === 0 ? into : annotating(into, "output", { asked: seen }),
-			);
-		});
 	});
 }
-
-const closing = topic<string>("closing");
 
 export function concluding(text: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.beforeSettle.use(function* (ctx, more, next) {
 			const decided = yield* next(ctx, more);
-			if (!decided) closing.emit(ctx.interp.channels, { user: text });
+			if (!decided) recording(ctx.interp.channels, "closed", text);
 			return decided;
-		});
-		hooks.annotate.use((buffer, into, next) => {
-			const seen = buffer.collect(closing);
-			return next(
-				buffer,
-				seen.length === 0 ? into : annotating(into, "output", { closed: seen }),
-			);
 		});
 	});
 }

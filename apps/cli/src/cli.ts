@@ -5,11 +5,12 @@ import type { ChannelTransport } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { setExit } from "@repo/interpreter/core-builtins";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { Reader } from "@repo/interpreter/reader";
-import { noAnnotations, openSession } from "@repo/interpreter/session";
+import { openSession } from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
 import { openAsks, question, runAsking } from "@repo/repl/asks";
 import type { Repl } from "@repo/repl/repl";
@@ -110,9 +111,7 @@ class InteractiveRepl implements Repl {
 		} finally {
 			detach();
 		}
-		return openAsks(
-			this.hooks.annotate.run((_b, into) => into, buffer, noAnnotations()),
-		);
+		return openAsks(buffer.collect(journal));
 	}
 
 	private async answer(choice: AskChoice): Promise<void> {

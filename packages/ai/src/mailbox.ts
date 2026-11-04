@@ -1,4 +1,4 @@
-import type { Annotations } from "@repo/interpreter/session";
+import type { Received } from "@repo/interpreter/journal";
 import type { Awaitable } from "@repo/shared/host";
 
 export type Envelope =
@@ -7,7 +7,7 @@ export type Envelope =
 			id: string;
 			text: string;
 			forms: boolean;
-			annotations?: Annotations;
+			received?: Received;
 	  }
 	| {
 			kind: "event";

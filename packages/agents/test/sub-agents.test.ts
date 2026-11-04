@@ -1,4 +1,3 @@
-import { activityKey } from "@repo/interpreter/annotations";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
 	extract,
@@ -6,15 +5,12 @@ import {
 	restore,
 	snapshot,
 } from "@repo/interpreter/image";
+import { activityOf, journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import {
-	newSessionHooks,
-	noAnnotations,
-	openSession,
-} from "@repo/interpreter/session";
+import { newSessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import { describe, expect, test } from "vitest";
 import {
@@ -617,7 +613,7 @@ describe("agent-keep", () => {
 
 describe("a spawn or a send", () => {
 	test("is reported as activity naming the chat the agent runs in", async () => {
-		const { interp, extension, run } = world();
+		const { interp, run } = world();
 		const buffer = bufferTransport();
 		const detach = interp.channels.pipe(buffer);
 		try {
@@ -625,15 +621,7 @@ describe("a spawn or a send", () => {
 		} finally {
 			detach();
 		}
-		const into = openSession([extension]).annotate.run(
-			(_b, into) => into,
-			buffer,
-			noAnnotations(),
-		);
-
-		expect(
-			activityKey.schema.safeParse(into.output[activityKey.name]).data,
-		).toEqual([
+		expect(activityOf(buffer.collect(journal))).toEqual([
 			{
 				kind: "agent",
 				icon: "agent",

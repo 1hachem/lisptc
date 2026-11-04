@@ -1,22 +1,13 @@
-import {
-	type Question,
-	questionKey,
-	readAnnotation,
-} from "@repo/interpreter/annotations";
-
-export interface QuestionCarrier {
-	type: string;
-	additional_kwargs?: Record<string, unknown>;
-}
+import { latest, type Question, questionKind } from "@repo/interpreter/journal";
+import { type EntryCarrier, entriesOfMessage } from "./entries.ts";
 
 export function openQuestion(
-	messages: readonly QuestionCarrier[],
+	messages: readonly EntryCarrier[],
 ): Question | undefined {
 	for (let at = messages.length - 1; at >= 0; at--) {
 		const message = messages[at];
 		if (message === undefined || message.type === "human") return undefined;
-		if (message.type !== "tool") continue;
-		const question = readAnnotation(message.additional_kwargs, questionKey);
+		const question = latest(entriesOfMessage(message), questionKind);
 		if (question !== undefined) return question;
 	}
 	return undefined;

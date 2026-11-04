@@ -6,7 +6,7 @@
   "exports": {
     ".": "./src/lisp.ts",
     "./arith": "./src/arith.ts",
-    "./annotations": "./src/annotations.ts",
+    "./journal": "./src/journal.ts",
     "./asks": "./src/asks.ts",
     "./async": "./src/async.ts",
     "./channels": "./src/channels.ts",

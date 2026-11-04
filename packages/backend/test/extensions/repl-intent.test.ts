@@ -1,11 +1,11 @@
 import { intentExtension } from "@repo/intent-extension";
 import { intentHost } from "@repo/intent-extension/host";
 import {
-	intentKey,
-	questionKey,
-	readAnnotation,
-	viewKey,
-} from "@repo/interpreter/annotations";
+	intentKind,
+	latest,
+	questionKind,
+	viewKind,
+} from "@repo/interpreter/journal";
 import { describe, expect, it } from "vitest";
 import { agentRepl, modelFacing } from "./helpers.ts";
 
@@ -17,13 +17,13 @@ describe("a step that says its intent", () => {
 		const out = await withIntent().evalOutput(
 			'(intent/todo "load" "show") (intent/check "load") (ui/render (ui/text "done"))',
 		);
-		expect(readAnnotation(out.annotations.output, intentKey)).toEqual({
+		expect(latest(out.entries, intentKind)).toEqual({
 			todos: [
 				{ label: "load", done: true },
 				{ label: "show", done: false },
 			],
 		});
-		expect(readAnnotation(out.annotations.output, viewKey)).toEqual({
+		expect(latest(out.entries, viewKind)).toEqual({
 			viewId: "v1",
 		});
 		expect(out.effects).not.toContainEqual({ type: "end" });
@@ -34,7 +34,7 @@ describe("a step that says its intent", () => {
 			'(intent/ask "Which board?" \'("Sales" "Support"))',
 		);
 		expect(out.effects).toContainEqual({ type: "end" });
-		expect(readAnnotation(out.annotations.output, questionKey)).toEqual({
+		expect(latest(out.entries, questionKind)).toEqual({
 			id: "q1",
 			prompt: "Which board?",
 			choices: ["Sales", "Support"],
@@ -46,7 +46,7 @@ describe("a step that says its intent", () => {
 		const repl = withIntent();
 		await repl.evalOutput('(intent/doing "look it up")');
 		const settled = await repl.beforeSettle(false);
-		const log = readAnnotation(settled.annotations.output, intentKey)?.log;
+		const log = latest(settled.entries, intentKind)?.log;
 		expect(log).toEqual([
 			{
 				text: "look it up",

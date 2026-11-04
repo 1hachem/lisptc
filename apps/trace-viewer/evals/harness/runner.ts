@@ -113,7 +113,7 @@ const runtime = {
 			})) {
 				if (
 					event.type === "assistant" ||
-					event.type === "collected" ||
+					event.type === "entry" ||
 					event.type === "result" ||
 					event.type === "halt" ||
 					event.type === "silent" ||

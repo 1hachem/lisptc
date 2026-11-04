@@ -16,7 +16,7 @@ import type {
 	ActivityIcon,
 	ActivityImage,
 	Progress,
-} from "@repo/interpreter/annotations";
+} from "@repo/interpreter/journal";
 import { useState } from "react";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 

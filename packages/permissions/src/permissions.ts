@@ -234,7 +234,8 @@ export function permissionsExtension(
 		host.approvals.open(request);
 		if (change !== undefined) awaiting.set(request.id, change);
 		requested.emit(interp.channels, { user: request });
-		for (const approver of host.approvers) approver.ask?.(request);
+		for (const approver of host.approvers)
+			approver.ask?.(request, interp.channels);
 		return request;
 	}
 

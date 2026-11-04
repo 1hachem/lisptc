@@ -1,11 +1,12 @@
-import type { ActivityEntry } from "@repo/interpreter/annotations";
-import { topic } from "@repo/interpreter/channels";
 import type { Eval } from "@repo/interpreter/drive";
 import { messageOf } from "@repo/interpreter/errors";
+import {
+	type ActivityEntry,
+	activityKind,
+	record,
+} from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import type { Clock } from "@repo/shared/host";
-
-export const fileActivity = topic<ActivityEntry>("knowledge-activity");
 
 const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
@@ -38,18 +39,16 @@ export function* reporting<T>(
 	calls.set(n);
 	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
-		fileActivity.emit(interp.channels, {
-			user: {
-				kind: "file",
-				icon: verb,
-				label: `knowledge · ${verb}`,
-				detail: name,
-				state,
-				...(error === undefined ? {} : { error: messageOf(error) }),
-				id: `file-${n}`,
-				startedAt,
-				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
-			},
+		record(interp.channels, activityKind, {
+			kind: "file",
+			icon: verb,
+			label: `knowledge · ${verb}`,
+			detail: name,
+			state,
+			...(error === undefined ? {} : { error: messageOf(error) }),
+			id: `file-${n}`,
+			startedAt,
+			...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 		});
 	report("started");
 	try {

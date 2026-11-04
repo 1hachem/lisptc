@@ -12,6 +12,7 @@ import type {
 import type { Image } from "@repo/interpreter/image";
 import { type ImageStore, MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
+import { ENTRY_TYPE } from "@repo/shared/messages";
 import { DEFAULT_CHOICE } from "@repo/shared/providers";
 import type { FunctionReturnType } from "convex/server";
 import { internal } from "../convex/_generated/api.js";
@@ -75,12 +76,18 @@ export function profileOf(lineage: RecordLineage): ThreadProfile {
 interface StoredMessage {
 	_id: string;
 	wireId?: string;
-	type: "human" | "ai" | "system" | "tool";
+	type: "human" | "ai" | "system" | "tool" | typeof ENTRY_TYPE;
 	content: string;
 	kwargs?: Record<string, unknown>;
 }
 
-const STORED_TYPES = new Set<string>(["human", "ai", "system", "tool"]);
+const STORED_TYPES = new Set<string>([
+	"human",
+	"ai",
+	"system",
+	"tool",
+	ENTRY_TYPE,
+]);
 
 function isStored(
 	message: WireMessage,
@@ -135,8 +142,8 @@ export class ThreadHost {
 					messages: toStored(messages),
 				});
 			},
-			async annotate(threadId, id, kwargs) {
-				await server.mutation(internal.threads.annotate, {
+			async revise(threadId, id, kwargs) {
+				await server.mutation(internal.threads.revise, {
 					chatId: asChat(threadId),
 					id,
 					kwargs,

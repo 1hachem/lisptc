@@ -1,10 +1,10 @@
-import { topic } from "@repo/interpreter/channels";
+import type { Channels } from "@repo/interpreter/channels";
 import { settled } from "@repo/interpreter/drive";
 import { ends } from "@repo/interpreter/effects";
+import { journal } from "@repo/interpreter/journal";
 import {
 	type AgentStep,
 	type AgentTurn,
-	annotating,
 	type ModelDelta,
 	type ModelRequest,
 	slot,
@@ -13,6 +13,14 @@ import {
 import { describe, expect, it } from "vitest";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 import { extension } from "./helpers.ts";
+
+function recording(
+	channels: Channels | undefined,
+	kind: string,
+	value: unknown,
+): void {
+	journal.emit(channels, { harness: { kind, value } });
+}
 
 describe("an extension hooking the session", () => {
 	it("wraps the evaluation and sees the code", async () => {
@@ -87,48 +95,48 @@ describe("an extension hooking the session", () => {
 		expect((await r.beginStep()).emitted).toBe("something worth knowing");
 	});
 
-	it("annotates the step on a lane of its own, beside the output", async () => {
+	it("journals what a step records, beside the output", async () => {
 		const r = new MemoryRepl({
 			extensions: [
 				extension((hooks) => {
-					hooks.annotate.use((buffer, into, next) =>
-						next(buffer, annotating(into, "step", { envelopes: 1 })),
-					);
+					hooks.evalStep.use(async (ctx, next) => {
+						recording(ctx.interp.channels, "before", 1);
+						await next(ctx);
+						recording(ctx.interp.channels, "after", 2);
+					});
 				}),
 			],
 		});
 
-		const { user, annotations } = await r.evalOutput('(echo "hi")');
+		const { user, entries } = await r.evalOutput('(echo "hi")');
 
 		expect(user).toBe("hi\n");
-		expect(annotations.step).toEqual({ envelopes: 1 });
-		expect(annotations.output).toEqual({});
+		expect(entries).toEqual([
+			{ kind: "before", value: 1 },
+			{ kind: "after", value: 2 },
+		]);
 	});
 
-	it("annotates a ui action the same way it annotates a step", async () => {
+	it("journals a ui action the same way it journals a step", async () => {
 		const r = new MemoryRepl({
 			extensions: [
 				extension((hooks) => {
-					hooks.invoke.use(async () => {});
-					hooks.annotate.use((buffer, into, next) =>
-						next(buffer, annotating(into, "output", { view: "a1" })),
-					);
+					hooks.invoke.use(async (ctx) => {
+						recording(ctx.interp.channels, "view", ctx.action);
+					});
 				}),
 			],
 		});
 
-		expect((await r.invokeUi("a1")).annotations.output).toEqual({
-			view: "a1",
-		});
+		expect((await r.invokeUi("a1")).entries).toEqual([
+			{ kind: "view", value: "a1" },
+		]);
 	});
 
-	it("reports nothing on a lane no extension claimed", async () => {
+	it("journals nothing when no extension records", async () => {
 		const r = new MemoryRepl({ extensions: [] });
 
-		expect((await r.evalOutput("(+ 1 1)")).annotations).toEqual({
-			step: {},
-			output: {},
-		});
+		expect((await r.evalOutput("(+ 1 1)")).entries).toEqual([]);
 	});
 
 	it("spans the forms a step did not run", async () => {
@@ -246,28 +254,21 @@ describe("an extension hooking the turn", () => {
 		);
 	});
 
-	it("carries what the system prompt emits on the channels, like a step", async () => {
-		const said = topic<string>("said");
+	it("journals what the system prompt records, like a step", async () => {
 		const r = new AgentRepl({
 			extensions: [
 				extension((hooks) => {
 					hooks.system.use(function* (interp, prompt, next) {
-						said.emit(interp.channels, { user: "you are a pirate" });
+						recording(interp.channels, "said", "you are a pirate");
 						return yield* next(interp, prompt);
 					});
-					hooks.annotate.use((buffer, into, next) =>
-						next(
-							buffer,
-							annotating(into, "step", { said: buffer.collect(said) }),
-						),
-					);
 				}),
 			],
 		});
 
-		expect((await r.system("you are a repl")).annotations.step).toEqual({
-			said: ["you are a pirate"],
-		});
+		expect((await r.system("you are a repl")).entries).toEqual([
+			{ kind: "said", value: "you are a pirate" },
+		]);
 	});
 
 	it("rewrites what the model sees", () => {
@@ -378,7 +379,7 @@ describe("an extension hooking the turn", () => {
 		expect(await r.beforeSettle(false)).toEqual({
 			more: false,
 			emitted: "",
-			annotations: { step: {}, output: {} },
+			entries: [],
 		});
 		expect(await r.beforeSettle(true)).toMatchObject({
 			more: true,
@@ -405,31 +406,22 @@ describe("an extension hooking the turn", () => {
 		});
 	});
 
-	it("hands over what it annotated as the turn settles", async () => {
-		const closing = topic<string>("closing");
+	it("hands over what it recorded as the turn settles, and only once", async () => {
 		const r = new AgentRepl({
 			extensions: [
 				extension((hooks) => {
 					hooks.beforeSettle.use(function* (ctx, more, next) {
-						closing.emit(ctx.interp.channels, { user: "wrapped" });
+						recording(ctx.interp.channels, "closed", "wrapped");
 						return yield* next(ctx, more);
 					});
-					hooks.annotate.use((buffer, into, next) =>
-						next(
-							buffer,
-							annotating(into, "output", { closed: buffer.collect(closing) }),
-						),
-					);
 				}),
 			],
 		});
 
-		expect((await r.beforeSettle(false)).annotations.output).toEqual({
-			closed: ["wrapped"],
-		});
-		expect((await r.evalOutput("(+ 1 2)")).annotations.output).toEqual({
-			closed: [],
-		});
+		expect((await r.beforeSettle(false)).entries).toEqual([
+			{ kind: "closed", value: "wrapped" },
+		]);
+		expect((await r.evalOutput("(+ 1 2)")).entries).toEqual([]);
 	});
 
 	it("sees how the turn ended", () => {

@@ -1,10 +1,5 @@
-import {
-	type ActivityEntry,
-	type ActivityImage,
-	recordActivity,
-} from "@repo/interpreter/annotations";
 import { isNumeric } from "@repo/interpreter/arith";
-import { type Ask, asking } from "@repo/interpreter/asks";
+import { type Ask, answering, asksKind } from "@repo/interpreter/asks";
 import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import { settled } from "@repo/interpreter/drive";
@@ -14,6 +9,12 @@ import {
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
+import {
+	type ActivityEntry,
+	type ActivityImage,
+	activityKind,
+	record,
+} from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -59,10 +60,6 @@ const MAX_TOOL_TIMEOUT_SECONDS = 900;
 const TIMEOUT_OPTION = "mcp/timeout";
 
 const AUTHORIZE_ACTION = "mcp/authorize";
-
-const authorizationAsked = topic<Ask>("mcp-authorization");
-
-const toolActivity = topic<ActivityEntry>("mcp-activity");
 
 const DETAIL_MAX = 120;
 
@@ -146,12 +143,6 @@ function flagRow(conf: ConnConfig): List[] {
 		: [arrayToList(names.map((name) => newLispKeyword(name)))];
 }
 
-function reportActivity(hooks: SessionHooks): void {
-	hooks.annotate.use((buffer, into, next) =>
-		next(buffer, recordActivity(into, buffer.collect(toolActivity))),
-	);
-}
-
 const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
 	fromLisp: (x) => Number(x),
@@ -194,8 +185,8 @@ function authorizationAsk(server: string, url: string): Ask {
 
 function holdForAuthorization(interp: Interp, error: unknown): unknown {
 	if (!(error instanceof AuthorizationRequired)) return error;
-	authorizationAsked.emit(interp.channels, {
-		user: authorizationAsk(error.server, error.url),
+	record(interp.channels, asksKind, {
+		open: [authorizationAsk(error.server, error.url)],
 	});
 	return new StepHold(
 		`${error.message}. The turn ends here; you will be told when they answer`,
@@ -212,27 +203,19 @@ function answerAuthorization(hooks: SessionHooks): void {
 				id ?? null,
 				false,
 			);
+		const accepted = approved === true || approved === "true";
 		authorizationAnswered.emit(ctx.interp.channels, {
-			user: { id, server, approved: approved === true || approved === "true" },
+			user: { id, server, approved: accepted },
 		});
-	});
-	hooks.annotate.use((buffer, into, next) =>
-		next(
-			buffer,
-			asking(into, {
-				open: buffer.collect(authorizationAsked),
-				answered: Object.fromEntries(
-					buffer.collect(authorizationAnswered).map((a) => [
-						a.id,
-						{
-							accepted: a.approved,
-							label: a.approved ? "Authorized" : "Not authorized",
-						},
-					]),
-				),
+		record(
+			ctx.interp.channels,
+			asksKind,
+			answering(id, {
+				accepted,
+				label: accepted ? "Authorized" : "Not authorized",
 			}),
-		),
-	);
+		);
+	});
 	hooks.message.use((buffer, next) => {
 		const answers = buffer.collect(authorizationAnswered);
 		if (answers.length === 0) return next(buffer);
@@ -735,18 +718,16 @@ function callTool(
 	const icon = iconOf(tool.icons, entry.icons);
 	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
-		toolActivity.emit(interp.channels, {
-			user: {
-				kind: "mcp",
-				icon,
-				label: toolLabel(ref.server, tool),
-				...(detail === undefined ? {} : { detail }),
-				state,
-				...(error === undefined ? {} : { error: messageOf(error) }),
-				id: `mcp-${n}`,
-				startedAt,
-				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
-			},
+		record(interp.channels, activityKind, {
+			kind: "mcp",
+			icon,
+			label: toolLabel(ref.server, tool),
+			...(detail === undefined ? {} : { detail }),
+			state,
+			...(error === undefined ? {} : { error: messageOf(error) }),
+			id: `mcp-${n}`,
+			startedAt,
+			...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 		});
 	report("started");
 	return withTimeout(
@@ -861,7 +842,6 @@ export function mcpExtension(host: McpExtensionHost): InterpExtension {
 		prompt: host.prompt(),
 		session(hooks: SessionHooks): void {
 			answerAuthorization(hooks);
-			reportActivity(hooks);
 			if (host.machine !== undefined) announceMachine(hooks, host.machine);
 		},
 	});
@@ -950,21 +930,19 @@ export function registerMcp(
 		loads.set(n);
 		const startedAt = clock.now();
 		const report = (state: ActivityEntry["state"], error?: unknown): void =>
-			toolActivity.emit(interp.channels, {
-				user: {
-					kind: "mcp",
-					icon: iconOf(
-						state === "done" ? entryOf(servers, name)?.icons : undefined,
-						manifestIcons(conf),
-					),
-					label: `load-mcp · ${name}`,
-					state,
-					...(state === "held" ? { detail: "requires auth" } : {}),
-					...(error === undefined ? {} : { error: messageOf(error) }),
-					id: `mcp-load-${n}`,
-					startedAt,
-					...(state === "started" ? {} : { ms: clock.now() - startedAt }),
-				},
+			record(interp.channels, activityKind, {
+				kind: "mcp",
+				icon: iconOf(
+					state === "done" ? entryOf(servers, name)?.icons : undefined,
+					manifestIcons(conf),
+				),
+				label: `load-mcp · ${name}`,
+				state,
+				...(state === "held" ? { detail: "requires auth" } : {}),
+				...(error === undefined ? {} : { error: messageOf(error) }),
+				id: `mcp-load-${n}`,
+				startedAt,
+				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 			});
 		report("started");
 		const promise = interp.async.start((signal) => connect(args, signal), {

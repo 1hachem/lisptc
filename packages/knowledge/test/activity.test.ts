@@ -1,8 +1,11 @@
-import { type Activity, activityKey } from "@repo/interpreter/annotations";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import {
+	type Activity,
+	activityOf as activityIn,
+	journal,
+} from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
-import { noAnnotations, openSession } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
@@ -27,7 +30,7 @@ function ticking(from: number, step: number): { now(): number } {
 async function activityOf(
 	store: MemoryKnowledgeStore,
 	code: string,
-): Promise<Activity | undefined> {
+): Promise<Activity> {
 	const extension = knowledgeExtension(
 		knowledgeHostFor({
 			store,
@@ -49,12 +52,7 @@ async function activityOf(
 	} finally {
 		detach();
 	}
-	const into = openSession([extension]).annotate.run(
-		(_b, into) => into,
-		buffer,
-		noAnnotations(),
-	);
-	return activityKey.schema.safeParse(into.output[activityKey.name]).data;
+	return activityIn(buffer.collect(journal));
 }
 
 describe("a knowledge file read or write", () => {

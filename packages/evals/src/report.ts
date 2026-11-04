@@ -13,11 +13,22 @@ export type CheckOutcome = z.infer<typeof checkOutcomeSchema>;
 
 export const gradeSchema = z.enum(["pass", "degraded", "fail"]);
 
-export const transcriptLineSchema = z.object({
+const messageLineSchema = z.object({
 	role: z.enum(["user", "assistant", "tool"]),
 	content: z.string(),
-	annotations: z.record(z.string(), z.unknown()).optional(),
 });
+
+const entryLineSchema = z.object({
+	role: z.literal("entry"),
+	kind: z.string(),
+	value: z.unknown(),
+	content: z.string(),
+});
+
+export const transcriptLineSchema = z.discriminatedUnion("role", [
+	messageLineSchema,
+	entryLineSchema,
+]);
 
 export const targetSchema = z.object({
 	provider: z.string(),
@@ -83,6 +94,7 @@ export const reportSchema = z.object({
 
 export type Grade = z.infer<typeof gradeSchema>;
 export type TranscriptLine = z.infer<typeof transcriptLineSchema>;
+export type EntryLine = z.infer<typeof entryLineSchema>;
 export type Target = z.infer<typeof targetSchema>;
 export type SeedTurn = z.infer<typeof seedTurnSchema>;
 export type MockedServer = z.infer<typeof mockedServerSchema>;

@@ -1,5 +1,6 @@
 import { Compactor, compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
+import { entriesOf, memoryKind } from "@repo/interpreter/journal";
 import { llmSlot } from "@repo/interpreter/observe";
 import {
 	MemoryBank,
@@ -73,7 +74,7 @@ describe("a REPL built from a list of its own", () => {
 		expect((await bank.store.get("k"))?.body).toBe("a note worth keeping");
 	});
 
-	it("emits a fired memory for the model and annotates it for the browser, never in the REPL output", async () => {
+	it("emits a fired memory for the model and records it in the journal, never in the REPL output", async () => {
 		const bank = new MemoryBank(new VolatileStore());
 		const r = memoryRepl([
 			compactionExtension(compactionHost),
@@ -81,10 +82,10 @@ describe("a REPL built from a list of its own", () => {
 		]);
 		await r.eval(`(memory/remember "k" "the note" :on '(step))`);
 
-		const { model, annotations, emitted } = await r.evalOutput("(+ 1 1)");
+		const { model, entries, emitted } = await r.evalOutput("(+ 1 1)");
 
 		expect(emitted).toContain("k: the note");
-		expect(annotations.step.memories).toEqual([
+		expect(entriesOf(entries, memoryKind)).toEqual([
 			{ key: "k", body: "the note", on: "step" },
 		]);
 		expect(model).not.toContain("the note");
@@ -99,9 +100,9 @@ describe("a REPL built from a list of its own", () => {
 			}),
 		]);
 
-		expect((await r.evalOutput("(+ 1 1)")).annotations.step).not.toHaveProperty(
-			"memories",
-		);
+		expect(
+			entriesOf((await r.evalOutput("(+ 1 1)")).entries, memoryKind),
+		).toEqual([]);
 	});
 
 	it("has no bank when no memory extension is in it", () => {

@@ -9,12 +9,12 @@ const question = {
 };
 
 const asked = {
-	type: "tool",
-	additional_kwargs: { question },
+	type: "entry",
+	additional_kwargs: { kind: "question", value: question },
 };
 
 describe("the open question", () => {
-	test("is the question on the last tool message", () => {
+	test("is the question the turn last recorded", () => {
 		expect(
 			openQuestion([{ type: "human" }, { type: "ai" }, asked, { type: "ai" }]),
 		).toEqual(question);
@@ -31,21 +31,35 @@ describe("the open question", () => {
 		expect(
 			openQuestion([
 				asked,
-				{ type: "tool", additional_kwargs: { question: later } },
+				{
+					type: "entry",
+					additional_kwargs: { kind: "question", value: later },
+				},
 			]),
 		).toEqual(later);
 	});
 
-	test("is absent when no tool message carries one", () => {
+	test("is absent when the turn recorded none", () => {
 		expect(
 			openQuestion([{ type: "tool", additional_kwargs: {} }, { type: "ai" }]),
 		).toBeUndefined();
 	});
 
+	test("is read off a step that carries it", () => {
+		expect(
+			openQuestion([
+				{ type: "tool", entries: [{ kind: "question", value: question }] },
+			]),
+		).toEqual(question);
+	});
+
 	test("ignores a malformed question", () => {
 		expect(
 			openQuestion([
-				{ type: "tool", additional_kwargs: { question: { id: "q" } } },
+				{
+					type: "entry",
+					additional_kwargs: { kind: "question", value: { id: "q" } },
+				},
 			]),
 		).toBeUndefined();
 	});

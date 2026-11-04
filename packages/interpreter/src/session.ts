@@ -4,27 +4,9 @@ import type { Reader } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
 import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
+import type { Received } from "./journal.ts";
 import type { Installable, Interp } from "./lisp.ts";
 export type Bounded = Record<Reader, string>;
-
-export type Annotations = Record<string, unknown>;
-
-export interface StepAnnotations {
-	readonly step: Annotations;
-	readonly output: Annotations;
-}
-
-export function noAnnotations(): StepAnnotations {
-	return { step: {}, output: {} };
-}
-
-export function annotating(
-	into: StepAnnotations,
-	where: keyof StepAnnotations,
-	entry: Annotations,
-): StepAnnotations {
-	return { ...into, [where]: { ...into[where], ...entry } };
-}
 
 export interface TurnContext {
 	readonly interp: Interp;
@@ -116,10 +98,7 @@ export interface InterpExtension extends Installable {
 
 export interface SessionHooks {
 	readonly turnStart: Chain<[ctx: TurnContext], Eval<void>>;
-	readonly received: Chain<
-		[ctx: TurnContext, received: Annotations],
-		Eval<void>
-	>;
+	readonly received: Chain<[ctx: TurnContext, received: Received], Eval<void>>;
 	readonly system: Chain<[interp: Interp, prompt: string], Eval<string>>;
 	readonly beginStep: Chain<[ctx: TurnContext], Eval<void>>;
 	readonly context: Chain<
@@ -146,10 +125,6 @@ export interface SessionHooks {
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
 	readonly answered: Chain<[ctx: StepContext, out: StepOutcome], boolean>;
 	readonly unrun: Chain<[interp: Interp, code: string], Skipped[]>;
-	readonly annotate: Chain<
-		[buffer: ChannelBuffer, into: StepAnnotations],
-		StepAnnotations
-	>;
 	readonly message: Chain<[buffer: ChannelBuffer], string | undefined>;
 	readonly invoke: Chain<[ctx: ActionContext], Promise<void>>;
 	fill<T>(of: Slot<T>, value: T): void;
@@ -175,7 +150,6 @@ export function newSessionHooks(): SessionHooks {
 		stepError: new Chain(),
 		answered: new Chain(),
 		unrun: new Chain(),
-		annotate: new Chain(),
 		message: new Chain(),
 		invoke: new Chain(),
 		fill<T>(of: Slot<T>, value: T): void {

@@ -1,9 +1,10 @@
-import { type Asks, asksKey } from "@repo/interpreter/asks";
+import { type Asks, asksOf as asksIn } from "@repo/interpreter/asks";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { StepHold } from "@repo/interpreter/errors";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
-import { noAnnotations, openSession } from "@repo/interpreter/session";
+import { openSession } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -45,18 +46,13 @@ async function step(interp: Interp, run: () => Promise<unknown>) {
 	}
 }
 
-function asksOf(
-	hooks: ReturnType<typeof openSession>,
-	buffer: ReturnType<typeof bufferTransport>,
-): Asks {
-	return hooks.annotate.run((_b, into) => into, buffer, noAnnotations()).output[
-		asksKey.name
-	] as Asks;
+function asksOf(buffer: ReturnType<typeof bufferTransport>): Asks {
+	return asksIn(buffer.collect(journal));
 }
 
 describe("a load that needs a login", () => {
 	it("holds the step and asks the user to authorize at the link", async () => {
-		const { interp, hooks } = session();
+		const { interp } = session();
 		const { buffer, thrown } = await step(
 			interp,
 			() =>
@@ -67,7 +63,7 @@ describe("a load that needs a login", () => {
 		);
 		expect(thrown).toBeInstanceOf(StepHold);
 		expect((thrown as StepHold).reason).toContain(AUTH_URL);
-		const [ask] = asksOf(hooks, buffer).open ?? [];
+		const [ask] = asksOf(buffer).open ?? [];
 		expect(ask?.id).toBe("s-123");
 		expect(ask?.title).toBe("acme");
 		expect(ask?.choices.find((c) => c.accepts)?.opens).toBe(AUTH_URL);
@@ -83,7 +79,7 @@ describe("a load that needs a login", () => {
 			}),
 		);
 		expect(thrown).toBeUndefined();
-		expect(asksOf(hooks, buffer).answered).toEqual({
+		expect(asksOf(buffer).answered).toEqual({
 			"s-123": { accepted: true, label: "Authorized" },
 		});
 		expect(hooks.message.run(() => undefined, buffer)).toContain(

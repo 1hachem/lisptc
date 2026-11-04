@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { annotate, annotationKey, readAnnotation } from "./annotations.ts";
-import type { StepAnnotations } from "./session.ts";
+import { type Entry, entriesOf, entryKind } from "./journal.ts";
 
 const askAnswer = z
 	.object({
@@ -53,37 +52,26 @@ const asks = z
 
 export type Asks = z.infer<typeof asks>;
 
-export const asksKey = annotationKey({
-	name: "asks",
-	lane: "output",
-	schema: asks,
-});
+export const asksKind = entryKind({ name: "asks", schema: asks });
+
+export function asksOf(entries: readonly Entry[]): Asks {
+	const open: Ask[] = [];
+	let answered: Record<string, Answered> = {};
+	for (const added of entriesOf(entries, asksKind)) {
+		open.push(...(added.open ?? []));
+		answered = { ...answered, ...added.answered };
+	}
+	return {
+		...(open.length > 0 ? { open } : {}),
+		...(Object.keys(answered).length > 0 ? { answered } : {}),
+	};
+}
 
 export function unansweredAsks(asks: Asks | undefined): readonly Ask[] {
 	const answered = asks?.answered ?? {};
 	return (asks?.open ?? []).filter((ask) => !(ask.id in answered));
 }
 
-export function answering(
-	asks: Asks | undefined,
-	id: string,
-	answer: Answered,
-): Asks {
-	return { ...asks, answered: { ...asks?.answered, [id]: answer } };
-}
-
-export function asking(into: StepAnnotations, add: Asks): StepAnnotations {
-	const open = add.open ?? [];
-	const answered = add.answered ?? {};
-	if (open.length === 0 && Object.keys(answered).length === 0) return into;
-	const held = readAnnotation(into.output, asksKey) ?? {};
-	const merged: Asks = {
-		...(open.length > 0 || held.open
-			? { open: [...(held.open ?? []), ...open] }
-			: {}),
-		...(Object.keys(answered).length > 0 || held.answered
-			? { answered: { ...held.answered, ...answered } }
-			: {}),
-	};
-	return annotate(into, asksKey, merged);
+export function answering(id: string, answer: Answered): Asks {
+	return { answered: { [id]: answer } };
 }

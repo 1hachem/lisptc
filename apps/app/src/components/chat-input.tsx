@@ -5,7 +5,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
-import type { Question } from "@repo/interpreter/annotations";
+import type { Question } from "@repo/interpreter/journal";
 import type { SymbolTable } from "@repo/language-service";
 import { cn } from "@repo/ui";
 import { useCallback, useEffect, useRef } from "react";

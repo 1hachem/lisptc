@@ -1,6 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import type { Question } from "@repo/interpreter/annotations";
+import type { Question } from "@repo/interpreter/journal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { attachingFiles } from "../lib/attached-files.ts";
@@ -72,10 +72,8 @@ export function ChatComposer({
 	const submit = useCallback(
 		(text: string, attached: string[]) => {
 			const files = attachingFiles(attached);
-			const annotations = question ? { ...files, answers: question.id } : files;
-			return about
-				? sendAbout(about, text, annotations)
-				: send(text, annotations);
+			const received = question ? { ...files, answers: question.id } : files;
+			return about ? sendAbout(about, text, received) : send(text, received);
 		},
 		[about, question, send, sendAbout],
 	);

@@ -65,7 +65,7 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 			return repl.eval(req.code ?? "");
 		case "step": {
 			const out = await repl.evalOutput(req.code ?? "");
-			return { output: out.user, asks: openAsks(out.annotations) };
+			return { output: out.user, asks: openAsks(out.entries) };
 		}
 		case "answer":
 			return (await repl.invokeUi(req.action ?? "", req.values ?? {})).user;

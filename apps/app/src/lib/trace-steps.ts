@@ -10,7 +10,9 @@ import {
 	toolActivity,
 	toolFailed,
 	toolIntent,
+	tracePlacement,
 } from "./chat.tsx";
+import { foldEntries, isEntryMessage } from "./entries.ts";
 
 const SNIPPET = 60;
 
@@ -49,7 +51,7 @@ function doingOf(messages: readonly ChatMessage[]): string | undefined {
 function titleOf(messages: readonly ChatMessage[]): string {
 	const doing = doingOf(messages);
 	if (doing !== undefined) return snippet(doing);
-	const lead = messages.find((m) => !isToolMessage(m));
+	const lead = messages.find((m) => !isToolMessage(m) && !isEntryMessage(m));
 	if (lead === undefined) return "tool result";
 	const { prose } = formsIn(
 		messageText(lead),
@@ -90,6 +92,7 @@ function stepOf(messages: ChatMessage[], number: number): TraceStep {
 export function traceEntries(messages: readonly ChatMessage[]): TraceEntry[] {
 	const entries: TraceEntry[] = [];
 	let open: ChatMessage[] | undefined;
+	let waiting: ChatMessage[] = [];
 	let steps = 0;
 	const close = () => {
 		if (open === undefined) return;
@@ -97,17 +100,28 @@ export function traceEntries(messages: readonly ChatMessage[]): TraceEntry[] {
 		entries.push({ kind: "step", step: stepOf(open, steps) });
 		open = undefined;
 	};
-	for (const [at, message] of messages.entries()) {
-		if (isUserMessage(message) || isSystemMessage(message)) {
+	const settle = () => {
+		if (open !== undefined) open.push(...waiting);
+		else if (waiting.length > 0) open = waiting;
+		waiting = [];
+	};
+	for (const [at, message] of foldEntries(messages, tracePlacement).entries()) {
+		if (isEntryMessage(message)) {
+			waiting.push(message);
+		} else if (isUserMessage(message) || isSystemMessage(message)) {
+			settle();
 			close();
 			entries.push({ kind: "message", message, at });
 		} else if (isToolMessage(message) && open !== undefined) {
-			open.push(message);
+			open.push(...waiting, message);
+			waiting = [];
 		} else {
 			close();
-			open = [message];
+			open = [...waiting, message];
+			waiting = [];
 		}
 	}
+	settle();
 	close();
 	return entries;
 }

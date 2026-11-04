@@ -1,16 +1,15 @@
 import { ends } from "@repo/interpreter/effects";
+import type { Entry, Received } from "@repo/interpreter/journal";
 import type {
 	AgentFailure,
 	AgentTurn,
-	Annotations,
 	ModelDelta,
 	ModelRequest,
 	ModelUsage,
-	StepAnnotations,
 	StepVerdict,
 	TurnOutcome,
 } from "@repo/interpreter/session";
-import type { AgentRepl, LiveAnnotations } from "@repo/repl/repl";
+import type { AgentRepl, LiveEntries } from "@repo/repl/repl";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
 import { type AgentConfig, streamAgent } from "./agent.ts";
@@ -43,7 +42,7 @@ export interface TurnOptions {
 	maxSteps?: number;
 	inbox?: () => Promise<Envelope[]>;
 	runsForms?: boolean;
-	received?: Annotations;
+	received?: Received;
 }
 
 export type TurnEvent =
@@ -62,16 +61,12 @@ export type TurnEvent =
 			output: string;
 			display: string;
 			error: boolean;
-			annotations: StepAnnotations;
 			riding?: string;
 			failed: boolean;
 			held?: true;
 			results: readonly string[];
-			quiet?: boolean;
 	  }
-	| { type: "live"; stepId: string; annotations: Annotations }
-	| { type: "collected"; annotations: Annotations }
-	| { type: "concluded"; annotations: Annotations }
+	| { type: "entry"; entry: Entry }
 	| { type: "rode"; text: string }
 	| {
 			type: "steered";
@@ -153,12 +148,13 @@ async function* takeSteers({
 			taken += 1;
 			continue;
 		}
-		const { message, quiet } = evaluated;
+		const { message, quiet, entries } = evaluated;
 		if (!quiet) {
 			transcript.push(...withItsResult(prompt, resultEntry(message)));
 			taken += 1;
 		}
 		yield { type: "evaluated", message };
+		yield* recorded(entries);
 	}
 	return taken;
 }
@@ -181,8 +177,8 @@ async function* prepareStep(
 	transcript: TranscriptEntry[],
 ): AsyncGenerator<TurnEvent> {
 	repl.setConversationVars(snapshotConversation(transcript));
-	const { emitted, annotations } = await repl.beginStep();
-	yield* collect(annotations);
+	const { emitted, entries } = await repl.beginStep();
+	yield* recorded(entries);
 	if (emitted !== "" && ride(transcript, emitted))
 		yield { type: "rode", text: emitted };
 }
@@ -225,7 +221,7 @@ interface Turn {
 	readonly signal?: AbortSignal;
 	readonly inbox?: () => Promise<Envelope[]>;
 	readonly runsForms: boolean;
-	readonly received?: Annotations;
+	readonly received?: Received;
 	readonly agent: AgentTurn;
 	readonly telemetry: TurnTelemetry;
 	steps: number;
@@ -233,9 +229,8 @@ interface Turn {
 
 type ModelCall = (request: ModelRequest) => AsyncIterable<ModelDelta>;
 
-function* collect(annotations: StepAnnotations): Generator<TurnEvent> {
-	if (Object.keys(annotations.step).length > 0)
-		yield { type: "collected", annotations: annotations.step };
+function* recorded(entries: readonly Entry[]): Generator<TurnEvent> {
+	for (const entry of entries) yield { type: "entry", entry };
 }
 
 async function* openTurn(
@@ -249,19 +244,19 @@ async function* openTurn(
 
 	const started = await repl.turnStart(turn.telemetry.turnStart);
 	if (started.emitted !== "") transcript.push(noteEntry(started.emitted));
-	yield* collect(started.annotations);
+	yield* recorded(started.entries);
 
 	if (turn.received !== undefined) {
 		const heard = await repl.received(turn.received, turn.telemetry.received);
-		yield* collect(heard.annotations);
+		yield* recorded(heard.entries);
 		if (heard.emitted !== "" && ride(transcript, heard.emitted))
 			yield { type: "rode", text: heard.emitted };
 	}
 
-	const { prompt: system, annotations } = await repl.system(
+	const { prompt: system, entries } = await repl.system(
 		config?.system ?? withInstructions(systemPromptFor(repl.interp), config),
 	);
-	yield* collect(annotations);
+	yield* recorded(entries);
 	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,
@@ -281,15 +276,15 @@ interface Answered {
 	reply: Reply;
 }
 
-async function* whileRunning<T>(
-	stepId: string,
-	run: (live: LiveAnnotations) => Promise<T>,
+async function* whileRunning<T extends { entries: readonly Entry[] }>(
+	run: (live: LiveEntries) => Promise<T>,
 ): AsyncGenerator<TurnEvent, T> {
-	let latest: Annotations | undefined;
+	const waiting: Entry[] = [];
+	const seen = new Set<Entry>();
 	let done = false;
 	let wake = () => {};
-	const running = run((annotations) => {
-		latest = annotations;
+	const running = run((entry) => {
+		waiting.push(entry);
 		wake();
 	});
 	const finish = () => {
@@ -297,18 +292,21 @@ async function* whileRunning<T>(
 		wake();
 	};
 	running.then(finish, finish);
-	while (!done) {
-		if (latest !== undefined) {
-			const annotations = latest;
-			latest = undefined;
-			yield { type: "live", stepId, annotations };
+	for (;;) {
+		const entry = waiting.shift();
+		if (entry !== undefined) {
+			seen.add(entry);
+			yield { type: "entry", entry };
 			continue;
 		}
+		if (done) break;
 		await new Promise<void>((resolve) => {
 			wake = resolve;
 		});
 	}
-	return running;
+	const ran = await running;
+	yield* recorded(ran.entries.filter((entry) => !seen.has(entry)));
+	return ran;
 }
 
 async function* evaluateStep(
@@ -328,17 +326,8 @@ async function* evaluateStep(
 	transcript.push({ role: "assistant", content: code });
 
 	const evalStartedAt = Date.now();
-	const {
-		output,
-		display,
-		error,
-		annotations,
-		effects,
-		emitted,
-		failed,
-		held,
-		results,
-	} = yield* whileRunning(stepId, (live) => evalCode(repl, code, stepId, live));
+	const { output, display, error, effects, emitted, failed, held, results } =
+		yield* whileRunning((live) => evalCode(repl, code, stepId, live));
 	turn.steps += 1;
 	const step = turn.steps;
 
@@ -357,7 +346,7 @@ async function* evaluateStep(
 		turn.telemetry.stepEnd,
 	);
 	const halting = verdict === "halt" && !held;
-	if (halting && Object.keys(annotations.output).length === 0) return verdict;
+	if (halting) return verdict;
 	const riding = emitted === "" || halting ? {} : { riding: emitted };
 	yield {
 		type: "result",
@@ -365,14 +354,11 @@ async function* evaluateStep(
 		output,
 		display,
 		error,
-		annotations,
 		failed,
 		results,
 		...riding,
-		...(halting ? { quiet: true } : {}),
 		...(held ? { held: true as const } : {}),
 	};
-	if (halting) return verdict;
 	transcript.push({
 		role: "tool",
 		content: replResultContent(output, error),
@@ -396,9 +382,7 @@ async function* settle(turn: Turn): AsyncGenerator<TurnEvent, boolean> {
 	const taken = steps > 0 ? yield* takeSteers(turn) : 0;
 	const settled = await repl.beforeSettle(taken > 0);
 	if (settled.emitted !== "") transcript.push(noteEntry(settled.emitted));
-	yield* collect(settled.annotations);
-	if (Object.keys(settled.annotations.output).length > 0)
-		yield { type: "concluded", annotations: settled.annotations.output };
+	yield* recorded(settled.entries);
 	return settled.more && steps < maxSteps;
 }
 
@@ -426,7 +410,12 @@ async function* runStep(
 	);
 	const code = repl.response(reply.full, stripFences);
 	if (code === "") return { verdict: "silent", code };
-	const verdict = yield* evaluateStep(turn, { stepId, startedAt, code, reply });
+	const verdict = yield* evaluateStep(turn, {
+		stepId,
+		startedAt,
+		code,
+		reply,
+	});
 	return { verdict, code };
 }
 

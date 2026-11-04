@@ -24,8 +24,8 @@ import { useEffect, useRef, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import {
 	type AskTransport,
+	answerEntry,
 	uiActionTransport,
-	withAnswer,
 } from "../lib/asks.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import {
@@ -50,11 +50,22 @@ function answering(
 	id: string,
 	answer: Answered,
 ): Transcript | undefined {
-	return transcript?.map((row) =>
-		(row.wireId ?? row._id) === messageId
-			? { ...row, kwargs: withAnswer(row.kwargs, id, answer) }
-			: row,
-	);
+	const last = transcript?.at(-1);
+	if (transcript === undefined || last === undefined || messageId === undefined)
+		return transcript;
+	return [
+		...transcript,
+		{
+			...last,
+			seq: last.seq + 1,
+			type: "entry",
+			content: "",
+			kwargs: answerEntry(messageId, id, answer),
+			truncated: undefined,
+			wireId: `${messageId}:${id}:answered`,
+			layerId: undefined,
+		},
+	];
 }
 
 function linkState(choice: AskChoice): string | undefined {

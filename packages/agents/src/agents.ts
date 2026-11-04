@@ -1,11 +1,7 @@
-import {
-	type ActivityEntry,
-	recordActivity,
-} from "@repo/interpreter/annotations";
-import { topic } from "@repo/interpreter/channels";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { implant, snapshot } from "@repo/interpreter/image";
+import { activityKind, record } from "@repo/interpreter/journal";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -77,19 +73,10 @@ export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
 
-const agentActivity = topic<ActivityEntry>("agents-activity");
-
-function reportActivity(hooks: SessionHooks): void {
-	hooks.annotate.use((buffer, into, next) =>
-		next(buffer, recordActivity(into, buffer.collect(agentActivity))),
-	);
-}
-
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
 		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
-		session: reportActivity,
 	});
 }
 
@@ -259,16 +246,14 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 	const library = new AgentLibrary(host.folder, host.workspace, host.roster);
 
 	function report(id: string, name: string, detail: string, chat: string) {
-		agentActivity.emit(interp.channels, {
-			user: {
-				kind: "agent",
-				icon: "agent",
-				label: name,
-				detail,
-				state: "done",
-				id,
-				chat,
-			},
+		record(interp.channels, activityKind, {
+			kind: "agent",
+			icon: "agent",
+			label: name,
+			detail,
+			state: "done",
+			id,
+			chat,
 		});
 	}
 

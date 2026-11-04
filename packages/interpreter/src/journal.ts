@@ -1,55 +1,78 @@
 import { ENVELOPE_KEYS } from "@repo/shared/messages";
 import { z } from "zod";
-import {
-	type Annotations,
-	annotating,
-	type StepAnnotations,
-} from "./session.ts";
+import { type Channels, topic } from "./channels.ts";
 
-export type Lane = keyof StepAnnotations;
+export interface Entry {
+	readonly kind: string;
+	readonly value: unknown;
+}
 
-export interface AnnotationKey<T> {
+export interface EntryKind<T> {
 	readonly name: string;
-	readonly lane: Lane;
 	readonly schema: z.ZodType<T>;
 }
 
 const RESERVED: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
-export function annotationKey<T>(key: AnnotationKey<T>): AnnotationKey<T> {
-	if (RESERVED.has(key.name))
+export function entryKind<T>(kind: EntryKind<T>): EntryKind<T> {
+	if (RESERVED.has(kind.name))
 		throw new Error(
-			`annotation key "${key.name}" is a message envelope field; pick another name`,
+			`entry kind "${kind.name}" is a message envelope field; pick another name`,
 		);
-	return key;
+	return kind;
 }
 
-export function annotate<T>(
-	into: StepAnnotations,
-	key: AnnotationKey<T>,
+export const journal = topic<Entry>("journal");
+
+export function record<T>(
+	channels: Channels | undefined,
+	kind: EntryKind<T>,
 	value: T,
-): StepAnnotations {
-	return annotating(into, key.lane, { [key.name]: value });
+): void {
+	journal.emit(channels, { harness: { kind: kind.name, value } });
 }
 
-export function readAnnotation<T>(
-	bag: Annotations | undefined,
-	key: AnnotationKey<T>,
+export function readEntry<T>(entry: Entry, kind: EntryKind<T>): T | undefined {
+	return entry.kind === kind.name
+		? kind.schema.safeParse(entry.value).data
+		: undefined;
+}
+
+export function entriesOf<T>(
+	entries: readonly Entry[],
+	kind: EntryKind<T>,
+): T[] {
+	const values: T[] = [];
+	for (const entry of entries) {
+		const value = readEntry(entry, kind);
+		if (value !== undefined) values.push(value);
+	}
+	return values;
+}
+
+export function latest<T>(
+	entries: readonly Entry[],
+	kind: EntryKind<T>,
 ): T | undefined {
-	return bag === undefined
+	return entriesOf(entries, kind).at(-1);
+}
+
+export type Received = Record<string, unknown>;
+
+export function readReceived<T>(
+	received: Received | undefined,
+	kind: EntryKind<T>,
+): T | undefined {
+	return received === undefined
 		? undefined
-		: key.schema.safeParse(bag[key.name]).data;
+		: kind.schema.safeParse(received[kind.name]).data;
 }
 
 const viewRef = z.object({ viewId: z.string() });
 
 export type ViewRef = z.infer<typeof viewRef>;
 
-export const viewKey = annotationKey({
-	name: "ui",
-	lane: "output",
-	schema: viewRef,
-});
+export const viewKind = entryKind({ name: "ui", schema: viewRef });
 
 const todo = z.object({ label: z.string(), done: z.boolean() });
 
@@ -84,11 +107,7 @@ const intent = z.object({
 
 export type Intent = z.infer<typeof intent>;
 
-export const intentKey = annotationKey({
-	name: "intent",
-	lane: "output",
-	schema: intent,
-});
+export const intentKind = entryKind({ name: "intent", schema: intent });
 
 const question = z.object({
 	id: z.string(),
@@ -99,11 +118,7 @@ const question = z.object({
 
 export type Question = z.infer<typeof question>;
 
-export const questionKey = annotationKey({
-	name: "question",
-	lane: "output",
-	schema: question,
-});
+export const questionKind = entryKind({ name: "question", schema: question });
 
 const firedMemory = z.object({
 	key: z.string().min(1),
@@ -113,11 +128,7 @@ const firedMemory = z.object({
 
 export type FiredMemory = z.infer<typeof firedMemory>;
 
-export const memoriesKey = annotationKey({
-	name: "memories",
-	lane: "step",
-	schema: z.array(firedMemory).min(1),
-});
+export const memoryKind = entryKind({ name: "memory", schema: firedMemory });
 
 export const activityIcons = [
 	"tool",
@@ -155,24 +166,17 @@ export type ActivityEntry = z.infer<typeof activityEntry>;
 
 export type Activity = ActivityEntry[];
 
-export const activityKey = annotationKey({
+export const activityKind = entryKind({
 	name: "activity",
-	lane: "output",
-	schema: z.array(activityEntry).min(1),
+	schema: activityEntry,
 });
 
-export function recordActivity(
-	into: StepAnnotations,
-	entries: readonly ActivityEntry[],
-): StepAnnotations {
-	if (entries.length === 0) return into;
-	const merged = [
-		...(readAnnotation(into[activityKey.lane], activityKey) ?? []),
-	];
-	for (const entry of entries) {
+export function activityOf(entries: readonly Entry[]): Activity {
+	const merged: Activity = [];
+	for (const entry of entriesOf(entries, activityKind)) {
 		const at = merged.findIndex((e) => e.id === entry.id);
 		if (at === -1) merged.push(entry);
 		else merged[at] = { ...merged[at], ...entry };
 	}
-	return annotate(into, activityKey, merged);
+	return merged;
 }

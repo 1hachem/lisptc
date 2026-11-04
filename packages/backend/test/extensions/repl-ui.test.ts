@@ -1,4 +1,5 @@
 import { Compactor } from "@repo/compaction-extension";
+import { latest, viewKind } from "@repo/interpreter/journal";
 import type { EvalOutput } from "@repo/repl/repl";
 import { MemoryViewStore, type PanelOp } from "@repo/ui-extension";
 import { describe, expect, it } from "vitest";
@@ -16,7 +17,7 @@ const PANEL = `
 (ui/render (panel))
 `;
 
-const view = (out: EvalOutput): unknown => out.annotations.output.ui;
+const view = (out: EvalOutput): unknown => latest(out.entries, viewKind);
 
 function stored() {
 	const views = new MemoryViewStore();
@@ -94,7 +95,7 @@ describe("a step that opens panel tabs", () => {
 			},
 			{ op: "close", tab: "file:knowledge/q3.pdf" },
 		]);
-		expect(out.annotations.output).not.toHaveProperty("panel");
+		expect(out.entries.map((entry) => entry.kind)).not.toContain("panel");
 	});
 
 	it("fails the step when the panel port refuses an op", async () => {
@@ -136,7 +137,9 @@ describe("a view while its step runs", () => {
 		await r.evalOutput(
 			'(ui/render (ui/text "a")) (ui/render (ui/text "b"))',
 			undefined,
-			(output) => pushed.push(output.ui),
+			(entry) => {
+				if (entry.kind === viewKind.name) pushed.push(entry.value);
+			},
 		);
 		expect(pushed.length).toBeGreaterThan(0);
 		for (const ui of pushed) expect(ui).toEqual({ viewId: "v1" });

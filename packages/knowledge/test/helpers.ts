@@ -1,8 +1,10 @@
+import { entriesOf, journal } from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import type { AttachedFile } from "@repo/shared/files";
-import { attached, knowledgeExtension } from "../src/knowledge.ts";
+import { attachmentsKind } from "../src/attached.ts";
+import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { MemoryKnowledgeStore } from "../src/memory-store.ts";
 import type { Downloader, PdfReader } from "../src/ports.ts";
@@ -33,7 +35,9 @@ export async function world(
 	});
 	await runAsync(interp, prelude);
 	const shown: AttachedFile[] = [];
-	attached.on(interp.channels, (file) => shown.push(file));
+	journal.on(interp.channels, (entry) =>
+		shown.push(...entriesOf([entry], attachmentsKind).flat()),
+	);
 	return {
 		store,
 		attached: shown,

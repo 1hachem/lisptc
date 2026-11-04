@@ -17,6 +17,11 @@ import { UIProvider } from "../src/lib/ui.tsx";
 
 const PROSE = "Here is your chart.";
 
+const entry = (kind: string, value: unknown) => ({ kind, value });
+
+const activities = (...values: unknown[]) =>
+	values.map((value) => entry("activity", value));
+
 const MESSAGES: ChatMessage[] = [
 	{ id: "h1", type: "human", content: "make a chart" },
 	{ id: "a1", type: "ai", content: "(draw-chart)" },
@@ -27,15 +32,17 @@ const MESSAGES: ChatMessage[] = [
 		additional_kwargs: {
 			display: "drawn for you",
 			results: ["RESULT-VALUE"],
-			ui: { viewId: "v1" },
-			intent: {
+		},
+		entries: [
+			entry("ui", { viewId: "v1" }),
+			entry("intent", {
 				doing: "drawing the chart",
 				todos: [
 					{ label: "fetch rows", done: true },
 					{ label: "draw", done: false },
 				],
-			},
-		},
+			}),
+		],
 	},
 	{
 		id: "a2",
@@ -345,12 +352,12 @@ describe("a call's progress", () => {
 			id: "t1",
 			type: "tool",
 			content: "",
-			additional_kwargs: {
-				intent: { progress: { done: 3, total: 10, label: "rows" } },
-			},
+			entries: [
+				entry("intent", { progress: { done: 3, total: 10, label: "rows" } }),
+			],
 		},
 		{ id: "a2", type: "ai", content: "(next)" },
-		{ id: "t2", type: "tool", content: "", additional_kwargs: { intent: {} } },
+		{ id: "t2", type: "tool", content: "", entries: [entry("intent", {})] },
 	];
 
 	it("stays on the call that first showed it, live and once settled", async () => {
@@ -552,37 +559,41 @@ describe("the trace", () => {
 			},
 		},
 		{
+			id: "m1",
+			type: "entry",
+			content: "",
+			additional_kwargs: entry("memory", { key: "remembered", body: "b" }),
+		},
+		{
 			id: "a1",
 			type: "ai",
 			content: "(draw-chart)",
 			additional_kwargs: {
 				reasoning_content: "THINKING-MARK",
-				meta: { durationMs: 5, memories: [{ key: "remembered", body: "b" }] },
+				meta: { durationMs: 5 },
 			},
 		},
 		{
 			id: "t1",
 			type: "tool",
 			content: '{"source":"lisp-repl","output":"MODEL-MARK"}',
-			additional_kwargs: {
-				display: "OUTPUT-MARK",
-				ui: { viewId: "UI-MARK" },
-				question: {
+			additional_kwargs: { display: "OUTPUT-MARK" },
+			entries: [
+				entry("ui", { viewId: "UI-MARK" }),
+				entry("question", {
 					id: "q1",
 					prompt: "ASKS-MARK",
 					choices: ["yes"],
 					multi: false,
-				},
-				activity: [
-					{
-						kind: "agent",
-						label: "AGENTS-MARK",
-						state: "done",
-						id: "scout",
-						chat: "child-chat",
-					},
-				],
-			},
+				}),
+				...activities({
+					kind: "agent",
+					label: "AGENTS-MARK",
+					state: "done",
+					id: "scout",
+					chat: "child-chat",
+				}),
+			],
 		},
 		{
 			id: "s1",
@@ -665,18 +676,16 @@ const ACTING: ChatMessage[] = [
 		id: "t1",
 		type: "tool",
 		content: "",
-		additional_kwargs: {
-			activity: [
-				call("a", "started"),
-				call("b", "started", "linear · Get issue"),
-			],
-		},
+		entries: activities(
+			call("a", "started"),
+			call("b", "started", "linear · Get issue"),
+		),
 	},
 	{
 		id: "t2",
 		type: "tool",
 		content: "",
-		additional_kwargs: { activity: [call("a", "done")] },
+		entries: activities(call("a", "done")),
 	},
 ];
 
@@ -713,10 +722,10 @@ describe("what a turn is doing", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: { doing: "triaging" },
-					activity: [call("a", "failed")],
-				},
+				entries: [
+					entry("intent", { doing: "triaging" }),
+					...activities(call("a", "failed")),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -736,12 +745,12 @@ describe("what a turn is doing", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: {
+				entries: [
+					entry("intent", {
 						doing: "triaging",
 						log: [{ text: "triaging", startedAt: 1, state: "done", ms: 5 }],
-					},
-				},
+					}),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -815,17 +824,17 @@ describe("the turn timeline", () => {
 		]);
 	});
 
-	it("draws the timeline from the intent and activity a step annotated", async () => {
+	it("draws the timeline from the intent and activity a step recorded", async () => {
 		session.messages = [
 			{ id: "h1", type: "human", content: "go" },
 			{
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: { log: logged.log.slice(0, 2) },
-					activity: [timed("a", 1200, "done", 90)],
-				},
+				entries: [
+					entry("intent", { log: logged.log.slice(0, 2) }),
+					...activities(timed("a", 1200, "done", 90)),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -862,13 +871,13 @@ describe("the turn timeline", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: {
+				entries: [
+					entry("intent", {
 						todos: [{ label: "fix it", done: true }],
 						log: logged.log.slice(0, 2),
-					},
-					activity: [timed("a", 100, "done", 300)],
-				},
+					}),
+					...activities(timed("a", 100, "done", 300)),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -1047,17 +1056,13 @@ describe("a trace's steps", () => {
 				id: "t1",
 				type: "tool",
 				content: '{"source":"lisp-repl","output":"spawned"}',
-				additional_kwargs: {
-					activity: [
-						{
-							kind: "agent",
-							label: "scout",
-							state: "started",
-							id: "scout",
-							chat: "child-chat",
-						},
-					],
-				},
+				entries: activities({
+					kind: "agent",
+					label: "scout",
+					state: "started",
+					id: "scout",
+					chat: "child-chat",
+				}),
 			},
 		];
 		const child: ChatMessage[] = [
@@ -1066,7 +1071,7 @@ describe("a trace's steps", () => {
 				id: "c2",
 				type: "tool",
 				content: '{"source":"lisp-repl","output":"CHILD-SAW"}',
-				additional_kwargs: { intent: { doing: "looking around" } },
+				entries: [entry("intent", { doing: "looking around" })],
 			},
 		];
 		const source = (chatId: string) => (chatId === "child-chat" ? child : []);
@@ -1094,7 +1099,7 @@ const todoTurn = (id: string, todos: { label: string; done: boolean }[]) => [
 		id: `t-${id}`,
 		type: "tool",
 		content: "",
-		additional_kwargs: { intent: { todos } },
+		entries: [entry("intent", { todos })],
 	},
 ];
 

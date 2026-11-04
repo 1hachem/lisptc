@@ -1,24 +1,27 @@
 import {
-	intentKey,
-	questionKey,
-	readAnnotation,
-} from "@repo/interpreter/annotations";
-import { bufferTransport } from "@repo/interpreter/channels-host";
+	bufferTransport,
+	type ChannelBuffer,
+} from "@repo/interpreter/channels-host";
 import { driveSync, settled } from "@repo/interpreter/drive";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
+import {
+	entriesOf,
+	intentKind,
+	journal,
+	questionKind,
+} from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import {
 	type AgentTurn,
 	newSessionHooks,
-	noAnnotations,
 	type SessionHooks,
 	type TurnOutcome,
 } from "@repo/interpreter/session";
 import { describe, expect, test } from "vitest";
-import { asked, intended, intentExtension } from "../src/intent.ts";
+import { intentExtension } from "../src/intent.ts";
 import { intentHost } from "../src/intent-host.ts";
 
 function fresh() {
@@ -38,13 +41,33 @@ function turnStart(interp: Interp, hooks: SessionHooks): void {
 }
 
 function failStep(interp: Interp, hooks: SessionHooks, code: string) {
-	const ran = step(interp, code);
-	hooks.stepError.run(
-		(_c, text) => ({ model: text, user: text }),
-		{ interp, code, emit: () => {} },
-		"boom\n",
-	);
-	return ran;
+	return watching(interp, () => {
+		step(interp, code);
+		hooks.stepError.run(
+			(_c, text) => ({ model: text, user: text }),
+			{ interp, code, emit: () => {} },
+			"boom\n",
+		);
+	});
+}
+
+function watching(interp: Interp, run: () => void) {
+	const buffer = bufferTransport();
+	const detach = interp.channels.pipe(buffer);
+	try {
+		run();
+	} finally {
+		detach();
+	}
+	return { buffer };
+}
+
+function intents(buffer: ChannelBuffer) {
+	return entriesOf(buffer.collect(journal), intentKind);
+}
+
+function questions(buffer: ChannelBuffer) {
+	return entriesOf(buffer.collect(journal), questionKind);
 }
 
 function settle(interp: Interp, hooks: SessionHooks, outcome: TurnOutcome) {
@@ -65,13 +88,15 @@ function settle(interp: Interp, hooks: SessionHooks, outcome: TurnOutcome) {
 }
 
 function beforeSettle(interp: Interp, hooks: SessionHooks, more: boolean) {
-	return driveSync(
-		hooks.beforeSettle.run(
-			(_c, m) => settled(m),
-			{ interp, emit: () => {} },
-			more,
-		),
-	);
+	return watching(interp, () => {
+		driveSync(
+			hooks.beforeSettle.run(
+				(_c, m) => settled(m),
+				{ interp, emit: () => {} },
+				more,
+			),
+		);
+	});
 }
 
 function logOf(interp: Interp): string {
@@ -98,9 +123,13 @@ describe("intent forms", () => {
 			interp,
 			'(intent/todo "a" "b") (intent/doing "reading") (intent/check "a")',
 		);
-		const sent = buffer.envelopes.filter((e) => e.topic === intended.name);
-		expect(sent.map((e) => e.to)).toEqual([["user"], ["user"], ["user"]]);
-		expect(buffer.collect(intended).at(-1)).toEqual({
+		const sent = buffer.envelopes.filter((e) => e.topic === journal.name);
+		expect(sent.map((e) => e.to)).toEqual([
+			["harness"],
+			["harness"],
+			["harness"],
+		]);
+		expect(intents(buffer).at(-1)).toEqual({
 			doing: "reading",
 			todos: [
 				{ label: "a", done: true },
@@ -115,7 +144,7 @@ describe("intent forms", () => {
 		const { interp } = fresh();
 		step(interp, '(intent/todo "a" "b") (intent/check "a") (intent/check "b")');
 		const { buffer } = step(interp, '(intent/todo "b" "c")');
-		expect(buffer.collect(intended).at(-1)?.todos).toEqual([
+		expect(intents(buffer).at(-1)?.todos).toEqual([
 			{ label: "b", done: true },
 			{ label: "c", done: false },
 		]);
@@ -134,7 +163,7 @@ describe("intent forms", () => {
 		const { interp } = fresh();
 		step(interp, '(intent/todo "a" "b" "c") (intent/check "c")');
 		const { buffer } = step(interp, '(intent/drop "b")');
-		expect(buffer.collect(intended).at(-1)?.todos).toEqual([
+		expect(intents(buffer).at(-1)?.todos).toEqual([
 			{ label: "a", done: false },
 			{ label: "c", done: true },
 		]);
@@ -145,15 +174,13 @@ describe("intent forms", () => {
 		step(interp, '(intent/todo "a" "b" "c")');
 		const first = step(interp, '(intent/move "c" 0)');
 		expect(
-			first.buffer
-				.collect(intended)
+			intents(first.buffer)
 				.at(-1)
 				?.todos?.map((t) => t.label),
 		).toEqual(["c", "a", "b"]);
 		const last = step(interp, '(intent/move "c" 9)');
 		expect(
-			last.buffer
-				.collect(intended)
+			intents(last.buffer)
 				.at(-1)
 				?.todos?.map((t) => t.label),
 		).toEqual(["a", "b", "c"]);
@@ -163,7 +190,7 @@ describe("intent forms", () => {
 		const { interp } = fresh();
 		step(interp, '(intent/todo "a" "b")');
 		const { buffer } = step(interp, "(intent/clear)");
-		expect(buffer.collect(intended).at(-1)?.todos).toEqual([]);
+		expect(intents(buffer).at(-1)?.todos).toEqual([]);
 	});
 
 	test("refuse to drop or move a label not on the list", () => {
@@ -185,9 +212,9 @@ describe("a progress bar", () => {
 			interp,
 			'(intent/todo "a") (intent/progress 2 5 "files")',
 		);
-		const sent = buffer.envelopes.filter((e) => e.topic === intended.name);
-		expect(sent.map((e) => e.to)).toEqual([["user"], ["user"]]);
-		expect(buffer.collect(intended).at(-1)).toEqual({
+		const sent = buffer.envelopes.filter((e) => e.topic === journal.name);
+		expect(sent.map((e) => e.to)).toEqual([["harness"], ["harness"]]);
+		expect(intents(buffer).at(-1)).toEqual({
 			todos: [{ label: "a", done: false }],
 			progress: { done: 2, total: 5, label: "files" },
 		});
@@ -198,7 +225,7 @@ describe("a progress bar", () => {
 		const { interp } = fresh();
 		step(interp, "(intent/progress 1 3)");
 		const { buffer } = step(interp, '(intent/todo "b") (intent/check "b")');
-		expect(buffer.collect(intended).at(-1)).toEqual({
+		expect(intents(buffer).at(-1)).toEqual({
 			todos: [{ label: "b", done: true }],
 			progress: { done: 1, total: 3 },
 		});
@@ -214,7 +241,7 @@ describe("a progress bar", () => {
 			     (intent/progress i n "issues")))`,
 		);
 		expect(thrown).toBeUndefined();
-		expect(buffer.collect(intended).map((i) => i.progress)).toEqual([
+		expect(intents(buffer).map((i) => i.progress)).toEqual([
 			{ done: 1, total: 3, label: "issues" },
 			{ done: 2, total: 3, label: "issues" },
 			{ done: 3, total: 3, label: "issues" },
@@ -233,7 +260,7 @@ describe("a progress bar", () => {
 		const { thrown, buffer } = step(interp, code);
 		expect(thrown).toBeInstanceOf(EvalException);
 		expect((thrown as Error).message).toContain(message);
-		expect(buffer.collect(intended)).toEqual([]);
+		expect(intents(buffer)).toEqual([]);
 	});
 });
 
@@ -244,7 +271,7 @@ describe("a question", () => {
 			interp,
 			'(intent/ask "Which board?" \'("Sales" "Support") :multi t)',
 		);
-		expect(buffer.collect(asked)).toEqual([
+		expect(questions(buffer)).toEqual([
 			{
 				id: "q1",
 				prompt: "Which board?",
@@ -252,8 +279,8 @@ describe("a question", () => {
 				multi: true,
 			},
 		]);
-		expect(buffer.envelopes.find((e) => e.topic === asked.name)?.to).toEqual([
-			"user",
+		expect(buffer.envelopes.find((e) => e.topic === journal.name)?.to).toEqual([
+			"harness",
 		]);
 		expect(buffer.collect(effect)).toEqual([{ type: "end" }]);
 	});
@@ -262,7 +289,7 @@ describe("a question", () => {
 		const { interp } = fresh();
 		step(interp, '(intent/ask "p" \'("A"))');
 		const { buffer } = step(interp, '(intent/ask "p" \'("A"))');
-		expect(buffer.collect(asked)[0]).toMatchObject({ id: "q2", multi: false });
+		expect(questions(buffer)[0]).toMatchObject({ id: "q2", multi: false });
 	});
 
 	test("needs a choice", () => {
@@ -273,32 +300,32 @@ describe("a question", () => {
 	});
 });
 
-describe("the annotate hook", () => {
-	test("writes the last intent and the last question of the step", () => {
-		const { interp, hooks } = fresh();
+describe("the journal", () => {
+	test("records each intent and the question as the step runs", () => {
+		const { interp } = fresh();
 		const { buffer } = step(
 			interp,
 			'(intent/todo "a") (intent/doing "x") (intent/ask "p" \'("A" "B"))',
 		);
-		const out = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
-		expect(readAnnotation(out.output, intentKey)).toEqual({
+		expect(buffer.collect(journal).map((e) => e.kind)).toEqual([
+			"intent",
+			"intent",
+			"question",
+		]);
+		expect(intents(buffer).at(-1)).toEqual({
 			doing: "x",
 			todos: [{ label: "a", done: false }],
 			log: [{ text: "x", startedAt: 1000, state: "running" }],
 		});
-		expect(readAnnotation(out.output, questionKey)).toEqual({
-			id: "q1",
-			prompt: "p",
-			choices: ["A", "B"],
-			multi: false,
-		});
+		expect(questions(buffer)).toEqual([
+			{ id: "q1", prompt: "p", choices: ["A", "B"], multi: false },
+		]);
 	});
 
-	test("writes nothing for a step that said nothing", () => {
-		const { interp, hooks } = fresh();
+	test("records nothing for a step that said nothing", () => {
+		const { interp } = fresh();
 		const { buffer } = step(interp, "(+ 1 2)");
-		const out = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
-		expect(out.output).toEqual({});
+		expect(buffer.collect(journal)).toEqual([]);
 	});
 });
 
@@ -310,14 +337,14 @@ describe("the doing log", () => {
 		step(interp, '(intent/doing "sort")');
 		clock.at = 1300;
 		const { buffer } = step(interp, '(intent/doing "write")');
-		expect(buffer.collect(intended).at(-1)?.log).toEqual([
+		expect(intents(buffer).at(-1)?.log).toEqual([
 			{ text: "read", startedAt: 1000, ms: 250, state: "done" },
 			{ text: "sort", startedAt: 1250, ms: 50, state: "done" },
 			{ text: "write", startedAt: 1300, state: "running" },
 		]);
 	});
 
-	test("marks the running line failed in the annotation of the step that failed", () => {
+	test("records the running line failed when the step fails", () => {
 		const { interp, hooks, clock } = fresh();
 		step(interp, '(intent/doing "fetch")');
 		clock.at = 1400;
@@ -326,8 +353,7 @@ describe("the doing log", () => {
 			hooks,
 			'(intent/doing "parse") (car 1)',
 		);
-		const out = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
-		expect(readAnnotation(out.output, intentKey)?.log).toEqual([
+		expect(intents(buffer).at(-1)?.log).toEqual([
 			{ text: "fetch", startedAt: 1000, ms: 400, state: "done" },
 			{
 				text: "parse",
@@ -339,7 +365,7 @@ describe("the doing log", () => {
 		]);
 		clock.at = 1500;
 		const next = step(interp, '(intent/doing "retry")');
-		expect(next.buffer.collect(intended).at(-1)?.log?.slice(1)).toEqual([
+		expect(intents(next.buffer).at(-1)?.log?.slice(1)).toEqual([
 			{
 				text: "parse",
 				startedAt: 1400,
@@ -356,8 +382,7 @@ describe("the doing log", () => {
 		step(interp, '(intent/doing "fetch")');
 		clock.at = 1800;
 		const { buffer } = failStep(interp, hooks, "(car 1)");
-		const out = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
-		expect(readAnnotation(out.output, intentKey)?.log).toEqual([
+		expect(intents(buffer).at(-1)?.log).toEqual([
 			{
 				text: "fetch",
 				startedAt: 1000,
@@ -367,10 +392,7 @@ describe("the doing log", () => {
 			},
 		]);
 		const quiet = step(interp, "(+ 1 2)");
-		expect(
-			hooks.annotate.run((_b, into) => into, quiet.buffer, noAnnotations())
-				.output,
-		).toEqual({});
+		expect(quiet.buffer.collect(journal)).toEqual([]);
 	});
 
 	test("closes the running line as done when the turn settles", () => {
@@ -381,17 +403,12 @@ describe("the doing log", () => {
 		expect(logOf(interp)).toBe('(("answer" 1000 600 "done"))');
 	});
 
-	test("closes the running line as done before the turn settles, in an annotation the person is sent", () => {
+	test("closes the running line as done before the turn settles, in an entry the person is sent", () => {
 		const { interp, hooks, clock } = fresh();
 		step(interp, '(intent/doing "answer")');
 		clock.at = 1600;
-		beforeSettle(interp, hooks, false);
-		const out = hooks.annotate.run(
-			(_b, into) => into,
-			bufferTransport(),
-			noAnnotations(),
-		);
-		expect(readAnnotation(out.output, intentKey)?.log).toEqual([
+		const { buffer } = beforeSettle(interp, hooks, false);
+		expect(intents(buffer).at(-1)?.log).toEqual([
 			{ text: "answer", startedAt: 1000, ms: 600, state: "done" },
 		]);
 	});
@@ -419,7 +436,7 @@ describe("the doing log", () => {
 		turnStart(interp, hooks);
 		clock.at = 2000;
 		const { buffer } = step(interp, '(intent/doing "second")');
-		expect(buffer.collect(intended).at(-1)?.log).toEqual([
+		expect(intents(buffer).at(-1)?.log).toEqual([
 			{ text: "second", startedAt: 2000, state: "running" },
 		]);
 	});

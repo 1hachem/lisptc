@@ -1,3 +1,4 @@
+import { asksOf } from "@repo/interpreter/asks";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
@@ -27,9 +28,7 @@ describe("permissions over the memory extension", () => {
 		await repl.eval(REMEMBER);
 		const asked = await repl.evalOutput("(memory/forget-all)");
 		expect(asked.held).toBe(true);
-		const { open: requests } = asked.annotations.output.asks as {
-			open: { title: string }[];
-		};
+		const requests = asksOf(asked.entries).open ?? [];
 		expect(requests.map((r) => r.title)).toEqual(["memory/forget-all"]);
 		expect(await printed(repl, '(memory/recall "note")')).toContain("a note");
 	});

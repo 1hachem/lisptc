@@ -1,8 +1,15 @@
+import type { Entry } from "@repo/interpreter/journal";
 import { knowledgeExtension } from "@repo/knowledge-extension";
 import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { MemoryKnowledgeStore } from "@repo/knowledge-extension/memory-store";
+import { ATTACHMENTS_KIND } from "@repo/shared/files";
 import { describe, expect, it } from "vitest";
 import { memoryRepl, modelFacing } from "./helpers.ts";
+
+const attached = (entries: readonly Entry[]): unknown[] =>
+	entries
+		.filter((entry) => entry.kind === ATTACHMENTS_KIND)
+		.flatMap((entry) => entry.value as unknown[]);
 
 function attachingRepl() {
 	const store = new MemoryKnowledgeStore();
@@ -23,7 +30,7 @@ describe("a step that attaches a file", () => {
 		const out = await attachingRepl().evalOutput(
 			'(attachments/write "chart.svg" "<svg/>") (attachments/attach "chart.svg") (knowledge/attach "report.md")',
 		);
-		expect(out.annotations.output.attachments).toEqual([
+		expect(attached(out.entries)).toEqual([
 			{ folder: "attachments", name: "chart.svg" },
 			{ folder: "knowledge", name: "report.md" },
 		]);
@@ -31,6 +38,6 @@ describe("a step that attaches a file", () => {
 
 	it("reports no attachments for a step that attached none", async () => {
 		const out = await attachingRepl().evalOutput("(+ 1 2)");
-		expect(out.annotations.output).not.toHaveProperty("attachments");
+		expect(attached(out.entries)).toEqual([]);
 	});
 });

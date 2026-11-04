@@ -98,7 +98,7 @@ describe("the recalled memories of a step", () => {
 	});
 });
 
-describe("reading memories off an annotation", () => {
+describe("reading memories off a journal entry", () => {
 	it("keeps the ones that carry a key", () => {
 		expect(
 			firedMemories([

@@ -1,3 +1,4 @@
+import type { Entry } from "@repo/interpreter/journal";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Repls } from "./repl-store.ts";
 
@@ -5,7 +6,7 @@ export interface UiActionResult {
 	output: string;
 	error: boolean;
 	message?: string;
-	annotations?: Record<string, unknown>;
+	entries: readonly Entry[];
 }
 
 export async function runUiAction<Id extends string>(
@@ -23,7 +24,7 @@ export async function uiActionOn(
 	values: Record<string, unknown>,
 ): Promise<UiActionResult> {
 	try {
-		const { user, annotations, message, failed } = await repl.invokeUi(
+		const { user, entries, message, failed } = await repl.invokeUi(
 			action,
 			values,
 		);
@@ -31,12 +32,13 @@ export async function uiActionOn(
 			output: user,
 			error: failed,
 			message,
-			annotations: annotations.output,
+			entries,
 		};
 	} catch (ex) {
 		return {
 			output: ex instanceof Error ? ex.message : String(ex),
 			error: true,
+			entries: [],
 		};
 	}
 }

@@ -1,10 +1,9 @@
-import { readAnnotation } from "@repo/interpreter/annotations";
 import {
 	type Answered,
 	type Ask,
 	type AskChoice,
 	answering,
-	asksKey,
+	asksKind,
 } from "@repo/interpreter/asks";
 import { postUiAction } from "./ui-action.ts";
 
@@ -33,27 +32,12 @@ export const uiActionTransport: AskTransport = {
 	},
 };
 
-export function asksOf(kwargs: Record<string, unknown> | undefined): Ask[] {
-	return [...(readAnnotation(kwargs, asksKey)?.open ?? [])];
-}
-
-export function answersOf(
-	kwargs: Record<string, unknown> | undefined,
-): ReadonlyMap<string, Answered> {
-	return new Map(
-		Object.entries(readAnnotation(kwargs, asksKey)?.answered ?? {}),
-	);
-}
-
-export function withAnswer(
-	kwargs: Record<string, unknown> | undefined,
+export function answerEntry(
+	about: string,
 	id: string,
 	answer: Answered,
 ): Record<string, unknown> {
-	return {
-		...kwargs,
-		[asksKey.name]: answering(readAnnotation(kwargs, asksKey), id, answer),
-	};
+	return { kind: asksKind.name, value: answering(id, answer), about };
 }
 
 export function askText(ask: Ask, answered: Answered | undefined): string {

@@ -1,6 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { MessageMemories } from "@repo/components";
-import type { Progress } from "@repo/interpreter/annotations";
+import type { Progress } from "@repo/interpreter/journal";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import {
@@ -535,7 +534,6 @@ function TurnFoot({
 	live,
 	failure,
 	stats,
-	memories,
 	index,
 	onTrace,
 }: {
@@ -543,7 +541,6 @@ function TurnFoot({
 	live: boolean;
 	failure: string | undefined;
 	stats: StepMeta | undefined;
-	memories: NonNullable<StepMeta["memories"]>;
 	index: number;
 	onTrace?: () => void;
 }) {
@@ -560,9 +557,6 @@ function TurnFoot({
 				<span className="whitespace-pre-wrap break-words text-red">
 					{failure}
 				</span>
-			)}
-			{!live && memories.length > 0 && (
-				<MessageMemories memories={memories} onOpen={onTrace} />
 			)}
 			{!live && (stats || onTrace) && (
 				<MessageMeta
@@ -598,14 +592,12 @@ function failedAt(turn: Turn): ChatMessage | undefined {
 
 function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 	const shape = useMemo(() => shapeTurn(turn), [turn]);
-	const memories = useMemo(
-		() =>
-			turnMessages(turn).flatMap(
-				(m) => (m.id === undefined ? undefined : meta[m.id]?.memories) ?? [],
-			),
-		[turn, meta],
-	);
 	const placed = useMemo(() => placeTimeline(shape, live), [shape, live]);
+	const shown = useChannels();
+	const traceAt = (message: ChatMessage | undefined) => {
+		const id = message?.id;
+		return onTrace && id !== undefined ? () => onTrace(id) : undefined;
+	};
 	const items = shape.chain.map((link, at) =>
 		link.kind === "text" ? (
 			<StepText key={`text:${link.message.id ?? at}`} message={link.message} />
@@ -628,11 +620,6 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 			/>
 		),
 	);
-	const shown = useChannels();
-	const traceAt = (message: ChatMessage | undefined) => {
-		const id = message?.id;
-		return onTrace && id !== undefined ? () => onTrace(id) : undefined;
-	};
 	const stats =
 		shape.answer?.id === undefined ? undefined : meta[shape.answer.id];
 	const failure =
@@ -654,7 +641,6 @@ function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 				live={live}
 				failure={failure}
 				stats={stats}
-				memories={memories}
 				index={index}
 				onTrace={traceAt(failure ? failedAt(turn) : shape.answer)}
 			/>

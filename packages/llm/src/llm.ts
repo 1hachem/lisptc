@@ -1,10 +1,10 @@
+import { isNumeric } from "@repo/interpreter/arith";
+import { EvalException, messageOf } from "@repo/interpreter/errors";
 import {
 	type ActivityEntry,
-	recordActivity,
-} from "@repo/interpreter/annotations";
-import { isNumeric } from "@repo/interpreter/arith";
-import { topic } from "@repo/interpreter/channels";
-import { EvalException, messageOf } from "@repo/interpreter/errors";
+	activityKind,
+	record,
+} from "@repo/interpreter/journal";
 import {
 	type Interp,
 	runSync,
@@ -42,8 +42,6 @@ import { z } from "zod";
 
 export const LLM_TIMEOUT_MS = 60_000;
 
-const modelActivity = topic<ActivityEntry>("llm-activity");
-
 const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
 	fromLisp: (x) => Number(x),
@@ -65,17 +63,15 @@ type Announce = (
 
 function announcer(interp: Interp): Announce {
 	return (id, builtin, state, { provider, model }, timing, error) =>
-		modelActivity.emit(interp.channels, {
-			user: {
-				kind: "llm",
-				icon: "model",
-				label: `llm · ${model ?? provider ?? "default model"}`,
-				detail: builtin,
-				state,
-				...(error === undefined ? {} : { error: messageOf(error) }),
-				id,
-				...timing,
-			},
+		record(interp.channels, activityKind, {
+			kind: "llm",
+			icon: "model",
+			label: `llm · ${model ?? provider ?? "default model"}`,
+			detail: builtin,
+			state,
+			...(error === undefined ? {} : { error: messageOf(error) }),
+			id,
+			...timing,
 		});
 }
 
@@ -168,9 +164,6 @@ export function llmExtension(
 		{
 			prompt: host.prompt(),
 			session(hooks: SessionHooks): void {
-				hooks.annotate.use((buffer, into, next) =>
-					next(buffer, recordActivity(into, buffer.collect(modelActivity))),
-				);
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {
 						config.observe = observer;

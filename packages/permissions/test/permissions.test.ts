@@ -1,3 +1,4 @@
+import { asksOf } from "@repo/interpreter/asks";
 import type { Hold } from "@repo/interpreter/drive";
 import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
@@ -39,7 +40,7 @@ describe("the permissions guard", () => {
 		expect(() => session("(permission/default deny)")).not.toThrow();
 	});
 
-	it("asks, emits the request on its channel and annotates the step", async () => {
+	it("asks, emits the request on its channel and records the ask", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const run = await s.step(UPCASE);
 		expect(run.failed).toBe(false);
@@ -50,23 +51,21 @@ describe("the permissions guard", () => {
 			expect.objectContaining({ name: "string-upcase", args: '"a"' }),
 		]);
 		expect(run.requests[0].change).toBeUndefined();
-		expect(run.annotations.output).toEqual({
-			asks: {
-				open: [
-					{
-						id: run.requests[0].id,
-						title: "string-upcase",
-						detail: '"a"',
-						prompt: "This call needs your approval.",
-						choices: [
-							"Deny",
-							"Always allow",
-							"Allow for session",
-							"Allow once",
-						].map((label) => expect.objectContaining({ label })),
-					},
-				],
-			},
+		expect(asksOf(run.entries)).toEqual({
+			open: [
+				{
+					id: run.requests[0].id,
+					title: "string-upcase",
+					detail: '"a"',
+					prompt: "This call needs your approval.",
+					choices: [
+						"Deny",
+						"Always allow",
+						"Allow for session",
+						"Allow once",
+					].map((label) => expect.objectContaining({ label })),
+				},
+			],
 		});
 	});
 
@@ -185,8 +184,8 @@ describe("the permissions guard", () => {
 			id: "nope",
 			approved: true,
 		});
-		expect(decided.annotations.output).toEqual({
-			asks: { answered: { nope: { accepted: false, label: "Expired" } } },
+		expect(asksOf(decided.entries)).toEqual({
+			answered: { nope: { accepted: false, label: "Expired" } },
 		});
 	});
 
@@ -312,10 +311,8 @@ describe("evaluating a permissions form", () => {
 				reason: "changes the permissions config",
 			}),
 		]);
-		expect(asked.annotations.output).toEqual({
-			asks: {
-				open: [expect.objectContaining({ answerApplies: true })],
-			},
+		expect(asksOf(asked.entries)).toEqual({
+			open: [expect.objectContaining({ answerApplies: true })],
 		});
 		expect((await s.step(UPCASE)).value).toBe('"A"');
 		expect(s.host.store.source()).toBe("");
@@ -720,20 +717,13 @@ describe("reporting a decision", () => {
 			approved: true,
 			scope: "once",
 		});
-		expect(decided.annotations).toEqual({
-			step: {},
-			output: {
-				asks: {
-					answered: { [request.id]: { accepted: true, label: "Allowed" } },
-				},
-			},
+		expect(decided.entries).toHaveLength(1);
+		expect(asksOf(decided.entries)).toEqual({
+			answered: { [request.id]: { accepted: true, label: "Allowed" } },
 		});
 		expect(decided.message).toMatch(/approved/);
-		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
-		expect((await s.step("(+ 1 2)")).annotations).toEqual({
-			step: {},
-			output: {},
-		});
+		expect((await s.turnStart()).entries).toEqual([]);
+		expect((await s.step("(+ 1 2)")).entries).toEqual([]);
 	});
 
 	it("reports a denial as a decision too", async () => {
@@ -743,13 +733,11 @@ describe("reporting a decision", () => {
 			id: request.id,
 			approved: false,
 		});
-		expect(denied.annotations.output).toEqual({
-			asks: {
-				answered: { [request.id]: { accepted: false, label: "Denied" } },
-			},
+		expect(asksOf(denied.entries)).toEqual({
+			answered: { [request.id]: { accepted: false, label: "Denied" } },
 		});
 		expect(denied.message).toMatch(/denied/);
-		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
+		expect((await s.turnStart()).entries).toEqual([]);
 	});
 });
 

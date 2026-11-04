@@ -1,4 +1,5 @@
 import { quiets } from "@repo/interpreter/effects";
+import type { Entry } from "@repo/interpreter/journal";
 import type { AgentRepl } from "@repo/repl/repl";
 import { formsOnly, type Skipped } from "@repo/shared/lisp-forms";
 import { evalMessageCode } from "./repl.ts";
@@ -7,6 +8,7 @@ import { type ToolMessage, toolMessage } from "./tool-message.ts";
 
 export interface Evaluated {
 	message: ToolMessage;
+	entries: readonly Entry[];
 	quiet: boolean;
 }
 
@@ -26,7 +28,7 @@ export async function evalMessage(
 	if (formsOnly(message).trim() === "") return undefined;
 	if (!runsAnything(message, repl.unrun(message))) return undefined;
 	const id = crypto.randomUUID();
-	const { effects, emitted, ...outcome } = await evalMessageCode(
+	const { effects, emitted, entries, ...outcome } = await evalMessageCode(
 		repl,
 		message,
 		id,
@@ -37,6 +39,7 @@ export async function evalMessage(
 			{ ...outcome, quiet, ...(emitted === "" ? {} : { riding: emitted }) },
 			id,
 		),
+		entries,
 		quiet,
 	};
 }

@@ -1,6 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
+import { latest, memoryKind } from "@repo/interpreter/journal";
 import {
 	type ComponentProps,
 	type RefObject,
@@ -24,6 +25,7 @@ import {
 	messageText,
 	stepMeta,
 } from "../lib/chat.tsx";
+import { entriesOfMessage, isEntryMessage } from "../lib/entries.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { useTrace } from "../lib/trace-source.tsx";
 import {
@@ -76,6 +78,21 @@ function ChannelToggles({
 	);
 }
 
+function EntryLine({
+	message,
+	focused,
+}: {
+	message: ChatMessage;
+	focused: boolean;
+}) {
+	const shown = useChannels();
+	if (!shown.memory) return null;
+	const entries = entriesOfMessage(message);
+	const memory = latest(entries, memoryKind);
+	if (memory === undefined) return null;
+	return <MessageMemories memories={[memory]} focused={focused} />;
+}
+
 function TraceLine({
 	message,
 	focused,
@@ -85,17 +102,15 @@ function TraceLine({
 }) {
 	const { metaShown } = useUI();
 	const { openModelPicker } = useModelPicker();
-	const shown = useChannels();
 	const stats = useMemo(() => stepMeta(message), [message]);
 	return (
 		<div className="group relative min-w-0 empty:hidden">
-			{isToolMessage(message) ? (
+			{isEntryMessage(message) ? (
+				<EntryLine message={message} focused={focused} />
+			) : isToolMessage(message) ? (
 				<ToolMessage message={message} />
 			) : (
 				<ChatLine message={message} />
-			)}
-			{shown.memory && stats?.memories && (
-				<MessageMemories memories={stats.memories} focused={focused} />
 			)}
 			{stats && (
 				<MessageMeta

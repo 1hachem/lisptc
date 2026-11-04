@@ -15,11 +15,12 @@ export {
 	type TranscriptEntry,
 } from "./repl.ts";
 export { type ReplSource, type Repls, replFrom } from "./repl-store.ts";
-export type {
-	ChatInput,
-	ChatMessageInput,
-	TurnOutcome,
-	WireMessage,
+export {
+	type ChatInput,
+	type ChatMessageInput,
+	entryMessage,
+	type TurnOutcome,
+	type WireMessage,
 } from "./stream.ts";
 export { renderSystemEvent, type SystemEvent } from "./system-event.ts";
 export {

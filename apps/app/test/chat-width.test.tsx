@@ -138,47 +138,66 @@ const WIDE: ChatMessage[] = [
 		id: "t1",
 		type: "tool",
 		content: "",
-		additional_kwargs: {
-			intent: {
-				doing: long,
-				todos: [{ label: long, done: false }],
-				progress: { done: 1, total: 2, label: long },
-				log: [{ text: long, startedAt: 0, state: "running" }],
+		entries: [
+			{
+				kind: "intent",
+				value: {
+					doing: long,
+					todos: [{ label: long, done: false }],
+					progress: { done: 1, total: 2, label: long },
+					log: [{ text: long, startedAt: 0, state: "running" }],
+				},
 			},
-			activity: [
-				{ id: "z", kind: "mcp", label: long, detail: long, state: "started" },
-			],
-			ui: storeView("wide", {
-				tag: "stack",
-				props: {},
-				children: [
-					{ tag: "text", props: { text: long }, children: [] },
-					{ tag: "markdown", props: { text: MARKDOWN }, children: [] },
-					{
-						tag: "table",
-						props: { columns: [long, "b"], rows: [{ [long]: long, b: long }] },
-						children: [],
-					},
-				],
-			}),
-			asks: {
-				open: [
-					{
-						id: "k1",
-						title: long,
-						detail: long,
-						prompt: long,
-						choices: [
-							{
-								label: long,
-								accepts: true,
-								answer: { action: "x", values: {} },
+			{
+				kind: "activity",
+				value: {
+					id: "z",
+					kind: "mcp",
+					label: long,
+					detail: long,
+					state: "started",
+				},
+			},
+			{
+				kind: "ui",
+				value: storeView("wide", {
+					tag: "stack",
+					props: {},
+					children: [
+						{ tag: "text", props: { text: long }, children: [] },
+						{ tag: "markdown", props: { text: MARKDOWN }, children: [] },
+						{
+							tag: "table",
+							props: {
+								columns: [long, "b"],
+								rows: [{ [long]: long, b: long }],
 							},
-						],
-					},
-				],
+							children: [],
+						},
+					],
+				}),
 			},
-		},
+			{
+				kind: "asks",
+				value: {
+					open: [
+						{
+							id: "k1",
+							title: long,
+							detail: long,
+							prompt: long,
+							choices: [
+								{
+									label: long,
+									accepts: true,
+									answer: { action: "x", values: {} },
+								},
+							],
+						},
+					],
+				},
+			},
+		],
 	},
 	{
 		id: "a2",
@@ -224,13 +243,16 @@ describe("the chat's width", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					ui: storeView("table", {
-						tag: "table",
-						props: { columns, rows: [row] },
-						children: [],
-					}),
-				},
+				entries: [
+					{
+						kind: "ui",
+						value: storeView("table", {
+							tag: "table",
+							props: { columns, rows: [row] },
+							children: [],
+						}),
+					},
+				],
 			},
 		];
 		session.isLoading = false;

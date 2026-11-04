@@ -10,6 +10,7 @@ const SYSTEM = [
 	"You review a run of an automated eval of a coding agent.",
 	"The agent answers by writing programs in a Lisp dialect; the REPL evaluates them and feeds the output back.",
 	"You are given how the eval was set up, the conversation, and which assertions passed.",
+	"The conversation also holds what the harness recorded as it happened, in order: a [memory] line is a memory that fired into what the agent read, and a line named for any other kind is a fact the harness recorded at that point.",
 	"You report only what went wrong.",
 	"If the run went according to plan, reply with nothing at all: an empty response, no praise, no summary, no confirmation that it went well.",
 	"A run went according to plan when every assertion held, the agent answered the user, and it took no detour worth an engineer's attention.",
@@ -48,7 +49,10 @@ function brief(info: CaseInfo | undefined, row: ReportRow): string {
 		)
 		.join("\n");
 	const turns = row.transcript
-		.map((line) => `[${line.role}] ${line.content.trimEnd()}`)
+		.map(
+			(line) =>
+				`[${line.role === "entry" ? line.kind : line.role}] ${line.content.trimEnd()}`,
+		)
 		.join("\n");
 	return [
 		`Task given to the agent: ${info?.seed.map((t) => t.content).join(" / ") ?? "(none recorded)"}`,

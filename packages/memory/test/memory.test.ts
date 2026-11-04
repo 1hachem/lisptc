@@ -1,8 +1,10 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
+import { entriesOf, journal, memoryKind } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -195,6 +197,19 @@ describe("triggers", () => {
 		expect(await f.step(`(string-join '("a") ",")`)).toContain(
 			"tools: list first",
 		);
+	});
+
+	it("records each memory it fires as a journal entry, when it fires", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "always" "here" :on '(step))`);
+		const buffer = bufferTransport();
+		f.interp.channels.pipe(buffer);
+
+		await f.step("(+ 1 1)");
+
+		expect(entriesOf(buffer.collect(journal), memoryKind)).toEqual([
+			{ key: "always", body: "here", on: "step" },
+		]);
 	});
 
 	it("finds a call nested inside a binding form", async () => {
