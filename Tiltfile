@@ -13,6 +13,10 @@ local('kubectl create namespace %s --dry-run=client -o yaml | kubectl apply -f -
 
 other_apps = ['apps/cli', 'apps/dashi-code', 'apps/desktop', 'apps/lsp', 'apps/mcp', 'apps/mcp-toolkit', 'apps/trace-viewer']
 
+manifests = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/app/package.json'] + [
+    'packages/%s/package.json' % p for p in str(local('ls packages', quiet=True)).split()
+]
+
 docker_build(
     'ghcr.io/1hachem/lisptc-app',
     context='.',
@@ -21,6 +25,7 @@ docker_build(
     secret=['id=web-build-vars,env=WEB_BUILD_VARS'] if prod else [],
     ignore=other_apps,
     live_update=[] if prod else [
+        fall_back_on(manifests),
         sync('apps/app', '/app/apps/app'),
         sync('packages', '/app/packages'),
     ],
