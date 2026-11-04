@@ -49,7 +49,7 @@ function isPlist(items: readonly Datum[]): boolean {
 	);
 }
 
-export function DatumView({ datum }: { datum: Datum }) {
+function DatumView({ datum }: { datum: Datum }) {
 	switch (datum.kind) {
 		case "string":
 			return (

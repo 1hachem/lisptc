@@ -63,7 +63,7 @@ export function readForm(text: string): Datum | undefined {
 	return forms?.length === 1 ? forms[0] : undefined;
 }
 
-export function headOf(form: Datum | undefined): string | undefined {
+function headOf(form: Datum | undefined): string | undefined {
 	if (form?.kind !== "list") return undefined;
 	const head = form.items[0];
 	return head?.kind === "symbol" ? head.name : undefined;
