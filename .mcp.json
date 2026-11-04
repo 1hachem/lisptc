@@ -22,6 +22,11 @@
       "type": "stdio",
       "command": "task",
       "args": ["mcp:argocd"]
+    },
+    "convex-selfhosted": {
+      "type": "stdio",
+      "command": "task",
+      "args": ["mcp:convex"]
     }
   }
 }

@@ -1,0 +1,30 @@
+diff --git a/dist/cli.bundle.cjs b/dist/cli.bundle.cjs
+index 62bf695a7981221ba291db8beabcd5e5da0fe0af..e822b47542afc357f195c6f9617fbe939778606c 100644
+--- a/dist/cli.bundle.cjs
++++ b/dist/cli.bundle.cjs
+@@ -154723,14 +154723,12 @@ var Mutex = class {
+   enqueueCallbackForMutex(callback) {
+     if (this.currentlyRunning === null) {
+       this.currentlyRunning = callback().finally(() => {
++        this.currentlyRunning = null;
+         const nextCb = this.waiting.shift();
+-        if (nextCb === void 0) {
+-          this.currentlyRunning = null;
+-        } else {
++        if (nextCb !== void 0) {
+           this.enqueueCallbackForMutex(nextCb);
+         }
+       });
+-      this.waiting.length = 0;
+     } else {
+       this.waiting.push(callback);
+     }
+@@ -154819,7 +154817,7 @@ function makeServer(options) {
+     const ctx = new RequestContext(options);
+     await initializeBigBrainAuth(ctx, options);
+     try {
+-      const authorized = await checkAuthorization(ctx, false);
++      const authorized = process.env.CONVEX_SELF_HOSTED_URL !== void 0 || await checkAuthorization(ctx, false);
+       if (!authorized) {
+         await ctx.crash({
+           exitCode: 1,

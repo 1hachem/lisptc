@@ -42,6 +42,9 @@
       "@types/react-dom": "^19.2.2",
       "@better-auth/utils": "0.4.2",
       "zod@4.6.6": "4.4.3"
+    },
+    "patchedDependencies": {
+      "convex@1.46.0": "patches/convex@1.46.0.patch"
     }
   },
   "knip": {
