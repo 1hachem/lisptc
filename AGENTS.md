@@ -98,9 +98,10 @@ A change to the language surface is not done until they still pass.
 The test cluster is not a workspace either, and it answers to `task` as well.
 What it runs is deployed from `main` alone, except a pull request labeled
 `preview`, which runs in a namespace of its own until the label or the pull
-request goes away. A service added to the local stack is not deployed until the
-cluster runs it too, and a URL the stack derives from its hostnames has to be
-derived for a preview as well.
+request goes away. The local stack is the cluster's own chart, which Tilt runs
+in the `lisptc-dev` namespace with `values-dev.yaml`, so a
+service is added to the chart and nowhere else. A URL the stack derives from its
+hostnames has to be derived for a preview and for `dev` as well.
 
 ### Packages
 
@@ -367,7 +368,7 @@ pnpm repl                    # turbo run repl (run the interpreter REPL directly
 
 task check:agents            # judge the AGENTS.md prose a PR adds (needs the /actions/agents-md secrets)
 task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
-task up                      # build and run the whole stack in docker, with live reload
+task up                      # run the whole stack on the local k3s under tilt, in lisptc-dev, with live reload
 task test                    # the vitest suites and the nix flake checks together
 task test:nix                # the nix flake checks, the ptcfmt formatter test included
 task test:nvim               # the nvim integration test
