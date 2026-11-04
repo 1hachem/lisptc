@@ -214,8 +214,8 @@ const ROOT_FILES: Record<
 		title: "README.md",
 		icon: InformationCircleIcon,
 	},
-	settings: { name: "settings", title: "settings.ptc" },
-	preferences: { name: "preferences", title: "preferences.ptc" },
+	settings: { name: "settings", title: "settings" },
+	preferences: { name: "preferences", title: "preferences" },
 };
 
 function RootFile({
