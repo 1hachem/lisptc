@@ -5,36 +5,56 @@ import { motionOf } from "./resolved-preferences.ts";
 import {
 	currentNames,
 	type SidebarEntry,
+	type SidebarSides,
 	shownEntries,
-	sidebarOrder,
+	sidebarSides,
 	toggledEntry,
-	withHidden,
+	withHiddenSides,
 } from "./sidebar-order.ts";
 
-export function useSidebarOrder() {
+function same(
+	stored: readonly string[] | undefined,
+	resolved: readonly string[],
+): boolean {
+	return stored?.join("\n") === resolved.join("\n");
+}
+
+export function useSidebarSides() {
 	const stored = usePreferences();
 	const put = usePutPreferences();
-	const order = useMemo(() => sidebarOrder(stored?.sidebar), [stored?.sidebar]);
-	const shown = useMemo(
-		() => shownEntries(order, stored?.hidden),
-		[order, stored?.hidden],
+	const sides = useMemo(
+		() => sidebarSides(stored?.sidebar, stored?.sidebarRight),
+		[stored?.sidebar, stored?.sidebarRight],
 	);
-	const complete = stored?.sidebar?.join("\n") === order.join("\n");
+	const shown: SidebarSides = useMemo(
+		() => ({
+			left: shownEntries(sides.left, stored?.hidden),
+			right: shownEntries(sides.right, stored?.hidden),
+		}),
+		[sides, stored?.hidden],
+	);
+	const complete =
+		same(stored?.sidebar, sides.left) &&
+		same(stored?.sidebarRight, sides.right);
 	const hiddenNow = currentNames(stored?.hidden);
-	const hiddenRenamed = stored?.hidden?.join("\n") !== hiddenNow.join("\n");
+	const hiddenRenamed = !same(stored?.hidden, hiddenNow);
 
 	useEffect(() => {
-		if (stored !== undefined && !complete) put({ sidebar: order });
-	}, [stored, complete, order, put]);
+		if (stored !== undefined && !complete)
+			put({ sidebar: [...sides.left], sidebarRight: [...sides.right] });
+	}, [stored, complete, sides, put]);
 
 	useEffect(() => {
 		if (stored?.hidden !== undefined && hiddenRenamed)
 			put({ hidden: currentNames(stored.hidden) });
 	}, [stored?.hidden, hiddenRenamed, put]);
 
-	const reorder = useCallback(
-		(next: SidebarEntry[]) => put({ sidebar: withHidden(next, order) }),
-		[put, order],
+	const move = useCallback(
+		(next: SidebarSides) => {
+			const placed = withHiddenSides(next, sides);
+			put({ sidebar: [...placed.left], sidebarRight: [...placed.right] });
+		},
+		[put, sides],
 	);
 
 	const toggle = useCallback(
@@ -43,7 +63,7 @@ export function useSidebarOrder() {
 		[put, stored?.hidden],
 	);
 
-	return { order, shown, hidden: hiddenNow, reorder, toggle };
+	return { sides, shown, hidden: hiddenNow, move, toggle };
 }
 
 export function useSidebarMotion() {

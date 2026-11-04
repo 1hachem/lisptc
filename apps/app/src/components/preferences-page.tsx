@@ -1,5 +1,5 @@
 import { PageView } from "./file-view.tsx";
-import { PreferenceSections } from "./preferences-panel.tsx";
+import { PreferenceSections } from "./preference-sections.tsx";
 
 export function PreferencesPage() {
 	return (

@@ -1,43 +1,76 @@
 import { describe, expect, it } from "vitest";
 import {
 	currentNames,
+	RIGHT_BY_DEFAULT,
 	SIDEBAR_ENTRIES,
 	shownEntries,
-	sidebarOrder,
+	sidebarSides,
 	toggledEntry,
-	withHidden,
+	withHiddenSides,
 } from "../src/lib/sidebar-order.ts";
 
-describe("sidebarOrder", () => {
-	it("falls back to the default order when nothing is stored", () => {
-		expect(sidebarOrder(undefined)).toEqual([...SIDEBAR_ENTRIES]);
+describe("splitting the entries between the two sidebars", () => {
+	it("puts the agent's own folders on the right when nothing is stored", () => {
+		const sides = sidebarSides(undefined, undefined);
+		expect(sides.right).toEqual([
+			"memories",
+			"permissions",
+			"sub-agents",
+			"triggers",
+			"tasks",
+			"ui",
+			"tests",
+		]);
+		expect(sides.left).toEqual(
+			SIDEBAR_ENTRIES.filter((name) => !RIGHT_BY_DEFAULT.includes(name)),
+		);
 	});
 
-	it("keeps the stored order and appends the entries it does not name", () => {
-		const order = sidebarOrder(["README.md", "chat"]);
-		expect(order.slice(0, 3)).toEqual(["README.md", "chat", "home"]);
-		expect(order).toHaveLength(SIDEBAR_ENTRIES.length);
+	it("moves the default right entries out of an order stored before there were two", () => {
+		const sides = sidebarSides(["tests", "README.md", "chat"], undefined);
+		expect(sides.left.slice(0, 2)).toEqual(["README.md", "chat"]);
+		expect(sides.left).not.toContain("tests");
+		expect(sides.right).toContain("tests");
+	});
+
+	it("keeps each stored side in its order, the right winning an entry named in both", () => {
+		const sides = sidebarSides(["chat", "tests"], ["home", "tests"]);
+		expect(sides.left[0]).toBe("chat");
+		expect(sides.left).not.toContain("tests");
+		expect(sides.right.slice(0, 2)).toEqual(["home", "tests"]);
+	});
+
+	it("places an entry neither side names on its default side", () => {
+		const sides = sidebarSides(["chat"], ["home"]);
+		expect(sides.right).toEqual(["home", ...RIGHT_BY_DEFAULT]);
+		expect(sides.left).toContain("README.md");
+		expect([...sides.left, ...sides.right].sort()).toEqual(
+			[...SIDEBAR_ENTRIES].sort(),
+		);
 	});
 
 	it("drops repeats and entries the sidebar no longer has", () => {
-		expect(sidebarOrder(["gone", "tasks", "tasks"])[0]).toBe("tasks");
-		expect(sidebarOrder(["gone"])).toEqual([...SIDEBAR_ENTRIES]);
+		const sides = sidebarSides(["gone", "chat", "chat"], ["gone"]);
+		expect(sides.left[0]).toBe("chat");
+		expect(sides.left.filter((name) => name === "chat")).toHaveLength(1);
+		expect(sides.right).toEqual([...RIGHT_BY_DEFAULT]);
 	});
 });
 
 describe("hidden entries", () => {
-	const order = sidebarOrder(["README.md", "chat", "tests", "home"]);
-
-	it("leaves the hidden entries out of what the sidebar shows", () => {
-		const shown = shownEntries(order, ["tests", "sub-agents"]);
-		expect(shown.slice(0, 3)).toEqual(["README.md", "chat", "home"]);
-		expect(shown).not.toContain("tests");
-		expect(shown).not.toContain("sub-agents");
+	it("leaves the hidden entries out of what a sidebar shows", () => {
+		const shown = shownEntries(["README.md", "chat", "tests"], ["tests"]);
+		expect(shown).toEqual(["README.md", "chat"]);
 	});
 
-	it("keeps the hidden entries in the stored order after a drag", () => {
-		const next = withHidden(["chat", "README.md", "home"], order.slice(0, 4));
-		expect(next).toEqual(["chat", "README.md", "home", "tests"]);
+	it("keeps a hidden entry on its side after the shown ones move", () => {
+		const previous = {
+			left: ["chat" as const, "bin" as const],
+			right: ["tests" as const, "ui" as const],
+		};
+		expect(
+			withHiddenSides({ left: [], right: ["chat", "tests"] }, previous),
+		).toEqual({ left: ["bin"], right: ["chat", "tests", "ui"] });
 	});
 });
 
@@ -55,12 +88,10 @@ describe("toggling an entry", () => {
 
 describe("entries saved under their old .ptc names", () => {
 	it("keep their place and stay hidden under the new names", () => {
-		expect(sidebarOrder(["preferences.ptc", "chat"]).slice(0, 2)).toEqual([
-			"preferences",
-			"chat",
-		]);
-		const order = sidebarOrder(undefined);
-		expect(shownEntries(order, ["settings.ptc"])).not.toContain("settings");
+		expect(
+			sidebarSides(["preferences.ptc", "chat"], []).left.slice(0, 2),
+		).toEqual(["preferences", "chat"]);
+		expect(shownEntries(["settings"], ["settings.ptc"])).toEqual([]);
 		expect(toggledEntry(["settings.ptc"], "settings")).toEqual([]);
 		expect(currentNames(["settings.ptc", "tests"])).toEqual([
 			"settings",
