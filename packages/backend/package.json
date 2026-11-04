@@ -29,7 +29,6 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "env:seed": "sh scripts/seed-env.sh",
     "migrate": "convex run migrations:runAll",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

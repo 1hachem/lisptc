@@ -96,6 +96,7 @@
           helmfile
           yq-go
           k9s
+          tilt
           unstable.spec-kit
           git-town
         ];

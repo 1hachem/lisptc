@@ -25,8 +25,9 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, and what an
-agent runner itself reads under `.agents/` and `.github/`.
+code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, the
+feature specs under `specs/` with the Spec Kit files under `.specify/`, and what
+an agent runner itself reads under `.agents/` and `.github/`.
 
 ## The IO goes out to an agent
 
@@ -98,9 +99,10 @@ A change to the language surface is not done until they still pass.
 The test cluster is not a workspace either, and it answers to `task` as well.
 What it runs is deployed from `main` alone, except a pull request labeled
 `preview`, which runs in a namespace of its own until the label or the pull
-request goes away. A service added to the local stack is not deployed until the
-cluster runs it too, and a URL the stack derives from its hostnames has to be
-derived for a preview as well.
+request goes away. The local stack is the cluster's own chart, which Tilt runs
+in the `lisptc-dev` namespace with `values-dev.yaml`, so a
+service is added to the chart and nowhere else. A URL the stack derives from its
+hostnames has to be derived for a preview and for `dev` as well.
 
 ### Packages
 
@@ -370,7 +372,7 @@ pnpm repl                    # turbo run repl (run the interpreter REPL directly
 
 task check:agents            # judge the AGENTS.md prose a PR adds (needs the /actions/agents-md secrets)
 task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
-task up                      # build and run the whole stack in docker, with live reload
+task up                      # run the whole stack on the local k3s under tilt, in lisptc-dev, with live reload
 task test                    # the vitest suites and the nix flake checks together
 task test:nix                # the nix flake checks, the ptcfmt formatter test included
 task test:nvim               # the nvim integration test
@@ -401,8 +403,18 @@ there fails the same way locally, under the command it names.
 **Do not run the checks yourself before a push.** `.husky/pre-push` runs them
 and refuses a push that fails, and CI runs them again. When the user asks to
 push, push. If the hook or CI fails, read the failure, fix it, and push again
-without being asked. While the work is still moving, check a change with the
-tests and the typecheck of the package it touches, and nothing wider.
+without being asked.
+
+## When to verify
+
+**Do not run the tests or the typecheck after every step.** While the work is
+still moving, edit and keep going. A run per edit costs time and context and
+tells you little the next edit will not change.
+
+Verify once a milestone is reached and the user asks to wrap it up in commits.
+Then run the tests and the typecheck of the packages the change touches, and
+nothing wider, fix what fails, and commit. Run them earlier only when the user
+asks, or when a step cannot go on without knowing whether the last one works.
 
 ## Commits
 
@@ -480,6 +492,15 @@ An issue states:
 Leave priority, assignee and cycle to the user unless they named them. Search
 for an open issue covering the same thing first, and comment on it instead of
 opening a duplicate.
+
+## Specs
+
+A spec under `specs/` is written in concise language, for whoever plans and
+tests the feature. Each decision is stated once, in the fewest words that keep
+it testable. A user story does not restate a requirement, an edge case does not
+restate either, and the clarifications log keeps the answer, not the
+discussion. No fluff, no background the code already gives, and no section kept
+for its heading: a template section that does not apply is removed.
 
 ## Writing Style
 
