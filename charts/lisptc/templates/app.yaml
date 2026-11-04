@@ -82,7 +82,12 @@ spec:
               port: {{ .Values.app.port }}
             initialDelaySeconds: 30
             periodSeconds: 20
+            {{- if .Values.dev.enabled }}
+            timeoutSeconds: 10
+            failureThreshold: 6
+            {{- else }}
             failureThreshold: 3
+            {{- end }}
           readinessProbe:
             httpGet:
               {{- if .Values.dev.enabled }}
@@ -91,3 +96,6 @@ spec:
               path: /health
               port: {{ .Values.app.port }}
             periodSeconds: 10
+            {{- if .Values.dev.enabled }}
+            timeoutSeconds: 10
+            {{- end }}
