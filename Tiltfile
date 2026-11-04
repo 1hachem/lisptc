@@ -1,3 +1,5 @@
+load('ext://restart_process', 'docker_build_with_restart')
+
 config.define_bool('prod')
 cfg = config.parse()
 prod = cfg.get('prod', False)
@@ -13,23 +15,41 @@ local('kubectl create namespace %s --dry-run=client -o yaml | kubectl apply -f -
 
 other_apps = ['apps/cli', 'apps/dashi-code', 'apps/desktop', 'apps/lsp', 'apps/mcp', 'apps/mcp-toolkit', 'apps/trace-viewer']
 
+packages = str(local('ls packages', quiet=True)).split()
+
 manifests = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/app/package.json'] + [
-    'packages/%s/package.json' % p for p in str(local('ls packages', quiet=True)).split()
+    'packages/%s/package.json' % p for p in packages
 ]
 
-docker_build(
-    'ghcr.io/1hachem/lisptc-app',
-    context='.',
-    dockerfile='apps/app/Dockerfile',
-    target='prod' if prod else 'dev',
-    secret=['id=web-build-vars,env=WEB_BUILD_VARS'] if prod else [],
-    ignore=other_apps,
-    live_update=[] if prod else [
-        fall_back_on(manifests),
-        sync('apps/app', '/app/apps/app'),
-        sync('packages', '/app/packages'),
-    ],
-)
+read_once_at_startup = str(local("git ls-files 'packages/*.ptc'", quiet=True)).split() + [
+    'packages/toolkit/mcp.toolkit.json',
+    'packages/mcp/mcp.toolkit.local.json',
+]
+
+if prod:
+    docker_build(
+        'ghcr.io/1hachem/lisptc-app',
+        context='.',
+        dockerfile='apps/app/Dockerfile',
+        target='prod',
+        secret=['id=web-build-vars,env=WEB_BUILD_VARS'],
+        ignore=other_apps,
+    )
+else:
+    docker_build_with_restart(
+        'ghcr.io/1hachem/lisptc-app',
+        context='.',
+        dockerfile='apps/app/Dockerfile',
+        target='dev',
+        ignore=other_apps,
+        entrypoint=['pnpm', 'run', 'dev', '--host', '127.0.0.1'],
+        trigger=read_once_at_startup,
+        live_update=[
+            fall_back_on(manifests),
+            sync('apps/app', '/app/apps/app'),
+            sync('packages', '/app/packages'),
+        ],
+    )
 
 docker_build(
     'ghcr.io/1hachem/lisptc-convex-deploy',
