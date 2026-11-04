@@ -138,6 +138,7 @@ Everything else:
 - `packages/desktop-protocol` (`@repo/desktop-protocol`) — the wire between the desktop app and the app server.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/ui-catalog` (`@repo/ui-catalog`) — the widgets a view may hold, which the UI extension builds against and the frontend draws against.
+- `packages/journal-catalog` (`@repo/journal-catalog`): the journal entries a view may read, which an extension records against and the views above the seam read against.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.

@@ -51,7 +51,9 @@ language while the language may not know the seam.
 
 `src/hooks.ts` holds the chain machinery the seam is built on. `src/channels.ts`
 and `src/channels-host.ts` carry addressed output. `src/journal.ts` is the
-journal an extension records into, with the entry kinds the views read. `src/arith.ts`,
+journal an extension records into, and it names no kind. The entry primitive
+lives in `@repo/shared/journal`, and the kinds a view reads live in
+`@repo/journal-catalog`. `src/arith.ts`,
 `src/plist.ts`, `src/async.ts`, `src/timeout.ts` and `src/types.ts` are the
 small supporting modules. `src/source.ts` holds the language reference the model
 reads.
