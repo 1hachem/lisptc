@@ -7,6 +7,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
@@ -44,6 +45,7 @@ function Failed({
 	const seconds = useSecondsUntil(retryAt);
 	return (
 		<button
+			{...anchorOf("status/desktop")}
 			type="button"
 			onClick={onRetry}
 			title="Retry now"
@@ -60,7 +62,10 @@ function Failed({
 
 function Label({ phase }: { phase: "connected" | "connecting" }) {
 	return (
-		<span className="flex h-full flex-none items-center gap-1.5 px-2.5">
+		<span
+			{...anchorOf("status/desktop")}
+			className="flex h-full flex-none items-center gap-1.5 px-2.5"
+		>
 			<HugeiconsIcon
 				icon={phase === "connected" ? ComputerIcon : Loading03Icon}
 				className={`size-icon-sm flex-none ${phase === "connecting" ? "animate-spin" : ""}`}
@@ -79,6 +84,7 @@ function UpdateReady({
 }) {
 	return (
 		<button
+			{...anchorOf("status/desktop")}
 			type="button"
 			onClick={onInstall}
 			title={`Restart to update to ${version}`}

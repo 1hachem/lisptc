@@ -12,6 +12,7 @@ const SOURCE_FOLDERS: readonly string[] = ["sub-agents"];
 
 const KEYED = {
 	memory: "memories",
+	onboarding: "onboarding",
 	permission: "permissions",
 	bin: "bin",
 } as const satisfies Partial<Record<Page, string>>;
@@ -20,8 +21,8 @@ type KeyedPage = keyof typeof KEYED;
 
 const NAMED = {
 	readme: "README.md",
-	settings: "settings.ptc",
-	preferences: "preferences.ptc",
+	settings: "settings",
+	preferences: "preferences",
 	account: "account",
 } as const satisfies Record<Exclude<Page, KeyedPage>, string>;
 

@@ -35,6 +35,7 @@ export async function dropWorkspace(
 	await ctx.db.delete(workspaceId);
 	await ctx.scheduler.runAfter(0, internal.workspaces.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.memories.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.onboardings.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.sources.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
@@ -168,6 +169,9 @@ export const purge = internalMutation({
 				chatId: chat._id,
 			});
 			await ctx.scheduler.runAfter(0, internal.views.purge, {
+				chatId: chat._id,
+			});
+			await ctx.scheduler.runAfter(0, internal.tours.purge, {
 				chatId: chat._id,
 			});
 		}

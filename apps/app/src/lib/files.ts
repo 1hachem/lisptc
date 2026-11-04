@@ -1,5 +1,4 @@
 import type { Doc } from "@repo/backend/dataModel";
-import { workspaceIcon } from "@repo/backend/workspace-icons";
 import { formSpans } from "@repo/shared/lisp-forms";
 
 export interface OpenFile {
@@ -24,47 +23,16 @@ export function memorySource(
 	return `${lines.join("\n")})`;
 }
 
-export function settingsSource(
-	workspace: Pick<Doc<"workspaces">, "_id" | "name" | "icon">,
-	model: { provider: string; model: string },
-	theme: string,
+export function onboardingSource(
+	onboarding: Pick<Doc<"onboardings">, "name" | "about" | "script">,
 ): string {
-	return [
-		`(settings :name ${quoted(workspace.name)}`,
-		`  :model ${quoted(`${model.provider}/${model.model}`)}`,
-		`  :icon ${quoted(workspaceIcon(workspace))}`,
-		`  :theme ${quoted(theme)})`,
-	].join("\n");
-}
-
-function toggles(shown: Record<string, boolean>): string {
-	return `(${Object.entries(shown)
-		.map(([id, on]) => `:${id} ${on ? "t" : "nil"}`)
-		.join(" ")})`;
-}
-
-export function preferencesSource(preferences: {
-	font: string;
-	metadata: Record<string, boolean>;
-	input: Record<string, boolean>;
-	sidebar: readonly string[];
-	hidden: readonly string[];
-	motion: string;
-	panelMotion: boolean;
-	traceBesideChat: boolean;
-	traceLink: boolean;
-}): string {
-	return [
-		`(preferences :font ${quoted(preferences.font)}`,
-		`  :metadata ${toggles(preferences.metadata)}`,
-		`  :input ${toggles(preferences.input)}`,
-		`  :sidebar (${preferences.sidebar.map(quoted).join(" ")})`,
-		`  :hidden (${preferences.hidden.map(quoted).join(" ")})`,
-		`  :motion ${quoted(preferences.motion)}`,
-		`  :panel-motion ${preferences.panelMotion ? "t" : "nil"}`,
-		`  :trace-beside-chat ${preferences.traceBesideChat ? "t" : "nil"}`,
-		`  :trace-link ${preferences.traceLink ? "t" : "nil"})`,
-	].join("\n");
+	const lines = [
+		`(onboarding/create ${quoted(onboarding.name)}`,
+		`  '${onboarding.script}`,
+	];
+	if (onboarding.about !== "")
+		lines.push(`  :about ${quoted(onboarding.about)}`);
+	return `${lines.join("\n")})`;
 }
 
 export function fileContext(file: OpenFile, text: string): string {

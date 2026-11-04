@@ -1,3 +1,4 @@
+import { contentRegion } from "@repo/ui-catalog";
 import type { ReactNode } from "react";
 import type { OpenFile } from "../lib/files.ts";
 import { LispSource } from "./lisp-text.tsx";
@@ -46,6 +47,7 @@ export function FileView({
 	const layout = fill ? LAYOUT.fill : LAYOUT.scroll;
 	return (
 		<div
+			{...contentRegion}
 			className={`min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] px-8 pt-6 pb-7 ${layout.outer}`}
 		>
 			<div

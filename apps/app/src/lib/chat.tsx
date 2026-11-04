@@ -315,6 +315,13 @@ async function postTurn(
 		throw new Error(`the message was refused: ${response.status}`);
 }
 
+export async function postMessage(
+	chatId: Id<"chats">,
+	message: string,
+): Promise<void> {
+	await postTurn(chatId, crypto.randomUUID(), { message });
+}
+
 export type StopScope = "thread" | "tree";
 
 export function stopChat(chatId: string, scope: StopScope): void {

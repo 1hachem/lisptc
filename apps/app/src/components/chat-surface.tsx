@@ -1,4 +1,5 @@
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import type { ReactNode } from "react";
 import { CHAT_MIN_WIDTH, SIDE_TRACE_MIN_WIDTH } from "../lib/panel-ops.ts";
 import { Chat } from "./chat.tsx";
@@ -20,7 +21,7 @@ export function ChatSurface({
 			</ResizablePanel>
 			{trace && (
 				<>
-					<ResizableHandle />
+					<ResizableHandle {...anchorOf("chat/trace-resize")} />
 					<ResizablePanel
 						id="trace"
 						defaultSize="40%"

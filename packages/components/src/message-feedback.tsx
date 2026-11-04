@@ -3,17 +3,20 @@
 import { cn } from "@repo/ui/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { quip, surveyResponse, type Thumb } from "./feedback.ts";
+import type { Marker } from "./file-tree.tsx";
 
 export function MessageFeedback({
 	capture,
 	onRate,
 	className,
 	reveal = "hover",
+	anchor,
 }: {
 	capture: (properties: Record<string, unknown>) => void;
 	onRate?: (thumb: Thumb) => void;
 	className?: string;
 	reveal?: "hover" | "always";
+	anchor?: Marker;
 }) {
 	const [thumb, setThumb] = useState<Thumb | null>(null);
 	const submission = useRef<string | null>(null);
@@ -52,6 +55,7 @@ export function MessageFeedback({
 	return (
 		<>
 			<div
+				{...anchor}
 				className={cn(
 					"flex select-none gap-1.5 text-[11px] leading-[1.7]",
 					className,
@@ -82,7 +86,10 @@ export function MessageFeedback({
 			</div>
 
 			{asking && (
-				<div className="mt-1 flex items-center gap-2 border-yellow/40 border-l pl-3">
+				<div
+					{...anchor}
+					className="mt-1 flex items-center gap-2 border-yellow/40 border-l pl-3"
+				>
 					<span className="select-none text-[11px] text-dim">
 						{thumb === "up" ? "what worked?" : "what went wrong?"}
 					</span>

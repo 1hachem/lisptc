@@ -6,6 +6,10 @@ export const MAX_MEMORY_BYTES = 32_768;
 
 export const MAX_MEMORIES = 500;
 
+export const MAX_ONBOARDING_BYTES = 32_768;
+
+export const MAX_ONBOARDINGS = 100;
+
 export const MAX_SOURCE_BYTES = 32_768;
 
 export const MAX_SOURCES = 100;
@@ -57,3 +61,7 @@ export const MAX_VIEW_BYTES = 262_144;
 export const DESKTOP_SEEN_REFRESH_MS = 30_000;
 
 export const DESKTOP_STALE_MS = 90_000;
+
+export const TOUR_TTL_MS = 1_800_000;
+
+export const POINTER_TTL_MS = 15_000;

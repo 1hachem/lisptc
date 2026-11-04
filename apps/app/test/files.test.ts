@@ -1,11 +1,9 @@
-import type { Id } from "@repo/backend/dataModel";
 import { describe, expect, it } from "vitest";
 import {
 	fileContext,
 	memorySource,
+	onboardingSource,
 	permissionRules,
-	preferencesSource,
-	settingsSource,
 	withoutRule,
 } from "../src/lib/files.ts";
 
@@ -33,37 +31,23 @@ describe("memorySource", () => {
 	});
 });
 
-describe("preferencesSource", () => {
-	it("names the font, every toggle, the sidebar order and what it hides", () => {
+describe("onboardingSource", () => {
+	it("writes an onboarding as the create call that saves it", () => {
 		expect(
-			preferencesSource({
-				font: "mono",
-				metadata: { tokens: true },
-				input: { lisp: true },
-				sidebar: ["README.md", "home"],
-				hidden: ["tests"],
-				motion: "lift",
-				panelMotion: false,
-				traceBesideChat: true,
-				traceLink: false,
+			onboardingSource({
+				name: "welcome",
+				about: "first look",
+				script: '(ui/tour "welcome" (quote (:say "hi")))',
 			}),
 		).toBe(
-			'(preferences :font "mono"\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift"\n  :panel-motion nil\n  :trace-beside-chat t\n  :trace-link nil)',
+			'(onboarding/create "welcome"\n  \'(ui/tour "welcome" (quote (:say "hi")))\n  :about "first look")',
 		);
 	});
-});
 
-describe("settingsSource", () => {
-	it("names the workspace, its model, its icon and its theme", () => {
+	it("leaves out an empty line", () => {
 		expect(
-			settingsSource(
-				{ _id: "w1" as Id<"workspaces">, name: "personal", icon: "rocket" },
-				{ provider: "anthropic", model: "claude-opus-5-5" },
-				"borland",
-			),
-		).toBe(
-			'(settings :name "personal"\n  :model "anthropic/claude-opus-5-5"\n  :icon "rocket"\n  :theme "borland")',
-		);
+			onboardingSource({ name: "tips", about: "", script: "(+ 1 2)" }),
+		).toBe('(onboarding/create "tips"\n  \'(+ 1 2))');
 	});
 });
 

@@ -18,6 +18,7 @@ import {
 	ConfirmationRequest,
 	ConfirmationTitle,
 } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useRef, useState } from "react";
@@ -199,6 +200,7 @@ export function AskCard({
 
 	return (
 		<Confirmation
+			{...anchorOf("chat/ask")}
 			approval={approval}
 			state={open ? "approval-requested" : "approval-responded"}
 			className="mt-2 gap-1.5 border-yellow/50 px-3 py-2"

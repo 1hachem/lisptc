@@ -8,6 +8,7 @@ import { PromptDialog } from "@repo/components";
 import type { Question } from "@repo/interpreter/annotations";
 import type { SymbolTable } from "@repo/language-service";
 import { cn } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useCallback, useEffect, useRef } from "react";
 import {
 	type FileTransfer,
@@ -78,6 +79,7 @@ function SendAction({
 	if (streaming?.active && empty)
 		return (
 			<InputAction
+				anchor={anchorOf("composer/stop")}
 				label="stop"
 				glyph="■"
 				tone="text-red hover:brightness-125"
@@ -87,6 +89,7 @@ function SendAction({
 	if (streaming?.active)
 		return (
 			<InputAction
+				anchor={anchorOf("composer/queue")}
 				label="queue"
 				glyph="⏎"
 				tone="text-yellow hover:brightness-125"
@@ -95,6 +98,7 @@ function SendAction({
 		);
 	return (
 		<InputAction
+			anchor={anchorOf("composer/send")}
 			label="send"
 			glyph="⏎"
 			tone="text-green hover:brightness-125"

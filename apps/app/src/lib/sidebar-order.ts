@@ -1,26 +1,12 @@
-export const SIDEBAR_FOLDERS = [
-	"chat",
-	"memories",
-	"permissions",
-	"knowledge",
-	"attachments",
-	"bin",
-	"sub-agents",
-	"triggers",
-	"tasks",
-	"ui",
-	"tests",
-] as const;
-
-export type SidebarFolder = (typeof SIDEBAR_FOLDERS)[number];
+import { SIDEBAR_FOLDERS } from "@repo/ui-catalog";
 
 export const SIDEBAR_ENTRIES = [
 	"home",
 	"new_chat",
 	...SIDEBAR_FOLDERS,
 	"README.md",
-	"settings.ptc",
-	"preferences.ptc",
+	"settings",
+	"preferences",
 ] as const;
 
 export type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number];

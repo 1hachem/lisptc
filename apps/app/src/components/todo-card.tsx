@@ -1,5 +1,6 @@
 import { CheckmarkSquare02Icon, SquareIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { anchorOf } from "@repo/ui-catalog";
 import { type RefObject, useEffect, useState } from "react";
 import type { TurnTodos } from "../lib/turn-groups.ts";
 import { ProgressBar } from "./turn-intent.tsx";
@@ -75,6 +76,7 @@ export function TodoCard({
 	if (chip)
 		return (
 			<button
+				{...anchorOf("chat/todo")}
 				type="button"
 				data-todo-card="chip"
 				aria-expanded={false}
@@ -90,6 +92,7 @@ export function TodoCard({
 		);
 	return (
 		<div
+			{...anchorOf("chat/todo")}
 			data-todo-card="card"
 			className="absolute top-11 right-2 z-10 flex w-64 max-w-[calc(100%-1.5rem)] flex-col gap-1.5 border border-bg2 bg-bg1 px-3 py-2 text-[12px]"
 		>

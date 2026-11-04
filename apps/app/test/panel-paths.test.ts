@@ -24,6 +24,15 @@ describe("panel paths", () => {
 			"memories/tone",
 		],
 		[
+			{
+				kind: "page",
+				page: "onboarding",
+				id: "welcome",
+				title: "onboarding/welcome",
+			},
+			"onboarding/welcome",
+		],
+		[
 			{ kind: "page", page: "permission", id: "2", title: "permissions/2" },
 			"permissions/2",
 		],
@@ -32,9 +41,9 @@ describe("panel paths", () => {
 			"bin/old.md",
 		],
 		[{ kind: "page", page: "readme", title: "README.md" }, "readme"],
-		[{ kind: "page", page: "settings", title: "settings.ptc" }, "settings"],
+		[{ kind: "page", page: "settings", title: "settings" }, "settings"],
 		[
-			{ kind: "page", page: "preferences", title: "preferences.ptc" },
+			{ kind: "page", page: "preferences", title: "preferences" },
 			"preferences",
 		],
 		[{ kind: "page", page: "account", title: "account" }, "account"],

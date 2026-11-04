@@ -12,6 +12,7 @@ import {
 	SidebarRail,
 	useSidebar,
 } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNewChat } from "../lib/chats.ts";
@@ -23,8 +24,9 @@ import { useWorkspace } from "../lib/workspace.tsx";
 import { PanelLink } from "./panel-link.tsx";
 import { WorkspaceMenu, WorkspaceRailMenu } from "./workspace-menu.tsx";
 import {
+	ENTRY_ANCHORS,
 	ENTRY_ICONS,
-	openFolderOnMount,
+	openFolder,
 	WorkspaceTree,
 } from "./workspace-tree.tsx";
 
@@ -33,11 +35,11 @@ const TREE_ROW = "flex h-[calc(1lh+0.5rem)] items-center text-[11.5px]";
 const PAGES: Partial<Record<SidebarEntry, PanelContent>> = {
 	home: NEW_CHAT,
 	"README.md": { kind: "page", page: "readme", title: "README.md" },
-	"settings.ptc": { kind: "page", page: "settings", title: "settings.ptc" },
-	"preferences.ptc": {
+	settings: { kind: "page", page: "settings", title: "settings" },
+	preferences: {
 		kind: "page",
 		page: "preferences",
-		title: "preferences.ptc",
+		title: "preferences",
 	},
 };
 
@@ -48,9 +50,29 @@ function useRailPick() {
 		if (entry === "new_chat") return newChat();
 		const page = PAGES[entry];
 		if (page !== undefined) return requestPanel(page);
-		openFolderOnMount(entry);
+		openFolder(entry);
 		setOpen(true);
 	};
+}
+
+function RailEntry({
+	entry,
+	pick,
+}: {
+	entry: SidebarEntry;
+	pick: (entry: SidebarEntry) => void;
+}) {
+	return (
+		<SidebarMenuButton
+			{...ENTRY_ANCHORS[entry]}
+			tooltip={entry}
+			className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
+			onClick={() => pick(entry)}
+		>
+			<HugeiconsIcon icon={ENTRY_ICONS[entry]} />
+			<span>{entry}</span>
+		</SidebarMenuButton>
+	);
 }
 
 function EntryRail() {
@@ -62,14 +84,7 @@ function EntryRail() {
 			<SortableTree order={shown} onReorder={reorder} motion={motion}>
 				{(entry) => (
 					<div className={TREE_ROW}>
-						<SidebarMenuButton
-							tooltip={entry}
-							className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
-							onClick={() => pick(entry)}
-						>
-							<HugeiconsIcon icon={ENTRY_ICONS[entry]} />
-							<span>{entry}</span>
-						</SidebarMenuButton>
+						<RailEntry entry={entry} pick={pick} />
 					</div>
 				)}
 			</SortableTree>
@@ -101,6 +116,7 @@ function SettingsLink({ expanded }: { expanded: boolean }) {
 	if (!workspace) return null;
 	return (
 		<PanelLink
+			anchor={anchorOf("account")}
 			workspaceId={workspace._id}
 			content={ACCOUNT}
 			className={`${expanded ? "ml-auto" : ""} flex-none text-dim hover:text-fg`}
@@ -123,6 +139,7 @@ function SignOutButton({
 	const [armed, setArmed] = useState(false);
 	return (
 		<button
+			{...anchorOf("sign-out")}
 			type="button"
 			onClick={() => (armed ? onSignOut() : setArmed(true))}
 			onBlur={() => setArmed(false)}
@@ -194,7 +211,10 @@ export function LeftSidebar({ onSignOut }: { onSignOut: () => void }) {
 				)}
 			</SidebarContent>
 			<UserRow expanded={expanded} onSignOut={onSignOut} />
-			<SidebarRail className="hover:after:bg-transparent" />
+			<SidebarRail
+				{...anchorOf("sidebar/toggle")}
+				className="hover:after:bg-transparent"
+			/>
 		</Sidebar>
 	);
 }

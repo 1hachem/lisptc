@@ -1,11 +1,13 @@
 import type { IconSvgElement } from "@hugeicons/react";
 import { type TreeCheck, TreeGroup } from "@repo/components";
+import type { AnchorMark } from "@repo/ui-catalog";
 import { Fragment, type ReactNode } from "react";
 import { byDate } from "../lib/date-groups.ts";
 
 export type FolderState<Name extends string = string> = {
 	name: Name;
 	icon: IconSvgElement;
+	toggleAnchor: AnchorMark;
 	open: boolean;
 	onToggle: () => void;
 };
@@ -33,19 +35,21 @@ export function DatedListing<T>({
 	at,
 	empty,
 	check,
+	checkAnchor,
 	children,
 }: {
 	items: T[] | undefined;
 	at: (item: T) => number;
 	empty: string | null;
 	check: (items: T[]) => TreeCheck;
+	checkAnchor?: AnchorMark;
 	children: (item: T) => ReactNode;
 }) {
 	if (items === undefined) return null;
 	if (items.length === 0) return empty && <Empty>{empty}</Empty>;
 	return byDate(items, at, Date.now()).map(({ group, items: dated }) => (
 		<Fragment key={group}>
-			<TreeGroup label={group} check={check(dated)} />
+			<TreeGroup label={group} check={check(dated)} checkAnchor={checkAnchor} />
 			{dated.map(children)}
 		</Fragment>
 	));

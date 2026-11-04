@@ -2,6 +2,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { contentRegion } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
@@ -255,7 +256,7 @@ export function FilePreview({
 			</div>
 		);
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div {...contentRegion} className="flex h-full min-h-0 flex-col">
 			<div className="flex h-row flex-none items-center justify-between gap-2 px-3 text-dim">
 				<span className="truncate">
 					{folder}/{name}

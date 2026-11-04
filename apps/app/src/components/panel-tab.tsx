@@ -6,6 +6,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { GlyphCycle } from "@repo/components";
 import { Button } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { AgentProvider } from "../lib/agent.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
@@ -31,6 +32,7 @@ import { BinPage } from "./bin-page.tsx";
 import { ChatSurface } from "./chat-surface.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { MemoryPage } from "./memory-page.tsx";
+import { OnboardingPage } from "./onboarding-page.tsx";
 import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
 import { SettingsPage } from "./settings-page.tsx";
@@ -52,6 +54,7 @@ function SideTraceToggle() {
 	const open = control.trace.shown === "open";
 	return (
 		<Button
+			{...anchorOf("chat/trace")}
 			type="button"
 			variant="ghost"
 			size="icon-sm"
@@ -184,6 +187,9 @@ const PAGE_TABS: Record<
 > = {
 	memory: (workspaceId, id) => (
 		<MemoryPage workspaceId={workspaceId} memoryKey={id} />
+	),
+	onboarding: (workspaceId, id) => (
+		<OnboardingPage workspaceId={workspaceId} name={id} />
 	),
 	permission: (workspaceId, id) => (
 		<PermissionPage workspaceId={workspaceId} rule={Number(id)} />
