@@ -52,7 +52,9 @@ tasks:
     aliases:
       - dev
     deps: [mcp:browser:build, registry, cluster:_reachable]
-    cmd: tilt up --stream {{.CLI_ARGS}}
+    cmds:
+      - defer: tilt down
+      - tilt up --stream {{.CLI_ARGS}}
 
   up:convex:
     desc: bring up postgres and the convex backend on the local cluster, seed and deploy the functions, and wait until they are done
