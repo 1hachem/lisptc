@@ -51,6 +51,8 @@ else:
         ],
     )
 
+convex_imports_outside_convex = ['packages/%s' % p for p in packages if p != 'backend'] + ['packages/backend/src']
+
 docker_build(
     'ghcr.io/1hachem/lisptc-convex-deploy',
     context='.',
@@ -60,6 +62,7 @@ docker_build(
     live_update=[] if prod else [
         fall_back_on(manifests),
         sync('packages', '/app/packages'),
+        run('touch convex/schema.ts', trigger=convex_imports_outside_convex),
     ],
 )
 
