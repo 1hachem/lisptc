@@ -53,7 +53,7 @@ tasks:
       - dev
     deps: [mcp:browser:build, registry, cluster:_reachable]
     cmds:
-      - defer: tilt down
+      - defer: setsid -w tilt down
       - tilt up --stream {{.CLI_ARGS}}
 
   up:convex:
@@ -73,7 +73,7 @@ tasks:
       - prod
     deps: [mcp:browser:build, registry, cluster:_reachable]
     cmds:
-      - defer: tilt down
+      - defer: setsid -w tilt down
       - task: _infisical-run
         vars:
           ENV: dev
