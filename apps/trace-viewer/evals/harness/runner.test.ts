@@ -24,6 +24,32 @@ const extensions = () => [
 	proseExtension(proseHost),
 ];
 
+const judgingExtensions = () => [
+	tracedSecretsExtension(),
+	promisesExtension(promisesHost),
+	mockedMcpExtension(),
+	compactionExtension(compactionHost),
+	memoryExtension({
+		...memoryHost,
+		store: new VolatileStore(),
+		judge: () => new Map([["the user wants the headline", 0.9]]),
+	}),
+	proseExtension(proseHost),
+];
+
+const failingJudgeExtensions = () => [
+	tracedSecretsExtension(),
+	promisesExtension(promisesHost),
+	mockedMcpExtension(),
+	compactionExtension(compactionHost),
+	memoryExtension({
+		...memoryHost,
+		store: new VolatileStore(),
+		judge: () => Promise.reject(new Error("timed out")),
+	}),
+	proseExtension(proseHost),
+];
+
 function entriesAt(result: RunResult, kind: string): number[] {
 	return result.transcript.flatMap((line, at) =>
 		line.role === "entry" && line.kind === kind ? [at] : [],
@@ -258,6 +284,64 @@ describe("a case runs against a scripted model", () => {
 			});
 			expect(around(result, at)).toEqual(["assistant", "tool"]);
 		}
+	});
+
+	test("the judge's scores land before the step that read them", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions: judgingExtensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "headline" "the headline is on the page" :on '(asks "the user wants the headline"))`,
+				seed: [{ user: "open hyko.ai and tell me the headline" }],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		const first = firstAssistant(result);
+		const [judged] = entriesAt(result, "judged");
+		const [fired] = entriesAt(result, "memory");
+		expect(result.transcript[judged]).toMatchObject({
+			value: {
+				message: "open hyko.ai and tell me the headline",
+				scores: { "the user wants the headline": 0.9 },
+			},
+		});
+		expect(result.transcript[fired]).toMatchObject({
+			value: { key: "headline", on: "asks" },
+		});
+		expect(judged).toBeLessThan(fired);
+		expect(fired).toBeLessThan(first);
+		expect(entriesAt(result, "memory")).toEqual([fired]);
+	});
+
+	test("a judge that fails lands in the transcript with its error", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions: failingJudgeExtensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "headline" "the headline is on the page" :on '(asks "the user wants the headline"))`,
+				seed: [{ user: "open hyko.ai and tell me the headline" }],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		const [judged] = entriesAt(result, "judged");
+		expect(result.transcript[judged]).toMatchObject({
+			value: { scores: {}, error: "timed out" },
+			content: "failed: timed out",
+		});
+		expect(judged).toBeLessThan(firstAssistant(result));
+		expect(entriesAt(result, "memory")).toEqual([]);
 	});
 
 	test("a memory the halting step fires lands after the halting step", async () => {
