@@ -1,5 +1,3 @@
-load('ext://restart_process', 'custom_build_with_restart')
-
 config.define_bool('prod')
 cfg = config.parse()
 prod = cfg.get('prod', False)
@@ -9,67 +7,31 @@ registry = 'localhost:5000'
 
 allow_k8s_contexts('default')
 default_registry(registry)
-watch_settings(ignore=['worktrees'])
+watch_settings(ignore=['worktrees', '.claude/', '**/node_modules/**', '**/.turbo/**', '**/tsconfig.tsbuildinfo', 'Tiltfile.tmp.*'])
 
 local('kubectl create namespace %s --dry-run=client -o yaml | kubectl apply -f -' % namespace, quiet=True)
 
-build_ignore = ['**/node_modules', '**/.turbo', '**/dist', '**/.output', '**/.nitro', '**/.tanstack', '**/.vite']
+other_apps = ['apps/cli', 'apps/dashi-code', 'apps/desktop', 'apps/lsp', 'apps/mcp', 'apps/mcp-toolkit', 'apps/trace-viewer']
 
-app_build_command = 'docker build --progress=plain -f apps/app/Dockerfile --target %s %s -t $EXPECTED_REF .'
-app_deps = [
-    'apps/app/Dockerfile',
-    'apps/app/package.json',
-    'apps/app/vite.config.ts',
-    'apps/app/src',
-    'apps/app/server',
-    'apps/app/public',
-    'packages',
-    'pnpm-lock.yaml',
-]
-
-if prod:
-    custom_build(
-        'ghcr.io/1hachem/lisptc-app',
-        app_build_command % ('prod', '--secret id=web-build-vars,env=WEB_BUILD_VARS'),
-        deps=app_deps,
-        ignore=build_ignore,
-    )
-else:
-    client_only_packages = ['bloub', 'components', 'ui', 'ui-catalog']
-    server_packages = [
-        'packages/' + p
-        for p in str(local('ls packages', quiet=True)).split()
-        if p not in client_only_packages
-    ]
-    custom_build_with_restart(
-        'ghcr.io/1hachem/lisptc-app',
-        app_build_command % ('dev', ''),
-        deps=app_deps,
-        ignore=build_ignore,
-        entrypoint=['pnpm', 'run', 'dev', '--host', '127.0.0.1'],
-        trigger=['apps/app/server'] + server_packages,
-        live_update=[
-            fall_back_on(['apps/app/vite.config.ts', 'apps/app/package.json', 'pnpm-lock.yaml']),
-            sync('apps/app/src', '/app/apps/app/src'),
-            sync('apps/app/server', '/app/apps/app/server'),
-            sync('apps/app/public', '/app/apps/app/public'),
-            sync('packages', '/app/packages'),
-        ],
-    )
-
-custom_build(
-    'ghcr.io/1hachem/lisptc-convex-deploy',
-    'docker build --progress=plain -f packages/backend/Dockerfile --target prod -t $EXPECTED_REF .',
-    deps=[
-        'packages/backend/Dockerfile',
-        'packages/backend/package.json',
-        'packages/backend/convex',
-        'packages/interpreter',
-        'packages/shared',
-        'packages/ui',
-        'pnpm-lock.yaml',
+docker_build(
+    'ghcr.io/1hachem/lisptc-app',
+    context='.',
+    dockerfile='apps/app/Dockerfile',
+    target='prod' if prod else 'dev',
+    secret=['id=web-build-vars,env=WEB_BUILD_VARS'] if prod else [],
+    ignore=other_apps,
+    live_update=[] if prod else [
+        sync('apps/app', '/app/apps/app'),
+        sync('packages', '/app/packages'),
     ],
-    ignore=build_ignore,
+)
+
+docker_build(
+    'ghcr.io/1hachem/lisptc-convex-deploy',
+    context='.',
+    dockerfile='packages/backend/Dockerfile',
+    target='prod',
+    ignore=['apps'],
 )
 
 node = str(local('hostname', quiet=True)).strip()

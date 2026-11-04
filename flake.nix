@@ -98,6 +98,7 @@
           k9s
           tilt
           unstable.spec-kit
+          git-town
         ];
 
         # Use the Nix browsers instead of downloaded ones; skip host-dep validation.

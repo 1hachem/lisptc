@@ -399,8 +399,18 @@ there fails the same way locally, under the command it names.
 **Do not run the checks yourself before a push.** `.husky/pre-push` runs them
 and refuses a push that fails, and CI runs them again. When the user asks to
 push, push. If the hook or CI fails, read the failure, fix it, and push again
-without being asked. While the work is still moving, check a change with the
-tests and the typecheck of the package it touches, and nothing wider.
+without being asked.
+
+## When to verify
+
+**Do not run the tests or the typecheck after every step.** While the work is
+still moving, edit and keep going. A run per edit costs time and context and
+tells you little the next edit will not change.
+
+Verify once a milestone is reached and the user asks to wrap it up in commits.
+Then run the tests and the typecheck of the packages the change touches, and
+nothing wider, fix what fails, and commit. Run them earlier only when the user
+asks, or when a step cannot go on without knowing whether the last one works.
 
 ## Commits
 
