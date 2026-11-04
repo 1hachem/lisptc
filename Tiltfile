@@ -9,7 +9,19 @@ registry = 'localhost:5000'
 
 allow_k8s_contexts('default')
 default_registry(registry)
-watch_settings(ignore=['worktrees', '.claude/', '**/node_modules/**', '**/.turbo/**', '**/tsconfig.tsbuildinfo', 'Tiltfile.tmp.*'])
+watch_settings(ignore=[
+    '.agents', '.claude', '.codex', '.direnv', '.fallow', '.github', '.husky', '.specify', '.topiary',
+    '.playwright-mcp', '.llama-cache', '.r2', '.r2-cache', '.r2-mount',
+    'argocd', 'argocd-previews', 'artifacts', 'deploy', 'docker', 'editors', 'examples', 'nix',
+    'scripts', 'specs', 'taskfiles', 'worktrees',
+    '*.md', 'LICENSE', 'Taskfile.yml', 'biome.json', 'knip.json', 'no-comments.json',
+    'lint-staged.config.ts', '.commitlintrc.ts', '.fallowrc.json', '.mcp.json', '.infisical.json',
+    '.env*', '.envrc', 'flake.nix', 'flake.lock', '.gitignore',
+    'apps/desktop/release', 'apps/trace-viewer/.evals',
+    '**/node_modules', '**/.turbo', '**/dist', '**/coverage', '**/.output', '**/.nitro',
+    '**/.tanstack', '**/.vite', '**/.next', '**/*.tsbuildinfo', '**/*.log', '**/.env.local',
+    'Tiltfile.tmp.*',
+])
 
 local('kubectl create namespace %s --dry-run=client -o yaml | kubectl apply -f -' % namespace, quiet=True)
 
