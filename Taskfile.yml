@@ -81,7 +81,7 @@ tasks:
     deps: [cluster:_reachable]
     cmds:
       - tilt down
-      - '[ "{{.CLI_ARGS}}" != "-v" ] || kubectl delete namespace lisptc-dev --ignore-not-found'
+      - '{{if eq .CLI_ARGS "-v"}}kubectl delete namespace lisptc-dev --ignore-not-found{{else}}true{{end}}'
 
   convex:push:
     desc: push the convex functions and schema to the local dev deployment, once (production releases through the cluster's convex-deploy Job)
