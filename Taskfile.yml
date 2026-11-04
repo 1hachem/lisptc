@@ -68,8 +68,12 @@ tasks:
 
   up:prod-local:
     desc: build the production images and run them on the local cluster under tilt, against the dev secrets
-    deps: [registry, cluster:_reachable]
+    aliases:
+      - up:prod
+      - prod
+    deps: [mcp:browser:build, registry, cluster:_reachable]
     cmds:
+      - defer: tilt down
       - task: _infisical-run
         vars:
           ENV: dev
