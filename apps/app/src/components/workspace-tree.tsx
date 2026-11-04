@@ -220,7 +220,6 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 			name="home"
 			icon={Home01Icon}
 			selected={false}
-			onDragStart={dragsAs(NEW_CHAT)}
 			link={linkTo(workspaceId, NEW_CHAT)}
 		/>
 	);
@@ -257,7 +256,6 @@ function RootFile({
 			name={ROOT_FILES[page].name}
 			icon={ROOT_FILES[page].icon}
 			selected={shown(content)}
-			onDragStart={dragsAs(content)}
 			link={linkTo(workspaceId, content)}
 		/>
 	);
