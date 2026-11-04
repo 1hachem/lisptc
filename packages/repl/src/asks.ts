@@ -1,5 +1,5 @@
-import { type Ask, type AskChoice, asksOf } from "@repo/interpreter/asks";
-import type { Entry } from "@repo/interpreter/journal";
+import { type Ask, type AskChoice, asksOf } from "@repo/journal-catalog/asks";
+import type { Entry } from "@repo/shared/journal";
 
 export function openAsks(entries: readonly Entry[]): readonly Ask[] {
 	return asksOf(entries).open ?? [];

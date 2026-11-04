@@ -1,4 +1,5 @@
-import { latest, type Question, questionKind } from "@repo/interpreter/journal";
+import { type Question, questionKind } from "@repo/journal-catalog/intent";
+import { latest } from "@repo/shared/journal";
 import { type EntryCarrier, entriesOfMessage } from "./entries.ts";
 
 export function openQuestion(

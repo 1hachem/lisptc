@@ -1,12 +1,13 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
-import { type Entry, journal } from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks, type SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
+import type { Entry } from "@repo/shared/journal";
 import { requested } from "../src/channel.ts";
 import {
 	type PermissionsExtension,

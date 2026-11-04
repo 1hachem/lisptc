@@ -1,10 +1,10 @@
-import { type Asks, asksOf as asksIn } from "@repo/interpreter/asks";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { openSession } from "@repo/interpreter/session";
+import { type Asks, asksOf as asksIn } from "@repo/journal-catalog/asks";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";

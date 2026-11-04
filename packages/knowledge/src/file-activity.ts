@@ -1,11 +1,11 @@
 import type { Eval } from "@repo/interpreter/drive";
 import { messageOf } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
+import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	type ActivityEntry,
 	activityKind,
-	record,
-} from "@repo/interpreter/journal";
-import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
+} from "@repo/journal-catalog/activity";
 import type { Clock } from "@repo/shared/host";
 
 const callSeqCodec: StateCodec<number> = {

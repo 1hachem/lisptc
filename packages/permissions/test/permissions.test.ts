@@ -1,5 +1,5 @@
-import { asksOf } from "@repo/interpreter/asks";
 import type { Hold } from "@repo/interpreter/drive";
+import { asksOf } from "@repo/journal-catalog/asks";
 import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
 import { SessionRules } from "../src/permissions.ts";

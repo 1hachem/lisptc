@@ -1,7 +1,7 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { implant, snapshot } from "@repo/interpreter/image";
-import { activityKind, record } from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -18,6 +18,7 @@ import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
+import { activityKind } from "@repo/journal-catalog/activity";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
 import { AGENT_FOLDER, writeDefinition } from "./definition.ts";

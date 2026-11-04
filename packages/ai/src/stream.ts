@@ -1,4 +1,4 @@
-import type { Entry, Received } from "@repo/interpreter/journal";
+import type { Entry, Received } from "@repo/shared/journal";
 import {
 	contentToText,
 	ENTRY_TYPE,

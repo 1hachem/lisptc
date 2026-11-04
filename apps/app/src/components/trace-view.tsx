@@ -1,7 +1,8 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
-import { latest, memoryKind } from "@repo/interpreter/journal";
+import { memoryKind } from "@repo/journal-catalog/memory";
+import { latest } from "@repo/shared/journal";
 import {
 	type ComponentProps,
 	type RefObject,

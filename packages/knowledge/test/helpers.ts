@@ -1,8 +1,9 @@
-import { entriesOf, journal } from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import type { AttachedFile } from "@repo/shared/files";
+import { entriesOf } from "@repo/shared/journal";
 import { attachmentsKind } from "../src/attached.ts";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";

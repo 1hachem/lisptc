@@ -1,6 +1,7 @@
 import { Compactor } from "@repo/compaction-extension";
-import { latest, viewKind } from "@repo/interpreter/journal";
+import { viewKind } from "@repo/journal-catalog/view";
 import type { EvalOutput } from "@repo/repl/repl";
+import { latest } from "@repo/shared/journal";
 import { MemoryViewStore, type PanelOp } from "@repo/ui-extension";
 import { describe, expect, it } from "vitest";
 import { agentRepl, memoryRepl, modelFacing } from "./helpers.ts";

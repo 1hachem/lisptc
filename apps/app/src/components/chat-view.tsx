@@ -1,5 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { Progress } from "@repo/interpreter/journal";
+import type { Progress } from "@repo/journal-catalog/intent";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import {

@@ -1,6 +1,6 @@
 import { quiets } from "@repo/interpreter/effects";
-import type { Entry } from "@repo/interpreter/journal";
 import type { AgentRepl } from "@repo/repl/repl";
+import type { Entry } from "@repo/shared/journal";
 import { formsOnly, type Skipped } from "@repo/shared/lisp-forms";
 import { evalMessageCode } from "./repl.ts";
 import { type ReplSource, replFrom } from "./repl-store.ts";

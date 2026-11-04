@@ -1,4 +1,4 @@
-import { asksOf } from "@repo/interpreter/asks";
+import { asksOf } from "@repo/journal-catalog/asks";
 import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import { permissionsExtension } from "@repo/permissions-extension";

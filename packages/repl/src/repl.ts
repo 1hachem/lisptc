@@ -21,7 +21,7 @@ import {
 	noOpinion,
 } from "@repo/interpreter/hooks";
 import { type Image, restore, snapshot } from "@repo/interpreter/image";
-import { type Entry, journal, type Received } from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
@@ -46,6 +46,7 @@ import {
 	type TurnContext,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
+import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
 import type { Checkpoint, ImageStore } from "./image-store.ts";

@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
-import type { Ask, AskChoice } from "@repo/interpreter/asks";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { setExit } from "@repo/interpreter/core-builtins";
@@ -12,6 +11,7 @@ import { prelude } from "@repo/interpreter/prelude";
 import { Reader } from "@repo/interpreter/reader";
 import { openSession } from "@repo/interpreter/session";
 import { type Note, note, output } from "@repo/interpreter/topics";
+import type { Ask, AskChoice } from "@repo/journal-catalog/asks";
 import { openAsks, question, runAsking } from "@repo/repl/asks";
 import type { Repl } from "@repo/repl/repl";
 import {

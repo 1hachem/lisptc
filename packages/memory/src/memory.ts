@@ -2,7 +2,7 @@ import { quotient } from "@repo/interpreter/arith";
 import type { Channels } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { memoryKind, record } from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
@@ -25,6 +25,7 @@ import {
 	type SessionHooks,
 	slot,
 } from "@repo/interpreter/session";
+import { type FiredMemory, memoryKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
@@ -139,12 +140,6 @@ function fires(trigger: Trigger, event: MemoryEvent): boolean {
 	return evalPattern(trigger.pattern, (p) =>
 		typeof p === "string" ? matches(p, event.text ?? "") : false,
 	);
-}
-
-export interface FiredMemory {
-	key: string;
-	body: string;
-	on?: TriggerKind;
 }
 
 const countCodec: StateCodec<number> = {

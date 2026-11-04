@@ -1,7 +1,7 @@
 "use client";
 
+import type { FiredMemory } from "@repo/journal-catalog/memory";
 import { useEffect, useState } from "react";
-import type { FiredMemory } from "./memories.ts";
 
 const TRIGGER_COLORS: Record<string, string> = {
 	error: "bg-red",

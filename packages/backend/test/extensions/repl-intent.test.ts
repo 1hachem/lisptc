@@ -1,11 +1,8 @@
 import { intentExtension } from "@repo/intent-extension";
 import { intentHost } from "@repo/intent-extension/host";
-import {
-	intentKind,
-	latest,
-	questionKind,
-	viewKind,
-} from "@repo/interpreter/journal";
+import { intentKind, questionKind } from "@repo/journal-catalog/intent";
+import { viewKind } from "@repo/journal-catalog/view";
+import { latest } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { agentRepl, modelFacing } from "./helpers.ts";
 

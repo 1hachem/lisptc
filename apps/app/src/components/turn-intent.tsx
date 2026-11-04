@@ -15,8 +15,8 @@ import { GlyphCycle } from "@repo/components";
 import type {
 	ActivityIcon,
 	ActivityImage,
-	Progress,
-} from "@repo/interpreter/journal";
+} from "@repo/journal-catalog/activity";
+import type { Progress } from "@repo/journal-catalog/intent";
 import { useState } from "react";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 

@@ -7,7 +7,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import type { Answered, Ask, AskChoice } from "@repo/interpreter/asks";
+import type { Answered, Ask, AskChoice } from "@repo/journal-catalog/asks";
 import {
 	Confirmation,
 	ConfirmationAccepted,

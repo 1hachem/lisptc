@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Ask, asksKind } from "@repo/interpreter/asks";
 import { StepHold } from "@repo/interpreter/errors";
 import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { type Ask, asksKind } from "@repo/journal-catalog/asks";
 import { describe, expect, it } from "vitest";
 import { openAsks, runAsking, yesOrNo } from "../src/asks.ts";
 import { SessionClient, serve } from "../src/session-server.ts";

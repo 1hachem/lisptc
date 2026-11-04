@@ -1,6 +1,6 @@
 import type { Effect } from "@repo/interpreter/effects";
-import type { Entry } from "@repo/interpreter/journal";
 import type { AgentRepl, EvalOutput, LiveEntries } from "@repo/repl/repl";
+import type { Entry } from "@repo/shared/journal";
 import type { ChatMessage } from "@repo/shared/messages";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 

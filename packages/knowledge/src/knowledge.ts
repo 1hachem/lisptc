@@ -1,10 +1,11 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { readReceived, record } from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { STORE_FOLDERS } from "@repo/shared/files";
+import { readReceived } from "@repo/shared/journal";
 import { z } from "zod";
 import { attachmentsKind } from "./attached.ts";
 import { ATTACHMENT_ASKS, registerAttachments } from "./attachment-forms.ts";

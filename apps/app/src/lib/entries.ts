@@ -1,4 +1,4 @@
-import type { Entry } from "@repo/interpreter/journal";
+import type { Entry } from "@repo/shared/journal";
 import { ENTRY_TYPE, entryOf, envelopeOf } from "@repo/shared/messages";
 import type { ChatMessage } from "./chat.tsx";
 

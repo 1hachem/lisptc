@@ -1,5 +1,5 @@
-import type { Entry } from "@repo/interpreter/journal";
 import type { AgentRepl } from "@repo/repl/repl";
+import type { Entry } from "@repo/shared/journal";
 import type { Repls } from "./repl-store.ts";
 
 export interface UiActionResult {

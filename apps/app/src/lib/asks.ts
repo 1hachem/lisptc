@@ -4,7 +4,7 @@ import {
 	type AskChoice,
 	answering,
 	asksKind,
-} from "@repo/interpreter/asks";
+} from "@repo/journal-catalog/asks";
 import { postUiAction } from "./ui-action.ts";
 
 export type AskOutcome =

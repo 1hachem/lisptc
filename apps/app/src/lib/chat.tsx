@@ -2,26 +2,26 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import {
+	type ActivityEntry,
+	activityKind,
+	activityOf,
+} from "@repo/journal-catalog/activity";
+import {
 	type Answered,
 	type Ask,
 	asksKind,
 	asksOf,
-} from "@repo/interpreter/asks";
+} from "@repo/journal-catalog/asks";
 import {
-	type ActivityEntry,
-	activityKind,
-	activityOf,
-	type Entry,
 	type Intent,
 	intentKind,
-	latest,
-	memoryKind,
 	type Question,
 	questionKind,
-	type ViewRef,
-	viewKind,
-} from "@repo/interpreter/journal";
+} from "@repo/journal-catalog/intent";
+import { memoryKind } from "@repo/journal-catalog/memory";
+import { type ViewRef, viewKind } from "@repo/journal-catalog/view";
 import { ATTACHMENTS_KIND } from "@repo/shared/files";
+import { type Entry, latest } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
 import { useQuery } from "@tanstack/react-query";

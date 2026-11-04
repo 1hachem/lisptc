@@ -2,7 +2,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { type Ask, asksOf } from "@repo/interpreter/asks";
+import { type Ask, asksOf } from "@repo/journal-catalog/asks";
 import { entriesIn } from "@repo/shared/messages";
 import {
 	QueryClient,

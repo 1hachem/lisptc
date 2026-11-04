@@ -1,7 +1,7 @@
-import { type Ask, answering, asksKind } from "@repo/interpreter/asks";
 import { EvalException } from "@repo/interpreter/errors";
 import { record } from "@repo/interpreter/journal";
 import type { SessionHooks } from "@repo/interpreter/session";
+import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
 import { resolveApproval } from "./approvals.ts";
 import { decided, lapsed, settled } from "./channel.ts";
 import type { ApprovalRequest, Approvals, Approver, Scope } from "./ports.ts";

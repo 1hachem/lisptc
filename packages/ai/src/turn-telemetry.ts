@@ -1,6 +1,5 @@
 import type { Eval } from "@repo/interpreter/drive";
 import type { Middleware } from "@repo/interpreter/hooks";
-import type { Received } from "@repo/interpreter/journal";
 import { llmSlot } from "@repo/interpreter/observe";
 import type {
 	AgentEnd,
@@ -10,6 +9,7 @@ import type {
 	StepVerdict,
 	TurnContext,
 } from "@repo/interpreter/session";
+import type { Received } from "@repo/shared/journal";
 import {
 	captureException,
 	captureLlmCall,

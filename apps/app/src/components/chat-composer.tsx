@@ -1,6 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import type { Question } from "@repo/interpreter/journal";
+import type { Question } from "@repo/journal-catalog/intent";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { attachingFiles } from "../lib/attached-files.ts";

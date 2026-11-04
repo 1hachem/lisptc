@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
+
+import type { FiredMemory } from "@repo/journal-catalog/memory";
 import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { type FiredMemory, firedMemories } from "./memories.ts";
 import { MessageMemories } from "./message-memories.tsx";
 
 beforeAll(() => {
@@ -95,31 +96,5 @@ describe("the recalled memories of a step", () => {
 			{ key: "b", body: "two" },
 		]);
 		expect(view.text()).toContain("2 memories recalled");
-	});
-});
-
-describe("reading memories off a journal entry", () => {
-	it("keeps the ones that carry a key", () => {
-		expect(
-			firedMemories([
-				{ key: "a", body: "one" },
-				{ body: "no key" },
-				{ key: "b" },
-				{ key: "c", body: "three", on: "error" },
-				{ key: "d", body: "four", on: 7 },
-				"not an object",
-				null,
-			]),
-		).toEqual([
-			{ key: "a", body: "one" },
-			{ key: "b", body: "" },
-			{ key: "c", body: "three", on: "error" },
-			{ key: "d", body: "four" },
-		]);
-	});
-
-	it("reads nothing out of a lane that is not a list", () => {
-		expect(firedMemories(undefined)).toEqual([]);
-		expect(firedMemories({ key: "a" })).toEqual([]);
 	});
 });

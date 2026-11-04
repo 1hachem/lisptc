@@ -2,7 +2,7 @@ import { type Channels, topic } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
-import { record, viewKind } from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -20,6 +20,7 @@ import { plistOptions } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { viewKind } from "@repo/journal-catalog/view";
 import type { PromptSource } from "@repo/shared/host";
 import { ACTION_PROPS, FOLDERS, TAGS, type Tag } from "@repo/ui-catalog";
 import { z } from "zod";

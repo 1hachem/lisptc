@@ -1,4 +1,4 @@
-import { asksOf } from "@repo/interpreter/asks";
+import { asksOf } from "@repo/journal-catalog/asks";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";

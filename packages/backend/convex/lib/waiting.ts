@@ -1,5 +1,6 @@
-import { asksOf, unansweredAsks } from "@repo/interpreter/asks";
-import { latest, questionKind } from "@repo/interpreter/journal";
+import { asksOf, unansweredAsks } from "@repo/journal-catalog/asks";
+import { questionKind } from "@repo/journal-catalog/intent";
+import { latest } from "@repo/shared/journal";
 import { entriesIn } from "@repo/shared/messages";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";

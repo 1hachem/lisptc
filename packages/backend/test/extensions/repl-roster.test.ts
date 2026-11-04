@@ -1,7 +1,7 @@
 import { Compactor, compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
-import { entriesOf, memoryKind } from "@repo/interpreter/journal";
 import { llmSlot } from "@repo/interpreter/observe";
+import { memoryKind } from "@repo/journal-catalog/memory";
 import {
 	MemoryBank,
 	memoryExtension,
@@ -14,6 +14,7 @@ import { proseHost } from "@repo/prose-extension/host";
 import { MemoryRepl } from "@repo/repl/repl";
 import { secretsExtension, secretsSlot } from "@repo/secrets-extension";
 import { envSecretsStore, secretsHost } from "@repo/secrets-extension/host";
+import { entriesOf } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { memoryRepl } from "./helpers.ts";
 

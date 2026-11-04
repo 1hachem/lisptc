@@ -1,5 +1,4 @@
 import { ends } from "@repo/interpreter/effects";
-import type { Entry, Received } from "@repo/interpreter/journal";
 import type {
 	AgentFailure,
 	AgentTurn,
@@ -10,6 +9,7 @@ import type {
 	TurnOutcome,
 } from "@repo/interpreter/session";
 import type { AgentRepl, LiveEntries } from "@repo/repl/repl";
+import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
 import { type AgentConfig, streamAgent } from "./agent.ts";

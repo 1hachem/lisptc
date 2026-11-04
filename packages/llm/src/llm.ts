@@ -1,10 +1,6 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import { EvalException, messageOf } from "@repo/interpreter/errors";
-import {
-	type ActivityEntry,
-	activityKind,
-	record,
-} from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import {
 	type Interp,
 	runSync,
@@ -36,6 +32,10 @@ import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
+import {
+	type ActivityEntry,
+	activityKind,
+} from "@repo/journal-catalog/activity";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";

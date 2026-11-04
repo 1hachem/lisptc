@@ -1,13 +1,13 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	type Activity,
-	activityOf as activityIn,
-	activityKind,
-	entriesOf,
-	journal,
-} from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
+import {
+	type ActivityEntry,
+	activityOf as activityIn,
+	activityKind,
+} from "@repo/journal-catalog/activity";
+import { entriesOf } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { type Generate, llmExtension } from "../src/llm.ts";
 import { llmHost } from "../src/llm-host.ts";
@@ -25,7 +25,7 @@ function ticking(from: number, step: number): { now(): number } {
 async function activityOf(
 	generate: Generate,
 	code: string,
-): Promise<{ activity: Activity; states: string[] }> {
+): Promise<{ activity: ActivityEntry[]; states: string[] }> {
 	const extension = llmExtension({
 		...llmHost,
 		generate,

@@ -1,8 +1,8 @@
-import type { Entry } from "@repo/interpreter/journal";
 import { knowledgeExtension } from "@repo/knowledge-extension";
 import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { MemoryKnowledgeStore } from "@repo/knowledge-extension/memory-store";
 import { ATTACHMENTS_KIND } from "@repo/shared/files";
+import type { Entry } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { memoryRepl, modelFacing } from "./helpers.ts";
 

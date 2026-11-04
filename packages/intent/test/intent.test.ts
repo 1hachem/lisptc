@@ -5,12 +5,7 @@ import {
 import { driveSync, settled } from "@repo/interpreter/drive";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
-import {
-	entriesOf,
-	intentKind,
-	journal,
-	questionKind,
-} from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -20,6 +15,8 @@ import {
 	type SessionHooks,
 	type TurnOutcome,
 } from "@repo/interpreter/session";
+import { intentKind, questionKind } from "@repo/journal-catalog/intent";
+import { entriesOf } from "@repo/shared/journal";
 import { describe, expect, test } from "vitest";
 import { intentExtension } from "../src/intent.ts";
 import { intentHost } from "../src/intent-host.ts";

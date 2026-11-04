@@ -1,5 +1,5 @@
-import type { Received } from "@repo/interpreter/journal";
 import type { Awaitable } from "@repo/shared/host";
+import type { Received } from "@repo/shared/journal";
 
 export type Envelope =
 	| {

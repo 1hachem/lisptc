@@ -1,14 +1,6 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
-import {
-	type Intent,
-	type IntentStep,
-	intentKind,
-	type Progress,
-	questionKind,
-	record,
-	type Todo,
-} from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -20,6 +12,14 @@ import {
 import { plistOptions } from "@repo/interpreter/plist";
 import { zAny, zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import {
+	type Intent,
+	type IntentStep,
+	intentKind,
+	type Progress,
+	questionKind,
+	type Todo,
+} from "@repo/journal-catalog/intent";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 

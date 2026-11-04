@@ -5,13 +5,14 @@ import {
 	restore,
 	snapshot,
 } from "@repo/interpreter/image";
-import { activityOf, journal } from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
+import { activityOf } from "@repo/journal-catalog/activity";
 import { describe, expect, test } from "vitest";
 import {
 	agentsExtension,

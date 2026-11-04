@@ -1,5 +1,5 @@
+import { type Entry, entriesOf, entryKind } from "@repo/shared/journal";
 import { z } from "zod";
-import { type Entry, entriesOf, entryKind } from "./journal.ts";
 
 const askAnswer = z
 	.object({
@@ -7,8 +7,6 @@ const askAnswer = z
 		values: z.record(z.string(), z.union([z.string(), z.boolean()])).readonly(),
 	})
 	.readonly();
-
-export type AskAnswer = z.infer<typeof askAnswer>;
 
 const askChoice = z
 	.object({

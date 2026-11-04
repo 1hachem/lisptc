@@ -1,15 +1,15 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	type Activity,
-	activityOf as activityIn,
-	activityKind,
-	entriesOf,
-	journal,
-} from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import type { LispPromise } from "@repo/interpreter/promise";
 import { openSession } from "@repo/interpreter/session";
+import {
+	type ActivityEntry,
+	activityOf as activityIn,
+	activityKind,
+} from "@repo/journal-catalog/activity";
+import { entriesOf } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -91,7 +91,7 @@ async function activityOf(
 	code: string,
 	icons?: Icon[],
 ): Promise<{
-	activity: Activity;
+	activity: ActivityEntry[];
 	reported: unknown[];
 }> {
 	const { interp } = await session(icons);

@@ -1,11 +1,11 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	type Activity,
-	activityOf as activityIn,
-	journal,
-} from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
+import {
+	type ActivityEntry,
+	activityOf as activityIn,
+} from "@repo/journal-catalog/activity";
 import { describe, expect, it } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
@@ -30,7 +30,7 @@ function ticking(from: number, step: number): { now(): number } {
 async function activityOf(
 	store: MemoryKnowledgeStore,
 	code: string,
-): Promise<Activity> {
+): Promise<ActivityEntry[]> {
 	const extension = knowledgeExtension(
 		knowledgeHostFor({
 			store,

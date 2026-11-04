@@ -1,7 +1,8 @@
-import { type Entry, journal } from "@repo/interpreter/journal";
+import { journal } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension } from "@repo/interpreter/session";
+import type { Entry } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { agentRepl } from "./helpers.ts";
 

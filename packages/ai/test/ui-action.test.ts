@@ -1,5 +1,6 @@
-import { record, viewKind } from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import { newSym } from "@repo/interpreter/objects";
+import { viewKind } from "@repo/journal-catalog/view";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { describe, expect, test } from "vitest";
 import { runUiAction } from "../src/ui-action.ts";

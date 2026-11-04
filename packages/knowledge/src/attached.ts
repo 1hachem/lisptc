@@ -1,5 +1,5 @@
-import { entryKind } from "@repo/interpreter/journal";
 import { ATTACHMENTS_KIND, attachedFiles } from "@repo/shared/files";
+import { entryKind } from "@repo/shared/journal";
 
 export const attachmentsKind = entryKind({
 	name: ATTACHMENTS_KIND,

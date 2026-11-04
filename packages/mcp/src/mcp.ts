@@ -1,5 +1,4 @@
 import { isNumeric } from "@repo/interpreter/arith";
-import { type Ask, answering, asksKind } from "@repo/interpreter/asks";
 import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import { settled } from "@repo/interpreter/drive";
@@ -9,12 +8,7 @@ import {
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
-import {
-	type ActivityEntry,
-	type ActivityImage,
-	activityKind,
-	record,
-} from "@repo/interpreter/journal";
+import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -33,6 +27,12 @@ import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
+import {
+	type ActivityEntry,
+	type ActivityImage,
+	activityKind,
+} from "@repo/journal-catalog/activity";
+import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
