@@ -4,6 +4,9 @@ config.define_bool('prod')
 cfg = config.parse()
 prod = cfg.get('prod', False)
 
+if prod:
+    trigger_mode(TRIGGER_MODE_MANUAL)
+
 namespace = 'lisptc-dev'
 registry = 'localhost:5000'
 
@@ -84,7 +87,7 @@ rendered = helm(
     name='lisptc',
     namespace=namespace,
     values=['charts/lisptc/values-dev.yaml'],
-    set=['dev.node=' + node],
+    set=['dev.node=' + node, 'dev.watch=%s' % ('false' if prod else 'true')],
 )
 objects = decode_yaml_stream(rendered)
 for o in objects:
@@ -116,7 +119,8 @@ k8s_resource(
     labels=['convex'],
 )
 k8s_resource(
-    'convex-deploy',
+    named('Job')[0] if prod else 'convex-deploy',
+    new_name='convex-deploy',
     resource_deps=['convex-backend'],
     labels=['convex'],
 )

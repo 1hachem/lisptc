@@ -38,6 +38,7 @@ preview:
 dev:
   enabled: false
   node: ""
+  watch: false
 
 infisical:
   hostAPI: https://app.infisical.com/api

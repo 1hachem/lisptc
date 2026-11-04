@@ -2,6 +2,7 @@ imagePullSecret: ""
 
 dev:
   enabled: true
+  watch: true
 
 infisical:
   envSlug: dev
