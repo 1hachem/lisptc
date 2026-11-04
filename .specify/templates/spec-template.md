@@ -1,7 +1,5 @@
 # Feature Specification: [FEATURE NAME]
 
-**Feature Branch**: `[###-feature-name]`
-
 **Created**: [DATE]
 
 **Status**: Draft

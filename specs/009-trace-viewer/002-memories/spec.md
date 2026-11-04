@@ -1,7 +1,5 @@
 # Feature Specification: Memories in the Trace Viewer
 
-**Feature Branch**: `009-trace-viewer/002-memories`
-
 **Created**: 2026-11-01
 
 **Status**: Draft

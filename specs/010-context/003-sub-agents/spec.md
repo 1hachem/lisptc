@@ -1,7 +1,5 @@
 # Feature Specification: Sub-agent Abilities
 
-**Feature Branch**: `010-context/003-sub-agents`
-
 **Created**: 2026-11-01
 
 **Status**: Draft

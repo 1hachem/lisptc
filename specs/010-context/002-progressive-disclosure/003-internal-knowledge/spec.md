@@ -1,7 +1,5 @@
 # Feature Specification: Internal Memories
 
-**Feature Branch**: `010-context/002-progressive-disclosure/003-internal-knowledge`
-
 **Created**: 2026-11-01
 
 **Status**: Draft

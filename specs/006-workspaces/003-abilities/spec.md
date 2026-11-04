@@ -1,7 +1,5 @@
 # Feature Specification: Workspace Abilities
 
-**Feature Branch**: `006-workspaces/003-abilities`
-
 **Created**: 2026-11-01
 
 **Status**: Draft

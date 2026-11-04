@@ -1,7 +1,5 @@
 # Feature Specification: Conversation Body
 
-**Feature Branch**: `003-chat-conversation/008-conversation-body`
-
 **Created**: 2026-11-01
 
 **Status**: Draft
