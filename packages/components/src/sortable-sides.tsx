@@ -7,7 +7,6 @@ import {
 	DndContext,
 	type DragEndEvent,
 	type DragOverEvent,
-	DragOverlay,
 	type DragStartEvent,
 	KeyboardSensor,
 	MeasuringStrategy,
@@ -26,6 +25,7 @@ import {
 } from "@dnd-kit/sortable";
 import type { MotionId } from "@repo/ui/motions.ts";
 import { createContext, type ReactNode, useContext, useState } from "react";
+import { CursorDragOverlay } from "./cursor-drag-overlay.tsx";
 import { SortableEntry, usePrefersReducedMotion } from "./sortable-tree.tsx";
 
 const DRAG_AFTER_PX = 4;
@@ -166,13 +166,13 @@ export function SortableSides<Side extends string, Id extends string>({
 			onDragCancel={onDragCancel}
 		>
 			<SidesContext value={{ sides, motion: shown }}>{children}</SidesContext>
-			<DragOverlay dropAnimation={shown === "none" ? null : SETTLE}>
+			<CursorDragOverlay dropAnimation={shown === "none" ? null : SETTLE}>
 				{dragged && (
 					<div className="cursor-grabbing bg-bg2 shadow-lg">
 						{overlay(dragged)}
 					</div>
 				)}
-			</DragOverlay>
+			</CursorDragOverlay>
 		</DndContext>
 	);
 }
