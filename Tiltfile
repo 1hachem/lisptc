@@ -1,3 +1,5 @@
+load('ext://restart_process', 'custom_build_with_restart')
+
 config.define_bool('prod')
 cfg = config.parse()
 prod = cfg.get('prod', False)
@@ -13,30 +15,47 @@ local('kubectl create namespace %s --dry-run=client -o yaml | kubectl apply -f -
 
 build_ignore = ['**/node_modules', '**/.turbo', '**/dist', '**/.output', '**/.nitro', '**/.tanstack', '**/.vite']
 
-app_target = 'prod' if prod else 'dev'
-app_build_secret = '--secret id=web-build-vars,env=WEB_BUILD_VARS' if prod else ''
-custom_build(
-    'ghcr.io/1hachem/lisptc-app',
-    'docker build --progress=plain -f apps/app/Dockerfile --target %s %s -t $EXPECTED_REF .' % (app_target, app_build_secret),
-    deps=[
-        'apps/app/Dockerfile',
-        'apps/app/package.json',
-        'apps/app/vite.config.ts',
-        'apps/app/src',
-        'apps/app/server',
-        'apps/app/public',
-        'packages',
-        'pnpm-lock.yaml',
-    ],
-    ignore=build_ignore,
-    live_update=[] if prod else [
-        fall_back_on(['apps/app/vite.config.ts', 'apps/app/package.json', 'pnpm-lock.yaml']),
-        sync('apps/app/src', '/app/apps/app/src'),
-        sync('apps/app/server', '/app/apps/app/server'),
-        sync('apps/app/public', '/app/apps/app/public'),
-        sync('packages', '/app/packages'),
-    ],
-)
+app_build_command = 'docker build --progress=plain -f apps/app/Dockerfile --target %s %s -t $EXPECTED_REF .'
+app_deps = [
+    'apps/app/Dockerfile',
+    'apps/app/package.json',
+    'apps/app/vite.config.ts',
+    'apps/app/src',
+    'apps/app/server',
+    'apps/app/public',
+    'packages',
+    'pnpm-lock.yaml',
+]
+
+if prod:
+    custom_build(
+        'ghcr.io/1hachem/lisptc-app',
+        app_build_command % ('prod', '--secret id=web-build-vars,env=WEB_BUILD_VARS'),
+        deps=app_deps,
+        ignore=build_ignore,
+    )
+else:
+    client_only_packages = ['bloub', 'components', 'ui', 'ui-catalog']
+    server_packages = [
+        'packages/' + p
+        for p in str(local('ls packages', quiet=True)).split()
+        if p not in client_only_packages
+    ]
+    custom_build_with_restart(
+        'ghcr.io/1hachem/lisptc-app',
+        app_build_command % ('dev', ''),
+        deps=app_deps,
+        ignore=build_ignore,
+        entrypoint=['pnpm', 'run', 'dev', '--host', '127.0.0.1'],
+        trigger=['apps/app/server'] + server_packages,
+        live_update=[
+            fall_back_on(['apps/app/vite.config.ts', 'apps/app/package.json', 'pnpm-lock.yaml']),
+            sync('apps/app/src', '/app/apps/app/src'),
+            sync('apps/app/server', '/app/apps/app/server'),
+            sync('apps/app/public', '/app/apps/app/public'),
+            sync('packages', '/app/packages'),
+        ],
+    )
 
 custom_build(
     'ghcr.io/1hachem/lisptc-convex-deploy',
