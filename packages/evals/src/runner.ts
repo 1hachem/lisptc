@@ -170,6 +170,15 @@ function entryText({ kind, value }: EvalEntry): string {
 	const fields = record(value);
 	if (kind === "memory" && typeof fields.key === "string")
 		return `${fields.key}: ${typeof fields.body === "string" ? fields.body : ""}`;
+	if (kind === "judged") {
+		const scores = Object.entries(record(fields.scores)).map(
+			([ask, score]) =>
+				`${ask} → ${typeof score === "number" ? score.toFixed(2) : String(score)}`,
+		);
+		if (typeof fields.error === "string")
+			scores.push(`failed: ${fields.error}`);
+		return scores.join("\n");
+	}
 	return JSON.stringify(value) ?? "";
 }
 

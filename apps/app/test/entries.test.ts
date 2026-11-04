@@ -141,7 +141,7 @@ describe("folding the journal into a chat", () => {
 		const folded = foldEntries(
 			[
 				row("m", "memory", { key: "k", body: "b" }),
-				row("n", "note", { text: "hi" }),
+				row("j", "judged", { message: "hi", scores: {} }),
 				{ id: "a", type: "ai", content: "(x)" },
 			],
 			(entry) => (entry.kind === "memory" ? "standing" : "dropped"),

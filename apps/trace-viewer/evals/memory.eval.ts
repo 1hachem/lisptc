@@ -93,6 +93,8 @@ evalCase("writes the correction down the moment a guess fails", {
 `,
 });
 
+const EVAL_APPLIES_TIMEOUT_MS = 30_000;
+
 const judged = () => [
 	promisesExtension(promisesHost),
 	mockedMcpExtension(),
@@ -101,7 +103,7 @@ const judged = () => [
 	memoryExtension({
 		...memoryHost,
 		store: new VolatileStore(),
-		judge: appliesJudge(openRouterSystemOne()),
+		judge: appliesJudge(openRouterSystemOne(), EVAL_APPLIES_TIMEOUT_MS),
 	}),
 ];
 

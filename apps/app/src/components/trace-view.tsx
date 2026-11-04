@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
-import { MessageMemories } from "@repo/components";
-import { memoryKind } from "@repo/journal-catalog/memory";
+import { MessageJudgements, MessageMemories } from "@repo/components";
+import { judgedKind, memoryKind } from "@repo/journal-catalog/memory";
 import { view } from "@repo/shared/journal";
 import {
 	type ComponentProps,
@@ -159,9 +159,19 @@ function EntryLine({
 	message: ChatMessage;
 	focused: boolean;
 }) {
-	const memory = shownMemory(message, useChannels());
-	if (memory === undefined) return null;
-	return <MessageMemories memories={[memory]} focused={focused} />;
+	const shown = useChannels();
+	const memory = shownMemory(message, shown);
+	if (memory !== undefined)
+		return <MessageMemories memories={[memory]} focused={focused} />;
+	if (!shown.memory) return null;
+	const judged = view(entriesOfMessage(message), judgedKind).at(-1);
+	if (judged === undefined) return null;
+	return (
+		<div className="min-w-0 text-[11px] text-dim">
+			<span>judged “{judged.message}”</span>
+			<MessageJudgements scores={judged.scores} error={judged.error} />
+		</div>
+	);
 }
 
 function TraceLine({

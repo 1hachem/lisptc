@@ -19,6 +19,7 @@ export {
 	RUNNING_GLYPHS,
 } from "./glyph-cycle.tsx";
 export { MessageFeedback } from "./message-feedback.tsx";
+export { MessageJudgements } from "./message-judgements.tsx";
 export { MessageMemories } from "./message-memories.tsx";
 export { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 export { PromptDialog } from "./prompt-dialog.tsx";

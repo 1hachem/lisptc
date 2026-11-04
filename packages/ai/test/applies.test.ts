@@ -32,10 +32,10 @@ describe("judging which descriptions a message calls for", () => {
 		const { seen, provider } = deciding((i) =>
 			i.includes("browser") ? 0.9 : 0.1,
 		);
-		const judged = await appliesJudge(provider)("open my browser", [
-			"user wants to automate a browser",
-			"user asks about billing",
-		]);
+		const judged = await appliesJudge(provider)(
+			{ message: "open my browser" },
+			["user wants to automate a browser", "user asks about billing"],
+		);
 		expect(judged).toEqual(
 			new Map([
 				["user wants to automate a browser", 0.9],
@@ -49,6 +49,18 @@ describe("judging which descriptions a message calls for", () => {
 		]);
 	});
 
+	it("hands the latest step to System One beside the message", async () => {
+		const { seen, provider } = deciding(() => 0.5);
+		await appliesJudge(provider)(
+			{ message: "get me the price", step: "(fetch url)\n\nneeds javascript" },
+			["user wants to automate a browser"],
+		);
+		expect(seen[0]?.state).toEqual({
+			message: "get me the price",
+			step: "(fetch url)\n\nneeds javascript",
+		});
+	});
+
 	it("gives up after its timeout, so the turn is never held by it", async () => {
 		const provider: SystemOneProvider = {
 			decide: ({ signal }) =>
@@ -56,10 +68,12 @@ describe("judging which descriptions a message calls for", () => {
 					signal?.addEventListener("abort", () => reject(signal.reason)),
 				),
 		};
-		await expect(appliesJudge(provider, 10)("hi", ["x"])).rejects.toThrow();
+		await expect(
+			appliesJudge(provider, 10)({ message: "hi" }, ["x"]),
+		).rejects.toThrow();
 	});
 
-	it("waits no longer than the latency measured for a judgment, with room for a cold connection", () => {
-		expect(APPLIES_TIMEOUT_MS).toBe(800);
+	it("waits at most two seconds for a judgment before a step goes ahead without it", () => {
+		expect(APPLIES_TIMEOUT_MS).toBe(2_000);
 	});
 });

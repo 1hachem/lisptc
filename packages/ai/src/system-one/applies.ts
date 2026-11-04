@@ -1,9 +1,14 @@
 import type { SystemOneProvider } from "./system-one.ts";
 
-export const APPLIES_TIMEOUT_MS = 800;
+export const APPLIES_TIMEOUT_MS = 2_000;
+
+export interface Situation {
+	readonly message: string;
+	readonly step?: string;
+}
 
 export type AppliesJudge = (
-	message: string,
+	situation: Situation,
 	descriptions: readonly string[],
 ) => Promise<ReadonlyMap<string, number>>;
 
@@ -11,19 +16,19 @@ export function appliesJudge(
 	provider: SystemOneProvider,
 	timeoutMs: number = APPLIES_TIMEOUT_MS,
 ): AppliesJudge {
-	return async (message, descriptions) => {
+	return async (situation, descriptions) => {
 		const ids = descriptions.map((_, i) => `d${i}`);
 		const { answers } = await provider.decide({
-			state: { message },
+			state: situation,
 			questions: Object.fromEntries(
 				descriptions.map((applies, i) => [
 					ids[i],
 					{
 						type: "noul",
-						instructions: `Does \`message\` call for knowledge that applies when: ${applies}?`,
+						instructions: `Does the situation, the user's \`message\` and, when present, the agent's latest \`step\` with what came of it, call for knowledge that applies when: ${applies}?`,
 						criteria: {
-							true: "the user is asking for this, or is about to need it to be helped",
-							false: "the message is about something else",
+							true: "the user is asking for this, or the agent is about to need it to help them",
+							false: "the situation is about something else",
 						},
 					},
 				]),

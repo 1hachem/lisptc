@@ -16,9 +16,16 @@ const FIRED = {
 		on: "call",
 	},
 };
-const STARTED = {
-	kind: "activity",
-	value: { id: "mcp-1", label: "load-mcp", state: "started" },
+const JUDGED = {
+	kind: "judged",
+	value: {
+		message: "open hyko.ai",
+		scores: { "the user wants the headline": 0.9 },
+	},
+};
+const FAILED = {
+	kind: "judged",
+	value: { message: "open hyko.ai", scores: {}, error: "timed out" },
 };
 
 function runtimeFor(events: EvalTurnEvent[]): EvalRuntime<EvalSpec, object> {
@@ -62,7 +69,7 @@ describe("entries land where they were recorded", () => {
 	test("each entry is a line of its own, in the order it arrived", async () => {
 		const run = await runCase(
 			runtimeFor([
-				{ type: "entry", entry: STARTED },
+				{ type: "entry", entry: JUDGED },
 				{ type: "entry", entry: FIRED },
 				{ type: "assistant", code: '(load-mcp "playwright")', meta: {} },
 				{ type: "entry", entry: FIRED },
@@ -83,9 +90,9 @@ describe("entries land where they were recorded", () => {
 			"assistant",
 		]);
 		expect(run.transcript[0]).toMatchObject({
-			kind: "activity",
-			value: STARTED.value,
-			content: JSON.stringify(STARTED.value),
+			kind: "judged",
+			value: JUDGED.value,
+			content: "the user wants the headline → 0.90",
 		});
 		expect(run.transcript[1]).toMatchObject({
 			kind: "memory",
@@ -93,6 +100,27 @@ describe("entries land where they were recorded", () => {
 			content: "navigate: browser_navigate, not navigate",
 		});
 		expect(run.transcript[3]).toMatchObject({ kind: "memory" });
+	});
+
+	test("a judge that failed shows its error in the printed run", async () => {
+		const run = await runCase(
+			runtimeFor([
+				{ type: "entry", entry: FAILED },
+				{ type: "assistant", code: "done", meta: {} },
+				{ type: "halt", answer: "done" },
+			]),
+			spec,
+			target,
+		);
+
+		expect(run.transcript[0]).toMatchObject({
+			role: "entry",
+			kind: "judged",
+			content: "failed: timed out",
+		});
+		expect(formatRun("case", { ...run, case: "case", sample: 1 })).toContain(
+			"judged │ failed: timed out",
+		);
 	});
 
 	test("a recorded memory shows under its kind in the printed run", async () => {

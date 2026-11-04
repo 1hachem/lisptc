@@ -25,7 +25,11 @@ import {
 	type SessionHooks,
 	slot,
 } from "@repo/interpreter/session";
-import { type FiredMemory, memoryKind } from "@repo/journal-catalog/memory";
+import {
+	type FiredMemory,
+	judgedKind,
+	memoryKind,
+} from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
@@ -34,6 +38,7 @@ import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
+	ASKS_FIRES_AT,
 	combinatorIn,
 	INITIAL_SCORE,
 	LINKED_FIRES_AT,
@@ -43,6 +48,7 @@ import {
 	type MemoryStore,
 	parseTrigger,
 	readBuiltins,
+	type Situation,
 	type Trigger,
 	type TriggerKind,
 	triggerToForm,
@@ -56,7 +62,6 @@ export const FORGET_BELOW = 0.05;
 export const MAX_CASCADE_DEPTH = 3;
 export const MAX_RECALL_WORDS = 200;
 export const DEFAULT_RECALL_LIMIT = 5;
-export const ASKS_FIRES_AT = 0.7;
 export const MAX_BUILTIN_WORDS = 300;
 
 function matches(pattern: string, text: string): boolean {
@@ -127,6 +132,26 @@ function someSubform(form: unknown, test: (s: unknown) => boolean): boolean {
 	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr)
 		if (someSubform(rest.car, test)) return true;
 	return false;
+}
+
+function latestStep(interp: Interp): string | undefined {
+	const said = interp.getGlobal(newSym("conversation"));
+	if (!(said instanceof Cell)) return undefined;
+	const turns = listToArray(said).map((turn) => {
+		const fields = new Map<string, unknown>();
+		for (let at: unknown = turn; at instanceof Cell; at = at.cdr)
+			if (at.car instanceof Cell && typeof at.car.car === "string")
+				fields.set(at.car.car, at.car.cdr);
+		return fields;
+	});
+	let at = turns.length - 1;
+	while (at >= 0 && turns[at]?.get("role") !== "assistant") at--;
+	if (at === -1) return undefined;
+	return turns
+		.slice(at)
+		.map((turn) => turn.get("content"))
+		.filter((content): content is string => typeof content === "string")
+		.join("\n\n");
 }
 
 function userMessages(interp: Interp): string[] {
@@ -234,6 +259,7 @@ export class MemoryBank {
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
 	private loaded: State<readonly string[]> = detachedState([]);
+	private asked: State<readonly string[]> = detachedState([]);
 	private builtinSource: () => readonly string[] = () => [];
 	private builtinTable: ReadonlyMap<string, Memory> | undefined;
 
@@ -263,6 +289,12 @@ export class MemoryBank {
 			keysCodec,
 			[],
 			"The built-in memories whose text is still in the conversation, so they do not load twice.",
+		);
+		this.asked = interp.state(
+			"memory/asked",
+			keysCodec,
+			[],
+			"The memories an asks trigger fired since the user last spoke, so a later step does not fire them again.",
 		);
 	}
 
@@ -349,15 +381,21 @@ export class MemoryBank {
 
 	*hear(interp: Interp): Eval<FiredMemory[]> {
 		const said = userMessages(interp);
-		if (said.length === this.heard) return [];
-		this.heard = said.length;
 		const last = said[said.length - 1];
+		const fresh = said.length !== this.heard;
+		if (fresh) {
+			this.heard = said.length;
+			this.asked.set([]);
+		}
 		if (last === undefined || last === "") return [];
 		this.change({ stepping: true });
 		yield* this.sweep();
 		const before = this.step.get().surfaced.length;
-		yield* this.dispatch({ kind: "user", text: last }, interp);
-		const judged = yield* this.judgeAsks(last);
+		if (fresh) yield* this.dispatch({ kind: "user", text: last }, interp);
+		const step = fresh ? undefined : latestStep(interp);
+		const judged = yield* this.judgeAsks(
+			step === undefined ? { message: last } : { message: last, step },
+		);
 		if (judged.size > 0)
 			yield* this.dispatch({ kind: "asks", text: last, judged }, interp);
 		this.change({ stepping: false });
@@ -375,18 +413,35 @@ export class MemoryBank {
 		return [...surfaced];
 	}
 
-	private *judgeAsks(message: string): Eval<ReadonlyMap<string, number>> {
-		const loaded = this.loaded.get();
-		const asks = new Set<string>();
-		for (const memory of yield* this.everything())
-			if (memory.on?.kind === "asks" && !loaded.includes(memory.key))
-				asks.add(memory.on.pattern as string);
+	private *judgeAsks(situation: Situation): Eval<ReadonlyMap<string, number>> {
+		const spent = [...this.loaded.get(), ...this.asked.get()];
+		const candidates = (yield* this.everything()).filter(
+			(memory) => memory.on?.kind === "asks" && !spent.includes(memory.key),
+		);
+		const asks = new Set(candidates.map((m) => m.on?.pattern as string));
 		if (asks.size === 0) return new Map();
+		let scores: ReadonlyMap<string, number> = new Map();
+		let error: string | undefined;
 		try {
-			return yield* settled(this.judge(message, [...asks]));
-		} catch {
-			return new Map();
+			scores = yield* settled(this.judge(situation, [...asks]));
+		} catch (ex) {
+			error = ex instanceof Error ? ex.message : String(ex);
 		}
+		const selected = candidates
+			.filter(
+				(memory) =>
+					memory.on !== undefined &&
+					fires(memory.on, { kind: "asks", judged: scores }),
+			)
+			.map((memory) => memory.key);
+		if (scores.size > 0 || error !== undefined)
+			record(this.channels, judgedKind, {
+				...situation,
+				scores: Object.fromEntries(scores),
+				...(selected.length === 0 ? {} : { selected }),
+				...(error === undefined ? {} : { error }),
+			});
+		return scores;
 	}
 
 	*beginStep(code: string, interp: Interp): Eval<string> {
@@ -510,6 +565,11 @@ export class MemoryBank {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
 			if (!fires(on, event)) continue;
+			if (event.kind === "asks") {
+				const asked = this.asked.get();
+				if (asked.includes(memory.key)) continue;
+				this.asked.set([...asked, memory.key]);
+			}
 			yield* this.fire(memory, interp);
 		}
 	}
@@ -559,7 +619,7 @@ const FORGET_ALL = "memory/forget-all";
 function heardText(memories: FiredMemory[]): string {
 	return [
 		"<memories>",
-		"these fired on what the user just said. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).",
+		"these fired on what the user said and what just happened. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).",
 		...memories.map((m) => `${m.key}: ${m.body}`),
 		"</memories>",
 	].join("\n");
@@ -612,6 +672,7 @@ export function memoryExtension(
 		bank,
 		asks: [FORGET_ALL],
 		prompt: host.prompt(),
+		memories: host.memories(),
 		session: memorySession(bank),
 	});
 }
