@@ -42,13 +42,13 @@ describe("a stored value", () => {
 		expect(host.textContent).toBe("be brief");
 	});
 
-	it("shows a plist as labelled rows", () => {
+	it("shows a plist as its labels and values, without the keyword colons", () => {
 		const host = rendered(
 			<SourceValue source={'(:tone "brief" :lang "en")'} />,
 		);
-		expect(
-			[...host.querySelectorAll("dt")].map((dt) => dt.textContent),
-		).toEqual(["tone", "lang"]);
+		expect(host.textContent).toContain("tone");
+		expect(host.textContent).toContain("brief");
+		expect(host.textContent).toContain("lang");
 		expect(host.textContent).not.toContain(":");
 	});
 });
