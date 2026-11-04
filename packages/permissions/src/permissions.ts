@@ -1,6 +1,11 @@
 import type { Hold } from "@repo/interpreter/drive";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
-import { type Interp, runSync } from "@repo/interpreter/lisp";
+import {
+	type Interp,
+	runSync,
+	type State,
+	type StateCodec,
+} from "@repo/interpreter/lisp";
 import { arrayToList, Cell, newSym, Sym } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
@@ -141,6 +146,27 @@ export class SessionRules {
 	}
 }
 
+const heldRequest = z.object({
+	id: z.string(),
+	name: z.string(),
+	args: z.string(),
+	reason: z.string().optional(),
+	at: z.number(),
+});
+
+function parsedRequests(source: string): ApprovalRequest[] {
+	try {
+		return z.array(heldRequest).catch([]).parse(JSON.parse(source));
+	} catch {
+		return [];
+	}
+}
+
+const pendingCodec: StateCodec<ApprovalRequest[]> = {
+	toLisp: (requests) => JSON.stringify(requests),
+	fromLisp: (x) => (typeof x === "string" ? parsedRequests(x) : []),
+};
+
 export interface PermissionsExtension extends InterpExtension {
 	readonly rules: SessionRules;
 }
@@ -155,6 +181,48 @@ export function permissionsExtension(
 	);
 	let armed = 0;
 	let issued = 0;
+	const pendingOf = new WeakMap<Interp, State<ApprovalRequest[]>>();
+
+	function stillOpen(): Set<string> {
+		return new Set(host.approvals.pending().map((request) => request.id));
+	}
+
+	function adopt(interp: Interp): void {
+		const open = stillOpen();
+		for (const request of pendingOf.get(interp)?.get() ?? [])
+			if (!open.has(request.id))
+				host.approvals.open({ ...request, restored: true });
+	}
+
+	function prune(interp: Interp): void {
+		const pending = pendingOf.get(interp);
+		if (pending === undefined) return;
+		const open = stillOpen();
+		const held = pending.get();
+		const kept = held.filter((request) => open.has(request.id));
+		if (kept.length !== held.length) pending.set(kept);
+	}
+
+	function keep(interp: Interp, request: ApprovalRequest): void {
+		const pending = pendingOf.get(interp);
+		if (pending === undefined || request.change) return;
+		pending.set([
+			...pending.get().filter((held) => held.name !== request.name),
+			request,
+		]);
+	}
+
+	async function adopting(
+		interp: Interp,
+		run: () => Promise<void>,
+	): Promise<void> {
+		adopt(interp);
+		try {
+			await armedWhile(run);
+		} finally {
+			prune(interp);
+		}
+	}
 
 	async function armedWhile(run: () => Promise<void>): Promise<void> {
 		armed++;
@@ -232,6 +300,7 @@ export function permissionsExtension(
 			...(change === undefined ? {} : { change: true as const }),
 		};
 		host.approvals.open(request);
+		keep(interp, request);
 		if (change !== undefined) awaiting.set(request.id, change);
 		requested.emit(interp.channels, { user: request });
 		for (const approver of host.approvers)
@@ -328,6 +397,15 @@ export function permissionsExtension(
 	return Object.assign(
 		(interp: Interp): void => {
 			registerPermissions(interp, rules, (form) => apply(interp, form));
+			pendingOf.set(
+				interp,
+				interp.state(
+					"permission/pending",
+					pendingCodec,
+					[],
+					"The approval requests still waiting on the user, kept so a restored session can still answer them.",
+				),
+			);
 			interp.hooks.call.use((i, name, args, next) => {
 				const waiting = guard(i, name, args);
 				return waiting === undefined
@@ -344,8 +422,10 @@ export function permissionsExtension(
 			rules,
 			prompt: host.prompt(),
 			session(hooks: SessionHooks): void {
-				hooks.evalStep.use((ctx, next) => armedWhile(() => next(ctx)));
-				hooks.invoke.use((ctx, next) => armedWhile(() => next(ctx)));
+				hooks.evalStep.use((ctx, next) =>
+					adopting(ctx.interp, () => next(ctx)),
+				);
+				hooks.invoke.use((ctx, next) => adopting(ctx.interp, () => next(ctx)));
 				for (const approver of host.approvers)
 					approver.session?.(hooks, host.approvals);
 			},

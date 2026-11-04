@@ -38,6 +38,7 @@ export interface ApprovalRequest {
 	readonly reason?: string;
 	readonly at: number;
 	readonly change?: true;
+	readonly restored?: true;
 }
 
 export type Scope = "once" | "session" | "always";
