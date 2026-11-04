@@ -11,7 +11,6 @@
     ".specify/scripts/bash/setup-plan.sh": "d0bd298c026446f3c63167130d65e49e4aa4485de6bef18bcdfd57b19aa0de96",
     ".specify/templates/constitution-template.md": "ce7549540fa45543cca797a150201d868e64495fdff39dc38246fb17bd4024b3",
     ".specify/templates/spec-template.md": "3945437fc35cd30a5b2bf7beea680337c3516826d3efa5a6b92c4a7eca1ba28e",
-    ".specify/templates/checklist-template.md": "856532b3cb66171c662cc16f16b31a5856e4655a8666aad1e545bbfc7f603ca1",
     ".specify/templates/tasks-template.md": "fc29a233f6f5a27ca31f1aa46b596af6500c627441c6e62b2bc4a1d721525842",
     ".specify/templates/plan-template.md": "7e637502d41eccf0ca672496636365691fdca62ef37b27ec07fcb412dbfa90d4",
     ".specify/.gitignore": "8c908410d177a1ef3d0dee16d7ad55f2ac3333df3104c4d4adee1c9b82f1dbc1"

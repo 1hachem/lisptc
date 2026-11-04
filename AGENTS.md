@@ -25,8 +25,9 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, and what an
-agent runner itself reads under `.agents/` and `.github/`.
+code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, the
+feature specs under `specs/` with the Spec Kit files under `.specify/`, and what
+an agent runner itself reads under `.agents/` and `.github/`.
 
 ## The IO goes out to an agent
 
@@ -488,6 +489,15 @@ An issue states:
 Leave priority, assignee and cycle to the user unless they named them. Search
 for an open issue covering the same thing first, and comment on it instead of
 opening a duplicate.
+
+## Specs
+
+A spec under `specs/` is written in concise language, for whoever plans and
+tests the feature. Each decision is stated once, in the fewest words that keep
+it testable. A user story does not restate a requirement, an edge case does not
+restate either, and the clarifications log keeps the answer, not the
+discussion. No fluff, no background the code already gives, and no section kept
+for its heading: a template section that does not apply is removed.
 
 ## Writing Style
 
