@@ -162,7 +162,7 @@ const DRAGGING_CLASS: Record<MotionId, string> = {
 	none: "relative z-10 bg-bg2",
 };
 
-function SortableEntry({
+export function SortableEntry({
 	id,
 	motion,
 	className = "",
