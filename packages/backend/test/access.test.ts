@@ -1562,6 +1562,22 @@ describe("chat listing", () => {
 			expect(await status()).toBeUndefined();
 		});
 
+		it("still waits on an ask buried under a long run of later entries", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			const activity = Array.from({ length: 80 }, (_, i) => ({
+				type: "entry" as const,
+				content: "",
+				id: `act${i}`,
+				kwargs: { kind: "activity", value: { id: `x${i}` } },
+			}));
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [asking, ...activity],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
+		});
+
 		it("waits on an open question until the user answers it", async () => {
 			const { alice, chatId, status } = await opened(harness());
 			const question = {
