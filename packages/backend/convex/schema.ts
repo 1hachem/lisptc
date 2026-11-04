@@ -154,6 +154,7 @@ export default defineSchema({
 		metadata: v.optional(v.record(v.string(), v.boolean())),
 		input: v.optional(v.record(v.string(), v.boolean())),
 		sidebar: v.optional(v.array(v.string())),
+		sidebarRight: v.optional(v.array(v.string())),
 		hidden: v.optional(v.array(v.string())),
 		statusBar: v.optional(v.array(v.string())),
 		statusBarHidden: v.optional(v.array(v.string())),
