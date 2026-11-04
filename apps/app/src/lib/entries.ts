@@ -57,13 +57,13 @@ class Folding {
 		for (const { row, entry } of run) {
 			const placement = this.place(entry);
 			if (placement === "dropped") continue;
+			if (placement === "standing") {
+				this.out.push(row);
+				continue;
+			}
 			const claimed = this.claimed(row, entry);
 			if (claimed !== undefined) {
 				this.carry(claimed, entry);
-				continue;
-			}
-			if (placement === "standing") {
-				this.out.push(row);
 				continue;
 			}
 			if (next?.type === "tool") this.carry(next, entry);
@@ -103,10 +103,8 @@ function targetsById(
 	shown.forEach((message, at) => {
 		if (message.id === undefined) return;
 		const result = shown[at + 1];
-		targets.set(
-			message.id,
-			message.type === "ai" && result?.type === "tool" ? result : message,
-		);
+		if (message.type !== "ai") targets.set(message.id, message);
+		else if (result?.type === "tool") targets.set(message.id, result);
 	});
 	return targets;
 }

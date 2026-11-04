@@ -82,18 +82,38 @@ describe("folding the journal into a chat", () => {
 		]);
 	});
 
-	test("keeps what a step recorded on its own message when it ran into no result", () => {
+	test("gives a step that has no result yet a quiet carrier, so what it records shows while it runs", () => {
 		expect(
 			shape(
 				foldEntries([
-					{ id: "s1", type: "ai", content: "done" },
+					{ id: "h", type: "human", content: "go" },
+					{ id: "s1", type: "ai", content: "(work)" },
 					row("e1", "intent", {}, { about: "s1" }),
-					{ id: "h", type: "human", content: "next" },
 				]),
 			),
 		).toEqual([
-			["s1", "ai", ["intent"]],
 			["h", "human", []],
+			["s1", "ai", []],
+			["e1:entries", "tool", ["intent"]],
+		]);
+	});
+
+	test("keeps a standing entry on a line of its own even when it names its step", () => {
+		expect(
+			shape(
+				foldEntries(
+					[
+						{ id: "s1", type: "ai", content: "(x)" },
+						row("e1", "memory", {}, { about: "s1" }),
+						{ id: "t1", type: "tool", content: "" },
+					],
+					(entry) => (entry.kind === "memory" ? "standing" : "carried"),
+				),
+			),
+		).toEqual([
+			["s1", "ai", []],
+			["e1", "entry", []],
+			["t1", "tool", []],
 		]);
 	});
 
