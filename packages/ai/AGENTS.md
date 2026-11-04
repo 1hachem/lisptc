@@ -56,12 +56,10 @@ takes one, or the store and the thread to draw one from. The extensions in it,
 and the hosts under them, are assembled in `@repo/backend` and injected by the
 product app.
 
-The loop interprets no journal entry, coming or going. It forwards each one in
-the order it was recorded, and each lands as its own row. A view filters them by
-kind: the chat shows messages, intent, tool calls and questions, and the trace
-viewer shows everything. What the model reads is what an extension emits, the same
-live and after a reload. A payload that would need interpreting belongs below
-the seam.
+The loop interprets no journal entry, coming or going. Which entries a view
+shows is that view's choice, never the loop's. What the model reads is what an
+extension emits, the same live and after a reload. A payload that would need
+interpreting belongs below the seam.
 
 A new kind of thing a turn can report is a new variant of the turn event union,
 not a side channel.
