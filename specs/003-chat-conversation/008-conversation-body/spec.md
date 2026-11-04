@@ -1,9 +1,5 @@
 # Feature Specification: Conversation Body
 
-**Created**: 2026-11-01
-
-**Status**: Draft
-
 **Input**: User description: "it should show no technical jargon about the internal workings, memories, lisp, ui forms, recovery, in the ui we should eliminate any form of repetition for example currently 2 things show the same "calling x tool" twice on top of each other one for the form and another for the tool calling state, any information should be non redundant deduped, non fatal errors should be hidden and retried, new extension will be added to create a way to test forms and to recover error instantly, add a spec for recovery extension keep it empty for now, recovery communication should be in natural language (tried to call x tool and it failed let me try a different way) for example"
 
 ## Requirements

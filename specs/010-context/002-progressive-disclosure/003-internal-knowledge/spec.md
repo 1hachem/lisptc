@@ -1,9 +1,5 @@
 # Feature Specification: Internal Memories
 
-**Created**: 2026-11-01
-
-**Status**: Draft
-
 **Input**: User description: "progressive disclousure for extensions internal working, each extension ships alot of text in its system prompt, and this is all used in the overall system prompt, in the future new extensions will be added that are not necessarly used by all agents, or users, also system prompt at the beginning is not always a good context for immediate actions since llms are influnced more with new tokens, so having the skill prompt loaded just in the right time the agent needs it is better". Follow-up: "the idea is to use the memory system in order to hook prompt about how to use the memories, so each memory comes with a set of memories that are written in lisp (use a .ptc file to write these memories next to the extension)"
 
 ## Context

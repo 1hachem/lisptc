@@ -1,9 +1,5 @@
 # Feature Specification: Memories in the Trace Viewer
 
-**Created**: 2026-11-01
-
-**Status**: Draft
-
 **Input**: Moved from `specs/010-context/002-progressive-disclosure/003-internal-knowledge`: "the trace viewer should show the output and input of the judge model, the probabilities, the state that was passed to the judge, the memory choices", and "internal memories should have a gold color in the trace viewer, special kind of memory".
 
 ## Context

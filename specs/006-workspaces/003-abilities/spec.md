@@ -1,9 +1,5 @@
 # Feature Specification: Workspace Abilities
 
-**Created**: 2026-11-01
-
-**Status**: Draft
-
 **Input**: Split from `specs/010-context/003-sub-agents`: "the main chat will have optional abilities that can turn on and off, per workspace, currently all extensions are on by default but later on new extensions will be added on specific usecase only"
 
 ## Context

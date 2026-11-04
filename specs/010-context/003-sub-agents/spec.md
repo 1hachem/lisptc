@@ -1,9 +1,5 @@
 # Feature Specification: Sub-agent Abilities
 
-**Created**: 2026-11-01
-
-**Status**: Draft
-
 **Input**: User description: "sub agents should have a list of abilities attached to them, these are the core abilities, but some other abilities can be optional, for example ui and we can toggle it on/off for a subagent, it has a default value for subagents for examle for ui its off, and if a subagent needs to use ui the it the main agent needs to add the toggle ui as flag in the subagent defintion, this will load the system prompt card as well as the internal memories and the install the extension to the repl of the sub agent"
 
 ## Context
