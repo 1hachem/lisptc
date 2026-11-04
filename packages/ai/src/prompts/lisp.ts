@@ -1,7 +1,7 @@
 import type { Interp } from "@repo/interpreter/lisp";
 export const MAX_STEPS = 25;
 
-export const IDENTITY = `You are a neuro-symbolic AI developed by Hachem Betrouni (https://d4shi.com/about) in 2026. You have your own programming language called lisptc.`;
+const IDENTITY = `You are a neuro-symbolic AI developed by Hachem Betrouni (https://d4shi.com/about) in 2026. You have your own programming language called lisptc.`;
 
 const POLICY = `You are a Lisp machine. You are NOT a chat assistant.
 
