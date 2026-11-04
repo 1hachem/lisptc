@@ -5,6 +5,7 @@ import {
 	LayoutTwoColumnIcon,
 	Move01Icon,
 	PaintBoardIcon,
+	SidebarLeftIcon,
 	Tag01Icon,
 	TextFontIcon,
 } from "@hugeicons/core-free-icons";
@@ -32,10 +33,11 @@ import {
 	useTraceBesideChat,
 	useTraceLink,
 } from "../lib/preferences.ts";
-import { useSidebarMotion } from "../lib/sidebar.ts";
+import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
 import { isGap } from "../lib/status-bar-order.ts";
 import { useUI } from "../lib/ui.tsx";
+import { ENTRY_ICONS } from "./workspace-tree.tsx";
 
 function MetaToggle({ field }: { field: { id: MetaField; label: string } }) {
 	const { metaShown, toggleMeta } = useUI();
@@ -117,6 +119,41 @@ function StatusBarList() {
 						</div>
 					)
 				}
+			</SortableTree>
+		</div>
+	);
+}
+
+function SidebarList() {
+	const { order, shown, reorder, toggle } = useSidebarOrder();
+	const { motion } = useSidebarMotion();
+	return (
+		<div className="px-4 text-[11.5px]">
+			<SortableTree order={order} onReorder={reorder} motion={motion}>
+				{(entry) => {
+					const on = shown.includes(entry);
+					return (
+						<div className="py-0.5">
+							<button
+								type="button"
+								aria-pressed={on}
+								onClick={() => toggle(entry)}
+								className="flex w-full cursor-pointer items-center gap-2 text-left"
+							>
+								<HugeiconsIcon
+									icon={ENTRY_ICONS[entry]}
+									className={`size-icon flex-none ${on ? "text-fg" : "text-dim"}`}
+								/>
+								<span
+									className={`min-w-0 flex-1 truncate ${on ? "text-fg" : "text-dim line-through"}`}
+								>
+									{entry}
+								</span>
+								<span className="flex-none text-dim">{on ? "on" : "off"}</span>
+							</button>
+						</div>
+					);
+				}}
 			</SortableTree>
 		</div>
 	);
@@ -300,6 +337,7 @@ function MotionList() {
 const SECTIONS: { name: string; icon: IconSvgElement }[] = [
 	{ name: "metadata", icon: Tag01Icon },
 	{ name: "input", icon: KeyboardIcon },
+	{ name: "sidebar", icon: SidebarLeftIcon },
 	{ name: "recent themes", icon: PaintBoardIcon },
 	{ name: "font", icon: TextFontIcon },
 	{ name: "drag motion", icon: Move01Icon },
@@ -362,6 +400,10 @@ function Preferences() {
 					<InputToggle key={helper.id} helper={helper} />
 				))}
 			</div>
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				sidebar
+			</div>
+			<SidebarList />
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 				bottom bar
 			</div>

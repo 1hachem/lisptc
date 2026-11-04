@@ -6,6 +6,7 @@ import {
 	type SidebarEntry,
 	shownEntries,
 	sidebarOrder,
+	toggledEntry,
 	withHidden,
 } from "./sidebar-order.ts";
 
@@ -28,7 +29,13 @@ export function useSidebarOrder() {
 		[put, order],
 	);
 
-	return { order, shown, hidden: stored?.hidden ?? [], reorder };
+	const toggle = useCallback(
+		(entry: SidebarEntry) =>
+			put({ hidden: toggledEntry(stored?.hidden, entry) }),
+		[put, stored?.hidden],
+	);
+
+	return { order, shown, hidden: stored?.hidden ?? [], reorder, toggle };
 }
 
 export function useSidebarMotion() {

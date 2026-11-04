@@ -50,3 +50,13 @@ export function withHidden(
 ): SidebarEntry[] {
 	return [...shown, ...order.filter((name) => !shown.includes(name))];
 }
+
+export function toggledEntry(
+	hidden: readonly string[] | undefined,
+	entry: SidebarEntry,
+): SidebarEntry[] {
+	const kept = [...new Set(hidden ?? [])].filter(isEntry);
+	return kept.includes(entry)
+		? kept.filter((held) => held !== entry)
+		: [...kept, entry];
+}
