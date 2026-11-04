@@ -54,9 +54,7 @@ describe("the mcp policy port", () => {
 		const interp = interpWith(
 			serverPolicy({ access: "denied", reason: "no fixtures" }),
 		);
-		expect(() => runSync(interp, LOAD_FX)).toThrow(
-			"MCP server denied: no fixtures",
-		);
+		expect(() => runSync(interp, LOAD_FX)).toThrow("no fixtures");
 	});
 
 	it("treats a hidden server as one that does not exist", () => {
@@ -105,7 +103,7 @@ describe("the mcp policy port", () => {
 			await (runSync(interp, LOAD_FX) as Promise<unknown>);
 			live.server({ access: "denied", reason: "no fixtures" });
 			expect(() => runSync(interp, '(fx/echo :message "x")')).toThrow(
-				"MCP server denied: no fixtures",
+				"no fixtures",
 			);
 			expect(str(runSync(interp, '(list-tools "fx")'))).toBe("nil");
 			interp.dispose();

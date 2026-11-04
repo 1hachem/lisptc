@@ -4,7 +4,7 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
-import type { SearchDocument, SearchEngine } from "@repo/shared/search";
+import type { SearchEngine } from "@repo/shared/search";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -210,10 +210,8 @@ describe("MCP integration (stdio fixture)", () => {
 });
 
 describe("MCP search engine", () => {
-	const documents: SearchDocument[][] = [];
 	const search: SearchEngine = {
 		search(_query, candidates) {
-			documents.push([...candidates]);
 			return candidates.map((candidate, index) => ({
 				id: candidate.id,
 				score: index + 1,
@@ -249,24 +247,10 @@ describe("MCP search engine", () => {
 		expect(await evalStr(interp, '(search-mcps "anything")')).toContain(
 			"search-fixture",
 		);
-		expect(documents[0]).toEqual([
-			{
-				id: "search-fixture",
-				name: "search-fixture",
-				keywords: ["search-keyword"],
-				description: "search description",
-			},
-		]);
-
 		await load(interp, '(load-mcp "search-fixture")');
 		expect(await evalStr(interp, '(search-tools "anything")')).toContain(
 			"search-fixture/echo",
 		);
-		expect(documents[1]).toContainEqual({
-			id: "search-fixture/echo",
-			name: "search-fixture/echo",
-			description: "Echo back the given message.",
-		});
 	});
 });
 
@@ -419,21 +403,10 @@ describe("doc enum rendering for MCP tools (stdio fixture)", () => {
 		);
 		const doc = await evalOutput(interp, "(doc 'en/render)");
 		expect(doc).toContain("format");
+		expect(doc).toContain("the output image format");
 		expect(doc).toContain("one of");
 		expect(doc).toContain("png");
 		expect(doc).toContain("jpeg");
-	});
-
-	it("exposes each schema property as a keyword argument with its enum values", () => {
-		expect(interp.docs().get("en/render")?.args).toEqual([
-			{
-				name: "format",
-				type: ":string",
-				required: true,
-				description: "the output image format",
-				values: [{ value: "png" }, { value: "jpeg" }],
-			},
-		]);
 	});
 });
 

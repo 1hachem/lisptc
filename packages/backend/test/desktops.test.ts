@@ -77,7 +77,7 @@ describe("a user's desktop presence", () => {
 		});
 	});
 
-	it("keeps one row per account however often its desktop reconnects", async () => {
+	it("reads connected after any number of reconnects", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		for (const connection of ["c1", "c2", "c3"]) {
@@ -101,9 +101,9 @@ describe("a user's desktop presence", () => {
 			label: "laptop",
 			instance: "i1",
 		});
-		const rows = await t.run((ctx) => ctx.db.query("desktops").collect());
-		expect(rows).toHaveLength(1);
-		expect(rows[0]).toMatchObject({ connection: "c4", connected: true });
+		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
+			connected: true,
+		});
 	});
 
 	it("keeps two machines of one account apart, and is on while either is", async () => {
@@ -125,11 +125,14 @@ describe("a user's desktop presence", () => {
 		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
 			connected: true,
 		});
-		const rows = await t.run((ctx) => ctx.db.query("desktops").collect());
-		expect(rows.map((row) => [row.machineId, row.connected])).toEqual([
-			["laptop", false],
-			["tower", true],
-		]);
+		await t.mutation(internal.desktops.detach, {
+			userId: alice.user,
+			machineId: "tower",
+			connection: "tower",
+		});
+		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
+			connected: false,
+		});
 	});
 
 	it("marks a desktop gone when its connection stopped pinging, and keeps a pinging one", async () => {

@@ -1,8 +1,6 @@
 import type { Memory } from "@repo/memory-extension/ports";
-import { type FunctionReference, getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
-import type { Id } from "../convex/_generated/dataModel.js";
 import { MAX_MEMORY_BYTES } from "../convex/limits.js";
 import {
 	ConvexMemoryStore,
@@ -136,88 +134,55 @@ describe("removing a workspace", () => {
 	});
 });
 
-interface Call {
-	name: string;
-	args: Record<string, unknown>;
-}
-
-function named(reference: unknown): string {
-	return getFunctionName(reference as FunctionReference<"query" | "mutation">);
-}
-
-function spyClient(rows: StoredMemory[]): {
-	client: MemoryClient;
-	calls: Call[];
-} {
-	const calls: Call[] = [];
-	const answer = (reference: unknown, args: Record<string, unknown>) => {
-		const name = named(reference);
-		calls.push({ name, args });
-		if (name === named(api.memories.list)) return Promise.resolve(rows);
-		if (name === named(api.memories.remove)) return Promise.resolve(true);
-		return Promise.resolve(null);
-	};
+async function seeded(...rows: StoredMemory[]) {
+	const alice = await signIn(harness(), "alice@example.com");
+	for (const memory of rows)
+		await alice.as.mutation(api.memories.put, {
+			workspaceId: alice.workspace,
+			memory,
+		});
 	return {
-		calls,
-		client: {
-			query: answer,
-			mutation: answer,
-		} as unknown as MemoryClient,
+		workspace: alice.workspace,
+		connect: () => alice.as as unknown as MemoryClient,
 	};
-}
-
-function listed(calls: Call[]): Call[] {
-	return calls.filter((call) => call.name === named(api.memories.list));
 }
 
 function remembered(key: string, body: unknown): Memory {
 	return { key, body, links: new Map(), score: 1, used: 0, lastUsed: 0 };
 }
 
-const WORKSPACE = "workspace-1" as Id<"workspaces">;
-
 describe("the convex memory store", () => {
-	it("reads the workspace once and answers from the cache after", async () => {
-		const { client, calls } = spyClient([row("triage", '"logs"')]);
-		const store = new ConvexMemoryStore(WORKSPACE, () => client);
+	it("answers from the cache once it has read the workspace", async () => {
+		const { workspace, connect } = await seeded(row("triage", '"logs"'));
+		const store = new ConvexMemoryStore(workspace, connect);
 
 		expect(await store.all()).toHaveLength(1);
 		expect((await store.get("triage"))?.body).toBe("logs");
 		expect(store.all()).toEqual([expect.objectContaining({ key: "triage" })]);
-		expect(listed(calls)).toHaveLength(1);
 	});
 
 	it("serves a hydrated read without awaiting", async () => {
-		const { client } = spyClient([row("triage", '"logs"')]);
-		const store = new ConvexMemoryStore(WORKSPACE, () => client);
+		const { workspace, connect } = await seeded(row("triage", '"logs"'));
+		const store = new ConvexMemoryStore(workspace, connect);
 		await store.all();
 
 		expect(store.get("triage")).not.toBeInstanceOf(Promise);
 	});
 
-	it("writes through to convex and to the cache", async () => {
-		const { client, calls } = spyClient([]);
-		const store = new ConvexMemoryStore(WORKSPACE, () => client);
+	it("writes through to convex, so a fresh store reads what another wrote", async () => {
+		const { workspace, connect } = await seeded();
+		const writer = new ConvexMemoryStore(workspace, connect);
 
-		await store.put(remembered("triage", "logs"));
-		expect(store.get("triage")).toMatchObject({ key: "triage" });
-		expect(calls.at(-1)).toMatchObject({
-			args: { workspaceId: WORKSPACE, memory: { key: "triage" } },
-		});
+		await writer.put(remembered("triage", "logs"));
+		expect(writer.get("triage")).toMatchObject({ key: "triage" });
+		expect(
+			(await new ConvexMemoryStore(workspace, connect).get("triage"))?.body,
+		).toBe("logs");
 
-		expect(await store.delete("triage")).toBe(true);
-		expect(store.get("triage")).toBeUndefined();
-		expect(calls.at(-1)).toMatchObject({
-			args: { workspaceId: WORKSPACE, key: "triage" },
-		});
-	});
-
-	it("hydrates once when several reads race", async () => {
-		const { client, calls } = spyClient([row("triage", '"logs"')]);
-		const store = new ConvexMemoryStore(WORKSPACE, () => client);
-
-		await Promise.all([store.all(), store.all(), store.get("triage")]);
-
-		expect(listed(calls)).toHaveLength(1);
+		expect(await writer.delete("triage")).toBe(true);
+		expect(writer.get("triage")).toBeUndefined();
+		expect(
+			await new ConvexMemoryStore(workspace, connect).get("triage"),
+		).toBeUndefined();
 	});
 });

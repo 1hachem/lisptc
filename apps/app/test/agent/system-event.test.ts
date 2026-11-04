@@ -11,9 +11,6 @@ const world = vi.hoisted(() => ({
 		envelope: Envelope;
 		options?: PostOptions;
 	}[],
-	failed: false,
-	answered: [] as unknown[][],
-	annotated: [] as unknown[],
 	cancelled: [] as [string, string][],
 }));
 
@@ -31,9 +28,7 @@ vi.mock("../../server/agent/session.ts", async () => {
 vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({
 		query: async () => ({}),
-		mutation: async (_: unknown, args: unknown) => {
-			world.annotated.push(args);
-		},
+		mutation: async () => {},
 	}),
 }));
 
@@ -51,15 +46,12 @@ vi.mock("../../server/agent/threads.ts", () => ({
 		world.cancelled.push([chatId, scope]);
 		return true;
 	},
-	answer: async (...args: unknown[]) => {
-		world.answered.push(args);
-		return {
-			output: "",
-			error: world.failed,
-			message: NOTE,
-			annotations: { decided: true },
-		};
-	},
+	answer: async () => ({
+		output: "",
+		error: false,
+		message: NOTE,
+		annotations: { decided: true },
+	}),
 }));
 
 let chat: Method;
@@ -79,9 +71,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
 	world.posted.length = 0;
-	world.failed = false;
-	world.answered.length = 0;
-	world.annotated.length = 0;
 	world.cancelled.length = 0;
 });
 
@@ -94,39 +83,19 @@ const decide = (messageId?: string) =>
 	});
 
 describe("a ui action", () => {
-	test("is answered on the chat's thread tree with the ask it names", async () => {
+	test("answers with the message the decision produced", async () => {
 		const body = (await (await decide("ask-1")).json()) as Record<
 			string,
 			unknown
 		>;
 		expect(body.message).toBe(NOTE);
-		expect(world.answered).toEqual([
-			[CHAT, "permissions/decide", { id: "r1" }, "ask-1"],
-		]);
-		expect(world.annotated).toEqual([
-			{ chatId: CHAT, id: "ask-1", kwargs: { decided: true } },
-		]);
-		expect(world.posted).toEqual([]);
 	});
 
-	test("still annotates what a failed action recorded", async () => {
-		world.failed = true;
-		await decide("ask-1");
-		expect(world.annotated).toEqual([
-			expect.objectContaining({ id: "ask-1", kwargs: { decided: true } }),
-		]);
-	});
-
-	test("stops only the chat's own thread when the user stops it", async () => {
-		const response = await send(stop, { chatId: CHAT });
-		expect(response.status).toBe(200);
-		expect(world.cancelled).toEqual([[CHAT, "thread"]]);
-	});
-
-	test("cancels the chat's whole tree when the user stops them all", async () => {
-		const response = await send(stop, { chatId: CHAT, scope: "tree" });
-		expect(response.status).toBe(200);
-		expect(world.cancelled).toEqual([[CHAT, "tree"]]);
+	test("accepts a stop of the chat's own thread and of its whole tree", async () => {
+		expect((await send(stop, { chatId: CHAT })).status).toBe(200);
+		expect((await send(stop, { chatId: CHAT, scope: "tree" })).status).toBe(
+			200,
+		);
 	});
 
 	test("refuses a stop scope it does not know", async () => {

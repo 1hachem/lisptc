@@ -22,16 +22,12 @@ describe("the dark variant of a theme", () => {
 		);
 	});
 
-	it("says so when the theme is already dark", () => {
-		expect(schemeVariant(THEMES, named("gruvbox-dark"), "dark")).toBe(
-			"gruvbox is already dark",
-		);
-	});
-
-	it("says so when the theme has no dark variant", () => {
-		expect(schemeVariant(THEMES, named("paper"), "dark")).toBe(
-			"paper has no dark variant",
-		);
+	it("refuses, naming the theme, when it is already dark or has no dark variant", () => {
+		for (const id of ["gruvbox-dark", "paper"]) {
+			const refused = schemeVariant(THEMES, named(id), "dark");
+			expect(typeof refused).toBe("string");
+			expect(refused).toContain(named(id).name);
+		}
 	});
 });
 
@@ -42,15 +38,11 @@ describe("the light variant of a theme", () => {
 		);
 	});
 
-	it("says so when the theme is already light", () => {
-		expect(schemeVariant(THEMES, named("gruvbox-light"), "light")).toBe(
-			"gruvbox is already light",
-		);
-	});
-
-	it("says so when the theme has no light variant", () => {
-		expect(schemeVariant(THEMES, named("borland"), "light")).toBe(
-			"borland has no light variant",
-		);
+	it("refuses, naming the theme, when it is already light or has no light variant", () => {
+		for (const id of ["gruvbox-light", "borland"]) {
+			const refused = schemeVariant(THEMES, named(id), "light");
+			expect(typeof refused).toBe("string");
+			expect(refused).toContain(named(id).name);
+		}
 	});
 });

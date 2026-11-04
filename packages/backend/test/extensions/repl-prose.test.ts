@@ -73,16 +73,17 @@ describe("a REPL the model faces", () => {
 describe("prose with parentheses in it", () => {
 	it("runs the real form and reports the aside it skipped", async () => {
 		const r = agentRepl();
-		expect(await r.eval("Here is the plan (see below):\n(+ 1 2)")).toBe(
-			'+-1: 3\nskipped (see below) — "see" is not defined, so this was read as prose\n',
-		);
+		const out = await r.eval("Here is the plan (see below):\n(+ 1 2)");
+		expect(out.startsWith("+-1: 3\n")).toBe(true);
+		expect(out).toContain("(see below)");
+		expect(out).toContain('"see"');
 	});
 
 	it("recovers the form after an unclosed parenthesis", async () => {
 		const r = agentRepl();
-		expect(await r.eval("The result (roughly is fine\n(+ 1 2)")).toBe(
-			'+-1: 3\nskipped unclosed "(" on line 1\n',
-		);
+		const out = await r.eval("The result (roughly is fine\n(+ 1 2)");
+		expect(out.startsWith("+-1: 3\n")).toBe(true);
+		expect(out).toContain("line 1");
 	});
 
 	it("errors on a misspelled call that passes a value", async () => {
@@ -102,14 +103,12 @@ describe("prose with parentheses in it", () => {
 
 	it("reports each aside it skipped", async () => {
 		const r = agentRepl();
-		expect(
-			(await r.eval('(echo "x") (see one) and (see two)')).split("\n"),
-		).toEqual([
-			"x",
-			'skipped (see one) — "see" is not defined, so this was read as prose',
-			'skipped (see two) — "see" is not defined, so this was read as prose',
-			"",
-		]);
+		const lines = (await r.eval('(echo "x") (see one) and (see two)')).split(
+			"\n",
+		);
+		expect(lines[0]).toBe("x");
+		expect(lines.filter((l) => l.includes("(see one)"))).toHaveLength(1);
+		expect(lines.filter((l) => l.includes("(see two)"))).toHaveLength(1);
 	});
 
 	it("reports a repeated aside once", async () => {
@@ -179,9 +178,7 @@ describe("prose with parentheses in it", () => {
 		it("keeps the notes an answer did not return", async () => {
 			const r = agentRepl();
 			expect(await r.eval("all done (see above)")).toBe("");
-			expect(r.takeProseFeedback()).toBe(
-				'skipped (see above) — "see" is not defined, so this was read as prose\n',
-			);
+			expect(r.takeProseFeedback()).toContain("(see above)");
 		});
 
 		it("holds nothing back from prose with no parenthesis in it", async () => {

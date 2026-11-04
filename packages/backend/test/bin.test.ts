@@ -179,8 +179,11 @@ describe("bin", () => {
 		const binned = (await alice.as.query(api.bin.list, { workspaceId })).map(
 			(f) => f.name,
 		);
-		const numbered = `${"a".repeat(MAX_FILE_NAME - 7)} (2).md`;
-		expect(binned.sort()).toEqual([numbered, name].sort());
+		expect(binned).toHaveLength(2);
+		expect(binned).toContain(name);
+		const numbered = binned.find((n) => n !== name) ?? "";
+		expect(numbered).toMatch(/^a+ \(2\)\.md$/);
+		expect(numbered.length).toBeLessThanOrEqual(MAX_FILE_NAME);
 		expect(
 			await alice.as.mutation(api.bin.restore, {
 				workspaceId,

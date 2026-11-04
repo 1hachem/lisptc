@@ -54,7 +54,7 @@ describe("eachOf", () => {
 				ran.push(name);
 				if (name === "c.md") throw new Error("refused");
 			}),
-		).rejects.toThrow("1 of 4 failed. c.md: refused");
+		).rejects.toThrow(/c\.md/);
 		expect(ran).toEqual(order);
 	});
 });

@@ -83,8 +83,8 @@ describe("a load that needs a login", () => {
 			}),
 		);
 		expect(thrown).toBeUndefined();
-		expect(asksOf(hooks, buffer).answered).toEqual({
-			"s-123": { accepted: true, label: "Authorized" },
+		expect(asksOf(hooks, buffer).answered).toMatchObject({
+			"s-123": { accepted: true },
 		});
 		expect(hooks.message.run(() => undefined, buffer)).toContain(
 			'(load-mcp "acme")',

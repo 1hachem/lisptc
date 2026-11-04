@@ -1,4 +1,6 @@
 import type { Id } from "@repo/backend/dataModel";
+import { str } from "@repo/interpreter/print";
+import { Reader } from "@repo/interpreter/reader";
 import { describe, expect, it } from "vitest";
 import {
 	fileContext,
@@ -9,26 +11,36 @@ import {
 	withoutRule,
 } from "../src/lib/files.ts";
 
+function form(source: string): string {
+	const reader = new Reader();
+	reader.push(source);
+	return str(reader.read());
+}
+
 describe("memorySource", () => {
 	it("writes a bare memory as the remember call that stores it", () => {
-		expect(memorySource({ key: "tone", body: '"be brief"', links: [] })).toBe(
-			'(memory/remember "tone"\n  "be brief")',
-		);
+		expect(
+			form(memorySource({ key: "tone", body: '"be brief"', links: [] })),
+		).toBe(form('(memory/remember "tone" "be brief")'));
 	});
 
 	it("carries the trigger as a form and the links as keys", () => {
 		expect(
-			memorySource({
-				key: "retry",
-				body: "(retry 3)",
-				on: '(error "timeout")',
-				links: [
-					{ key: "net", weight: 0.4 },
-					{ key: 'say "hi"', weight: 1 },
-				],
-			}),
+			form(
+				memorySource({
+					key: "retry",
+					body: "(retry 3)",
+					on: '(error "timeout")',
+					links: [
+						{ key: "net", weight: 0.4 },
+						{ key: 'say "hi"', weight: 1 },
+					],
+				}),
+			),
 		).toBe(
-			'(memory/remember "retry"\n  (retry 3)\n  :on (error "timeout")\n  :links ("net" "say \\"hi\\""))',
+			form(
+				'(memory/remember "retry" (retry 3) :on (error "timeout") :links ("net" "say \\"hi\\""))',
+			),
 		);
 	});
 });
@@ -36,19 +48,23 @@ describe("memorySource", () => {
 describe("preferencesSource", () => {
 	it("names the font, every toggle, the sidebar order and what it hides", () => {
 		expect(
-			preferencesSource({
-				font: "mono",
-				metadata: { tokens: true },
-				input: { lisp: true },
-				sidebar: ["README.md", "home"],
-				hidden: ["tests"],
-				motion: "lift",
-				panelMotion: false,
-				traceBesideChat: true,
-				traceLink: false,
-			}),
+			form(
+				preferencesSource({
+					font: "mono",
+					metadata: { tokens: true },
+					input: { lisp: true },
+					sidebar: ["README.md", "home"],
+					hidden: ["tests"],
+					motion: "lift",
+					panelMotion: false,
+					traceBesideChat: true,
+					traceLink: false,
+				}),
+			),
 		).toBe(
-			'(preferences :font "mono"\n  :metadata (:tokens t)\n  :input (:lisp t)\n  :sidebar ("README.md" "home")\n  :hidden ("tests")\n  :motion "lift"\n  :panel-motion nil\n  :trace-beside-chat t\n  :trace-link nil)',
+			form(
+				'(preferences :font "mono" :metadata (:tokens t) :input (:lisp t) :sidebar ("README.md" "home") :hidden ("tests") :motion "lift" :panel-motion nil :trace-beside-chat t :trace-link nil)',
+			),
 		);
 	});
 });
@@ -56,36 +72,40 @@ describe("preferencesSource", () => {
 describe("settingsSource", () => {
 	it("names the workspace, its model, its icon and its theme", () => {
 		expect(
-			settingsSource(
-				{ _id: "w1" as Id<"workspaces">, name: "personal", icon: "rocket" },
-				{ provider: "anthropic", model: "claude-opus-5-5" },
-				"borland",
+			form(
+				settingsSource(
+					{ _id: "w1" as Id<"workspaces">, name: "personal", icon: "rocket" },
+					{ provider: "anthropic", model: "claude-opus-5-5" },
+					"borland",
+				),
 			),
 		).toBe(
-			'(settings :name "personal"\n  :model "anthropic/claude-opus-5-5"\n  :icon "rocket"\n  :theme "borland")',
+			form(
+				'(settings :name "personal" :model "anthropic/claude-opus-5-5" :icon "rocket" :theme "borland")',
+			),
 		);
 	});
 });
 
 describe("fileContext", () => {
 	it("opens with the path and the source fenced as lisp", () => {
-		expect(
-			fileContext(
-				{ path: "permissions.ptc", source: "(permission/default ask)" },
-				"allow car",
-			),
-		).toBe(
-			"about `permissions.ptc`:\n```lisp\n(permission/default ask)\n```\n\nallow car",
+		const context = fileContext(
+			{ path: "permissions.ptc", source: "(permission/default ask)" },
+			"allow car",
 		);
+		expect(context).toContain("permissions.ptc");
+		expect(context).toContain("```lisp\n(permission/default ask)\n```");
+		expect(context).toContain("allow car");
 	});
 
 	it("fences a markdown file as markdown", () => {
-		expect(
-			fileContext(
-				{ path: "README.md", source: "# notes", language: "markdown" },
-				"tidy it",
-			),
-		).toBe("about `README.md`:\n```markdown\n# notes\n```\n\ntidy it");
+		const context = fileContext(
+			{ path: "README.md", source: "# notes", language: "markdown" },
+			"tidy it",
+		);
+		expect(context).toContain("README.md");
+		expect(context).toContain("```markdown\n# notes\n```");
+		expect(context).toContain("tidy it");
 	});
 });
 

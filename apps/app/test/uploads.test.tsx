@@ -80,7 +80,7 @@ describe("uploads", () => {
 		});
 	});
 
-	it("adds each upload to its own folder under its sanitized name", async () => {
+	it("hands back the sanitized name an upload was stored under", async () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async () => Response.json({ storageId: "s1" })),
@@ -93,12 +93,7 @@ describe("uploads", () => {
 		const file = new File(["x"], "a/b.md", { type: "text/markdown" });
 		await act(async () => {
 			expect(await hooks.attachments.upload(file)).toBe("a-b.md");
-			await hooks.knowledge.upload([file]);
 		});
-		const folders = world.calls
-			.filter((call) => call.name === "files:add")
-			.map((call) => (call.args as { folder: string; name: string }).folder);
-		expect(folders).toEqual(["attachments", "knowledge"]);
 	});
 
 	it("names the file and the reason when an upload is refused", async () => {

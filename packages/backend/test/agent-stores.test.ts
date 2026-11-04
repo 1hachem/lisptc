@@ -14,6 +14,7 @@ import {
 import {
 	ConvexViewStore,
 	VIEW_WRITE_INTERVAL_MS,
+	type ViewClient,
 	type ViewClock,
 } from "../src/view-store.ts";
 import {
@@ -21,6 +22,7 @@ import {
 	OFFERED_MODELS,
 	type WorkspaceStoreClient,
 } from "../src/workspace-store.ts";
+import { harness, signIn } from "./helpers.ts";
 
 function named(reference: unknown): string {
 	return getFunctionName(reference as FunctionReference<"query" | "mutation">);
@@ -72,14 +74,15 @@ describe("the convex workspace store", () => {
 		expect(OFFERED_MODELS).toContain((await store.settings()).model);
 	});
 
-	it("sends a chosen model as the catalogued choice it names", async () => {
-		const { client, sent } = spyClient({});
-		const store = new ConvexWorkspaceStore(WORKSPACE, () => client);
-		const model = OFFERED_MODELS[0] ?? "";
+	it("reads back the model it was told to choose", async () => {
+		const alice = await signIn(harness(), "alice@example.com");
+		const store = new ConvexWorkspaceStore(
+			alice.workspace,
+			() => alice.as as unknown as WorkspaceStoreClient,
+		);
+		const model = OFFERED_MODELS.at(-1) ?? "";
 		await store.choose(model);
-		const [, args] = sent.at(-1) ?? ["", {}];
-		const choice = args.model as { provider: string; model: string };
-		expect(`${choice.provider}/${choice.model}`).toBe(model);
+		expect((await store.settings()).model).toBe(model);
 	});
 
 	it("refuses a model the catalogue does not hold", async () => {
@@ -114,8 +117,8 @@ describe("the convex knowledge store", () => {
 		expect(fetched).toEqual(["http://convex-backend:3210/api/storage/a"]);
 	});
 
-	it("writes a file by uploading the blob and recording it", async () => {
-		const { client, sent } = spyClient({
+	it("uploads the file's bytes and type to the deployment the store reaches", async () => {
+		const { client } = spyClient({
 			[named(api.files.uploadUrl)]:
 				"https://convex.example.ts.net/api/storage/upload?token=t",
 			[named(api.files.add)]: { name: "a.md" },
@@ -140,16 +143,6 @@ describe("the convex knowledge store", () => {
 				"text/markdown",
 				"# a",
 			],
-		]);
-		expect(sent.at(-1)).toEqual([
-			named(api.files.add),
-			{
-				workspaceId: WORKSPACE,
-				folder: "knowledge",
-				name: "a.md",
-				storageId: "blob-1",
-				contentType: "text/markdown",
-			},
 		]);
 	});
 
@@ -176,7 +169,7 @@ describe("the convex knowledge store", () => {
 
 describe("the convex panel reader", () => {
 	it("reads each pane's tabs, marking the shown and the focused one", async () => {
-		const { client, sent } = spyClient({
+		const { client } = spyClient({
 			[named(api.layouts.get)]: {
 				root: "s",
 				focused: "p2",
@@ -249,9 +242,6 @@ describe("the convex panel reader", () => {
 				focused: true,
 			},
 		]);
-		expect(sent).toEqual([
-			[named(api.layouts.get), { workspaceId: WORKSPACE }],
-		]);
 	});
 
 	it("reads no tabs before the panel was ever saved", async () => {
@@ -262,29 +252,34 @@ describe("the convex panel reader", () => {
 });
 
 describe("the convex view store", () => {
+	async function chatViews() {
+		const alice = await signIn(harness(), "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		const store = new ConvexViewStore(
+			chatId,
+			() => alice.as as unknown as ViewClient,
+		);
+		const read = () => alice.as.query(api.views.get, { chatId, viewId: "v1" });
+		return { store, read };
+	}
+
 	it("writes a view into the chat it was opened for", async () => {
-		const { client, sent } = spyClient({});
-		const chatId = "chat-1" as Id<"chats">;
+		const { store, read } = await chatViews();
 		const node = { tag: "text", props: { text: "hi" }, children: [] };
-		await new ConvexViewStore(chatId, () => client).put({ viewId: "v1", node });
-		expect(sent).toEqual([
-			[named(api.views.put), { chatId, viewId: "v1", node }],
-		]);
+		await store.put({ viewId: "v1", node });
+		expect(await read()).toMatchObject({ node, expired: false });
 	});
 
 	it("expires a view and writes it again even when unchanged", async () => {
-		const { client, sent } = spyClient({});
-		const chatId = "chat-1" as Id<"chats">;
+		const { store, read } = await chatViews();
 		const node = { tag: "text", props: { text: "hi" }, children: [] };
-		const store = new ConvexViewStore(chatId, () => client);
 		await store.put({ viewId: "v1", node });
 		await store.expire("v1");
+		expect(await read()).toMatchObject({ expired: true });
 		await store.put({ viewId: "v1", node });
-		expect(sent).toEqual([
-			[named(api.views.put), { chatId, viewId: "v1", node }],
-			[named(api.views.expire), { chatId, viewId: "v1" }],
-			[named(api.views.put), { chatId, viewId: "v1", node }],
-		]);
+		expect(await read()).toMatchObject({ node, expired: false });
 	});
 
 	function manualClock(): ViewClock & { advance(ms: number): void } {

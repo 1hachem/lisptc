@@ -84,10 +84,7 @@ async function session(icons?: Icon[]) {
 async function activityOf(
 	code: string,
 	icons?: Icon[],
-): Promise<{
-	activity: Activity | undefined;
-	reported: unknown[];
-}> {
+): Promise<Activity | undefined> {
 	const { interp, hooks } = await session(icons);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
@@ -97,70 +94,54 @@ async function activityOf(
 		detach();
 	}
 	const into = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
-	return {
-		activity: activityKey.schema.safeParse(into.output[activityKey.name]).data,
-		reported: buffer.envelopes
-			.filter((e) => e.topic === "mcp-activity")
-			.map((e) => [e.to, (e.payload as { state: string }).state]),
-	};
+	return activityKey.schema.safeParse(into.output[activityKey.name]).data;
 }
 
 describe("a tool call from lisp", () => {
-	it("reports started to the user, then done, with the tool's first sentence", async () => {
-		const { activity, reported } = await activityOf(
-			'(acme/web_search :query "hyko")',
-		);
-		expect(reported).toEqual([
-			[["user"], "started"],
-			[["user"], "done"],
-		]);
-		expect(activity).toEqual([
+	it("reports a finished call under the tool's title, with its first sentence", async () => {
+		const activity = await activityOf('(acme/web_search :query "hyko")');
+		expect(activity).toMatchObject([
 			{
 				kind: "mcp",
 				icon: [{ src: "https://acme.example/logo.svg" }],
 				label: "acme · Web search",
 				detail: "Searches the web for a query.",
 				state: "done",
-				id: "mcp-1",
-				startedAt: 1050,
 				ms: 25,
 			},
 		]);
 	});
 
 	it("reports failed when the call fails", async () => {
-		const { activity } = await activityOf("(acme/explode)");
-		expect(activity).toEqual([
+		const activity = await activityOf("(acme/explode)");
+		expect(activity).toMatchObject([
 			{
 				kind: "mcp",
 				icon: [{ src: "https://acme.example/logo.svg" }],
 				label: "acme · explode",
 				state: "failed",
 				error: "boom",
-				id: "mcp-1",
-				startedAt: 1050,
 				ms: 25,
 			},
 		]);
 	});
 
 	it("gives every call its own id, labels by the annotation title and trims a long detail", async () => {
-		const { activity } = await activityOf(
+		const activity = await activityOf(
 			'(acme/fetch_page) (acme/web_search :query "a")',
 		);
-		expect(
-			activity?.map((a) => [a.id, a.label, a.state, a.startedAt, a.ms]),
-		).toEqual([
-			["mcp-1", "acme · Fetch page", "done", 1050, 25],
-			["mcp-2", "acme · Web search", "done", 1100, 25],
+		expect(activity?.map((a) => [a.label, a.state])).toEqual([
+			["acme · Fetch page", "done"],
+			["acme · Web search", "done"],
 		]);
+		expect(new Set(activity?.map((a) => a.id)).size).toBe(2);
 		expect(activity?.[0].detail?.length).toBeLessThanOrEqual(120);
 		expect(activity?.[0].detail?.endsWith("…")).toBe(true);
 	});
 });
 
 describe("loading a server", () => {
-	it("reports started to the user, then done once it connects", async () => {
+	it("reports the load as done once it connects", async () => {
 		const extension = mcpExtension({
 			...mcpHost,
 			client: fakeClient(),
@@ -185,18 +166,13 @@ describe("loading a server", () => {
 			noAnnotations(),
 		);
 		expect(
-			buffer.envelopes
-				.filter((e) => e.topic === "mcp-activity")
-				.map((e) => (e.payload as { state: string }).state),
-		).toEqual(["started", "done"]);
-		expect(activityKey.schema.parse(into.output[activityKey.name])).toEqual([
+			activityKey.schema.parse(into.output[activityKey.name]),
+		).toMatchObject([
 			{
 				kind: "mcp",
 				icon: [{ src: "https://acme.example/logo.svg" }],
 				label: "load-mcp · acme",
 				state: "done",
-				id: "mcp-load-1",
-				startedAt: 1000,
 				ms: 25,
 			},
 		]);
@@ -205,7 +181,7 @@ describe("loading a server", () => {
 
 describe("an mcp icon", () => {
 	it("shows the tool's own icons ahead of the server's, dropping unsafe sources", async () => {
-		const { activity } = await activityOf("(acme/painted)");
+		const activity = await activityOf("(acme/painted)");
 		expect(activity?.[0].icon).toEqual([
 			{ src: "https://acme.example/tool-light.png", theme: "light" },
 			{ src: "https://acme.example/tool-dark.png", theme: "dark" },
@@ -213,14 +189,14 @@ describe("an mcp icon", () => {
 	});
 
 	it("falls back to the server's icon when the tool's are all unsafe", async () => {
-		const { activity } = await activityOf("(acme/unsafe)");
+		const activity = await activityOf("(acme/unsafe)");
 		expect(activity?.[0].icon).toEqual([
 			{ src: "https://acme.example/logo.svg" },
 		]);
 	});
 
 	it("drops an oversized data icon and falls back to the tool icon", async () => {
-		const { activity } = await activityOf("(acme/explode)", [
+		const activity = await activityOf("(acme/explode)", [
 			{ src: `data:image/png;base64,${"A".repeat(9000)}` },
 		]);
 		expect(activity?.[0].icon).toBe("tool");

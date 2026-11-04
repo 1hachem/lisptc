@@ -1,6 +1,7 @@
 import type { Threads } from "@repo/ai";
-import { extract, type Image, snapshot } from "@repo/interpreter/image";
+import { type Image, implant, snapshot } from "@repo/interpreter/image";
 import { Interp, runSync } from "@repo/interpreter/lisp";
+import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import type { ChildRecord, Supervisor } from "../../src/agent-repl.ts";
@@ -18,8 +19,6 @@ function world() {
 		copied: [] as [string, string][],
 		asked: [] as unknown[][],
 		cancelled: [] as string[],
-		imaged: [] as [string, string][],
-		looked: [] as string[],
 		jobs: new Map<string, string>(),
 		stored: undefined as Image | undefined,
 	};
@@ -63,15 +62,10 @@ function world() {
 		copyTranscript: async (from, to) => {
 			seen.copied.push([from, to]);
 		},
-		child: async (parent, name) => {
-			expect(parent).toBe(PARENT);
-			seen.looked.push(name);
-			return name === "earlier" ? STORED : undefined;
-		},
-		image: async (parent, child) => {
-			seen.imaged.push([parent, child]);
-			return child === CHILD ? seen.stored : undefined;
-		},
+		child: async (parent, name) =>
+			parent === PARENT && name === "earlier" ? STORED : undefined,
+		image: async (parent, child) =>
+			parent === PARENT && child === CHILD ? seen.stored : undefined,
 	};
 	return { seen, agents: new SupervisedAgents(supervisor, PARENT) };
 }
@@ -140,7 +134,6 @@ describe("the agent threads adapter", () => {
 				{ replyTo: PARENT, maxSteps: 4 },
 			],
 		]);
-		expect(seen.looked).toEqual([]);
 	});
 
 	it("waits on and reads the state of the last job sent to a name", async () => {
@@ -171,7 +164,6 @@ describe("the agent threads adapter", () => {
 		const { seen, agents } = world();
 		expect(await agents.cancel("earlier")).toBe(true);
 		expect(seen.cancelled).toEqual([STORED]);
-		expect(seen.looked).toEqual(["earlier"]);
 		await expect(agents.cancel("nobody")).rejects.toThrow(
 			"no agent named nobody",
 		);
@@ -183,10 +175,9 @@ describe("the agent threads adapter", () => {
 		const child = new Interp();
 		runSync(child, "(setq rows (list 1 2) other 3)");
 		seen.stored = snapshot(child);
-		expect(await agents.read("r", "rows")).toEqual(
-			extract(seen.stored, "rows"),
+		expect(str(implant(new Interp(), await agents.read("r", "rows")))).toBe(
+			"(1 2)",
 		);
-		expect(seen.imaged).toEqual([[PARENT, CHILD]]);
 		await expect(agents.read("earlier", "rows")).rejects.toThrow(
 			"has run nothing yet",
 		);

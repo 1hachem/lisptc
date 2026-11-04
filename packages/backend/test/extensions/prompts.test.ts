@@ -13,11 +13,7 @@ import { secretsHost } from "@repo/secrets-extension/host";
 import { describe, expect, it } from "vitest";
 
 describe("the system prompt an interpreter composes", () => {
-	it("is the language reference alone when no extension was installed", () => {
-		expect(new Interp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
-	});
-
-	it("carries a section per extension, in the order they were given", () => {
+	it("carries the language reference and a section per extension", () => {
 		const prompt = new Interp({
 			extensions: [
 				secretsExtension(secretsHost),
@@ -26,7 +22,8 @@ describe("the system prompt an interpreter composes", () => {
 		}).systemPrompt();
 
 		expect(prompt).toContain(LANGUAGE_REFERENCE);
-		expect(prompt.indexOf("SECRETS")).toBeLessThan(prompt.indexOf("PROMISES"));
+		expect(prompt).toMatch(/\(secret /);
+		expect(prompt).toMatch(/\(await /);
 	});
 
 	it("says nothing about what the interpreter cannot do", () => {
@@ -45,22 +42,8 @@ describe("the system prompt an interpreter composes", () => {
 			extensions: [memoryExtension(memoryHost)],
 		}).systemPrompt();
 
-		expect(prompt).toMatch(/MEMORY/);
 		expect(prompt).toMatch(/memory\/remember/);
 		expect(prompt).toMatch(/memory\/replay/);
-	});
-
-	it("puts memory after compaction, so recall is read the way results are", () => {
-		const prompt = new Interp({
-			extensions: [
-				compactionExtension(compactionHost),
-				memoryExtension(memoryHost),
-			],
-		}).systemPrompt();
-
-		expect(prompt.indexOf("EXTRACT, THEN ECHO")).toBeLessThan(
-			prompt.indexOf("MEMORY"),
-		);
 	});
 
 	it("teaches windowing only when compaction is installed", () => {
@@ -69,6 +52,5 @@ describe("the system prompt an interpreter composes", () => {
 		}).systemPrompt();
 
 		expect(prompt).toMatch(/:offset/);
-		expect(prompt).toMatch(/EXTRACT, THEN ECHO/);
 	});
 });

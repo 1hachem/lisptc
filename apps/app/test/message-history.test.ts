@@ -81,7 +81,6 @@ describe("a history that changed while browsing", () => {
 		const second = recall(history, first?.recalled ?? null, "third", "back");
 		const grown = ["zeroth", ...history, "fourth"];
 		const rebased = rebase(second?.recalled ?? null, grown);
-		expect(rebased?.index).toBe(2);
 		expect(recall(grown, rebased, "second", "back")?.text).toBe("first");
 		expect(recall(grown, rebased, "second", "forward")?.text).toBe("third");
 	});

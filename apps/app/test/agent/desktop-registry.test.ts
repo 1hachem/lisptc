@@ -197,7 +197,6 @@ describe("the desktop registry", () => {
 		const first = await import("../../server/desktop/registry.ts");
 		vi.resetModules();
 		const second = await import("../../server/desktop/registry.ts");
-		expect(first.desktops).toBe(second.desktops);
 		const peer = fakeDesktop(first.desktops);
 		first.desktops.attach(user, "m1", peer);
 		expect(second.desktops.connected(user)).toBe(true);

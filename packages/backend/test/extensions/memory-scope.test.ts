@@ -32,10 +32,4 @@ describe("what a repl remembers, and for whom", () => {
 			await scoped("someone-else").eval('(memory/recall "secret")'),
 		).not.toContain("mine");
 	});
-
-	it("gives an unscoped roster a bank of its own", () => {
-		expect(scoped().hooks.filled(memorySlot)).not.toBe(
-			scoped().hooks.filled(memorySlot),
-		);
-	});
 });

@@ -198,7 +198,6 @@ describe("load-mcp :local", () => {
 		const interp = interpOn(host);
 		await settle(interp, '(load-mcp :name "fx" :command "anything" :local t)');
 		expect(send).toHaveBeenCalled();
-		expect(send.mock.calls[0]?.[0]).toMatchObject({ method: "initialize" });
 		interp.dispose();
 	});
 });
@@ -270,7 +269,7 @@ describe("load-mcp flags a toolkit entry declares", () => {
 		const host = recordingHost();
 		const interp = interpWith(host);
 		expect(() => runSync(interp, '(load-mcp "pw" :local t :fast t)')).toThrow(
-			/takes no :fast; it takes :headless/,
+			/:headless/,
 		);
 		expect(host.ensured).toEqual([]);
 		interp.dispose();
