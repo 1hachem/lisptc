@@ -1,0 +1,62 @@
+(memory "knowledge/files" :on (asks "user wants a file they uploaded listed, read, written, deleted or shown to them"))
+- (knowledge/list) lists file names, like "report.md".
+- (knowledge/read "name") by extension: .ptc gives its one form as data, never
+  run; .json as data (see knowledge/structured); .pdf gives page text as string;
+  other text gives string. Other binary (image) refused. nil when no file.
+- (knowledge/write "name" value) replaces file, old one to bin; user can open
+  and download it. User approves it. .ptc takes data, printed; function
+  refused. .json takes data (see knowledge/structured). Other file takes string.
+- (knowledge/delete "name") moves file to bin. User approves it.
+
+(memory "knowledge/structured" :on (asks "user wants a .json or .ptc file read as data, written from data, or one entry of it changed"))
+(knowledge/read) by extension: .json gives JSON as data: object as alist, array as list, null as nil,
+false as :false, [] as :[], {} as :{}; array that would read back as object
+comes led by :[], number index skips it.
+(knowledge/write) takes data for .ptc, printed; function refused. .json takes
+data, written as JSON: plist or alist becomes object,
+keyword values too, (:status :done) gives {"status": "done"}; list led by
+:[] becomes array of rest, (:[] :red :green) gives ["red", "green"]; other
+list becomes array; nil becomes null; :false :[] :{} become false [] {};
+other keyword becomes its name. Same key twice refused. Or takes JSON text
+string.
+Edit .ptc or .json file: read, change with set-in / update-in / remove-in, write back:
+  (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
+Same for .json. Removing last entry leaves nil, written null; set :[] or :{}
+to keep it empty.
+
+(memory "knowledge/attachments" :on (asks "user wants a file attached to a message written, fetched from a link, listed, kept, unkept, read or deleted, or a file handed to them"))
+Files user attached to message land in attachments, shown as attachments/ in
+sidebar; message then carries "user attached: attachments/spec.pdf". Unkept
+attachment moves to bin after a week.
+User message can point at file: @knowledge/report.md or @attachments/spec.pdf;
+quoted when name has space: @"attachments/Q3 Sales.json". Read it with
+(knowledge/read "report.md") or (attachments/read "spec.pdf"), name without folder.
+
+- (attachments/list) lists attachment names.
+- (attachments/read "name") reads attachment, same rules as knowledge/read.
+- (knowledge/keep "name") moves attachment into knowledge, kept for good. User
+  approves it. Keep what user wants to reuse later; leave rest to expire.
+- (knowledge/unkeep "name") moves it back to attachments, expiring again. User
+  approves it.
+- (attachments/write "name" value) puts file in attachments. String stored as
+  text; (:base64 "…" :type "image/png") stored as bytes, like image from tool.
+  Returns stored name; gains number when name taken.
+- (attachments/fetch "https://…") downloads url into attachments;
+  (attachments/fetch url "name") names it. User approves it. Returns stored
+  name.
+- (attachments/delete "name") moves attachment to bin. User approves it.
+- (attachments/attach "name") or (knowledge/attach "name") shows file under
+  your reply; user clicks to open it. Use after attachments/write or
+  attachments/fetch to hand user the file. Errors when no such file.
+
+(memory "knowledge/bin" :on (asks "user wants a deleted file back, or wants the bin searched or cleared"))
+Deleted knowledge and attachments land in bin, shown as bin/ in sidebar. Bin
+deletes them for good a month later. Bin file cannot be read; restore it first.
+
+- (bin/list) lists bin file names, newest first.
+- (bin/search "text") lists bin file names containing text, any case. Matches
+  name only, never content.
+- (bin/restore "name") moves file back to folder it came from. User approves
+  it. Returns "knowledge/name" or "attachments/name"; name gains number when
+  taken.
+- (bin/delete "name") deletes bin file for good. User approves it.

@@ -5,8 +5,12 @@ const preferencesPrompt = filePrompt(
 	new URL("./preferences.ptc", import.meta.url),
 );
 
+const preferencesMemories = filePrompt(
+	new URL("./preferences.memories.ptc", import.meta.url),
+);
+
 export function preferencesHostFor(
-	options: Partial<Omit<PreferencesHost, "prompt">> = {},
+	options: Partial<Omit<PreferencesHost, "prompt" | "memories">> = {},
 ): PreferencesHost {
 	return {
 		store: options.store ?? new MemoryPreferencesStore(),
@@ -14,6 +18,7 @@ export function preferencesHostFor(
 		motions: options.motions ?? [],
 		...(options.desktop === undefined ? {} : { desktop: options.desktop }),
 		prompt: preferencesPrompt,
+		memories: preferencesMemories,
 	};
 }
 

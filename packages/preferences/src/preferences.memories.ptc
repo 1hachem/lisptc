@@ -1,0 +1,58 @@
+(memory "preferences/layout" :on (asks "user wants sidebar entries reordered, moved between the left and right sidebar or hidden, or bottom status bar items moved, hidden or left as gaps"))
+- Two sidebars, left and right. :sidebar is left one's entries, top first;
+  :sidebar-right is right one's. Each entry sits in one.
+  (preferences/set :sidebar '("README.md" "chat")) moves those two to top of
+  left, pulling them from right if there; rest keep their order.
+  (preferences/set :sidebar-right '("tests")) moves tests to top of right.
+  Same entry in both lists errors. User also drags entries within a sidebar,
+  across to other one, or in preferences page.
+- :hidden is every sidebar entry hidden. Replaces whole list:
+  (preferences/set :hidden '("tests" "ui")) hides those two, shows rest.
+  '() shows all. Attachments and bin hidden until user shows them. User also
+  toggles them in preferences page.
+- :status-bar is bottom bar's 9 slots, left to right. Items: "panes",
+  "desktop" (desktop app status, shows only while connected), "clock". Each
+  empty slot is gap with own name: "gap-1" through "gap-6".
+  (preferences/set :status-bar '("desktop" "gap-1" "panes")) puts desktop
+  first, gap second, panes third, keeps rest in order. User also drags them
+  on bar or in preferences.
+- :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
+  (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
+
+(memory "preferences/chat" :on (asks "user wants chat changes: which message metadata fields show, which helpers the chat input runs, or where a trace opens"))
+- :input is helpers chat input runs while user types. :attach is attach
+  button. :lisp is highlight, completion, errors, docs for lisp in input:
+  (preferences/set :input '(:lisp nil)).
+- :trace-beside-chat t opens chat's trace in tab right of chat whenever chat
+  opens; nil opens trace only when asked. For developers. Default nil:
+  (preferences/set :trace-beside-chat t).
+- :trace-link t shows "show in trace" on message metadata; opens trace at
+  that message. Default t. nil hides it: (preferences/set :trace-link nil).
+
+(memory "preferences/motion" :on (asks "user wants animations changed: how the sidebar moves on a drag, or whether panels animate when they open or split"))
+- :motion is how sidebar animates that drag. (motions) gives alist of
+  (id . description) to choose from. System asks for reduced motion: nothing
+  animates, whatever :motion says.
+- :panel-motion t animates panels as they open, split, switch tab; nil keeps
+  them still: (preferences/set :panel-motion nil). Reduced motion wins here too.
+
+(memory "preferences/desktop" :on (asks "user wants the desktop app to close to the tray or start at login"))
+- (desktop-preferences) gives desktop app's own: (:close-to-tray t :open-at-login nil).
+  Live on user's machine, not in app. Work only while desktop app connected;
+  else error says no desktop app connected.
+- :close-to-tray t keeps desktop app running in tray when window closes; nil
+  quits. Default t: (desktop-preferences/set :close-to-tray nil).
+- :open-at-login t starts desktop app hidden in tray at login. Default nil:
+  (desktop-preferences/set :open-at-login t).
+
+(memory "preferences/set" :on (asks "a preference change errors, or user wants to see or change the font, a chat metadata field or a chat input helper"))
+- Preferences belong to this workspace, like theme: each workspace keeps own
+  set, change here leaves other workspaces alone.
+- (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t).
+- (fonts) gives alist of (id . name) to choose from.
+- (preferences/set :font "geist") changes only keys you give.
+- (preferences/set :metadata '(:tokens t)) turns tokens on, leaves others as they were.
+  Toggles merge.
+- Font id must be one (fonts) lists. Metadata and input ids must be ones
+  (preferences) already lists. Unknown one errors, naming valid ids.
+- Quote toggle plist, or keywords read as call: '(:tokens t).

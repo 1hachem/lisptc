@@ -8,4 +8,5 @@ export const llmHost: LlmHost = {
 	providers: listProviders,
 	clock: systemClock,
 	prompt: filePrompt(new URL("./llm.ptc", import.meta.url)),
+	memories: filePrompt(new URL("./llm.memories.ptc", import.meta.url)),
 };

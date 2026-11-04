@@ -115,6 +115,7 @@ export interface LlmHost {
 	providers: () => ProviderReport[];
 	clock: Clock;
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export interface LlmOptions {
@@ -163,6 +164,7 @@ export function llmExtension(
 		},
 		{
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {

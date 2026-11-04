@@ -1,4 +1,7 @@
-import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
+import {
+	LANGUAGE_MEMORIES,
+	LANGUAGE_REFERENCE,
+} from "@repo/interpreter/source";
 import { checkSyntax } from "@repo/language-service/syntax";
 import { describe, expect, it } from "vitest";
 import { evProse } from "./helpers.ts";
@@ -38,6 +41,7 @@ describe("the language reference teaches prose", () => {
 	});
 
 	it("says there is no comment syntax", () => {
-		expect(LANGUAGE_REFERENCE).toMatch(/there is no comment syntax/i);
+		const language = [LANGUAGE_REFERENCE, LANGUAGE_MEMORIES].join("\n");
+		expect(language).toMatch(/there is no comment syntax/i);
 	});
 });

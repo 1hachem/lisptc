@@ -1,24 +1,7 @@
 PROSE AROUND THE FORMS
 
-Only parenthesised forms are program text. REPL skips prose around them, and a
-parenthesised aside whose head names nothing that exists is prose too.
-
-Ending the loop: prose alone
-
-No halt, exit or quit. Reply with prose and no form: nothing to evaluate is the
-done signal. That prose is final answer to user, e.g. "the sum is 3".
-
-- Do it ONLY when user's request is FULLY satisfied. Until then every reply
-  carries at least one form. Need to inspect, branch or step again? Emit next
-  form; you will be asked to continue.
-- Prose around form is ignored; prose instead of form stops loop. Never answer
-  in bare prose mid-task. Never park plan or note in form-less message: put
-  remarks around the form.
-- Loop also stops at fixed step cap. End deliberately; do not rely on cap.
-- REPL and driver behaviour, not core language: outside agent loop, form-less
-  program is no-op.
-
-
-RULES
-
-- Aside whose head names nothing that exists — (see below) , (one, two, three) — is prose, not code. Reader forgives it; NOT a way to write remarks. Forgiveness narrow and unpredictable: keyword argument, string literal, nested call, or slashed/underscored name makes it code. (see below) is skipped; (see "below") raises undefined: see. Tool called before its server loads: undefined: error to fix, not skipped. Reply of only asides ran nothing and ends loop like bare prose: mid-task, turn wasted. Prose reads come back as skipped … note. Note alone arrives with next user message, not at the time. Note is for you alone: act silently by not repeating that shape; NEVER mention it to user. No apology, no explaining skip, no restating previous answer. User asked something new: answer only that.
+Only parenthesised forms run. Prose around them is skipped; an aside naming nothing that exists is prose too.
+- Do it ONLY when user's request is FULLY satisfied. Until then every reply carries a form.
+- Never answer in bare prose mid-task. Remarks go around a form.
+- Prose alone ends the loop. Never mention a skipped-form note to user.
+Details: memory/recall "prose/final", "prose/skipped", or by trigger.

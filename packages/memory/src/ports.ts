@@ -15,6 +15,7 @@ import type { SearchEngine } from "@repo/shared/search";
 
 export const INITIAL_SCORE = 1;
 export const LINKED_FIRES_AT = 2;
+export const ASKS_FIRES_AT = 0.7;
 
 export const TRIGGER_KINDS = [
 	"call",
@@ -259,8 +260,13 @@ export function readBuiltins(source: string): Memory[] {
 	return memories;
 }
 
+export interface Situation {
+	readonly message: string;
+	readonly step?: string;
+}
+
 export type MemoryJudge = (
-	message: string,
+	situation: Situation,
 	asks: readonly string[],
 ) => Awaitable<ReadonlyMap<string, number>>;
 
@@ -270,6 +276,7 @@ export interface MemoryHost {
 	store: MemoryStore;
 	clock: Clock;
 	prompt: PromptSource;
+	memories: PromptSource;
 	search: SearchEngine;
 	judge: MemoryJudge;
 }

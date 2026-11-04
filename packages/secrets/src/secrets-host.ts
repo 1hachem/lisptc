@@ -69,8 +69,16 @@ export function loadSecretsFromEnvFile(
 
 const secretsPrompt = filePrompt(new URL("./secrets.ptc", import.meta.url));
 
+const secretsMemories = filePrompt(
+	new URL("./secrets.memories.ptc", import.meta.url),
+);
+
 export function secretsHostFor(options: EnvSecretsOptions = {}): SecretsHost {
-	return { store: envSecretsStore(options), prompt: secretsPrompt };
+	return {
+		store: envSecretsStore(options),
+		prompt: secretsPrompt,
+		memories: secretsMemories,
+	};
 }
 
 export const secretsHost: SecretsHost = {
@@ -78,4 +86,5 @@ export const secretsHost: SecretsHost = {
 		return envSecretsStore();
 	},
 	prompt: secretsPrompt,
+	memories: secretsMemories,
 };

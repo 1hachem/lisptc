@@ -1,0 +1,45 @@
+(memory "intent/todo-example" :on (asks "user gave a multi-step task to track as a todo list, or the agent must show a step's todo mark as work runs"))
+(intent/todo "label"...) sets todo list, every item open. Label kept from list before keeps its done mark.
+(intent/check "label") marks one todo done. Unknown label fails and names open ones.
+Code checks each item, never memory. Work returns, item done at once. Work raises: check never runs, item stays open. Promise work: await before check.
+Write intent forms inside the code, never a step of their own: intent/doing before each slow call, intent/check chained after the form that does the work, intent/progress per item in a loop. User sees each update live while step runs.
+(intent/todo "sum scores" "average")
+(let ((scores '(3 9 4)))
+  (let ((total (apply + scores)))
+    (intent/check "sum scores")
+    (let ((mean (/ total (length scores))))
+      (intent/check "average")
+      (list total mean))))
+
+(memory "intent/user-view" :on (asks "user asks what they see of the agent's work, or the agent must decide whether a step shows in chat"))
+User sees only: intent line, todo list, rendered ui, tabs opened beside chat,
+questions, final answer. Say intent through these forms.
+
+(memory "intent/progress" :on (asks "user gave a list or loop of known size, or a batch of items, to work through one by one"))
+Known step count (loop over N items, batch): intent/progress each item. Named
+steps: intent/todo.
+- (intent/progress done total ["label"]) progress bar, done of total. Integers,
+  total at least 1, done at most total. Independent of todo.
+- Write intent/progress inside the loop, never a step of its own. User sees each
+  update live while step runs.
+
+(let ((i 0) (n 3))
+  (dolist (issue '("a" "b" "c"))
+    (setq i (+ i 1))
+    (intent/progress i n "issues")))
+
+(memory "intent/todo-edit" :on (asks "the plan changed while work was under way, so an item must be removed, moved or the whole list cleared"))
+Plan changed: edit list, keep it true.
+Label kept from list before keeps its done mark. (intent/doing "text") replaces line before.
+- (intent/drop "label") removes one todo. Unknown label fails and names open ones.
+- (intent/move "label" position) moves it, 0 first. Position past the end puts
+  it last.
+- (intent/clear) empties list.
+
+(memory "intent/ask" :on (asks "the agent must ask the user a question with a closed set of answers, or let them pick one or several options"))
+(intent/ask "prompt" '("A" "B") [:multi t]) closed question, one pick; :multi t
+allows several. Ends turn after this step. Answer arrives as next message.
+(intent/ask "Which board?" '("Sales" "Support"))
+
+(memory "intent/ui-view" :on (asks "the agent must build a rendered ui view for the user, or test one before showing it"))
+Build ui view and test it without rendering. ui/render only once it works.

@@ -8,11 +8,11 @@ import {
 import { describe, expect, it } from "vitest";
 
 const prompt = readFileSync(
-	new URL("../src/preferences.ptc", import.meta.url),
+	new URL("../src/preferences.memories.ptc", import.meta.url),
 	"utf8",
 ).replace(/\s+/g, " ");
 
-describe("the prompt's bottom bar", () => {
+describe("the memory's bottom bar", () => {
 	it("states the slot count, the gap range and every item the app draws", () => {
 		expect(prompt).toContain(`bottom bar's ${STATUS_BAR_SLOT_COUNT} slots`);
 		expect(prompt).toContain(

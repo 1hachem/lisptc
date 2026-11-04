@@ -43,6 +43,7 @@ function parseTimeout(x: unknown): number {
 
 export interface PromisesHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 function unawaited(error: EvalException): string | undefined {
@@ -64,7 +65,7 @@ export function promisesExtension(host: PromisesHost): InterpExtension {
 				return { reported };
 			});
 		},
-		{ prompt: host.prompt() },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }
 

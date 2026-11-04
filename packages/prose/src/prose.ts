@@ -48,6 +48,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 	};
 	return Object.assign(extension, {
 		prompt: host.prompt(),
+		memories: host.memories(),
 		session(hooks: SessionHooks): void {
 			hooks.unrun.use((interp, code, next) => [
 				...next(interp, code),

@@ -11,8 +11,12 @@ describe("what a repl remembers, and for whom", () => {
 		const repl = scoped();
 
 		expect(repl.hooks.filled(memorySlot)).toBeDefined();
-		expect(await repl.eval('(memory/remember "k" "a note")')).toContain("k");
-		expect(await repl.eval('(memory/recall "note")')).toContain("a note");
+		expect(await repl.eval('(memory/remember "k" "a zebra note")')).toContain(
+			"k",
+		);
+		expect(await repl.eval('(memory/recall "zebra")')).toContain(
+			"a zebra note",
+		);
 	});
 
 	it("carries what one conversation learned into the next", async () => {

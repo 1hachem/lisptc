@@ -68,7 +68,7 @@ import { qqExpand, qqQuote } from "./quasiquote.ts";
 import { Reader } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
-import { LANGUAGE_REFERENCE } from "./source.ts";
+import { LANGUAGE_MEMORIES, LANGUAGE_REFERENCE } from "./source.ts";
 import { note } from "./topics.ts";
 import type { ForeignValue } from "./types.ts";
 
@@ -195,7 +195,7 @@ export class Interp {
 
 	private readonly prompts: string[] = [];
 
-	private readonly memories: string[] = [];
+	private readonly memories: string[] = [LANGUAGE_MEMORIES];
 
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);

@@ -165,12 +165,16 @@ export function scopedMemoryStore(scope?: string): MemoryStore {
 }
 
 const memoryPrompt = filePrompt(new URL("./memory.ptc", import.meta.url));
+const memoryMemories = filePrompt(
+	new URL("./memory.memories.ptc", import.meta.url),
+);
 
 export function memoryHostFor(scope?: string): MemoryHost {
 	return {
 		store: scopedMemoryStore(scope),
 		clock: systemClock,
 		prompt: memoryPrompt,
+		memories: memoryMemories,
 		search: memorySearchEngine,
 		judge: unjudged,
 	};
@@ -182,6 +186,7 @@ export const memoryHost: MemoryHost = {
 	},
 	clock: systemClock,
 	prompt: memoryPrompt,
+	memories: memoryMemories,
 	search: memorySearchEngine,
 	judge: unjudged,
 };

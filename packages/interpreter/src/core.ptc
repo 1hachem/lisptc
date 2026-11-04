@@ -3,7 +3,7 @@ LISPTC LANGUAGE REFERENCE
 Lisptc: Common-Lisp-like dialect. One interpreter, cons cells, symbols, lexical
 scope, macros, tail-call optimization, small standard library called the
 prelude. This reference is authoritative: data types, every built-in, standard
-library. Name not listed here does not exist — define it yourself.
+library. Name not listed here or in a recalled memory does not exist — define it yourself.
 
 SYNTAX
 
@@ -12,363 +12,36 @@ Source is s-expressions. (f a b) calls f with evaluated a and b.
 Only parenthesised top-level forms are program text. Text around them is prose,
 ignored. Writing "let me square it" around (sq 5) evaluates only the form.
 Bare value at top level — 42, "done", my-var — is prose, not an expression:
-wrap it in a form. Stray paren in prose still reads as code, so never write
-one; paren smiley unsayable.
+wrap it in a form.
 
 NEVER PUT A SENTENCE IN PARENTHESES. Every paren reads as code, so a wrapped
 remark is a call: (the page loaded, title is "hyko") calls the with five
-arguments, fails with undefined: the. Put remark as bare prose beside the form.
-No bracket makes a comment, any shape.
-
-Aside whose head names nothing — (see below) , (one, two,
-  three) — reads as prose, comes back as skipped note. Mistake the reader
-forgave, not a way to write. Forgiveness narrow, unpredictable: anything shaped
-like a call runs. Keyword argument, string literal, nested call, or slashed or
-underscored name with no words around it — (server/tool :key "value") , dummy
-names — is code whatever is missing. (see below) skips; (see
-  "below") raises undefined: see. Tool of unloaded server: undefined: error to
-fix, not a skip. Reply of only asides ran nothing, ends the loop, see "Ending
-the loop".
+arguments, fails with undefined: the. Put remark as bare prose beside the form. No bracket makes a comment, any shape.
 
 To see a result, name it in a form: (echo search-mcps-1) . Bare name
 search-mcps-1 on its own line is prose, evaluates nothing. Prose-only reply
-ENDS THE LOOP with that line as final answer. Most expensive typo in the
-language.
+ENDS THE LOOP with that line as final answer. Most expensive typo in the language.
 
-- Quote: 'x same as (quote x) — x unevaluated.
-- Quasiquote: leading backtick same as (quasiquote x) . Inside, ,x unquotes,
-  inserts evaluated x; ,@x unquote-splicing, splices a list.
-  Example: (a ,(+ 1 2) ,@(list 3 4)) evaluates to the list a 3 3 4.
-- Lists: (a b c) . Dotted pair: (a . b) is one cons cell.
-- Strings: "..." with escapes \\ \" \n \r \f \b \t \v. No character type:
-  "character" is one-character string.
-- Keywords: :foo self-evaluating, interned, so (eq :a :a) is t.
-- Numbers: see NUMBERS. nil and () same value: empty list and false. t is
-  canonical true.
-- Comments: there is no comment syntax — prose around forms is the comment.
-  ; is ordinary symbol character, so "; note" inside a form is code.
-- Symbols: any token not number, string, keyword, nil or t. / and - legal in
-  names, e.g. string-split, acme/get_widget.
+Echo is the ONLY thing that prints. Nothing computed is seen until echoed.
 
-DATA TYPES
+DATA
 
-- nil = () = null = empty list = the ONLY false value.
-- t canonical true. Everything except nil truthy, including 0, "", empty
-  structures.
-- Cons cell — pair (car . cdr) ; list is chain of cells ending in nil.
-- Symbol — interned name; gensym and make-symbol make uninterned ones,
-  printed #:name.
-- Keyword — :foo, self-evaluating.
-- String — text; no char type.
-- Number — exact bigint integer or inexact float.
-- Hash table — mutable map, keys compare by equal. Prints #<hash-table n>.
-- Vector — mutable indexed sequence. Prints #<vector 1 2 3>.
-- Function / closure / macro — from lambda, defun, defmacro.
-- Secret — tainted string wrapper, only when secrets extension loaded.
+nil = () = null = empty list = the ONLY false value. t canonical true.
+Everything except nil truthy, including 0, "", empty structures.
 
-Test emptiness with null or not. Never rely on 0 or "" being false — they are
-TRUE.
+FORMS
 
-SPECIAL FORMS
+Special forms: quote, progn, cond, setq, lambda, macro, quasiquote, try.
+Prelude macros, used the same way: if, when, unless, and, or, let, let*,
+letrec, while, dolist, dotimes, case, defun, defmacro, setf, push, pop, incf,
+decf, block, return-from, catch, unwind-protect. Prelude functions are all available by default.
 
-Evaluated specially, not as function calls. Complete list:
+MEMORIES
 
-| Form | Shape | Meaning |
-|------|-------|---------|
-| quote | (quote x) | Return x unevaluated, written 'x. |
-| progn | (progn e...) | Evaluate in order, return the last. |
-| cond | (cond (test body...) ...) | First clause with non-nil test: eval its body, return last, or the test value if no body. Else nil. |
-| setq | (setq name val ...) | Assign val to variable name, one or more pairs. Returns last value. Defines or updates a global if name isn't a local. |
-| lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
-| macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
-| quasiquote | (quasiquote x) | Template with unquote and unquote-splicing, see the syntax section. |
-| try | (try
-  body
-  (catch (e)
-    handler...)) | Eval body; on error, bind e to the error value and run the handler. |
-
-if, when, unless, and, or,
-let, let*, letrec, while, dolist, dotimes, case, defun,
-defmacro, setf, push, pop, incf, decf, block, return-from, catch and
-unwind-protect are prelude macros, not special forms; use the same way.
-
-Tail calls optimized: tail recursion and loop macros never overflow the stack.
-Iterate with tail-recursive helpers or loop macros.
-
-NUMBERS
-
-- Integer literal is exact bigint: 42.
-- Decimal or exponent makes inexact float: 42.0, 4.2e1.
-- + - * keep exactness: bigint with bigint gives bigint. ANY float makes the
-  result float, "float contagion": (+ 1 2) is 3,
-(+ 1 2.0) is 3.0, (* 2 3) is 6, (* 2 3.0) is 6.0.
-- / is ALWAYS float, even evenly divisible: (/ 6 2)
-is 3.0. Exact integer division: truncate, gives bigint:
-(truncate 6 2) is 3.
-- Integer-valued float prints 3.0; bigint prints 3.
-- = and eql compare numerically across types: (= 3 3.0) is t.
-- Divide by zero: / follows JS, (/ 1 0) is Infinity, (/ 0 0) is NaN, no error.
-  Integer truncate, % and mod on bigints throw. Guard divisors.
-
-Arithmetic built-ins:
-
-- (+ n...) sum, 0 if none · (* n...) product, 1 if none ·
-(- n m...) subtract, or negate one arg · (/ n m...) float divide.
-- (% x y) remainder, sign of x, alias rem · (mod x y) modulo, sign of y ·
-(truncate x [y]) toward zero, gives bigint.
-- (< x y) primitive less-than. Prelude adds (> x y) , (>= x y) , (<= x y) ,
-(/= x y) and (= x y) .
-- Predicates: (numberp x) · (zerop n) · (plusp n) · (minusp n) ·
-(evenp n) · (oddp n) , last two integers only.
-- (abs n) · (min n m...) · (max n m...) · (1+ n) · (1- n) , keep exactness.
-- (floor x [y]) · (ceiling x [y]) · (round x [y]) give bigint, like
-  truncate. round takes tie to even: (round 2.5) is 2.
-- (expt b p) exact for integer b and p >= 0, else float · (sqrt n) float ·
-(gcd n...) · (lcm n...) .
-- (parse-integer s) decimal string to bigint, error otherwise.
-
-PRIMITIVE BUILT-INS, DEFINED IN THE INTERPRETER CORE
-
-Lists & pairs
-- (car x) first · (cdr x) rest · (cons a b) new cell · (list x...) .
-- (length x) length of list or string, bigint.
-- (rplaca cell x) and (rplacd cell x) destructively set car and cdr, aliases
-  setcar and setcdr.
-
-Predicates
-- (atom x) true if not cons · (eq x y) identity · (eql x y) identity or
-  numeric and string equality, alias = · (stringp x) · (numberp x) .
-
-Symbols
-- (gensym) fresh uninterned symbol · (make-symbol name) · (intern name) ·
-(symbol-name sym) .
-
-Hash tables & vectors
-- (make-hash-table) · (gethash key table [default]) · (puthash key value table)
-  · (remhash key table) · (clrhash table) · (hash-has-key key table) ·
-(hash-table-count table) · (hash-table-keys table) ·
-(hash-table-values table) · (hash-table-alist table) · (hash-table-p x) .
-  Keys by equal: "a", 2 and 2.0, (list 1 2) all work. Order is insertion.
-- (vector x...) · (make-vector n [init]) · (aref v i) · (aset v i x) ·
-(vector-push x v) appends, returns index · (vector-to-list v) ·
-(list-to-vector list) · (vectorp x) . Index past end errors.
-- (length x) , (elt seq i) and (subseq seq start [end]) take list, string or
-  vector.
-
-Strings
-- (char s i) one-char string at i, or nil · (concat s...) concatenate
-  · (string-upcase s) · (string-downcase s) .
-- (string< a b) · (string> a b) order by code point · (string-equal a b)
-  ignores case · (string-pad-left s width [pad]) ·
-(string-pad-right s width [pad]) · (number-to-string n digits) fixed digits:
-(number-to-string 3.14159 2) is "3.14".
-- Character = one-char string: (char-code c) · (code-char n) ·
-(digit-char-p c) digit value or nil · (alpha-char-p c) ·
-(whitespace-char-p c) .
-- (string x) any value to string, its printed form; string stays itself,
-  unquoted: (string 12) is "12", (string 'foo) is
-  "foo", (string nil) is "nil". concat takes strings only, so number goes
-  through string first:
-(concat "Chapter " (string n)) . Float keeps .0: (string 3.0)
-is "3.0"; (string (truncate x)) gives bare integer.
-
-Parsing text into data
-- (read s) parse FIRST Lisp expression in s, return as data, unevaluated:
-  (read "(+ 1 2)") gives the list (+ 1 2) , not 3. Trailing text ignored;
-  no expression errors.
-- (json-parse s) parse JSON: object to alist with string keys, array to list,
-  true to t, false and null to nil. Numbers arrive as floats: 7 reads 7.0; =
-  still compares numerically.
-  (cdr (assoc "title" (json-parse s))) reads a field.
-- Different parsers, not aliases. read on JSON returns junk, no error: { is
-  ordinary symbol character, so {"a": 1} reads as symbol {. json-parse for
-  JSON, read for Lisp.
-
-Eval / control
-- (apply f args) call f with elements of list args.
-- (error value) raise catchable error carrying value, caught by try.
-- (break) exit nearest loop; (return value) exit it with value.
-
-Output — echo is the ONLY thing that prints. Nothing computed is seen until
-echoed.
-- (echo x...) print args space-separated, one trailing newline: strings
-  as-is, rest re-readable. (echo) is blank line.
-  Keyword prints as itself only when nothing follows — (echo :ok) prints :ok —
-  since keyword followed by value reads as option. Put keyword to print LAST,
-  or wrap in list.
-
-Introspection
-- (doc name) print binding's signature and doc; (doc) lists all documented
-  names. Read it before guessing an argument, and again after a rejected call.
-- (dump) list every global symbol · (import "path") load and eval Lisp file.
-- (makunbound 'name) drops global from setq, defun or defmacro, doc and source
-  too. t if bound. Builtins and read-only globals stay.
-
-Globals: *gensym-counter*, *version*.
-
-PRELUDE STANDARD LIBRARY
-
-All available by default.
-
-List access — composed car and cdr: caar cadr cdar cddr caaar caadr cadar
-caddr cdaar cdadr cddar cdddr. cadr is 2nd element, caddr 3rd, and so on.
-
-List building / manipulation
-- (append list...) concatenate lists, non-destructive.
-- (nreverse list) destructive reverse · (last list) last cons cell ·
-(nconc lists...) destructive concat.
-- (mapcar f list) new list of f over each element:
-(mapcar (lambda (n) (* n n)) '(1 2 3)) gives (1 4 9) .
-- (nth n list) element at index n from 0; nil past end.
-- (filter f list) elements f says yes to:
-(filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40) .
-- (reduce f list [initial]) fold left: f takes accumulator and element.
-  No initial: first element starts; empty list gives nil.
-  (reduce + '(1 2 3)) is 6. List SECOND, initial last.
-- (sort list pred) new sorted list, stable, list unchanged:
-(sort '(3 1 2) <) gives (1 2 3) ; strings use string< .
-- (reverse list) · (copy-list list) · (nthcdr n list) ·
-(butlast list [n]) · (mapc f list) for effect, returns list.
-- (find item list) · (find-if f list) · (position item list) ·
-(position-if f list) · (count item list) · (count-if f list) ·
-(remove item list) · (remove-if f list) · (remove-duplicates list) . Item
-  matched by equal.
-- (some f list) first non-nil (f x) · (every f list) t if all pass.
-
-Predicates
-- (not x) and (null x) true if nil · (consp x) true if cons ·
-(listp x) true if nil or cons · (keywordp x) true if keyword ·
-(equal x y) deep structural equality.
-
-Membership / alists
-- (memq key list) tail from first eq match · (member key list) first equal
-  match · (assq key alist) first pair with eq car · (assoc key alist) first
-  pair with equal car. Alist field:
-(cdr (assoc "content" msg)) .
-- (get-in record key...) read through nested alists, keyword plists and lists,
-  every step guarded: (get-in config "server" "port") is nil when no
-  "server", not an error. No or guard, no assoc chain.
-  Number key indexes a list — (get-in reply "results" 0 "url") — keyword key
-  matches string of its name, :port finds "port". Plist key matches by name:
-(get-in '(:theme (:accent "red")) :theme :accent) gives "red" .
-
-Nested data, write side of get-in. Pure: return new copy, record unchanged.
-- (set-in record value key...) value at path. Missing key added: plist gets
-  keyword, alist gets pair; nil record becomes plist for keyword key, else alist.
-  Index replaces element, index = length appends:
-(set-in '(:theme (:accent "red")) "blue" :theme :accent) gives (:theme (:accent "blue")) .
-- (update-in record f key...) value at path becomes (f value); f gets nil when
-  path missing:
-(update-in '(:n 1) (lambda (n) (+ n 1)) :n) gives (:n 2) .
-- (remove-in record key...) drop plist key, alist pair or list index; missing
-  path gives record back:
-(remove-in '(:a 1 :b 2) :a) gives (:b 2) .
-- Edit data file: read it, set-in / update-in / remove-in, write whole value back.
-
-Control-flow macros
-- (if test then else...) · (when test body...) · (unless test body...) ·
-(and x...) , nil on first nil, else last · (or x...) , first non-nil ·
-(case key (keys forms...) ... (t default...)) — matches key by equal
-  against each clause's key list; t clause is default.
-
-Binding macros
-- (let ((name val) ...) body...) parallel bindings; bare name binds nil.
-- (let* ((name val) ...) body...) sequential; each val may use earlier names:
-(let* ((issue (car issues)) (state (cdr (assoc "state" issue)))) …) .
-- (letrec ((name val) ...) body...) bindings reference each other — local
-  recursive functions.
-
-Loops, all support (break) and (return value)
-- (while test body...) .
-- (dolist (name list [result]) body...) iterate elements.
-- (dotimes (name count [result]) body...) iterate 0..count-1.
-
-Defining
-- (defun name (args...) [doc] body...) define function; &rest x variadic.
-- &key after required args makes the rest optional and nameable:
-  (defun kpi (&key label value unit) ...) is called as
-(kpi "Revenue" 42000) or (kpi :label "Revenue" :value 42000 :unit "USD") .
-  Filled left to right until first keyword; missing one is nil.
-  &key and &rest cannot both appear.
-- (defmacro name (args...) [doc] body...) define macro.
-
-Strings
-- (string= s1 s2) string content equality, same test as equal ·
-(substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
-(string-index s sub [start]) index or nil · (string-contains? s sub) ·
-(string-count s sub) · (string-replace s old new) ·
-(string-split s sep) , empty sep gives characters · (string-join list sep) ·
-(string-trim s) .
-- (format template arg...) fill template, return string: ~a inserts next arg
-  as string would, ~% newline, ~~ tilde; letter case-insensitive.
-  (format "The sum was ~a" n) writes a sentence around a value. Prints
-  nothing: echo result.
-
-Places
-- (setf place value ...) store, return value. Place: variable, (car x) ,
-(cdr x) , (nth n xs) , (aref v i) , (gethash key table) , or
-(get-in record key...) , which rebinds record to updated copy.
-- (push x place) · (pop place) · (incf place [n]) · (decf place [n]) .
-
-Misc
-- (identity x) return x.
-- (think part...) echo reasoning as narration: parts print literally, ,x part
-  evaluated first, e.g. (think "sum is" ,(+ 1 2)) . Returns nil; real answer
-  goes in separate expression.
-
-MACROS
-
-defmacro defines compile-time transformer. Build expansion with quasiquote:
-
-(defmacro swap (a b)
-  (let ((tmp (gensym)))
-    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))
-
-(gensym) for temporaries you introduce, so user variables are not captured.
-Expansion depth max 20 nesting levels at compile time.
-
-ERRORS & CONTROL FLOW
-
-- (error value) raises; value any Lisp value, often string.
-- (try
-  expr
-  (catch (e)
-    handler...)) evaluates expr; on raise, e bound to raised value, handler
-  runs. ONLY error mechanism — no condition system.
-
-(try
-  (error "boom")
-  (catch (e)
-    (concat "failed: " e)))
-
-- (break) and (return value) escape nearest while, dolist or dotimes. Outside
-  a loop: error.
-- (block name body...) with (return-from name [value]) leaves named block
-  from any depth.
-- (catch tag body...) with (throw tag [value]) unwinds to catch with eq tag,
-  across calls. Not try's catch clause, which handles errors. throw or
-  return-from with nothing to reach: error, try catches it.
-- (unwind-protect form cleanup...) returns form's value, runs cleanup
-  however form exits: normal, error, throw, return-from, break.
-
-GOTCHAS
-
-- Only nil is false — 0, 0.0, "" all TRUE.
-- / gives float; truncate for exact integer.
-- Output shows 3 vs 3.0.
-- read parses LISP, json-parse parses JSON. read on JSON returns junk, no error.
-- JSON numbers are floats: integer id prints 7.0; = and eql still equal 7.
-- No character type: one-character strings; char-code and friends take them.
-- Check prelude before writing helper: sort, find, position, count, some,
-  every, remove, reverse, min, max, abs, floor, round exist.
-- Many lookups by key: hash table, not alist. gethash key comes FIRST,
-  table second; puthash is key value table.
-- sort returns new list, never sorts in place: keep result,
-  (setq xs (sort xs <)) .
-- try catches errors only. catch and throw are separate pair; block and
-  return-from for early exit from function body.
-- No comment syntax: remarks in prose around forms, never inside one.
-- No print, princ, terpri or view — echo does all.
-- Hash-and-angle-brackets printout — closure, live value reader cannot read
-  back — is printout, not syntax; typing one always errors. Use the name the
-  value was reported under.
+Detail for each topic is in built-in memories. Before you use a name or form
+from a topic, recall its memory by key: memory/recall "key".
+lang/syntax, lang/prose-asides, lang/data-types, lang/special-forms,
+lang/numbers, lang/arithmetic, lang/lists, lang/hash-vectors, lang/strings,
+lang/json-read, lang/eval-control, lang/output, lang/introspection,
+lang/prelude-lists, lang/prelude-alists, lang/prelude-nested, lang/prelude-control,
+lang/prelude-strings, lang/places, lang/macros, lang/errors, lang/gotchas.

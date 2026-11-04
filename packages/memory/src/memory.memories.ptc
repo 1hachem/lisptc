@@ -1,0 +1,155 @@
+(memory "memory/triggers" :on (asks "user wants the agent to remember something that should come back on its own when a command, an error, a result or certain words show up") :links ("memory/call-triggers"))
+Trigger is a quoted form of kind and pattern. Nine kinds:
+
+  call     a form about to be evaluated, at any depth, so it catches a call
+           nested inside a setq or a let
+  result   the printed value a top-level form returned
+  error    an evaluation that raised, so a past mistake surfaces exactly as it
+           is about to repeat
+  step     every step
+  prose    words in the prose around your forms
+  user     words in what the user just said
+  recall   another memory being retrieved
+  start    the user's first message, once, with no pattern: written (start)
+  asks     what user said and what last step did, judged by meaning before
+           every step, not regex. Fires once per user message. Pattern is
+           one string saying when it applies:
+           (asks "user wants to automate a web browser")
+
+(memory "memory/call-triggers" :on (asks "user wants a memory to fire on a particular call, such as one tool or one server, and not on every call"))
+For call the pattern is A FORM, written like the call, matched structurally:
+
+(call (load-mcp "acme")) only that server, not every load
+(call (load-mcp)) any call to load-mcp, whatever its arguments
+(call (load-mcp _)) _ matches one argument, whatever it is
+(call (acme/.*)) a head is a regular expression, so one
+                                   pattern hooks every tool on a server
+(call (setq _ (acme/get _))) the shape nests as deeply as you write it
+
+Pattern list matches a PREFIX of the call: fewer arguments looser, more
+tighter. Every other kind matches text: pattern is a string regex, matched
+case-insensitively anywhere:
+
+(user "file.*") whatever the user says about file.md, file.pdf or any other one
+(user "^deploy") only what the user opens with the word
+
+Invalid regex is read as plain text, so a literal with a stray bracket still
+matches.
+
+Combine with all, any-of and not, in either sort of trigger:
+
+(call (all (load-mcp) (not (load-mcp "acme"))))
+(error (any-of "undefined" "void variable"))
+
+Memory on a loader call surfaces what you know about a server the moment you
+load it. Memory on an error surfaces the fix the moment that error returns.
+
+NAME THE ARGUMENT THAT MADE IT TRUE. Facts about one server are not true of
+the next, so (call (load-mcp "acme")) is right where (call (load-mcp)) would
+fire on every server and teach wrong things about most. Hook the whole call,
+not only the name.
+
+Firing runs nothing. Fired recipe? Replay it. Triggers watch code you write
+into the REPL. A form evaluated inside a replay or a function body is not a
+step and fires nothing.
+
+(memory "memory/chaining" :on (asks "user wants a memory to load along with another one, or to load at the start of every conversation"))
+CHAINING
+
+Retrieval is an event, so one memory can hook another and both arrive
+together. Say so outright with :links, a list of keys:
+
+  (memory "browser/local" :on (asks "user wants to automate a web browser") :links ("browser/flags"))
+
+Also automatic: memories firing in the same step get wired together.
+
+Start memory rides the user's first message and stays for the whole
+conversation: put role and goal there, with (start) as its trigger. Loads once:
+a revision is read only by the next conversation.
+
+Fired memory arrives as a REPL feedback line, to you alone. Not run, user does
+not see it. To run, replay.
+
+Loads once: once a built-in is loaded, it stays in context. It loads again only
+after its text leaves context. Need one now? Recall it by key or words.
+
+(memory "memory/fading" :on (asks "user asks why the agent forgot something, or how long a memory lasts"))
+STRENGTH AND FORGETTING
+
+Every memory has a score. Recall strengthens it. Unused, it fades, half its
+strength a week, and below a floor it is swept away. No hand tidying needed.
+memory/forget exists for what is wrong, not for what is merely old.
+
+Built-in memories never fade.
+
+(memory "memory/revising" :on (asks "user says the agent got something wrong and wants it corrected for next time"))
+THE WINDOW
+
+Retrieving a memory opens it: until step end you can revise its body. Outside
+that window revise errors, telling you to recall first. Fix a memory while
+looking at it:
+
+(memory/recall "deploy/notes")
+(memory/revise "deploy/notes" "deploys go through task deploy, not kubectl")
+
+Read-only built-ins never revise. Remember the correction under a new key, with
+a trigger that will repeat.
+
+(memory "memory/bodies" :on (asks "user wants the agent to save a recipe, a function or a reusable procedure for later"))
+GOTCHAS
+
+- Body must be prose or a readable form. Closure, promise or secret is a live
+  value, prints in angle brackets, and remember rejects it. Store the quoted
+  form that builds it, never the built thing.
+- memory/recall output is already in front of you. No echo after.
+- A recipe worth keeping belongs in a memory, not a defun. Memories outlive the
+  interpreter; definitions die on reset.
+- Replaying a defun installs that function. Remembered recipe becomes running
+  one.
+
+(memory "memory/writing" :on (asks "user wants the agent to save, change or forget a memory, or asks what built-in memories exist"))
+Work from one session is gone next session unless remembered. Memory = key +
+body. Body is prose or code, one slot: here they are the same material.
+
+- Prose body is something to know. Quoted form body is a recipe to run later.
+  Quote it: arguments are evaluated, so unquoted form stores its result instead.
+- (memory/replay key) evaluate a memory whose body is a form, return result.
+- (memory/forget-all) drop every memory, only when the user asks for a clean slate.
+- Names are slashed: bare remember, recall, forget are English verbs and would
+  be read as code in an aside.
+
+FIRING BY ITSELF: with :on a memory watches for an event and loads itself, unasked.
+Trigger is a quoted form. Usual trigger is asks, judged by meaning before every
+step against what user said and what last step did. Memory with no :on never arrives by itself. It waits for a
+recall naming it. Unguessable key later means lost.
+
+BUILT-IN MEMORIES: tool ships its own memories: how-to depth behind each extension,
+loaded when its trigger fires. Listed in (memories), found by memory/recall like
+yours. Read-only: remember, revise, forget on a built-in key error.
+
+(memory "memory/rules" :on (asks "user asks how to decide what is worth remembering, or the agent just got a guess wrong"))
+- REMEMBER THE MOMENT A GUESS FAILS. Rejected call, wrong name, backwards
+  argument order: worth keeping. Write it before moving on, while the right
+  answer is on screen.
+- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description. Hook what you
+  will be doing when you next need it. Misnamed tool goes on the call that
+  loads its server, so it arrives before you misname it again. Rejected
+  mistake goes on that error. A memory you must remember to look for, you will
+  not look for.
+- Remember the correction, not the transcript. "browser_navigate, not navigate"
+  is worth keeping; the whole tool listing is not.
+- Do not remember what the REPL can tell you: doc output, discovery results,
+  anything recomputable. Memory is for what you found out the hard way.
+- Recall before you guess. Unsure of a name the session has not told you?
+  Cheapest possible recall.
+
+(memory "memory/recalling" :on (asks "user wants the agent to find something it remembered earlier, or asks what memories exist"))
+- (memory/recall query) retrieves by key or body text, strongest first. Query
+  is words, not a pattern: every meaningful word must land in the one memory.
+  Spelling forgiven, prefix counts. Found memories load into your context:
+  recalling IS reading. No echo after it.
+- (memories) every memory as key, score and trigger, strongest first.
+- (memory/remember key body) stores one. Quote a form body, or arguments are
+  evaluated, so an unquoted form stores its result instead.
+- (memory/forget key) drops one for good. (memory/revise key body) corrects
+  one, only inside the window of a recall.

@@ -615,6 +615,7 @@ function registerUi(
 
 export interface UiHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 	panel: PanelStore;
 	views: ViewStore;
 }
@@ -636,6 +637,7 @@ export function uiExtension(
 		{
 			surface,
 			prompt: host.prompt().replace("{{widgets}}", widgetPromptSection()),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();

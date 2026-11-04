@@ -3,6 +3,10 @@ import type { ThemeChoice, WorkspaceHost, WorkspaceStore } from "./ports.ts";
 
 const workspacePrompt = filePrompt(new URL("./workspace.ptc", import.meta.url));
 
+const workspaceMemories = filePrompt(
+	new URL("./workspace.memories.ptc", import.meta.url),
+);
+
 export function workspaceHostFor(options: {
 	store: WorkspaceStore;
 	models: readonly string[];
@@ -11,5 +15,9 @@ export function workspaceHostFor(options: {
 	defaultDarkTheme?: string;
 	chatId?: string;
 }): WorkspaceHost {
-	return { ...options, prompt: workspacePrompt };
+	return {
+		...options,
+		prompt: workspacePrompt,
+		memories: workspaceMemories,
+	};
 }

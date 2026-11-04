@@ -1,0 +1,72 @@
+(memory "llm/extract" :on (asks "user wants fields or structured data pulled out of a text, page, comment or mail"))
+llm/extract shape: alist of (key . field), written by (shape (name spec...) ...)
+: no quote, no dotted pairs. Field is:
+  :string, :number, :integer, :boolean, :any; plain string = string field
+  described by its text;
+  (:string "what it means") and same for other scalars;
+  (:enum "a" "b") ; (:list field) ; (:optional field) , only field model may
+  omit; nested alist = nested object. Alist shape returns alist, (:list …)
+  returns list. :instructions "..." says what to pull out.
+  Nested group = nested object; (:list …) and (:optional …) take groups too:
+(shape (items (:list (id :number) (title :string))))
+  is list of objects. Shape is literal, built at compile time: computed enum
+  needs hand-written alist.
+
+(llm/extract page (shape (title "the page title")
+    (stars :integer)
+    (state (:enum "open" "closed"))
+    (links (:list :string))
+    (author (:optional (:string "who wrote it")))))
+llm/extract-1: alist, keys "title" "stars" "state" "links"
+
+Text arguments: prompt, :system, :instructions, llm/extract text, message
+content. Any value works.
+
+(memory "llm/complete" :on (asks "user wants a single prompt sent to the model, or several messages sent as one conversation"))
+- (llm/complete "prompt") waits, gives reply string. Prompt is any value: list or alist goes in printed, no (string …) needed.
+- (llm/chat messages) gives reply string, multi-turn. Message is (message :system "...") or (message :user "...") . Bare string = user message.
+
+(llm/complete "Name three risks in this plan" :system "Be blunt." :max-tokens 200)
+llm/complete-1: 84 words
+
+(llm/chat (list (message :system "Answer in one sentence.") (message :user q)))
+
+Text arguments: prompt, :system, :instructions, llm/extract text, message
+content. Any value works.
+
+(memory "llm/macros" :on (asks "user wants a long text or list of records summarized, or a question answered from a given text or data"))
+Three forms over llm/complete carry prompt for you; (doc 'summarize) and
+expansion are all there is. Each takes llm/complete options plus :words,
+capping asked length and token budget.
+
+- (summarize value :words 60 [option...]) gives summary. Printed form goes in
+  prompt, so list of records works like page of text.
+- (summarize-each values :words 25 [option...]) gives summaries in order, one
+  sequential call per element: slice with (head x 5) first, never hundreds.
+- (llm/answer question context :words 60 [option...]) answers from context
+  only. Not in context: nil, not a guess. nil never means failed call: branch
+  on it, do not echo it.
+
+(setq brief (summarize acme/list-issues-1 :words 40))
+brief: 39 words
+
+(echo brief)
+
+(setq owner (llm/answer "who is assigned to ENG-12?" acme/list-issues-1))
+owner: "Nadia"
+
+(echo (if owner owner "the issues do not say who is assigned"))
+
+(memory "llm/options" :on (asks "user wants a particular model or provider used, a timeout set, or defaults changed for many model calls"))
+Options, all optional, every call: :provider, keyword from (llm/providers) ·
+:model, string · :system · :max-tokens · :temperature · :reasoning-effort,
+:low, :medium or :high · :timeout ms, default 60000.
+
+(llm/providers) gives row per reachable provider, (provider default-model
+status) , status :ready or :no-api-key. First row = default :provider.
+
+Global *llm-defaults* = keyword list every call starts from; call-site option
+wins. (with-llm (option...) body...) extends it for one block, restores after:
+
+(with-llm (:provider :openrouter :max-tokens 120)
+  (summarize-each (head pages-1 3)))

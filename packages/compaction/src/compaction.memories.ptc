@@ -1,0 +1,81 @@
+(memory "compaction/repl-names" :on (asks "user wants to know what name the REPL bound a result to, or a result's shape"))
+Variable is named after the function that produced it. It always holds the
+whole value. setq or defun reports under the name it bound. Never invent a
+name: the REPL always tells you the one it bound.
+
+(acme/list-issues :query "auth bug")
+acme/list-issues-1: list of 27 alists, keys "id" "identifier" "title" "state" "url"
+
+(+ 1 2)
++-1: 3
+
+(mapcar (lambda (i) (cdr (assoc "id" i))) acme/list-issues-1)
+
+(memory "compaction/echo-window" :on (asks "user wants the rest of a long printed output, or one part of it found"))
+Echo windowing, what it prints:
+- (echo x :offset 0 :length n) print a window of x, counted in
+  whitespace-separated words. Closing ... line gives offset to continue from.
+- (echo x :match "re" :context 8 :max 10 :ignore-case t) print only regions
+  matching a regex. Each comes as @ and word offset, plus surrounding words,
+  match wrapped in double square brackets. Feed reported offset back as
+  :offset. Use this to READ a value; use grep to KEEP what matched.
+- When you know what you look for: (echo report-1 :match "pattern") .
+- One unbroken word, minified JSON say, is cut by character, and the ... line
+  points at a substring. Several echoes in one step share the budget. When it
+  runs out you are told how many words you were not shown.
+- Output ending in a ... line is not everything. Page on, do not answer early.
+
+Echo output is capped for you; user never sees echo. Past the cap, text stops and
+a ... line says how much is left:
+
+... 10 of 40 words shown, 30 below — read on with (echo report-1 :offset 10)
+
+(memory "compaction/extract" :on (asks "user wants rows, matches or items picked out of a large result, filtered, searched or counted"))
+Extracting, what each returns:
+- head, tail and grep RETURN a value, which the REPL names. Only echo prints.
+  Exception: a bare head or tail step, and a discovery call, print in full.
+- (head x [n]) first n of x; (tail x [n]) last n. On a list, n ELEMENTS:
+  (head issues 4) is first four rows. On text, n words.
+  A slice written as a step of its own is PRINTED and gets no name: you asked
+  to read it. Nested in another form it prints nothing, only the value:
+  (mapcar row (head issues 4)) , (setq top (head issues 4)) .
+  A discovery call, a search or listing of what is available, prints in full
+  the same way.
+- (grep x "pattern" :group n :max n :ignore-case t) what pattern matched, as a
+  list, or nil. On a list, ELEMENTS whose printed form matches:
+  (grep issues "auth") is the issues about auth. On text, matched substrings:
+  (grep page "https?://[^ ]+") is the URLs in it.
+- A discovery call prints every name and description, no shape.
+- (doc name) prints whole, free against echo budget. Look freely.
+- Prefer computing over reading: (length x) , mapcar, assoc and grep work on
+  the complete value. One extracting form beats paging through text.
+
+Example. A result named grep-1 holds the URLs of a page:
+
+(grep page-1 "https?://[^ ]+")
+grep-1: ("https://x.dev/a")
+
+(echo (car grep-1))
+https://x.dev/a
+
+Bare slice already answers "what is in there":
+
+(head acme/list-issues-1 2)
+((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
+  (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
+
+(memory "compaction/render-rows" :on (asks "agent must read rows of data it fetched as a table, list or summary"))
+To read rows, keep whole list and echo a rendering of it:
+
+(defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
+row: function
+
+(echo (string-join (mapcar row (head acme/list-issues-1 4)) "\n"))
+| ENG-12 | Auth token refresh fails |
+| ENG-31 | OAuth callback drops the state param |
+
+Both wrong. Never do either:
+(echo "https://x.dev/a") the URL typed from a printout
+(echo "| ENG-12 | Auth token refresh fails |") the rows typed out by hand
+
+Compute the rows from the variable. Echo the computed string.

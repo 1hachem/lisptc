@@ -41,6 +41,7 @@ export interface AgentsHostOptions {
 export function agentsHostFor(options: AgentsHostOptions = {}): AgentsHost {
 	return {
 		prompt: filePrompt(new URL("./agents.ptc", import.meta.url)),
+		memories: filePrompt(new URL("./agents.memories.ptc", import.meta.url)),
 		folder: options.folder ?? new MemorySourceFolder(),
 		workspace: options.workspace ?? "local",
 		...(options.roster === undefined ? {} : { roster: options.roster }),

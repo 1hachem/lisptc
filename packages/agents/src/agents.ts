@@ -43,6 +43,7 @@ import {
 
 export interface AgentsHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 	folder: SourceFolder;
 	workspace: string;
 	roster?: readonly string[];
@@ -77,6 +78,7 @@ export interface AgentsExtension extends InterpExtension {
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
+		memories: host.memories(),
 		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
 	});
 }

@@ -1,6 +1,11 @@
 import { agentsExtension, subAgentExtension } from "@repo/agents-extension";
 import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
-import { appliesJudge, openRouterSystemOne, type Threads } from "@repo/ai";
+import {
+	appliesJudge,
+	openRouterSystemOne,
+	POLICY_MEMORIES,
+	type Threads,
+} from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -93,6 +98,10 @@ export interface ThreadScope {
 	readonly desktop?: Desktop;
 }
 
+function policyMemories(): InterpExtension {
+	return Object.assign(() => undefined, { memories: POLICY_MEMORIES });
+}
+
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
@@ -165,6 +174,7 @@ export async function workspaceExtensions(
 		? [agents, workspace, preferences, ui]
 		: [exports];
 	return [
+		policyMemories(),
 		permissions,
 		secretsExtension({
 			...secretsHost,

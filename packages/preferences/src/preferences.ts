@@ -422,6 +422,6 @@ export function registerPreferences(
 export function preferencesExtension(host: PreferencesHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerPreferences(interp, host),
-		{ prompt: host.prompt() },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }

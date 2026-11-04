@@ -40,6 +40,7 @@ export interface PreferencesHost {
 	motions: readonly Choice[];
 	desktop?: DesktopPreferencesPort;
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export class MemoryPreferencesStore implements PreferencesStore {

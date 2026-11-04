@@ -45,6 +45,10 @@ const permissionsPrompt = filePrompt(
 	new URL("./permissions.ptc", import.meta.url),
 );
 
+const permissionsMemories = filePrompt(
+	new URL("./permissions.memories.ptc", import.meta.url),
+);
+
 export interface PermissionsHostOptions {
 	store?: PermissionsStore;
 	approvers?: readonly Approver[];
@@ -61,6 +65,7 @@ export function permissionsHostFor(
 		approvers: options.approvers ?? [uiApprover],
 		clock: systemClock,
 		prompt: permissionsPrompt,
+		memories: permissionsMemories,
 		...(options.asks === undefined ? {} : { asks: options.asks }),
 		...(options.bounds === undefined ? {} : { bounds: options.bounds }),
 	};
