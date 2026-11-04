@@ -111,3 +111,47 @@ export function toggledEntry(
 		? kept.filter((held) => held !== entry)
 		: [...kept, entry];
 }
+
+export interface StoredSidebars {
+	sidebar?: readonly string[];
+	sidebarRight?: readonly string[];
+	hidden?: readonly string[];
+}
+
+export interface SidebarView {
+	sides: SidebarSides;
+	shown: SidebarSides;
+	hidden: string[];
+	outdated:
+		| { sidebar: string[]; sidebarRight: string[]; hidden: string[] }
+		| undefined;
+}
+
+function same(
+	stored: readonly string[] | undefined,
+	resolved: readonly string[],
+): boolean {
+	return (stored ?? []).join("\n") === resolved.join("\n");
+}
+
+export function sidebarView(stored: StoredSidebars): SidebarView {
+	const sides = sidebarSides(stored.sidebar, stored.sidebarRight);
+	const hidden = currentNames(stored.hidden);
+	const current =
+		stored.sidebar !== undefined &&
+		stored.sidebarRight !== undefined &&
+		same(stored.sidebar, sides.left) &&
+		same(stored.sidebarRight, sides.right) &&
+		same(stored.hidden, hidden);
+	return {
+		sides,
+		shown: {
+			left: shownEntries(sides.left, hidden),
+			right: shownEntries(sides.right, hidden),
+		},
+		hidden,
+		outdated: current
+			? undefined
+			: { sidebar: [...sides.left], sidebarRight: [...sides.right], hidden },
+	};
+}

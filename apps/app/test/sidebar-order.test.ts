@@ -5,6 +5,7 @@ import {
 	SIDEBAR_ENTRIES,
 	shownEntries,
 	sidebarSides,
+	sidebarView,
 	toggledEntry,
 	withHiddenSides,
 } from "../src/lib/sidebar-order.ts";
@@ -97,5 +98,45 @@ describe("entries saved under their old .ptc names", () => {
 			"settings",
 			"tests",
 		]);
+	});
+});
+
+describe("what the sidebars show from what is stored", () => {
+	it("shows each side without its hidden entries", () => {
+		const view = sidebarView({
+			sidebar: ["chat", "bin"],
+			sidebarRight: ["tests"],
+			hidden: ["bin"],
+		});
+		expect(view.shown.left).not.toContain("bin");
+		expect(view.sides.left).toContain("bin");
+		expect(view.shown.right[0]).toBe("tests");
+	});
+
+	it("asks to store both sides when the right one was never stored", () => {
+		const view = sidebarView({ sidebar: ["chat"] });
+		expect(view.outdated?.sidebarRight).toEqual([...RIGHT_BY_DEFAULT]);
+		expect(view.outdated?.sidebar).not.toContain("tests");
+	});
+
+	it("asks to store hidden entries under their new names", () => {
+		const { sides } = sidebarView({});
+		const view = sidebarView({
+			sidebar: [...sides.left],
+			sidebarRight: [...sides.right],
+			hidden: ["settings.ptc"],
+		});
+		expect(view.outdated?.hidden).toEqual(["settings"]);
+	});
+
+	it("asks for nothing once what is stored is what is shown", () => {
+		const { sides } = sidebarView({});
+		expect(
+			sidebarView({
+				sidebar: [...sides.left],
+				sidebarRight: [...sides.right],
+				hidden: ["tests"],
+			}).outdated,
+		).toBeUndefined();
 	});
 });
