@@ -5,7 +5,8 @@
   "entry": [
     "apps/app/server/routes/**/*.ts",
     "apps/app/server/plugins/**/*.ts",
-    "apps/trace-viewer/evals/**/*.eval.ts"
+    "apps/trace-viewer/evals/**/*.eval.ts",
+    "packages/*/test/calibration/**/*.calibration.ts"
   ],
   "usedClassMembers": [
     "toString",

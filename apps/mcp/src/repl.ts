@@ -18,6 +18,8 @@ import { proseHost } from "@repo/prose-extension/host";
 import { MemoryRepl } from "@repo/repl/repl";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
+import { semanticExtension } from "@repo/semantic-extension";
+import { semanticHost } from "@repo/semantic-extension/host";
 
 export function newRepl(): MemoryRepl {
 	return new MemoryRepl({
@@ -27,6 +29,7 @@ export function newRepl(): MemoryRepl {
 			introspectionExtension(introspectionHost),
 			mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
 			llmExtension(llmHost),
+			semanticExtension(semanticHost),
 			compactionExtension(compactionHost),
 			memoryExtension(memoryHost),
 			proseExtension(proseHost),

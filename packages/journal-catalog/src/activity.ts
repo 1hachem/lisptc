@@ -1,7 +1,14 @@
 import { entryKind } from "@repo/shared/journal";
 import { z } from "zod";
 
-const activityIcons = ["tool", "model", "agent", "read", "write"] as const;
+const activityIcons = [
+	"tool",
+	"model",
+	"agent",
+	"read",
+	"write",
+	"meaning",
+] as const;
 
 export type ActivityIcon = (typeof activityIcons)[number];
 

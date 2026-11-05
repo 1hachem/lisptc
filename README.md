@@ -148,7 +148,7 @@ What the extensions add on top:
 - compaction   echo, doc, head, tail, grep
 - promises     await, promise-all, promise-all-settled, promise-any,
                promise-race, promise-state, promises, cancel
-- llm          llm/complete, llm/chat, llm/extract, llm/providers, message,
+- llm          write, converse, extract, message,
                and the shape macros that type an extraction
 - mcp          load-mcp, unload-mcp, list-mcps, search-mcps, list-tools,
                search-tools, login, logout, mcp-authorize, mcp-shutdown.

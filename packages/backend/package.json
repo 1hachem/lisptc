@@ -58,6 +58,7 @@
     "@repo/prose-extension": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/secrets-extension": "workspace:*",
+    "@repo/semantic-extension": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/ui": "workspace:*",
     "@repo/ui-extension": "workspace:*",

@@ -66,8 +66,7 @@ function announcer(interp: Interp): Announce {
 		record(interp.channels, activityKind, {
 			kind: "llm",
 			icon: "model",
-			label: `llm · ${model ?? provider ?? "default model"}`,
-			detail: builtin,
+			label: builtin,
 			state,
 			...(error === undefined ? {} : { error: messageOf(error) }),
 			id,
@@ -104,15 +103,8 @@ export type Generate = (
 	signal?: AbortSignal,
 ) => Promise<LlmResult>;
 
-export interface ProviderReport {
-	name: string;
-	model: string;
-	ready: boolean;
-}
-
 export interface LlmHost {
 	generate: Generate;
-	providers: () => ProviderReport[];
 	clock: Clock;
 	prompt: PromptSource;
 }
@@ -121,7 +113,7 @@ export interface LlmOptions {
 	observe?: LlmObserver;
 }
 
-const DEFAULTS_VAR = "*llm-defaults*";
+const DEFAULTS_VAR = "*writing-defaults*";
 
 const CALL_OPTIONS = [
 	"provider",
@@ -471,7 +463,11 @@ function caller(
 		const startedAt = clock.now();
 		announce(id, builtin, "started", req, { startedAt });
 		const controller = new AbortController();
-		return withTimeout(generate(req, controller.signal), timeoutMs, "llm").then(
+		return withTimeout(
+			generate(req, controller.signal),
+			timeoutMs,
+			builtin,
+		).then(
 			(res) => {
 				const ms = clock.now() - startedAt;
 				announce(
@@ -509,12 +505,11 @@ export function registerLlm(
 	host: LlmHost,
 	observe: () => LlmObserver | undefined = () => undefined,
 ): void {
-	const providers = host.providers;
 	const calls = interp.state(
 		"llm/calls",
 		callSeqCodec,
 		0,
-		"The number of the last model call, which numbers the activity the user sees.",
+		"The number of the last writing call, which numbers the activity the user sees.",
 	);
 	const call = caller(
 		host.generate,
@@ -526,54 +521,54 @@ export function registerLlm(
 
 	interp.defineGlobal(newSym(DEFAULTS_VAR), null, {
 		signature: DEFAULTS_VAR,
-		doc: "The options every `llm/` call starts from, as a keyword list, e.g. `(setq *llm-defaults* (list :provider :openrouter :max-tokens 300))`. An option given at the call site wins over it. `with-llm` binds it for one block and restores it after.",
+		doc: "The options every write, converse and extract call starts from, as a keyword list, e.g. `(setq *writing-defaults* (list :max-tokens 300 :temperature 0.2))`. An option given at the call site wins over it. `with-writing` binds it for one block and restores it after.",
 	});
 
 	interp.def(
-		"llm/complete",
+		"write",
 		-1,
-		'(llm/complete "prompt" [:system "..."] [:provider :name] [:model "id"] [:max-tokens n] [:temperature x] [:reasoning-effort :low] [:timeout ms])',
-		"Send one prompt to a language model and return its reply as a string. The call waits for the reply, so the value is the text itself. The prompt is any value, not just a string: a list of records goes in as its printed form, so there is no `(string …)` to write around it. Use `:system` for the model's instructions, `:provider`/`:model` to choose where it runs, `(llm/providers)` to see what is reachable, and `:max-tokens` to bound the answer. The reply is a value like any other: name it, `grep` it, `echo` it.",
+		'(write "prompt" [:system "..."] [:max-tokens n] [:temperature x] [:reasoning-effort :low] [:timeout ms])',
+		"Write a reply to one prompt and return it as a string. The call waits for the reply, so the value is the text itself. The prompt is any value, not just a string: a list of records goes in as its printed form, so there is no `(string …)` to write around it. Use `:system` for standing instructions and `:max-tokens` to bound the answer. The reply is a value like any other: name it, `grep` it, `echo` it.",
 		z.tuple([zList]),
 		([rest]) => {
 			const { values, options: given } = splitKeywordArgs(rest, CALL_OPTIONS);
 			const prompt = oneValue(
 				values,
-				"llm/complete takes one prompt string, then keyword options",
+				"write takes one prompt string, then keyword options",
 				rest,
 			);
 			const opts = optionsFor(interp, given, CALL_OPTIONS);
 			const req = requestFrom(opts, [
 				{ role: "user", content: asContent(prompt, "the prompt") },
 			]);
-			return call("llm/complete", req, timeoutOf(opts)).then((res) => res.text);
+			return call("write", req, timeoutOf(opts)).then((res) => res.text);
 		},
 	);
 
 	interp.def(
-		"llm/chat",
+		"converse",
 		-1,
-		'(llm/chat messages [:provider :name] [:model "id"] [:max-tokens n] ...)',
-		'Send a list of messages to a language model and return its reply as a string. A message is what `message` builds: an alist with "role" and "content". That is the shape of the `conversation` global too, so it can be passed straight in. A bare string in the list counts as a user message. Takes the same options as `llm/complete`.',
+		"(converse messages [:max-tokens n] ...)",
+		'Write the next reply in a list of messages and return it as a string. A message is what `message` builds: an alist with "role" and "content". That is the shape of the `conversation` global too, so it can be passed straight in. A bare string in the list counts as a user message. Takes the same options as `write`.',
 		z.tuple([zList]),
 		([rest]) => {
 			const { values, options: given } = splitKeywordArgs(rest, CALL_OPTIONS);
 			const messages = oneValue(
 				values,
-				"llm/chat takes one list of messages, then keyword options",
+				"converse takes one list of messages, then keyword options",
 				rest,
 			);
 			const opts = optionsFor(interp, given, CALL_OPTIONS);
 			const req = requestFrom(opts, messagesFrom(messages));
-			return call("llm/chat", req, timeoutOf(opts)).then((res) => res.text);
+			return call("converse", req, timeoutOf(opts)).then((res) => res.text);
 		},
 	);
 
 	interp.def(
-		"llm/extract",
+		"extract",
 		-1,
-		'(llm/extract text shape [:instructions "..."] [:provider :name] [:model "id"] ...)',
-		'Read `text` with a language model and return the data `shape` asks for, as ordinary Lisp data. The model is constrained to the shape, so there is no parsing step and no stray prose. A shape is an alist of `(key . field)`, which `(shape (title :string) …)` builds for you. A field is `:string`, `:number`, `:integer`, `:boolean`, `:any`, a plain string (a string field, the text being what it means), `(:string "what it means")`, `(:enum "open" "closed")`, `(:list field)`, `(:optional field)`, or a nested alist for a nested object. An object shape comes back as an alist, a `(:list ...)` shape as a list. Add `:instructions` to say what to pull out. The `text` is any value: a list of records is read as its printed form.',
+		'(extract text shape [:instructions "..."] ...)',
+		'Read `text` and return the data `shape` asks for, as ordinary Lisp data. The answer is constrained to the shape, so there is no parsing step and no stray prose. A shape is an alist of `(key . field)`, which `(shape (title :string) …)` builds for you. A field is `:string`, `:number`, `:integer`, `:boolean`, `:any`, a plain string (a string field, the text being what it means), `(:string "what it means")`, `(:enum "open" "closed")`, `(:list field)`, `(:optional field)`, or a nested alist for a nested object. An object shape comes back as an alist, a `(:list ...)` shape as a list. Add `:instructions` to say what to pull out. The `text` is any value: a list of records is read as its printed form.',
 		z.tuple([zList]),
 		([rest]) => {
 			const { values, options: given } = splitKeywordArgs(
@@ -583,7 +578,7 @@ export function registerLlm(
 			const args = elements(values, "arguments expected");
 			if (args.length !== 2)
 				throw new EvalException(
-					"llm/extract takes a text and a shape, then keyword options",
+					"extract takes a text and a shape, then keyword options",
 					rest,
 				);
 			const opts = optionsFor(interp, given, EXTRACT_OPTIONS);
@@ -599,7 +594,7 @@ export function registerLlm(
 				},
 			]);
 			req.schema = { name: "extraction", schema };
-			return call("llm/extract", req, timeoutOf(opts)).then((res) => {
+			return call("extract", req, timeoutOf(opts)).then((res) => {
 				const value = unwrap
 					? (res.value as Record<string, unknown> | null)?.[UNWRAP]
 					: res.value;
@@ -609,28 +604,10 @@ export function registerLlm(
 	);
 
 	interp.def(
-		"llm/providers",
-		0,
-		"(llm/providers)",
-		"Return the language-model providers this REPL can reach, each as `(provider default-model status)`. The status is `:ready`, or `:no-api-key` when its key is missing from the environment. The first entry is what a call with no `:provider` uses.",
-		z.tuple([]),
-		() =>
-			arrayToList(
-				providers().map((p) =>
-					arrayToList([
-						newLispKeyword(p.name),
-						p.model,
-						newLispKeyword(p.ready ? "ready" : "no-api-key"),
-					]),
-				),
-			),
-	);
-
-	interp.def(
 		"message",
 		2,
 		'(message :user "content")',
-		'Build one chat message for `llm/chat`: an alist with "role" and "content". The role is `:system`, `:user` or `:assistant`, and the content is any value, a list of records included.',
+		'Build one chat message for `converse`: an alist with "role" and "content". The role is `:system`, `:user` or `:assistant`, and the content is any value, a list of records included.',
 		z.tuple([zAny, zAny]),
 		([role, content]) => {
 			const name = asName(role, "a role");
@@ -694,11 +671,11 @@ const MACROS = `
         (cond ((null fields) (error "shape needs at least one field"))
               (t (list 'quote (mapcar _shape-pair fields))))))
 (_set-doc 'shape "(shape (name spec...)...)"
-          "Build a shape for llm/extract without the quoting and the dotted pairs: (shape (title :string) (stars :integer) (state (:enum \\"open\\" \\"closed\\")) (links (:list :string)) (author (:optional :string))) is the alist ((title . :string) (stars . :integer) ...), which is what llm/extract reads. A spec is a type keyword, a description string, (:string \\"what it means\\"), or a nested (name spec...) group for a nested object; (:list ...) and (:optional ...) take a group too, so (items (:list (id :number) (title :string))) is a list of objects. The name is a symbol -- write it as a string when the field name has a space. The shape is literal, built when the form is compiled, so a computed enum still needs the alist written by hand.")
+          "Build a shape for extract without the quoting and the dotted pairs: (shape (title :string) (stars :integer) (state (:enum \\"open\\" \\"closed\\")) (links (:list :string)) (author (:optional :string))) is the alist ((title . :string) (stars . :integer) ...), which is what extract reads. A spec is a type keyword, a description string, (:string \\"what it means\\"), or a nested (name spec...) group for a nested object; (:list ...) and (:optional ...) take a group too, so (items (:list (id :number) (title :string))) is a list of objects. The name is a symbol -- write it as a string when the field name has a space. The shape is literal, built when the form is compiled, so a computed enum still needs the alist written by hand.")
 
 (setq summarize
       (macro (value &rest options)
-        \`(llm/complete
+        \`(write
            (concat "Summarize the input below in about "
                    ,(string (_llm-option options :words 60))
                    " words. Keep the names, numbers and conclusions. Write the summary only.\\n\\n"
@@ -707,7 +684,7 @@ const MACROS = `
                                      (* 4 (_llm-option options :words 60)))
            ,@(_llm-drop (_llm-drop options :words) :max-tokens))))
 (_set-doc 'summarize "(summarize value [:words n] [option...])"
-          "Summarize any value with a language model and return the summary text. Expands to an llm/complete call whose prompt carries the value's printed form, so it reads a list of records as well as a page of text. :words (default 60) sets both the length asked for and the token budget; every other option is passed on to llm/complete.")
+          "Summarize any value and return the summary text. Expands to a write call whose prompt carries the value's printed form, so it reads a list of records as well as a page of text. :words (default 60) sets both the length asked for and the token budget; every other option is passed on to write.")
 
 (setq summarize-each
       (macro (values &rest options)
@@ -717,12 +694,12 @@ const MACROS = `
                               ,@(_llm-drop options :words)))
                  ,values)))
 (_set-doc 'summarize-each "(summarize-each values [:words n] [option...])"
-          "Summarize every element of a list and return the list of summaries, in order. One model call per element, run in sequence, so :words (default 25) keeps each one short.")
+          "Summarize every element of a list and return the list of summaries, in order. One call per element, run in sequence, so :words (default 25) keeps each one short.")
 
-(setq llm/answer
+(setq answer
       (macro (question context &rest options)
         \`(let ((_llm-answer
-                  (llm/complete
+                  (write
                     (concat "Context:\\n" (string ,context)
                             "\\n\\nQuestion: " (string ,question))
                     :system ,(concat
@@ -733,19 +710,91 @@ const MACROS = `
                                               (* 4 (_llm-option options :words 60)))
                     ,@(_llm-drop (_llm-drop options :words) :max-tokens))))
            (if (string-prefix? "NOT-IN-CONTEXT" _llm-answer) nil _llm-answer))))
-(_set-doc 'llm/answer "(llm/answer question context [:words n] [option...])"
-          "Answer a question from a context and nothing else, and return the answer text. The context is any value: its printed form goes into the prompt, so a list of records works as well as a page of text. The model is told to use the context alone, so when the context does not contain the answer this returns nil rather than a guess -- test it with (if (llm/answer q ctx) ...) and never treat nil as a failed call. :words (default 60) caps the length and the token budget; every other option is passed on to llm/complete, an explicit :system included, which replaces the grounding instruction and is rarely what you want.")
+(_set-doc 'answer "(answer question context [:words n] [option...])"
+          "Answer a question from a context and nothing else, and return the answer text. The context is any value: its printed form goes into the prompt, so a list of records works as well as a page of text. It answers from the context alone, so when the context does not contain the answer this returns nil rather than a guess -- test it with (if (answer q ctx) ...) and never treat nil as a failed call. :words (default 60) caps the length and the token budget; every other option is passed on to write, an explicit :system included, which replaces the grounding instruction and is rarely what you want.")
 
-(setq with-llm
+(setq _llm-transform
+      (lambda (task inputs options)
+        (apply write
+               (cons (concat task " Write the result only, with no preamble.\\n\\n"
+                             (cond ((null (cdr inputs)) (string (car inputs)))
+                                   (t (concat "First:\\n" (string (car inputs))
+                                              "\\n\\nSecond:\\n" (string (car (cdr inputs)))))))
+                     options))))
+
+(setq invert
+      (lambda (x &rest options)
+        (_llm-transform "Invert the input below: swap its roles or direction so it states the reverse relation, in the same form. \\"I am standing on the shoulders of giants.\\" becomes \\"Giants are standing on my shoulders.\\""
+                        (list x) options)))
+(_set-doc 'invert "(invert x [option...])"
+          "Return x with its roles or direction swapped: (invert \\"I stand on the shoulders of giants.\\") is \\"Giants stand on my shoulders.\\" Every option is passed on to write.")
+
+(setq negate
+      (lambda (x &rest options)
+        (_llm-transform "Negate the input below: make it state the opposite of what it states, changing as little as possible."
+                        (list x) options)))
+(_set-doc 'negate "(negate x [option...])"
+          "Return x saying the opposite: (negate \\"I am happy.\\") is \\"I am not happy.\\" Every option is passed on to write.")
+
+(setq blend
+      (lambda (x y &rest options)
+        (_llm-transform "Combine the two inputs below into one coherent text that carries the meaning of both."
+                        (list x y) options)))
+(_set-doc 'blend "(blend x y [option...])"
+          "Return x and y blended into one text: (blend \\"Hello my\\" \\"friend\\") is \\"Hello my friend\\". Every option is passed on to write.")
+
+(setq strip
+      (lambda (x y &rest options)
+        (_llm-transform "Remove from the first input what the second input names or means, and keep the rest of the first as written."
+                        (list x y) options)))
+(_set-doc 'strip "(strip x y [option...])"
+          "Return x with what y names or means taken out: (strip \\"Hello my enemy\\" \\"enemy\\") is \\"Hello my\\". Every option is passed on to write.")
+
+(setq open-with
+      (lambda (x y &rest options)
+        (_llm-transform "Work the second input into the beginning of the first so the result reads naturally."
+                        (list x y) options)))
+(_set-doc 'open-with "(open-with x y [option...])"
+          "Return x with y worked in at its start: (open-with \\"high priority task\\" \\"urgent\\") is \\"urgent high priority task\\". Every option is passed on to write.")
+
+(setq close-with
+      (lambda (x y &rest options)
+        (_llm-transform "Work the second input into the end of the first so the result reads naturally."
+                        (list x y) options)))
+(_set-doc 'close-with "(close-with x y [option...])"
+          "Return x with y worked in at its end: (close-with \\"data processing\\" \\"downstream\\") is \\"data processing downstream\\". Every option is passed on to write.")
+
+(setq conclude
+      (lambda (x y &rest options)
+        (_llm-transform "Take both inputs below as true and state what follows from them together."
+                        (list x y) options)))
+(_set-doc 'conclude "(conclude x y [option...])"
+          "Return what follows from x and y taken together: (conclude \\"The horn only sounds on Sundays.\\" \\"I hear the horn.\\") concludes it is Sunday. Every option is passed on to write.")
+
+(setq either
+      (lambda (x y &rest options)
+        (_llm-transform "State the two inputs below as alternatives, either or both of which may hold."
+                        (list x y) options)))
+(_set-doc 'either "(either x y [option...])"
+          "Return x and y stated as alternatives that may both hold. Every option is passed on to write.")
+
+(setq one-of
+      (lambda (x y &rest options)
+        (_llm-transform "State the two inputs below as mutually exclusive alternatives: exactly one of them holds."
+                        (list x y) options)))
+(_set-doc 'one-of "(one-of x y [option...])"
+          "Return x and y stated as alternatives of which exactly one holds: (one-of \\"The door is open.\\" \\"The door is closed.\\"). Every option is passed on to write.")
+
+(setq with-writing
       (macro (options &rest body)
-        \`(let ((_llm-saved *llm-defaults*))
-           (setq *llm-defaults* (append _llm-saved (list ,@options)))
+        \`(let ((_llm-saved *writing-defaults*))
+           (setq *writing-defaults* (append _llm-saved (list ,@options)))
            (let ((_llm-value (try (progn ,@body)
                                   (catch (e)
-                                    (setq *llm-defaults* _llm-saved)
+                                    (setq *writing-defaults* _llm-saved)
                                     (error e)))))
-             (setq *llm-defaults* _llm-saved)
+             (setq *writing-defaults* _llm-saved)
              _llm-value))))
-(_set-doc 'with-llm "(with-llm (option...) body...)"
-          "Evaluate the body with *llm-defaults* extended by the given options, then restore it, so a block of code can pin a provider or a model without repeating it: (with-llm (:provider :openrouter :max-tokens 200) (summarize-each pages)). A call in the body can still override any of them.")
+(_set-doc 'with-writing "(with-writing (option...) body...)"
+          "Evaluate the body with *writing-defaults* extended by the given options, then restore it, so a block of code can pin a setting without repeating it: (with-writing (:max-tokens 200) (summarize-each pages)). A call in the body can still override any of them.")
 `;

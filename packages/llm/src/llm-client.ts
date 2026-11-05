@@ -1,20 +1,10 @@
 import type { CallbackHandlerMethods } from "@langchain/core/callbacks/base";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { LLMResult } from "@langchain/core/outputs";
-import type { ChatOpenAI } from "@langchain/openai";
 import { defaultProvider, providerSpecs } from "@repo/env/providers";
 import { contentToText } from "@repo/shared/messages";
-import { PROVIDER_NAMES, providerSpecFor } from "@repo/shared/providers";
-import type { Generate, LlmRequest, ProviderReport } from "./llm.ts";
-
-export function listProviders(): ProviderReport[] {
-	const first = defaultProvider;
-	const order = [first, ...PROVIDER_NAMES.filter((name) => name !== first)];
-	return order.map((name) => ({
-		name,
-		model: providerSpecs[name].defaultModel,
-		ready: providerSpecs[name].apiKey !== undefined,
-	}));
-}
+import { type ProviderName, providerSpecFor } from "@repo/shared/providers";
+import type { Generate, LlmRequest } from "./llm.ts";
 
 interface Usage {
 	inputTokens?: number;
@@ -40,7 +30,7 @@ function usageCollector(usage: Usage): CallbackHandlerMethods {
 }
 
 interface Target {
-	model: ChatOpenAI;
+	model: BaseChatModel;
 	provider: string;
 	name: string;
 }
@@ -48,25 +38,16 @@ interface Target {
 async function chatModel(req: LlmRequest): Promise<Target> {
 	const provider = req.provider ?? defaultProvider;
 	const spec = providerSpecFor(provider, providerSpecs);
-	if (spec.apiKey === undefined)
-		throw new Error(
-			`${spec.apiKeyEnv} is not set. Add it to your environment (.env) to talk to ${spec.label}.`,
-		);
 	const name = req.model ?? spec.defaultModel;
-	const { ChatOpenAI } = await import("@langchain/openai");
-	const model = new ChatOpenAI({
-		apiKey: spec.apiKey,
+	const { getChatProvider } = await import("@repo/models/providers");
+	const model = getChatProvider(provider as ProviderName)({
 		model: name,
 		temperature: req.temperature,
 		maxTokens: req.maxTokens,
 		streaming: false,
-		configuration: { baseURL: spec.baseUrl },
-		modelKwargs: {
-			...spec.body,
-			...(req.reasoningEffort === undefined
-				? {}
-				: { reasoning_effort: req.reasoningEffort }),
-		},
+		reasoningEffort: req.reasoningEffort ?? null,
+		repeatPenalty: null,
+		variant: null,
 	});
 	return { model, provider, name };
 }
