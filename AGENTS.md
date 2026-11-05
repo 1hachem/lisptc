@@ -127,6 +127,7 @@ named only at a composition root:
 - `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
+- `packages/semantic` (`@repo/semantic-extension`) — the `%` forms: comparisons, picks and ratings judged by meaning.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
 - `packages/workspace` (`@repo/workspace-extension`) — the workspace's settings and its chats.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
@@ -137,6 +138,7 @@ Everything else:
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
+- `packages/models` (`@repo/models`) — how the code reaches a model vendor: the chat providers and the System One models.
 - `packages/desktop-protocol` (`@repo/desktop-protocol`) — the wire between the desktop app and the app server.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/ui-catalog` (`@repo/ui-catalog`) — the widgets a view may hold, which the UI extension builds against and the frontend draws against.
@@ -192,6 +194,9 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   ships, and `apps/app/AGENTS.md` carries that rule.
 - `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
+- A package tagged `platform` is a vendor adapter, like `@repo/models`. It
+  depends on `foundation` and `static` packages only, and an extension, the
+  runtime, the backend and an app may each depend on it.
 - A package tagged `static` is data, like `@repo/toolkit`. It depends on zod or
   a `foundation` package at most, and every package and app may depend on it.
 - `@repo/backend` depends on no workspace package that reads it, and nothing

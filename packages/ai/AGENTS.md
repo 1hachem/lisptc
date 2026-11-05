@@ -11,8 +11,8 @@ Turbo tag: `runtime`.
 vocabulary of a turn. `src/stream.ts` puts a turn on the wire as server-sent
 events. `src/eval.ts` is the one-shot evaluation.
 
-`src/agent.ts` wraps the model call and yields deltas. `src/provider/` holds the
-provider registry and one file per provider. `src/prompts/lisp.ts` holds the
+`src/agent.ts` wraps the model call and yields deltas, on a chat provider from
+`@repo/models`. `src/prompts/lisp.ts` holds the
 system prompt and the step cap. `src/repl.ts` turns a transcript into model
 messages and an eval result into content. `src/telemetry.ts` is the PostHog
 side, and `src/turn-telemetry.ts` lays it over the turn's chains as their
