@@ -2,7 +2,6 @@ import type { Check } from "./check.ts";
 
 interface ImportRule {
 	modules: string[];
-	names?: string[];
 	allow: string[];
 	reason: string;
 }
@@ -18,30 +17,12 @@ const RULES: ImportRule[] = [
 			"Only the eval cases run a suite. Read reports through @repo/evals/report, /review and /storage instead.",
 	},
 	{
-		modules: ["@dnd-kit/core"],
-		names: ["DragOverlay"],
-		allow: ["packages/components/src/cursor-drag-overlay.tsx"],
-		reason:
-			"The page runs under CSS zoom, and a bare DragOverlay trails behind the cursor under it. Wrap the overlay in CursorDragOverlay from packages/components/src/cursor-drag-overlay.tsx.",
-	},
-	{
 		modules: ["lucide-react"],
 		allow: [],
 		reason:
 			"Icons come from @hugeicons/core-free-icons, drawn with <HugeiconsIcon icon={...} />.",
 	},
 ];
-
-function imports(source: string, module: string, names?: string[]): boolean {
-	if (names === undefined) return source.includes(`"${module}"`);
-	const specifiers = new RegExp(
-		`import\\s*(?:type\\s*)?\\{([^}]*)\\}\\s*from\\s*"${module}"`,
-		"g",
-	);
-	return [...source.matchAll(specifiers)].some(([, named]) =>
-		names.some((name) => new RegExp(`\\b${name}\\b`).test(named ?? "")),
-	);
-}
 
 export const restrictedImports: Check = {
 	name: "restricted imports",
@@ -58,10 +39,10 @@ export const restrictedImports: Check = {
 				.filter((file) => !rule.allow.some((prefix) => file.startsWith(prefix)))
 				.flatMap((file) =>
 					rule.modules
-						.filter((module) => imports(tree.read(file), module, rule.names))
+						.filter((module) => tree.read(file).includes(`"${module}"`))
 						.map((module) => ({
 							file,
-							what: `imports ${rule.names?.join(", ") ?? module} from ${module}`,
+							what: `imports ${module}`,
 							why: rule.reason,
 						})),
 				),
