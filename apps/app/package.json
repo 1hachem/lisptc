@@ -50,6 +50,7 @@
     "@repo/promises-extension": "workspace:*",
     "@repo/prose-extension": "workspace:*",
     "@repo/secrets-extension": "workspace:*",
+    "@repo/semantic-extension": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/syntax": "workspace:*",
     "@repo/toolkit": "workspace:*",

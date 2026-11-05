@@ -1,0 +1,10 @@
+import { jev } from "@repo/models/providers";
+import { systemClock } from "@repo/shared/host";
+import { filePrompt } from "@repo/shared/host-node";
+import type { SemanticHost } from "./semantic.ts";
+
+export const semanticHost: SemanticHost = {
+	systemOne: jev,
+	clock: systemClock,
+	prompt: filePrompt(new URL("./semantic.ptc", import.meta.url)),
+};

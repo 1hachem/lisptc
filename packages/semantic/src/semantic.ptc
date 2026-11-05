@@ -1,0 +1,57 @@
+SEMANTIC FORMS
+
+% before plain form = same form, judged by meaning. Judge is small fast model:
+gives probability, never text. Bare = < member find stay exact: % only where
+written. Numbers and equal values answer without judge, so (%= 2 2.0) free.
+Same question twice in session = same answer, no second call.
+
+Base, raw numbers for own threshold:
+
+- (%p x "is a refund request") gives probability of yes, 0..1.
+- (%p-each items "question") gives one probability per item, one call.
+- (%choose x '(:billing :technical :other)) gives option as written. Option =
+  keyword, string, or (option . "what it means"). :none value adds "none of
+  these", returns value when chosen. :min p returns :none value when best
+  option less likely than p. :question "..." says what is picked.
+- (%score x "urgency") gives rating 0..4 on very low..very high. Own levels:
+  (%score x "urgency" '("can wait" "today" "right now")) gives 0..2. Compare
+  scores only on same levels.
+- (%score-each items "urgency" [levels]) gives one score per item, one call.
+
+Predicates, t or nil, take :min p (default 0.5):
+
+- (%= "Hi there!" "Hello!") , (%/= a b) ; :context "politeness" judges only by that.
+- (%< "a cat" "a horse" :by "size") , %> %<= %>= ; numbers compare exact.
+- (%is-a row "person data")
+- (%enough? facts "to book the flight") , nil = ask user, do not guess.
+- (%string-contains? mail "a refund") , %string-prefix? %string-suffix? ;
+  literal match answers without judge.
+
+Lists, whole list in one call:
+
+- (%member "a refund" topics) gives tail like member.
+- (%find "a pet" animals) gives element or nil ; (%position "a pet" animals) gives index or nil.
+- (%filter "engineers" staff) , (%remove-if "spam" mails) , (%count-if "negative" reviews)
+- (%some "urgent" tickets) , (%every "in English" msgs)
+- (%sort tickets :by "urgency" :desc t) , (%max offers :by "value for money") , %min.
+  :levels '(...) for own rubric.
+
+Branching, judge picks clause, body runs as plain Lisp:
+
+(%cond ticket
+  ("asks for a refund" (refund ticket))
+  ("reports a bug" (file-bug ticket))
+  (t (escalate ticket)))
+
+(%case weather (:hot (stay-in)) (:mild (walk)) (t (check-again)))
+
+t clause runs when nothing fits; no t clause gives nil.
+
+Options, every judge call: :model "id" · :timeout ms, default 30000.
+
+GOTCHAS
+
+- Judge answers yes/no, pick, rate. Never writes text: rewrite, summarize,
+  extract stay llm/.
+- Call can fail: try with fallback where wrong guess is costly.
+- % forms on ids, keys, enum strings: wrong tool. Use plain form.
