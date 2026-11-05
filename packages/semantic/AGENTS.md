@@ -7,14 +7,15 @@ Turbo tag: `extension`.
 ## Shape
 
 `src/semantic.ts` is the extension: it declares `SemanticHost` (the System One
-model, the clock, its own prompt). The model's contract is
-`@repo/shared/system-one`. `src/semantic-host.ts` holds the host a root passes
-in, on `jev` from `@repo/models`. `src/semantic.ptc` is the prompt.
+model, the embedding model, the clock, its own prompt). The models' contracts
+are `@repo/shared/system-one` and `@repo/shared/embedding`.
+`src/semantic-host.ts` holds the host a root passes in, on `jev` and the
+OpenRouter embedder from `@repo/models`. `src/semantic.ptc` is the prompt.
 
 `check:arch` treats `src/semantic.ts` as an extension module, so it imports no
 SDK, no typed env module and no node builtin.
 
-A new System One provider belongs in `@repo/models`, not here.
+A new System One or embedding provider belongs in `@repo/models`, not here.
 
 ## Rules
 
@@ -37,4 +38,5 @@ helper lambdas.
 
 ## Tests
 
-`test/`. A test hands the extension a fake `SystemOneModel` rather than calling a model.
+`test/`. A test hands the extension a fake `SystemOneModel` or `EmbeddingModel` rather
+than calling a model.

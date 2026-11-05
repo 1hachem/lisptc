@@ -9,7 +9,7 @@ Turbo tag: `extension`.
 ## Shape
 
 `src/llm.ts` is the extension: it declares `LlmHost`, one field per port
-(generation, the provider list, the clock, its own prompt), and contributes a
+(generation, the clock, its own prompt), and contributes a
 prompt and a session. `src/llm-host.ts` holds the host a root passes in. `src/llm.ptc`
 is the prompt.
 
