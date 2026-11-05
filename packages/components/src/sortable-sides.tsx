@@ -91,11 +91,23 @@ function sameSides<Side extends string, Id extends string>(
 	);
 }
 
+interface Dropped<Side extends string, Id extends string> {
+	next: Sides<Side, Id>;
+	over: Sides<Side, Id>;
+}
+
+export function stillAwaiting<Side extends string, Id extends string>(
+	given: Sides<Side, Id>,
+	dropped: Dropped<Side, Id> | undefined,
+): Dropped<Side, Id> | undefined {
+	return dropped && sameSides(dropped.over, given) ? dropped : undefined;
+}
+
 export function awaitingSides<Side extends string, Id extends string>(
 	given: Sides<Side, Id>,
-	dropped: { next: Sides<Side, Id>; over: Sides<Side, Id> } | undefined,
+	dropped: Dropped<Side, Id> | undefined,
 ): Sides<Side, Id> {
-	return dropped && sameSides(dropped.over, given) ? dropped.next : given;
+	return stillAwaiting(given, dropped)?.next ?? given;
 }
 
 const preferEntries: CollisionDetection = (args) => {
@@ -133,11 +145,10 @@ export function SortableSides<Side extends string, Id extends string>({
 	const shown: MotionId = reduced || motion === "none" ? "none" : "overlay";
 	const [live, setLive] = useState<Sides<Side, Id>>();
 	const [dragged, setDragged] = useState<Id>();
-	const [dropped, setDropped] = useState<{
-		next: Sides<Side, Id>;
-		over: Sides<Side, Id>;
-	}>();
-	const settledSides = awaitingSides(given, dropped);
+	const [dropped, setDropped] = useState<Dropped<Side, Id>>();
+	const held = stillAwaiting(given, dropped);
+	if (held !== dropped) setDropped(held);
+	const settledSides = awaitingSides(given, held);
 	const sides = live ?? settledSides;
 	const sensors = useSensors(
 		useSensor(PointerSensor, {

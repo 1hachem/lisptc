@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { awaitingSides, movedAcross } from "./sortable-sides.tsx";
+import {
+	awaitingSides,
+	movedAcross,
+	stillAwaiting,
+} from "./sortable-sides.tsx";
 
 const SIDES = { left: ["a", "b", "c"], right: ["x", "y"] };
 
@@ -53,5 +57,12 @@ describe("the order held after a drop", () => {
 			}),
 		).toEqual(elsewhere);
 		expect(awaitingSides(SIDES, undefined)).toEqual(SIDES);
+	});
+
+	it("shows the old order again when a failed save puts it back", () => {
+		const next = { left: ["a", "c"], right: ["x", "b", "y"] };
+		const saving = stillAwaiting(next, { next, over: SIDES });
+		expect(saving).toBeUndefined();
+		expect(awaitingSides(SIDES, saving)).toEqual(SIDES);
 	});
 });
