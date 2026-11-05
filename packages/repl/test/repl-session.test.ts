@@ -105,11 +105,11 @@ describe("the llm observer", () => {
 
 		expect(r.hooks.filled(llmSlot)).toBe(observed);
 		r.hooks.filled(llmSlot)?.observe?.({
-			builtin: "llm/complete",
+			builtin: "write",
 			messages: [],
 			structured: false,
 			latencyMs: 0,
 		});
-		expect(calls.map((call) => call.builtin)).toEqual(["llm/complete"]);
+		expect(calls.map((call) => call.builtin)).toEqual(["write"]);
 	});
 });
