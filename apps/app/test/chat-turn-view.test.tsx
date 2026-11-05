@@ -387,26 +387,18 @@ describe("a call's progress", () => {
 });
 
 describe("the trace", () => {
-	it("shows the code each step ran, what it printed and what it returned, every channel on", async () => {
+	it("shows the code each step ran and only what it sent back to the model, every channel on", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const text = host.textContent ?? "";
 
 		expect(text).toContain("(draw-chart)");
-		expect(text).toContain("drawn for you");
-		expect(text).toContain("RESULT-VALUE");
 		expect(text).toContain("MODEL-SAW");
+		expect(text).not.toContain("drawn for you");
+		expect(text).not.toContain("RESULT-VALUE");
 	});
 
 	it("marks every block a trace draws with its channel's icon, and the chat with none", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const marked = [...host.querySelectorAll("[data-channel]")].map((block) => [
 			block.getAttribute("data-channel"),
 			block.querySelector(":scope > svg")?.getAttribute("aria-label"),
@@ -416,9 +408,9 @@ describe("the trace", () => {
 			expect.arrayContaining([
 				["ui", "ui"],
 				["output", "output"],
-				["model", "model"],
 			]),
 		);
+		expect(host.querySelector('[data-channel="model"]')).toBeNull();
 
 		session.messages = MESSAGES;
 		const chat = await mount(<ChatView />);
@@ -490,10 +482,6 @@ describe("the trace", () => {
 				]}
 			/>,
 		);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const toggles = [...host.querySelectorAll("button[aria-pressed]")].map(
 			(button) => button.textContent,
 		);
@@ -502,7 +490,7 @@ describe("the trace", () => {
 		expect(toggles).not.toContain("errors");
 		expect(failed?.textContent).toContain("MODEL-SAW-BOOM");
 		expect(
-			failed?.querySelector('[data-channel="model"] > div > .text-red')
+			failed?.querySelector('[data-channel="output"] > div > .text-red')
 				?.textContent,
 		).toContain("MODEL-SAW-BOOM");
 	});
@@ -523,10 +511,6 @@ describe("the trace", () => {
 				]}
 			/>,
 		);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const text = host.textContent ?? "";
 
 		expect(text).toContain(
@@ -537,21 +521,28 @@ describe("the trace", () => {
 		);
 	});
 
-	it("titles a step by its intent, else by the agent's prose, never by a form's name", async () => {
+	it("heads a step with its number and duration only", async () => {
 		const host = await mount(
 			<TraceLines
 				messages={[
-					...MESSAGES,
-					{ id: "a3", type: "ai", content: "(draw-chart)" },
-					{ id: "t3", type: "tool", content: '{"source":"lisp-repl"}' },
+					{ id: "h1", type: "human", content: "go" },
+					{
+						id: "a1",
+						type: "ai",
+						content: "(draw-chart)",
+						additional_kwargs: { meta: { durationMs: 1500 } },
+					},
+					{ id: "t1", type: "tool", content: '{"source":"lisp-repl"}' },
+					{ id: "a2", type: "ai", content: "(draw-chart)" },
+					{ id: "t2", type: "tool", content: '{"source":"lisp-repl"}' },
 				]}
 			/>,
 		);
-		const titles = [
-			...host.querySelectorAll("[data-step-header] .truncate"),
-		].map((t) => t.textContent);
+		const headers = [...host.querySelectorAll("[data-step-header]")].map(
+			(h) => h.textContent,
+		);
 
-		expect(titles).toEqual(["drawing the chart", PROSE, "step"]);
+		expect(headers).toEqual([`step 1${formatElapsed(1500)}`, "step 2"]);
 	});
 
 	const CHANNEL_TRACE: ChatMessage[] = [
@@ -614,23 +605,18 @@ describe("the trace", () => {
 	];
 
 	const MARKS: Record<ChannelId, string> = {
-		output: "OUTPUT-MARK",
+		output: "MODEL-MARK",
 		ui: "UI-MARK",
 		attachments: "USER-FILE.pdf",
 		thinking: "THINKING-MARK",
 		memory: "1 memory recalled",
 		asks: "ASKS-MARK",
-		model: "MODEL-MARK",
 		system: "SYSTEM-MARK",
 		agents: "AGENTS-MARK",
 	};
 
 	async function traced() {
 		const host = await mount(<TraceLines messages={CHANNEL_TRACE} />);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const you = host.querySelector<HTMLButtonElement>(
 			'[data-trace-message="you"] > button',
 		);
@@ -1000,60 +986,25 @@ const STEPS: ChatMessage[] = [
 ];
 
 describe("a trace's steps", () => {
-	it("start folded, however few there are", async () => {
-		const host = await mount(<TraceLines messages={MESSAGES} />);
+	it("lays every step out open, one level deep, under its header", async () => {
+		const host = await mount(<TraceLines messages={STEPS} />);
 		const headers = [...host.querySelectorAll("[data-step-header]")];
-
-		expect(headers.length).toBeGreaterThan(0);
-		expect(
-			headers.every((h) => h.getAttribute("aria-expanded") === "false"),
-		).toBe(true);
-	});
-
-	it("folds every step to a header and opens the one it was sent to", async () => {
-		const host = await mount(<TraceLines messages={STEPS} turn="t4" />);
-		const headers = [...host.querySelectorAll("[data-step-header]")];
-		const open = headers.filter(
-			(h) => h.getAttribute("aria-expanded") === "true",
-		);
 
 		expect(headers).toHaveLength(9);
-		expect(open.map((h) => h.textContent)).toEqual(["▾step 5stepfailed"]);
-		expect(host.textContent).toContain("OUT-4");
-		expect(host.textContent).not.toContain("OUT-3");
+		expect(host.querySelector("[aria-expanded][data-step-header]")).toBeNull();
+		for (let at = 0; at < 9; at++)
+			expect(host.textContent).toContain(`OUT-${at}`);
+	});
+
+	it("flashes the message it was sent to", async () => {
+		const host = await mount(<TraceLines messages={STEPS} turn="t4" />);
+
 		expect(
 			host.querySelector('[data-message-id="t4"]')?.hasAttribute("data-flash"),
 		).toBe(true);
 	});
 
-	it("opens the step it is sent to next, and lets a header open its step", async () => {
-		const host = document.createElement("div");
-		document.body.append(host);
-		const root = createRoot(host);
-		roots.push(root);
-		const draw = (turn: string) =>
-			act(async () =>
-				root.render(
-					<QueryClientProvider client={offline}>
-						<UIProvider>
-							<TraceLines messages={STEPS} turn={turn} />
-						</UIProvider>
-					</QueryClientProvider>,
-				),
-			);
-		await draw("t4");
-		await draw("a7");
-
-		expect(host.textContent).toContain("OUT-7");
-
-		const first = host.querySelector<HTMLButtonElement>("[data-step-header]");
-		await act(async () => first?.click());
-
-		expect(first?.getAttribute("aria-expanded")).toBe("true");
-		expect(host.textContent).toContain("OUT-0");
-	});
-
-	it("opens a sub-agent's own trace under the step that started it", async () => {
+	it("indents a sub-agent's trace right after the message that started it", async () => {
 		const spawned: ChatMessage[] = [
 			{ id: "h1", type: "human", content: "ask the scout" },
 			{ id: "a1", type: "ai", content: "(agents/spawn scout)" },
@@ -1085,16 +1036,13 @@ describe("a trace's steps", () => {
 				<TraceLines messages={spawned} turn="t1" />
 			</TraceSourceProvider>,
 		);
-		const opener = host.querySelector<HTMLButtonElement>(
-			'[data-child-trace="child-chat"] > button',
-		);
+		const indented = host.querySelector('[data-child-trace="child-chat"]');
 
-		expect(opener?.textContent).toContain("scout");
-		expect(host.textContent).not.toContain("looking around");
-
-		await act(async () => opener?.click());
-
-		expect(host.textContent).toContain("looking around");
+		expect(indented?.textContent).toContain("scout");
+		expect(indented?.textContent).toContain("CHILD-SAW");
+		expect(
+			indented?.previousElementSibling?.getAttribute("data-message-id"),
+		).toBe("t1");
 	});
 });
 

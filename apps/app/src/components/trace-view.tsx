@@ -5,6 +5,7 @@ import { memoryKind } from "@repo/journal-catalog/memory";
 import { view } from "@repo/shared/journal";
 import {
 	type ComponentProps,
+	Fragment,
 	type RefObject,
 	useEffect,
 	useMemo,
@@ -30,7 +31,6 @@ import { entriesOfMessage, isEntryMessage } from "../lib/entries.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { useTrace } from "../lib/trace-source.tsx";
 import {
-	stepHolding,
 	type TraceChild,
 	type TraceEntry,
 	type TraceStep,
@@ -153,23 +153,6 @@ function useFlash(target: string | undefined): string | undefined {
 	return flashing;
 }
 
-function useOpenSteps(entries: readonly TraceEntry[], target?: string) {
-	const [overrides, setOverrides] = useState<Record<string, boolean>>({});
-	const targeted = stepHolding(entries, target);
-	useEffect(() => {
-		if (targeted === undefined) return;
-		setOverrides((was) => {
-			if (!(targeted in was)) return was;
-			const { [targeted]: _, ...rest } = was;
-			return rest;
-		});
-	}, [targeted]);
-	const isOpen = (step: string) => overrides[step] ?? step === targeted;
-	const toggle = (step: string) =>
-		setOverrides((was) => ({ ...was, [step]: !isOpen(step) }));
-	return { isOpen, toggle };
-}
-
 function TraceRow({
 	open,
 	chevron = true,
@@ -198,30 +181,19 @@ function TraceRow({
 	);
 }
 
-function StepHeader({
-	step,
-	open,
-	toggle,
-}: {
-	step: TraceStep;
-	open: boolean;
-	toggle: () => void;
-}) {
+function StepDivider({ step }: { step: TraceStep }) {
 	return (
-		<TraceRow open={open} data-step-header onClick={toggle}>
+		<div
+			data-step-header
+			className="flex min-w-0 items-center gap-2 border-dim/20 border-t pt-1.5 text-[11.5px] text-dim"
+		>
 			<span className="flex-none">step {step.number}</span>
-			<span className="min-w-0 flex-1 truncate text-fg">{step.title}</span>
-			<span
-				className={`ml-auto flex-none ${step.failed ? "text-red" : "text-green"}`}
-			>
-				{step.failed ? "failed" : "ok"}
-			</span>
 			{step.durationMs !== undefined && (
-				<span className="flex-none tabular-nums">
+				<span className="ml-auto flex-none tabular-nums">
 					{formatElapsed(step.durationMs)}
 				</span>
 			)}
-		</TraceRow>
+		</div>
 	);
 }
 
@@ -351,21 +323,16 @@ function MessageEntry({
 }
 
 function ChildTrace({ child }: { child: TraceChild }) {
-	const [open, setOpen] = useState(false);
 	return (
 		<div
 			data-child-trace={child.chatId}
-			className="flex min-w-0 flex-col gap-2"
+			className="flex min-w-0 flex-col gap-2 border-dim/20 border-l pl-3"
 		>
-			<TraceRow open={open} onClick={() => setOpen((was) => !was)}>
+			<div className="flex min-w-0 gap-2 text-[11.5px] text-dim">
 				<span className="flex-none">agent</span>
 				<span className="min-w-0 truncate text-fg">{child.label}</span>
-			</TraceRow>
-			{open && (
-				<div className="min-w-0 pl-3">
-					<NestedTrace chatId={child.chatId} />
-				</div>
-			)}
+			</div>
+			<NestedTrace chatId={child.chatId} />
 		</div>
 	);
 }
@@ -373,18 +340,15 @@ function ChildTrace({ child }: { child: TraceChild }) {
 function NestedTrace({ chatId }: { chatId: string }) {
 	const messages = useTrace(chatId as Id<"chats">);
 	const entries = useMemo(() => traceEntries(messages), [messages]);
-	const steps = useOpenSteps(entries);
-	return <TraceEntries entries={entries} steps={steps} />;
+	return <TraceEntries entries={entries} />;
 }
 
 function TraceEntries({
 	entries,
-	steps,
 	flashing,
 	focused,
 }: {
 	entries: readonly TraceEntry[];
-	steps: ReturnType<typeof useOpenSteps>;
 	flashing?: string;
 	focused?: string;
 }) {
@@ -404,36 +368,29 @@ function TraceEntries({
 				}
 				if (!Object.values(shown).some(Boolean)) return null;
 				const { step } = entry;
-				const open = steps.isOpen(step.id);
 				return (
 					<div
 						key={step.id}
 						data-step={step.number}
 						className="flex min-w-0 flex-col gap-2"
 					>
-						<StepHeader
-							step={step}
-							open={open}
-							toggle={() => steps.toggle(step.id)}
-						/>
-						{open &&
-							step.messages.map((message, at) => (
-								<TracedMessage
-									key={message.id ?? at}
-									message={message}
-									flashing={flashing}
-								>
+						<StepDivider step={step} />
+						{step.messages.map((message, at) => (
+							<Fragment key={message.id ?? at}>
+								<TracedMessage message={message} flashing={flashing}>
 									<TraceLine
 										message={message}
 										focused={message.id !== undefined && message.id === focused}
 									/>
 								</TracedMessage>
-							))}
-						{open &&
-							shown.agents &&
-							step.children.map((child) => (
-								<ChildTrace key={child.chatId} child={child} />
-							))}
+								{shown.agents &&
+									step.children
+										.filter((child) => child.after === at)
+										.map((child) => (
+											<ChildTrace key={child.chatId} child={child} />
+										))}
+							</Fragment>
+						))}
 					</div>
 				);
 			})}
@@ -451,7 +408,6 @@ export function TraceLines({
 	const [shown, setShown] = useState<Shown>(EVERY_CHANNEL);
 	const scroller = useRef<HTMLDivElement>(null);
 	const entries = useMemo(() => traceEntries(messages), [messages]);
-	const steps = useOpenSteps(entries, turn);
 	const flashing = useFlash(turn);
 	useScrollTo(scroller, turn, messages.length > 0);
 	const toggle = (id: keyof Shown) =>
@@ -467,7 +423,6 @@ export function TraceLines({
 					<div className="mx-auto w-full max-w-[680px]">
 						<TraceEntries
 							entries={entries}
-							steps={steps}
 							flashing={flashing}
 							focused={turn}
 						/>

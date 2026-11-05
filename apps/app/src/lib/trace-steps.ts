@@ -1,24 +1,18 @@
-import { formsIn } from "@repo/syntax";
 import {
 	type ChatMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
-	messageProse,
-	messageText,
 	stepMeta,
 	toolActivity,
-	toolFailed,
-	toolIntent,
 	tracePlacement,
 } from "./chat.tsx";
 import { foldEntries, isEntryMessage } from "./entries.ts";
 
-const SNIPPET = 60;
-
 export interface TraceChild {
 	chatId: string;
 	label: string;
+	after: number;
 }
 
 export interface TraceStep {
@@ -26,39 +20,12 @@ export interface TraceStep {
 	number: number;
 	messages: ChatMessage[];
 	children: TraceChild[];
-	title: string;
-	failed: boolean;
 	durationMs?: number;
 }
 
 export type TraceEntry =
 	| { kind: "message"; message: ChatMessage; at: number }
 	| { kind: "step"; step: TraceStep };
-
-function snippet(text: string): string {
-	const line = text.trim().split("\n")[0] ?? "";
-	return line.length > SNIPPET ? `${line.slice(0, SNIPPET)}…` : line;
-}
-
-function doingOf(messages: readonly ChatMessage[]): string | undefined {
-	const declared = messages
-		.filter(isToolMessage)
-		.map((m) => toolIntent(m)?.doing?.trim())
-		.filter((doing): doing is string => doing !== undefined && doing !== "");
-	return declared.at(-1);
-}
-
-function titleOf(messages: readonly ChatMessage[]): string {
-	const doing = doingOf(messages);
-	if (doing !== undefined) return snippet(doing);
-	const lead = messages.find((m) => !isToolMessage(m) && !isEntryMessage(m));
-	if (lead === undefined) return "tool result";
-	const { prose } = formsIn(
-		messageText(lead),
-		messageProse(lead).map((s) => s.span),
-	);
-	return snippet(prose) || "step";
-}
 
 function durationOf(messages: readonly ChatMessage[]): number | undefined {
 	const timed = messages
@@ -69,11 +36,11 @@ function durationOf(messages: readonly ChatMessage[]): number | undefined {
 
 function childrenOf(messages: readonly ChatMessage[]): TraceChild[] {
 	const children = new Map<string, TraceChild>();
-	for (const message of messages)
+	for (const [after, message] of messages.entries())
 		if (isToolMessage(message))
 			for (const { chat, label } of toolActivity(message))
 				if (chat !== undefined && !children.has(chat))
-					children.set(chat, { chatId: chat, label });
+					children.set(chat, { chatId: chat, label, after });
 	return [...children.values()];
 }
 
@@ -83,8 +50,6 @@ function stepOf(messages: ChatMessage[], number: number): TraceStep {
 		number,
 		messages,
 		children: childrenOf(messages),
-		title: titleOf(messages),
-		failed: messages.some((m) => isToolMessage(m) && toolFailed(m)),
 		durationMs: durationOf(messages),
 	};
 }
@@ -124,18 +89,4 @@ export function traceEntries(messages: readonly ChatMessage[]): TraceEntry[] {
 	settle();
 	close();
 	return entries;
-}
-
-export function stepHolding(
-	entries: readonly TraceEntry[],
-	message: string | undefined,
-): string | undefined {
-	if (message === undefined) return undefined;
-	for (const entry of entries)
-		if (
-			entry.kind === "step" &&
-			entry.step.messages.some((m) => m.id === message)
-		)
-			return entry.step.id;
-	return undefined;
 }

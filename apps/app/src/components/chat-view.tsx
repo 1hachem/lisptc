@@ -225,14 +225,12 @@ function toolOutput(message: ChatMessage): string {
 
 function ToolResult({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
-	const output = shown.output ? toolOutput(message) : "";
-	const model = shown.model ? toolModelOutput(message).output : "";
+	const output = shown.output ? toolModelOutput(message).output : "";
 	const ui = shown.ui ? toolUi(message) : undefined;
 	const attachments = shown.attachments ? attachedTo(message) : [];
-	if (ui === undefined && attachments.length === 0 && !output && !model)
-		return null;
+	if (ui === undefined && attachments.length === 0 && !output) return null;
 	const failed = toolFailed(message);
-	const modelTone = failed ? "text-red" : channelOf("model").text;
+	const outputTone = failed ? "text-red" : channelOf("output").text;
 	return (
 		<div
 			data-step-failed={failed || undefined}
@@ -253,13 +251,8 @@ function ToolResult({ message }: { message: ChatMessage }) {
 				</Marked>
 			)}
 			{output && (
-				<Marked id="output">
-					<ChannelText code text={output} tone={channelOf("output").text} />
-				</Marked>
-			)}
-			{model && (
-				<Marked id="model" tone={modelTone}>
-					<ChannelText code={failed} text={model} tone={modelTone} />
+				<Marked id="output" tone={outputTone}>
+					<ChannelText code={failed} text={output} tone={outputTone} />
 				</Marked>
 			)}
 		</div>
@@ -401,9 +394,7 @@ function RanOutput({ message }: { message: ChatMessage }) {
 	if (output === "" && failure === "") return null;
 	return (
 		<div data-step-ran className="flex min-w-0 flex-col gap-2 break-words">
-			{output !== "" && (
-				<ChannelText code text={output} tone={channelOf("output").text} />
-			)}
+			{output !== "" && <ChannelText code text={output} tone="text-dim" />}
 			{failure !== "" && <ChannelText code text={failure} tone="text-red" />}
 		</div>
 	);
