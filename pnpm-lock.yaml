@@ -657,6 +657,9 @@ importers:
       '@repo/memory-extension':
         specifier: workspace:*
         version: link:../../packages/memory
+      '@repo/models':
+        specifier: workspace:*
+        version: link:../../packages/models
       '@repo/promises-extension':
         specifier: workspace:*
         version: link:../../packages/promises
@@ -770,9 +773,6 @@ importers:
       posthog-node:
         specifier: ^5.51.6
         version: 5.51.6
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
     devDependencies:
       '@repo/journal-catalog':
         specifier: workspace:*
@@ -843,6 +843,9 @@ importers:
       '@repo/memory-extension':
         specifier: workspace:*
         version: link:../memory
+      '@repo/models':
+        specifier: workspace:*
+        version: link:../models
       '@repo/permissions-extension':
         specifier: workspace:*
         version: link:../permissions

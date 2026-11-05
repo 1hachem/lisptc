@@ -1,27 +1,28 @@
+import type { JudgeRequest, SystemOneModel } from "@repo/shared/system-one";
 import { describe, expect, it } from "vitest";
-import { APPLIES_TIMEOUT_MS, appliesJudge } from "../src/system-one/applies.ts";
-import type {
-	SystemOneProvider,
-	SystemOneRequest,
-} from "../src/system-one/system-one.ts";
+import { APPLIES_TIMEOUT_MS, appliesJudge } from "../src/applies.ts";
 
-function deciding(noul: (instructions: string) => number): {
-	seen: SystemOneRequest<string>[];
-	provider: SystemOneProvider;
+function judging(noul: (instructions: string) => number): {
+	seen: JudgeRequest[];
+	model: SystemOneModel;
 } {
-	const seen: SystemOneRequest<string>[] = [];
+	const seen: JudgeRequest[] = [];
 	return {
 		seen,
-		provider: {
-			async decide<K extends string>(request: SystemOneRequest<K>) {
-				seen.push(request);
-				const answers = Object.fromEntries(
-					Object.entries(request.questions).map(([id, q]) => [
-						id,
-						{ noul: noul((q as { instructions: string }).instructions) },
-					]),
-				) as Record<K, { noul: number }>;
-				return { answers, cost: 0 };
+		model: {
+			provider: "fake",
+			model: "fake/jev",
+			async judge(req) {
+				seen.push(req);
+				return {
+					model: "fake/jev",
+					answers: Object.fromEntries(
+						Object.entries(req.questions).map(([id, q]) => [
+							id,
+							{ type: "noul", noul: noul(q.instructions) },
+						]),
+					),
+				};
 			},
 		},
 	};
@@ -29,13 +30,11 @@ function deciding(noul: (instructions: string) => number): {
 
 describe("judging which descriptions a message calls for", () => {
 	it("asks one noul per description, with the message as the state", async () => {
-		const { seen, provider } = deciding((i) =>
-			i.includes("browser") ? 0.9 : 0.1,
-		);
-		const judged = await appliesJudge(provider)(
-			{ message: "open my browser" },
-			["user wants to automate a browser", "user asks about billing"],
-		);
+		const { seen, model } = judging((i) => (i.includes("browser") ? 0.9 : 0.1));
+		const judged = await appliesJudge(model)({ message: "open my browser" }, [
+			"user wants to automate a browser",
+			"user asks about billing",
+		]);
 		expect(judged).toEqual(
 			new Map([
 				["user wants to automate a browser", 0.9],
@@ -50,8 +49,8 @@ describe("judging which descriptions a message calls for", () => {
 	});
 
 	it("hands the latest step to System One beside the message", async () => {
-		const { seen, provider } = deciding(() => 0.5);
-		await appliesJudge(provider)(
+		const { seen, model } = judging(() => 0.5);
+		await appliesJudge(model)(
 			{ message: "get me the price", step: "(fetch url)\n\nneeds javascript" },
 			["user wants to automate a browser"],
 		);
@@ -61,15 +60,28 @@ describe("judging which descriptions a message calls for", () => {
 		});
 	});
 
+	it("fails when the model leaves a description unanswered", async () => {
+		const model: SystemOneModel = {
+			provider: "fake",
+			model: "fake/jev",
+			judge: async () => ({ model: "fake/jev", answers: {} }),
+		};
+		await expect(
+			appliesJudge(model)({ message: "hi" }, ["x"]),
+		).rejects.toThrow();
+	});
+
 	it("gives up after its timeout, so the turn is never held by it", async () => {
-		const provider: SystemOneProvider = {
-			decide: ({ signal }) =>
+		const model: SystemOneModel = {
+			provider: "fake",
+			model: "fake/jev",
+			judge: (_, signal) =>
 				new Promise((_, reject) =>
 					signal?.addEventListener("abort", () => reject(signal.reason)),
 				),
 		};
 		await expect(
-			appliesJudge(provider, 10)({ message: "hi" }, ["x"]),
+			appliesJudge(model, 10)({ message: "hi" }, ["x"]),
 		).rejects.toThrow();
 	});
 

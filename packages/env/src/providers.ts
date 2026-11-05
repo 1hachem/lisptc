@@ -17,10 +17,6 @@ const providersEnv = createEnv({
 		OPENROUTER_API_KEY: z.string().optional(),
 		OPENROUTER_BASE_URL: z.url().default("https://openrouter.ai/api/v1"),
 		OPENROUTER_MODEL: z.string().default("anthropic/claude-haiku-5.5"),
-		OPENROUTER_DECISIONS_URL: z
-			.url()
-			.default("https://openrouter.ai/api/alpha/decisions"),
-		OPENROUTER_SYSTEM_ONE_MODEL: z.string().default("typesafe/jev-1.13"),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
@@ -48,10 +44,4 @@ export const providerSpecs: Record<ProviderName, ProviderSpec> = {
 		baseUrl: providersEnv.OPENROUTER_BASE_URL,
 		defaultModel: providersEnv.OPENROUTER_MODEL,
 	},
-};
-
-export const systemOneSpec = {
-	...key("OPENROUTER_API_KEY"),
-	url: providersEnv.OPENROUTER_DECISIONS_URL,
-	model: providersEnv.OPENROUTER_SYSTEM_ONE_MODEL,
 };

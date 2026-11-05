@@ -1,11 +1,6 @@
 import { agentsExtension, subAgentExtension } from "@repo/agents-extension";
 import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
-import {
-	appliesJudge,
-	openRouterSystemOne,
-	POLICY_MEMORIES,
-	type Threads,
-} from "@repo/ai";
+import { appliesJudge, POLICY_MEMORIES, type Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -25,6 +20,7 @@ import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
+import { jev } from "@repo/models/providers";
 import { permissionsExtension } from "@repo/permissions-extension";
 import { permissionsHostFor } from "@repo/permissions-extension/host";
 import { preferencesExtension } from "@repo/preferences-extension";
@@ -110,7 +106,7 @@ export async function workspaceExtensions(
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
-		judge: appliesJudge(openRouterSystemOne()),
+		judge: appliesJudge(jev),
 	});
 	const workspace = workspaceExtension(
 		workspaceHostFor({
