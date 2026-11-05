@@ -34,11 +34,11 @@ export const SEMANTIC_TIMEOUT_MS = 30_000;
 
 export const DEFAULT_MIN = 0.5;
 
-export const DUPLICATE_SIMILARITY = 0.9;
+export const DUPLICATE_SIMILARITY = 0.8;
 
-export const CLUSTER_SIMILARITY = 0.7;
+export const CLUSTER_SIMILARITY = 0.47;
 
-export const OUTLIER_SIMILARITY = 0.5;
+export const OUTLIER_SIMILARITY = 0.47;
 
 export interface SemanticHost {
 	systemOne: SystemOneModel;
@@ -1091,7 +1091,8 @@ const MACROS = `
 
 (setq _%judged
       (lambda (description xs options)
-        (_%over (apply %p-each (cons xs (cons description (_%drop options :min))))
+        (_%over (apply %p-each (cons xs (cons (concat "Does it fit the description: " description "?")
+                                              (_%drop options :min))))
                 (_%option options :min 0.5))))
 
 (setq _%keep

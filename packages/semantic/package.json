@@ -13,6 +13,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:calibration": "vitest run --config vitest.calibration.config.ts",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
