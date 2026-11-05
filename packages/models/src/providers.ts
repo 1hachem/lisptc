@@ -6,6 +6,7 @@ import {
 	defineChatProvider,
 	suffixVariant,
 } from "./chat.ts";
+import { openRouterEmbedding } from "./embedding.ts";
 import { openRouterSystemOne } from "./system-one.ts";
 
 export const DEFAULT_REPEAT_PENALTY = 1.1;
@@ -49,3 +50,5 @@ export function resolveModel(
 }
 
 export const jev = openRouterSystemOne(providerSpecs.openrouter);
+
+export const openRouterEmbedder = openRouterEmbedding(providerSpecs.openrouter);

@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     "./chat": "./src/chat.ts",
+    "./embedding": "./src/embedding.ts",
     "./providers": "./src/providers.ts",
     "./system-one": "./src/system-one.ts"
   },
