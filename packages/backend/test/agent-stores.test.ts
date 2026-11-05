@@ -353,7 +353,7 @@ describe("the convex preferences store", () => {
 				hidden: ["tests"],
 			},
 		});
-		const store = new ConvexPreferencesStore(() => client);
+		const store = new ConvexPreferencesStore(WORKSPACE, () => client);
 		expect(await store.read()).toEqual({
 			font: "mono",
 			metadata: undefined,

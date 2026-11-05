@@ -21,24 +21,24 @@ import { api } from "@repo/backend/api";
 import type { Doc, Id } from "@repo/backend/dataModel";
 import {
 	FileTree,
-	SortableTree,
+	SortableSide,
 	TreeCommand,
 	TreeFile,
 	TreeFolder,
 } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { writeBoolPref } from "../lib/prefs.ts";
-import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
 import {
 	SIDEBAR_FOLDERS,
 	type SidebarEntry,
 	type SidebarFolder,
+	type SidebarSide,
 } from "../lib/sidebar-order.ts";
 import { folderCookie, folderOpen } from "../lib/sidebar-prefetch.ts";
 import { ChatFolder } from "./chat-folder.tsx";
@@ -78,8 +78,8 @@ export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
 	home: Home01Icon,
 	new_chat: Add01Icon,
 	"README.md": InformationCircleIcon,
-	"settings.ptc": Settings02Icon,
-	"preferences.ptc": File01Icon,
+	settings: Settings02Icon,
+	preferences: File01Icon,
 };
 
 function memoryPage(key: string): PanelContent {
@@ -103,14 +103,20 @@ export function openFolderOnMount(entry: SidebarEntry) {
 	if (isFolder(entry)) writeBoolPref(folderCookie(entry), true);
 }
 
-function useFolders() {
+type Folders = <F extends SidebarFolder>(folder: F) => FolderState<F>;
+
+const FoldersContext = createContext<Folders | null>(null);
+
+export function FoldersProvider({ children }: { children: ReactNode }) {
 	const [opened, setOpened] = useState(
 		() =>
 			Object.fromEntries(
 				SIDEBAR_FOLDERS.map((folder) => [folder, folderOpen(folder)]),
 			) as Record<SidebarFolder, boolean>,
 	);
-	return <F extends SidebarFolder>(folder: F): FolderState<F> => ({
+	const folders: Folders = <F extends SidebarFolder>(
+		folder: F,
+	): FolderState<F> => ({
 		name: folder,
 		icon: FOLDER_ICONS[folder],
 		open: opened[folder],
@@ -120,6 +126,21 @@ function useFolders() {
 			setOpened((prev) => ({ ...prev, [folder]: next }));
 		},
 	});
+	return <FoldersContext value={folders}>{children}</FoldersContext>;
+}
+
+function useFolders(): Folders {
+	const folders = useContext(FoldersContext);
+	if (folders === null)
+		throw new Error("useFolders must be used within a FoldersProvider");
+	return folders;
+}
+
+export function useCloseFolder() {
+	const folder = useFolders();
+	return (entry: SidebarEntry) => {
+		if (isFolder(entry) && folder(entry).open) folder(entry).onToggle();
+	};
 }
 
 function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
@@ -199,7 +220,6 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 			name="home"
 			icon={Home01Icon}
 			selected={false}
-			onDragStart={dragsAs(NEW_CHAT)}
 			link={linkTo(workspaceId, NEW_CHAT)}
 		/>
 	);
@@ -207,11 +227,15 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 
 const ROOT_FILES: Record<
 	"readme" | "settings" | "preferences",
-	{ name: string; icon?: IconSvgElement }
+	{ name: string; title: string; icon?: IconSvgElement }
 > = {
-	readme: { name: "README.md", icon: InformationCircleIcon },
-	settings: { name: "settings.ptc" },
-	preferences: { name: "preferences.ptc" },
+	readme: {
+		name: "README.md",
+		title: "README.md",
+		icon: InformationCircleIcon,
+	},
+	settings: { name: "settings", title: "settings" },
+	preferences: { name: "preferences", title: "preferences" },
 };
 
 function RootFile({
@@ -225,14 +249,13 @@ function RootFile({
 	const content: PanelContent = {
 		kind: "page",
 		page,
-		title: ROOT_FILES[page].name,
+		title: ROOT_FILES[page].title,
 	};
 	return (
 		<TreeFile
 			name={ROOT_FILES[page].name}
 			icon={ROOT_FILES[page].icon}
 			selected={shown(content)}
-			onDragStart={dragsAs(content)}
 			link={linkTo(workspaceId, content)}
 		/>
 	);
@@ -240,17 +263,16 @@ function RootFile({
 
 export function WorkspaceTree({
 	workspaceId,
+	side,
 }: {
 	workspaceId: Id<"workspaces">;
+	side: SidebarSide;
 }) {
 	const newChat = useNewChat();
 	const folder = useFolders();
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
-
-	const { shown, reorder } = useSidebarOrder();
-	const { motion } = useSidebarMotion();
 
 	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
 		<TreeFolder {...folder(name)} onCreate="disabled" createLabel="coming soon">
@@ -300,26 +322,17 @@ export function WorkspaceTree({
 		ui: placeholder("ui"),
 		tests: placeholder("tests"),
 		"README.md": () => <RootFile workspaceId={workspaceId} page="readme" />,
-		"settings.ptc": () => (
-			<RootFile workspaceId={workspaceId} page="settings" />
-		),
-		"preferences.ptc": () => (
+		settings: () => <RootFile workspaceId={workspaceId} page="settings" />,
+		preferences: () => (
 			<RootFile workspaceId={workspaceId} page="preferences" />
 		),
 	};
 
 	return (
 		<FileTree>
-			<SortableTree
-				order={shown}
-				onReorder={reorder}
-				onPickUp={(name) => {
-					if (isFolder(name) && folder(name).open) folder(name).onToggle();
-				}}
-				motion={motion}
-			>
+			<SortableSide<SidebarEntry> side={side} className="min-h-24">
 				{(name) => entries[name]()}
-			</SortableTree>
+			</SortableSide>
 		</FileTree>
 	);
 }

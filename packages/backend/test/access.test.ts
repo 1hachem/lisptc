@@ -88,9 +88,15 @@ describe("a thread acting as its record's owner", () => {
 			subject: alice.user,
 			workspaceId: alice.workspace,
 		});
-		const before = await thread.query(api.preferences.get, {});
-		await thread.mutation(api.preferences.put, { preferences: before });
-		expect(await alice.as.query(api.preferences.get, {})).toEqual(before);
+		const workspaceId = alice.workspace;
+		const before = await thread.query(api.preferences.get, { workspaceId });
+		await thread.mutation(api.preferences.put, {
+			workspaceId,
+			preferences: before,
+		});
+		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual(
+			before,
+		);
 	});
 
 	it("is refused when its user does not own the workspace it acts for", async () => {
@@ -102,9 +108,9 @@ describe("a thread acting as its record's owner", () => {
 			subject: bob.user,
 			workspaceId: alice.workspace,
 		});
-		await expect(mismatched.query(api.preferences.get, {})).rejects.toThrow(
-			/UNAUTHENTICATED/,
-		);
+		await expect(
+			mismatched.query(api.preferences.get, { workspaceId: alice.workspace }),
+		).rejects.toThrow(/UNAUTHENTICATED/);
 		await expect(
 			mismatched.query(api.memories.list, { workspaceId: alice.workspace }),
 		).rejects.toThrow(/UNAUTHENTICATED/);
@@ -1262,33 +1268,78 @@ const DEFAULTS = {
 };
 
 describe("preferences access", () => {
-	it("keeps a user's preferences to that user", async () => {
+	it("keeps a workspace's preferences to its owner", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const preferences = { font: "mono", themeUses: { dusk: 2 } };
-		await bob.as.mutation(api.preferences.put, { preferences });
-		expect(await bob.as.query(api.preferences.get, {})).toEqual({
-			...DEFAULTS,
-			...preferences,
+		await bob.as.mutation(api.preferences.put, {
+			workspaceId: bob.workspace,
+			preferences,
 		});
-		expect(await alice.as.query(api.preferences.get, {})).toEqual(DEFAULTS);
-		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
+		expect(
+			await bob.as.query(api.preferences.get, { workspaceId: bob.workspace }),
+		).toEqual({ ...DEFAULTS, ...preferences });
+		expect(
+			await alice.as.query(api.preferences.get, {
+				workspaceId: alice.workspace,
+			}),
+		).toEqual(DEFAULTS);
+		await expect(
+			alice.as.query(api.preferences.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow(/FORBIDDEN/);
+		await expect(
+			alice.as.mutation(api.preferences.put, {
+				workspaceId: bob.workspace,
+				preferences: { font: "serif" },
+			}),
+		).rejects.toThrow(/FORBIDDEN/);
+		await expect(
+			t.query(api.preferences.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
 	});
 
-	it("merges each save into one row per user", async () => {
+	it("keeps each workspace's preferences apart", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
+		const other = await alice.as.mutation(api.workspaces.create, {
+			name: "other",
+		});
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId: alice.workspace,
+			preferences: { sidebar: ["README.md", "chat"], hidden: ["tests"] },
+		});
+		expect(
+			await alice.as.query(api.preferences.get, { workspaceId: other }),
+		).toEqual(DEFAULTS);
+		expect(
+			await alice.as.query(api.preferences.get, {
+				workspaceId: alice.workspace,
+			}),
+		).toEqual({
+			...DEFAULTS,
+			sidebar: ["README.md", "chat"],
+			hidden: ["tests"],
+		});
+	});
+
+	it("merges each save into one row per workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.preferences.put, {
+			workspaceId,
 			preferences: { motion: "lift", input: { lisp: true } },
 		});
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId,
 			preferences: { font: "mono", input: { lisp: false } },
 		});
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId,
 			preferences: { metadata: { tokens: true } },
 		});
-		expect(await alice.as.query(api.preferences.get, {})).toEqual({
+		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual({
 			motion: "lift",
 			font: "mono",
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
@@ -1310,6 +1361,7 @@ describe("preferences access", () => {
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.preferences.put, {
+				workspaceId: alice.workspace,
 				preferences: {
 					font: "x".repeat(MAX_PREFERENCES_BYTES),
 					themeUses: {},

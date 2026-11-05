@@ -4,31 +4,36 @@ import { usePreferences, usePutPreferences } from "./preferences.ts";
 import { motionOf } from "./resolved-preferences.ts";
 import {
 	type SidebarEntry,
-	shownEntries,
-	sidebarOrder,
-	withHidden,
+	type SidebarSides,
+	sidebarView,
+	toggledEntry,
+	withHiddenSides,
 } from "./sidebar-order.ts";
 
-export function useSidebarOrder() {
+export function useSidebarSides() {
 	const stored = usePreferences();
 	const put = usePutPreferences();
-	const order = useMemo(() => sidebarOrder(stored?.sidebar), [stored?.sidebar]);
-	const shown = useMemo(
-		() => shownEntries(order, stored?.hidden),
-		[order, stored?.hidden],
-	);
-	const complete = stored?.sidebar?.join("\n") === order.join("\n");
+	const view = useMemo(() => sidebarView(stored ?? {}), [stored]);
+	const { sides, outdated } = view;
 
 	useEffect(() => {
-		if (stored !== undefined && !complete) put({ sidebar: order });
-	}, [stored, complete, order, put]);
+		if (stored !== undefined && outdated !== undefined) put(outdated);
+	}, [stored, outdated, put]);
 
-	const reorder = useCallback(
-		(next: SidebarEntry[]) => put({ sidebar: withHidden(next, order) }),
-		[put, order],
+	const move = useCallback(
+		(next: SidebarSides) => {
+			const placed = withHiddenSides(next, sides);
+			put({ sidebar: [...placed.left], sidebarRight: [...placed.right] });
+		},
+		[put, sides],
 	);
 
-	return { order, shown, hidden: stored?.hidden ?? [], reorder };
+	const toggle = useCallback(
+		(entry: SidebarEntry) => put({ hidden: toggledEntry(view.hidden, entry) }),
+		[put, view.hidden],
+	);
+
+	return { ...view, move, toggle };
 }
 
 export function useSidebarMotion() {

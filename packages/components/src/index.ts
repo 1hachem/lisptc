@@ -25,6 +25,12 @@ export { MessageMemories } from "./message-memories.tsx";
 export { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 export { PromptDialog } from "./prompt-dialog.tsx";
 export { Scramble, type ScrambleProps } from "./scramble.tsx";
+export {
+	movedAcross,
+	type Sides,
+	SortableSide,
+	SortableSides,
+} from "./sortable-sides.tsx";
 export { moved, SortableTree } from "./sortable-tree.tsx";
 export {
 	DropPreview,

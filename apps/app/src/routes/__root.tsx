@@ -1,4 +1,5 @@
-import type { ConvexQueryClient } from "@convex-dev/react-query";
+import { type ConvexQueryClient, convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
 import { fontLinks } from "@repo/ui";
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -18,7 +19,7 @@ import { Analytics } from "../lib/analytics.tsx";
 import { authClient, fetchConvexToken } from "../lib/auth-client.ts";
 import { dropRejectedSession, ssrAuth } from "../lib/auth-server.ts";
 import { convexAuthHook, tokenCache } from "../lib/convex-auth.ts";
-import { preferencesQuery, useCachedPreferences } from "../lib/preferences.ts";
+import { useCachedPreferences } from "../lib/preferences.ts";
 import { fontOf, themeOf } from "../lib/resolved-preferences.ts";
 import { useCachedWorkspace } from "../lib/workspace.tsx";
 import appCss from "../styles/app.css?url";
@@ -27,6 +28,8 @@ interface RouterContext {
 	queryClient: QueryClient;
 	convexQueryClient: ConvexQueryClient;
 }
+
+const sessionQuery = convexQuery(api.users.me, {});
 
 export const Route = createRootRouteWithContext<RouterContext>()({
 	beforeLoad: async ({ context }) => {
@@ -39,12 +42,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 		if (context.auth.source !== "server" || context.auth.token === null)
 			return { sessionDropped: false };
 		try {
-			await context.queryClient.ensureQueryData(preferencesQuery);
+			await context.queryClient.ensureQueryData(sessionQuery);
 			return { sessionDropped: false };
 		} catch (error) {
 			dropRejectedSession(error, context.convexQueryClient);
 			context.queryClient.removeQueries({
-				queryKey: preferencesQuery.queryKey,
+				queryKey: sessionQuery.queryKey,
 			});
 			return { sessionDropped: true };
 		}
@@ -105,8 +108,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		select: (matches) => matches.some((match) => match.staticData.themed),
 	});
 	const inRoute = useParams({ strict: false }).workspaceId;
-	const cached = useCachedPreferences(queryClient);
 	const workspace = useCachedWorkspace(queryClient, inRoute);
+	const cached = useCachedPreferences(queryClient, workspace?._id);
 	const theme = themeOf(themed ? (workspace ?? undefined) : undefined);
 	const font = fontOf(themed ? cached : undefined);
 
