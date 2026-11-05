@@ -53,8 +53,8 @@ interface WireMessage {
 		display?: string;
 		riding?: string;
 		quiet?: boolean;
-		asked?: string[];
-		closed?: string[];
+		kind?: string;
+		value?: unknown;
 		meta?: {
 			at?: string;
 			durationMs?: number;
@@ -64,7 +64,6 @@ interface WireMessage {
 			outputTokens?: number;
 			cachedInputTokens?: number;
 			steps?: number;
-			reported?: string[];
 		};
 	};
 }
@@ -158,16 +157,16 @@ describe("chat stream", () => {
 		expect(persisted[2].additional_kwargs?.display).toBe("PRINTED-LINE\n");
 	});
 
-	test("a step that ends the turn reaches the person and the record, and never the model", async () => {
+	test("a step that ends the turn reaches the person and the record as an entry, and never the model", async () => {
 		const ask = { messages: [{ type: "human", content: "what is 1 + 2?" }] };
 		const persisted = await recorded(ask, {
 			repl: testRepl([asking("Pick")]),
 		});
 
-		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "tool"]);
-		expect(persisted[2].additional_kwargs).toMatchObject({
-			asked: ["Pick"],
-			quiet: true,
+		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "entry"]);
+		expect(persisted[2]).toMatchObject({
+			content: "",
+			additional_kwargs: { kind: "asked", value: "Pick" },
 		});
 
 		sent.length = 0;
@@ -176,35 +175,50 @@ describe("chat stream", () => {
 				messages: [...persisted, { type: "human", content: "A" }],
 			}),
 		);
-		expect(messages[2].additional_kwargs?.asked).toEqual(["Pick"]);
+		expect(messages[2].additional_kwargs?.value).toBe("Pick");
 		expect(sent[0].some((m) => m.content.includes("tool_result"))).toBe(false);
+		expect(sent[0].some((m) => m.content.includes("Pick"))).toBe(false);
 	});
 
-	test("what the turn leaves as it settles lands on its last step, flushed or not", async () => {
+	test("what the turn records as it settles is journaled after its last step, flushed or not", async () => {
 		const ask = { messages: [{ type: "human", content: "what is 1 + 2?" }] };
 		const options = { repl: testRepl([concluding("wrapped")]) };
 		const persisted = await recorded(ask, options);
 
-		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "tool", "ai"]);
-		expect(persisted[2].additional_kwargs?.closed).toEqual(["wrapped"]);
+		expect(persisted.map((m) => m.type)).toEqual([
+			"human",
+			"ai",
+			"tool",
+			"ai",
+			"entry",
+		]);
+		expect(persisted[4].additional_kwargs).toMatchObject({
+			kind: "closed",
+			value: "wrapped",
+		});
 
 		turn = 0;
 		const messages = await finalMessages(stream(ask, options));
-		expect(messages[2].additional_kwargs?.closed).toEqual(["wrapped"]);
+		expect(messages[4].additional_kwargs?.value).toBe("wrapped");
 	});
 
-	test("what the turn leaves as it settles is kept out of the model's sight when no step ran", async () => {
+	test("what the turn records as it settles is kept out of the model's sight when no step ran", async () => {
 		turn = 1;
 		const persisted = await recorded(
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
 			{ repl: testRepl([concluding("wrapped")]) },
 		);
 
-		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "tool"]);
-		expect(persisted[2]).toMatchObject({
-			content: "",
-			additional_kwargs: { closed: ["wrapped"], quiet: true },
-		});
+		expect(persisted.map((m) => m.type)).toEqual(["human", "ai", "entry"]);
+
+		turn = 1;
+		sent.length = 0;
+		await finalMessages(
+			stream({
+				messages: [...persisted, { type: "human", content: "again" }],
+			}),
+		);
+		expect(sent[0].some((m) => m.content.includes("wrapped"))).toBe(false);
 	});
 
 	test("reports why a turn failed, and nothing when it did not", async () => {
@@ -382,7 +396,7 @@ describe("chat stream", () => {
 		});
 	});
 
-	test("what a step reported rides the message the model wrote", async () => {
+	test("what a step recorded is its own row, between the message the model wrote and its result", async () => {
 		const messages = await finalMessages(
 			stream(
 				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
@@ -390,38 +404,43 @@ describe("chat stream", () => {
 			),
 		);
 
-		expect(
-			messages.find((m) => m.type === "ai")?.additional_kwargs?.meta?.reported,
-		).toEqual(["a step had something to say"]);
+		expect(messages.map((m) => m.type)).toEqual([
+			"human",
+			"ai",
+			"entry",
+			"tool",
+			"ai",
+			"entry",
+		]);
+		expect(messages[2].additional_kwargs).toMatchObject({
+			kind: "reported",
+			value: "a step had something to say",
+		});
+		expect(messages[1].additional_kwargs?.meta).not.toHaveProperty("reported");
 	});
 
-	test("what fired before the model answered rides the user's message, on the wire before the answer", async () => {
-		let revised: ReadonlyMap<number, unknown> = new Map();
+	test("what fired before the model answered is journaled before the message the model wrote", async () => {
 		const text = await stream(
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
-			{
-				repl: testRepl([hearing("a memory fired")]),
-				onTurn: (_produced, touched) => {
-					revised = touched;
-				},
-			},
+			{ repl: testRepl([hearing("a memory fired")]) },
 		).text();
 		const snapshots = records(text)
 			.filter((r) => r.event === "values")
 			.map((r) => (r.data as { messages: WireMessage[] }).messages);
-		const answered = snapshots.findIndex((m) =>
-			m.some((message) => message.type === "ai"),
-		);
-		const early = { messages: snapshots[answered - 1] };
-
-		expect(early.messages[0].additional_kwargs?.meta?.heard?.[0]).toBe(
-			"a memory fired",
-		);
 		const final = snapshots.at(-1) ?? [];
-		expect(
-			final.find((m) => m.type === "ai")?.additional_kwargs?.meta?.heard,
-		).toBeUndefined();
-		expect([...revised.keys()]).toEqual([0]);
+		expect(final.map((m) => m.type)).toEqual([
+			"human",
+			"entry",
+			"ai",
+			"tool",
+			"entry",
+			"ai",
+		]);
+		expect(final[1].additional_kwargs).toMatchObject({
+			kind: "heard",
+			value: "a memory fired",
+		});
+		expect(final[0].additional_kwargs?.meta).toBeUndefined();
 	});
 
 	test("what rode the user's message is stored on it, for the turns after", async () => {

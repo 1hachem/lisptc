@@ -2,9 +2,8 @@ import type {
 	ActivityEntry,
 	ActivityIcon,
 	ActivityImage,
-	Intent,
-	IntentStep,
-} from "@repo/interpreter/annotations";
+} from "@repo/journal-catalog/activity";
+import type { Intent, IntentStep } from "@repo/journal-catalog/intent";
 import type { TurnShape } from "./turn-groups.ts";
 
 export type TimelineState = "running" | "done" | "failed" | "held";

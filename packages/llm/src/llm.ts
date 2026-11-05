@@ -1,10 +1,6 @@
-import {
-	type ActivityEntry,
-	recordActivity,
-} from "@repo/interpreter/annotations";
 import { isNumeric } from "@repo/interpreter/arith";
-import { topic } from "@repo/interpreter/channels";
 import { EvalException, messageOf } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
 import {
 	type Interp,
 	runSync,
@@ -36,13 +32,15 @@ import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
+import {
+	type ActivityEntry,
+	activityKind,
+} from "@repo/journal-catalog/activity";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
 
 export const LLM_TIMEOUT_MS = 60_000;
-
-const modelActivity = topic<ActivityEntry>("llm-activity");
 
 const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
@@ -65,16 +63,14 @@ type Announce = (
 
 function announcer(interp: Interp): Announce {
 	return (id, builtin, state, { provider, model }, timing, error) =>
-		modelActivity.emit(interp.channels, {
-			user: {
-				kind: "llm",
-				icon: "model",
-				label: builtin,
-				state,
-				...(error === undefined ? {} : { error: messageOf(error) }),
-				id,
-				...timing,
-			},
+		record(interp.channels, activityKind, {
+			kind: "llm",
+			icon: "model",
+			label: builtin,
+			state,
+			...(error === undefined ? {} : { error: messageOf(error) }),
+			id,
+			...timing,
 		});
 }
 
@@ -160,9 +156,6 @@ export function llmExtension(
 		{
 			prompt: host.prompt(),
 			session(hooks: SessionHooks): void {
-				hooks.annotate.use((buffer, into, next) =>
-					next(buffer, recordActivity(into, buffer.collect(modelActivity))),
-				);
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {
 						config.observe = observer;

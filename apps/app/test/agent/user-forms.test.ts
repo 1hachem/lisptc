@@ -78,7 +78,7 @@ describe("a typed message", () => {
 			input: {
 				chatId: CHAT,
 				message: "what is (+ 1 2)",
-				annotations: { attachments: [] },
+				received: { attachments: [] },
 			},
 		});
 		expect(world.posted).toEqual([
@@ -89,7 +89,7 @@ describe("a typed message", () => {
 					id: expect.stringMatching(/^[0-9a-f-]{36}$/),
 					text: "what is (+ 1 2)",
 					forms: true,
-					annotations: { attachments: [] },
+					received: { attachments: [] },
 				},
 				options: undefined,
 			},

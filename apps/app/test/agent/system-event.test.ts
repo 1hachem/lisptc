@@ -13,7 +13,7 @@ const world = vi.hoisted(() => ({
 	}[],
 	failed: false,
 	answered: [] as unknown[][],
-	annotated: [] as unknown[],
+	recorded: [] as unknown[],
 	cancelled: [] as [string, string][],
 }));
 
@@ -32,7 +32,7 @@ vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({
 		query: async () => ({}),
 		mutation: async (_: unknown, args: unknown) => {
-			world.annotated.push(args);
+			world.recorded.push(args);
 		},
 	}),
 }));
@@ -57,7 +57,7 @@ vi.mock("../../server/agent/threads.ts", () => ({
 			output: "",
 			error: world.failed,
 			message: NOTE,
-			annotations: { decided: true },
+			entries: [{ kind: "asks", value: { decided: true } }],
 		};
 	},
 }));
@@ -81,7 +81,7 @@ beforeEach(() => {
 	world.posted.length = 0;
 	world.failed = false;
 	world.answered.length = 0;
-	world.annotated.length = 0;
+	world.recorded.length = 0;
 	world.cancelled.length = 0;
 });
 
@@ -103,17 +103,24 @@ describe("a ui action", () => {
 		expect(world.answered).toEqual([
 			[CHAT, "permissions/decide", { id: "r1" }, "ask-1"],
 		]);
-		expect(world.annotated).toEqual([
-			{ chatId: CHAT, id: "ask-1", kwargs: { decided: true } },
+		expect(world.recorded).toEqual([
+			{
+				chatId: CHAT,
+				about: "ask-1",
+				entries: [{ kind: "asks", value: { decided: true } }],
+			},
 		]);
 		expect(world.posted).toEqual([]);
 	});
 
-	test("still annotates what a failed action recorded", async () => {
+	test("still records what a failed action recorded", async () => {
 		world.failed = true;
 		await decide("ask-1");
-		expect(world.annotated).toEqual([
-			expect.objectContaining({ id: "ask-1", kwargs: { decided: true } }),
+		expect(world.recorded).toEqual([
+			expect.objectContaining({
+				about: "ask-1",
+				entries: [{ kind: "asks", value: { decided: true } }],
+			}),
 		]);
 	});
 

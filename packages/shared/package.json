@@ -6,6 +6,7 @@
   "exports": {
     "./embedding": "./src/embedding.ts",
     "./files": "./src/files.ts",
+    "./journal": "./src/journal.ts",
     "./host": "./src/host.ts",
     "./host-node": "./src/host-node.ts",
     "./lisp-form-fixtures": "./src/lisp-form-fixtures.ts",

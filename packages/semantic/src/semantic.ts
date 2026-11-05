@@ -1,10 +1,6 @@
-import {
-	type ActivityEntry,
-	recordActivity,
-} from "@repo/interpreter/annotations";
 import { compare, isNumeric } from "@repo/interpreter/arith";
-import { topic } from "@repo/interpreter/channels";
 import { EvalException, messageOf } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
 import { type Interp, runSync, type StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -17,8 +13,12 @@ import {
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zList } from "@repo/interpreter/schema";
-import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import type { InterpExtension } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
+import {
+	type ActivityEntry,
+	activityKind,
+} from "@repo/journal-catalog/activity";
 import type { EmbeddingModel } from "@repo/shared/embedding";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import type {
@@ -47,8 +47,6 @@ export interface SemanticHost {
 	prompt: PromptSource;
 }
 
-const judgeActivity = topic<ActivityEntry>("semantic-activity");
-
 const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
 	fromLisp: (x) => Number(x),
@@ -66,11 +64,6 @@ export function semanticExtension(host: SemanticHost): InterpExtension {
 		(interp: Interp): void => registerSemantic(interp, host),
 		{
 			prompt: host.prompt(),
-			session(hooks: SessionHooks): void {
-				hooks.annotate.use((buffer, into, next) =>
-					next(buffer, recordActivity(into, buffer.collect(judgeActivity))),
-				);
-			},
 		},
 	);
 }
@@ -98,17 +91,15 @@ function tracker(interp: Interp, host: SemanticHost): Track {
 			ms?: number,
 			error?: unknown,
 		): void =>
-			judgeActivity.emit(interp.channels, {
-				user: {
-					kind: "semantic",
-					icon: "meaning",
-					label: form,
-					state,
-					...(error === undefined ? {} : { error: messageOf(error) }),
-					id,
-					startedAt,
-					...(ms === undefined ? {} : { ms }),
-				},
+			record(interp.channels, activityKind, {
+				kind: "semantic",
+				icon: "meaning",
+				label: form,
+				state,
+				...(error === undefined ? {} : { error: messageOf(error) }),
+				id,
+				startedAt,
+				...(ms === undefined ? {} : { ms }),
 			});
 		announce("started");
 		const controller = new AbortController();

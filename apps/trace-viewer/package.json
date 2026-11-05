@@ -24,6 +24,7 @@
     "@repo/evals": "workspace:*",
     "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",
     "@repo/memory-extension": "workspace:*",
