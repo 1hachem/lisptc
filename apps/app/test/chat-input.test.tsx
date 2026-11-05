@@ -884,7 +884,10 @@ describe("the chat input with a question open", () => {
 	});
 
 	it("keeps the editor once a human message answers the question", () => {
-		const asked = { type: "tool", additional_kwargs: { question: PICK_ONE } };
+		const asked = {
+			type: "entry",
+			additional_kwargs: { kind: "question", value: PICK_ONE },
+		};
 		renderAsking(
 			vi.fn(),
 			openQuestion([asked, { type: "ai" }, { type: "human" }]),

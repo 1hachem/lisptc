@@ -391,6 +391,8 @@ export const fork = mutation({
 				layerId: message.layerId,
 			});
 		}
+		if (await waitsOnUser(ctx, forked))
+			await ctx.db.patch(forked, { status: "waiting" });
 		const views = await ctx.db
 			.query("views")
 			.withIndex("by_chat_view", (q) => q.eq("chatId", chatId))

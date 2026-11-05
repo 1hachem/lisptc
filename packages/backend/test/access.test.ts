@@ -411,7 +411,7 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
-	it("refuses annotating a message in another user's chat", async () => {
+	it("refuses recording into another user's chat", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
@@ -423,21 +423,19 @@ describe("chat access", () => {
 			messages: [{ id: "w1", type: "tool", content: "one" }],
 		});
 		await expect(
-			alice.as.mutation(api.messages.annotate, {
+			alice.as.mutation(api.messages.record, {
 				chatId,
-				id: "w1",
-				kwargs: { extra: true },
+				entries: [{ kind: "extra", value: true }],
 			}),
 		).rejects.toThrow();
 		await expect(
-			t.mutation(api.messages.annotate, {
+			t.mutation(api.messages.record, {
 				chatId,
-				id: "w1",
-				kwargs: { extra: true },
+				entries: [{ kind: "extra", value: true }],
 			}),
 		).rejects.toThrow();
-		const [row] = await bob.as.query(api.messages.transcript, { chatId });
-		expect(row.kwargs).toBeUndefined();
+		const rows = await bob.as.query(api.messages.transcript, { chatId });
+		expect(rows.map((row) => row.wireId)).toEqual(["w1"]);
 	});
 
 	it("hides an archived chat from the list", async () => {
@@ -582,7 +580,7 @@ describe("messages", () => {
 		expect(transcript.map((m) => m.wireId)).toEqual(["w1", undefined]);
 	});
 
-	it("deep-merges an annotation into a message's kwargs by its wire id", async () => {
+	it("deep-merges a revision into a message's kwargs by its wire id", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
@@ -602,7 +600,7 @@ describe("messages", () => {
 				},
 			],
 		});
-		await alice.as.mutation(api.messages.annotate, {
+		await t.mutation(internal.threads.revise, {
 			chatId,
 			id: "w1",
 			kwargs: { nested: { list: [3], inner: { b: 2 } }, added: 1 },
@@ -615,14 +613,14 @@ describe("messages", () => {
 		});
 	});
 
-	it("refuses annotating a message the chat does not hold", async () => {
+	it("refuses revising a message the chat does not hold", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
 		await expect(
-			alice.as.mutation(api.messages.annotate, {
+			t.mutation(internal.threads.revise, {
 				chatId,
 				id: "missing",
 				kwargs: { added: 1 },
@@ -1516,11 +1514,14 @@ describe("chat listing", () => {
 
 	describe("status", () => {
 		const asking = {
-			type: "tool" as const,
-			content: "held",
-			id: "w1",
+			type: "entry" as const,
+			content: "",
+			id: "e1",
 			kwargs: {
-				asks: { open: [{ id: "a1", title: "run?", prompt: "", choices: [] }] },
+				kind: "asks",
+				value: {
+					open: [{ id: "a1", title: "run?", prompt: "", choices: [] }],
+				},
 			},
 		};
 
@@ -1601,22 +1602,43 @@ describe("chat listing", () => {
 			});
 			await alice.as.mutation(api.chats.settle, { chatId });
 			expect(await status()).toBe("waiting");
-			await alice.as.mutation(api.messages.annotate, {
+			await alice.as.mutation(api.messages.record, {
 				chatId,
-				id: "w1",
-				kwargs: { asks: { answered: { a1: { accepted: true, label: "ok" } } } },
+				entries: [
+					{
+						kind: "asks",
+						value: { answered: { a1: { accepted: true, label: "ok" } } },
+					},
+				],
 			});
 			expect(await status()).toBeUndefined();
+		});
+
+		it("still waits on an ask buried under a long run of later entries", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			const activity = Array.from({ length: 80 }, (_, i) => ({
+				type: "entry" as const,
+				content: "",
+				id: `act${i}`,
+				kwargs: { kind: "activity", value: { id: `x${i}` } },
+			}));
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [asking, ...activity],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
 		});
 
 		it("waits on an open question until the user answers it", async () => {
 			const { alice, chatId, status } = await opened(harness());
 			const question = {
-				type: "tool" as const,
+				type: "entry" as const,
 				content: "",
 				id: "q1",
 				kwargs: {
-					question: {
+					kind: "question",
+					value: {
 						id: "q1",
 						prompt: "Which board?",
 						choices: ["Sales", "Support"],

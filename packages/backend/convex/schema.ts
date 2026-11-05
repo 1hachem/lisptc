@@ -13,6 +13,7 @@ export const messageType = v.union(
 	v.literal("ai"),
 	v.literal("system"),
 	v.literal("tool"),
+	v.literal("entry"),
 );
 
 export const subAgent = v.object({

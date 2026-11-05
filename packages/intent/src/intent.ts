@@ -1,16 +1,6 @@
-import {
-	annotate,
-	type Intent,
-	type IntentStep,
-	intentKey,
-	type Progress,
-	type Question,
-	questionKey,
-	type Todo,
-} from "@repo/interpreter/annotations";
-import { topic } from "@repo/interpreter/channels";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -22,6 +12,14 @@ import {
 import { plistOptions } from "@repo/interpreter/plist";
 import { zAny, zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import {
+	type Intent,
+	type IntentStep,
+	intentKind,
+	type Progress,
+	questionKind,
+	type Todo,
+} from "@repo/journal-catalog/intent";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 
@@ -29,10 +27,6 @@ export interface IntentHost {
 	prompt: PromptSource;
 	clock: Clock;
 }
-
-export const intended = topic<Intent>("intent");
-
-export const asked = topic<Question>("intent-ask");
 
 const todosCodec: StateCodec<Todo[]> = {
 	toLisp: (todos) =>
@@ -150,6 +144,16 @@ function close(
 	return shown(states);
 }
 
+function closeShown(
+	interp: Interp,
+	state: Closing,
+	clock: Clock,
+	error?: string,
+): void {
+	const intent = close(interp, state, clock, error);
+	if (intent !== undefined) record(interp.channels, intentKind, intent);
+}
+
 function count(x: unknown, what: string, least: number): number {
 	if (typeof x !== "bigint")
 		throw new EvalException(`integer expected as ${what}`, x);
@@ -183,40 +187,23 @@ export function intentExtension(host: IntentHost): InterpExtension {
 		{
 			prompt: host.prompt(),
 			session(hooks: SessionHooks): void {
-				let closed: Intent | undefined;
 				hooks.turnStart.use((ctx, next) => {
-					closed = undefined;
 					statesOf.get(ctx.interp)?.log.set([]);
 					return next(ctx);
 				});
 				hooks.stepError.use((ctx, text, next) => {
-					closed =
-						close(ctx.interp, "failed", clock, text.trim() || undefined) ??
-						closed;
+					closeShown(ctx.interp, "failed", clock, text.trim() || undefined);
 					return next(ctx, text);
 				});
 				hooks.beforeSettle.use(function* (ctx, more, next) {
 					const decided = yield* next(ctx, more);
-					if (!decided) closed = close(ctx.interp, "done", clock) ?? closed;
+					if (!decided) closeShown(ctx.interp, "done", clock);
 					return decided;
 				});
 				hooks.settled.use((turn, end, next) => {
 					const failed = end.outcome === "failed" || end.outcome === "aborted";
 					close(turn.interp, failed ? "failed" : "done", clock);
 					next(turn, end);
-				});
-				hooks.annotate.use((buffer, into, next) => {
-					const intent = closed ?? buffer.collect(intended).at(-1);
-					closed = undefined;
-					const question = buffer.collect(asked).at(-1);
-					const withIntent =
-						intent === undefined ? into : annotate(into, intentKey, intent);
-					return next(
-						buffer,
-						question === undefined
-							? withIntent
-							: annotate(withIntent, questionKey, question),
-					);
 				});
 			},
 		},
@@ -258,7 +245,7 @@ function registerIntent(interp: Interp, clock: Clock): void {
 	);
 
 	const show = (): typeof Unspecified => {
-		intended.emit(interp.channels, { user: shown(states) });
+		record(interp.channels, intentKind, shown(states));
 		return Unspecified;
 	};
 
@@ -401,8 +388,11 @@ function registerIntent(interp: Interp, clock: Clock): void {
 			const multi = opts.has("multi") && opts.get("multi") !== null;
 			const n = seq.get() + 1;
 			seq.set(n);
-			asked.emit(interp.channels, {
-				user: { id: `q${n}`, prompt, choices, multi },
+			record(interp.channels, questionKind, {
+				id: `q${n}`,
+				prompt,
+				choices,
+				multi,
 			});
 			effect.emit(interp.channels, { harness: { type: "end" } });
 			return Unspecified;

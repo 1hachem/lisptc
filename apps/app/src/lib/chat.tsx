@@ -1,20 +1,21 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import type { FiredMemory } from "@repo/components";
 import {
 	type ActivityEntry,
-	activityKey,
+	activityKind,
+} from "@repo/journal-catalog/activity";
+import { type Answered, type Ask, asksKind } from "@repo/journal-catalog/asks";
+import {
 	type Intent,
-	intentKey,
-	memoriesKey,
+	intentKind,
 	type Question,
-	questionKey,
-	readAnnotation,
-	type ViewRef,
-	viewKey,
-} from "@repo/interpreter/annotations";
-import type { Answered, Ask } from "@repo/interpreter/asks";
+	questionKind,
+} from "@repo/journal-catalog/intent";
+import { memoryKind } from "@repo/journal-catalog/memory";
+import { type ViewRef, viewKind } from "@repo/journal-catalog/view";
+import { ATTACHMENTS_KIND } from "@repo/shared/files";
+import { type Entry, view } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
 import { useQuery } from "@tanstack/react-query";
@@ -32,7 +33,7 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
-import { answersOf, asksOf } from "./asks.ts";
+import { entriesOfMessage, foldEntries } from "./entries.ts";
 import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
@@ -45,6 +46,7 @@ export interface ChatMessage {
 	type: string;
 	content: unknown;
 	additional_kwargs?: MessageKwargs;
+	entries?: readonly Entry[];
 }
 
 export interface StepMeta {
@@ -56,7 +58,6 @@ export interface StepMeta {
 	outputTokens?: number;
 	cachedInputTokens?: number;
 	steps?: number;
-	memories?: FiredMemory[];
 }
 
 function named(value: string | undefined): string | undefined {
@@ -65,10 +66,7 @@ function named(value: string | undefined): string | undefined {
 
 export function stepMeta(message: ChatMessage): StepMeta | undefined {
 	const { meta } = envelopeOf(message.additional_kwargs);
-	if (meta === undefined) return undefined;
-	const fired = readAnnotation(meta, memoriesKey);
-	const memories = fired === undefined ? undefined : [...fired];
-	if (meta.durationMs === undefined && memories === undefined) return undefined;
+	if (meta === undefined || meta.durationMs === undefined) return undefined;
 	return {
 		at: meta.at,
 		durationMs: meta.durationMs,
@@ -78,7 +76,6 @@ export function stepMeta(message: ChatMessage): StepMeta | undefined {
 		outputTokens: meta.outputTokens,
 		cachedInputTokens: meta.cachedInputTokens,
 		steps: meta.steps,
-		memories,
 	};
 }
 
@@ -94,14 +91,11 @@ export interface ChatSession {
 	draftChatId: Id<"chats"> | null;
 	workspaceId: Id<"workspaces">;
 	error?: string;
-	send: (
-		text: string,
-		annotations?: Record<string, unknown>,
-	) => Promise<boolean>;
+	send: (text: string, received?: Record<string, unknown>) => Promise<boolean>;
 	sendAbout: (
 		file: OpenFile,
 		text: string,
-		annotations?: Record<string, unknown>,
+		received?: Record<string, unknown>,
 	) => Promise<boolean>;
 	stop: () => void;
 	stopAll: () => void;
@@ -165,10 +159,8 @@ function freshMeta(
 	known: Readonly<Record<string, StepMeta>>,
 	message: ChatMessage,
 ): StepMeta | undefined {
-	if (!message.id || known[message.id]?.memories) return undefined;
-	const parsed = stepMeta(message);
-	if (parsed && known[message.id] && !parsed.memories) return undefined;
-	return parsed;
+	if (!message.id || known[message.id]) return undefined;
+	return stepMeta(message);
 }
 
 function newMeta(
@@ -269,30 +261,30 @@ function reported(source: string, thread: string) {
 
 function isEmptyTurn(
 	trimmed: string,
-	annotations: Record<string, unknown> | undefined,
+	received: Record<string, unknown> | undefined,
 ): boolean {
-	return trimmed === "" && annotations === undefined;
+	return trimmed === "" && received === undefined;
 }
 
 function turnInput(
 	message: string,
-	annotations: Record<string, unknown> | undefined,
-): { message: string; annotations?: Record<string, unknown> } {
-	return annotations === undefined ? { message } : { message, annotations };
+	received: Record<string, unknown> | undefined,
+): { message: string; received?: Record<string, unknown> } {
+	return received === undefined ? { message } : { message, received };
 }
 
 function humanMessage(
 	content: string,
-	annotations: Record<string, unknown> | undefined,
+	received: Record<string, unknown> | undefined,
 ): ChatMessage {
 	const message: ChatMessage = {
 		type: "human",
 		content,
 		id: crypto.randomUUID(),
 	};
-	return annotations === undefined
+	return received === undefined
 		? message
-		: { ...message, additional_kwargs: annotations };
+		: { ...message, additional_kwargs: received };
 }
 
 async function postTo(path: string, body: unknown): Promise<Response> {
@@ -347,7 +339,7 @@ function useHalt(chatId: Id<"chats"> | null, clear: () => void) {
 
 type Failure = { chatId: Id<"chats"> | null; message: string } | null;
 
-type TurnInput = { message: string; annotations?: Record<string, unknown> };
+type TurnInput = { message: string; received?: Record<string, unknown> };
 
 interface Pending {
 	readonly chatId: Id<"chats">;
@@ -408,14 +400,14 @@ function useTurnSend(
 		async (
 			text: string,
 			title = titleOf(text),
-			annotations?: Record<string, unknown>,
+			received?: Record<string, unknown>,
 		): Promise<boolean> => {
 			const trimmed = text.trim();
-			if (isEmptyTurn(trimmed, annotations)) return true;
+			if (isEmptyTurn(trimmed, received)) return true;
 			try {
 				await submit(
-					turnInput(trimmed, annotations),
-					humanMessage(trimmed, annotations),
+					turnInput(trimmed, received),
+					humanMessage(trimmed, received),
 					title,
 				);
 				return true;
@@ -432,14 +424,14 @@ function useTurnSend(
 		async (
 			file: OpenFile,
 			text: string,
-			annotations?: Record<string, unknown>,
+			received?: Record<string, unknown>,
 		) => {
 			const trimmed = text.trim();
-			if (isEmptyTurn(trimmed, annotations)) return true;
+			if (isEmptyTurn(trimmed, received)) return true;
 			return await submitTurn(
 				fileContext(file, trimmed),
 				titleOf(trimmed || file.path),
-				annotations,
+				received,
 			);
 		},
 		[submitTurn],
@@ -553,14 +545,14 @@ function useSend(
 	submitTurn: (
 		text: string,
 		title?: string,
-		annotations?: Record<string, unknown>,
+		received?: Record<string, unknown>,
 	) => Promise<boolean>,
 ) {
 	return useCallback(
-		async (text: string, annotations?: Record<string, unknown>) => {
+		async (text: string, received?: Record<string, unknown>) => {
 			const trimmed = text.trim();
-			if (!steering || !trimmed || annotations !== undefined)
-				return await submitTurn(trimmed, undefined, annotations);
+			if (!steering || !trimmed || received !== undefined)
+				return await submitTurn(trimmed, undefined, received);
 			enqueue(trimmed);
 			return true;
 		},
@@ -642,7 +634,7 @@ export function ChatProvider({
 	);
 
 	const messages = useMemo(
-		() => withGreeting(greeting, turns),
+		() => withGreeting(greeting, foldEntries(turns, chatPlacement)),
 		[greeting, turns],
 	);
 	const meta = useTurnMeta(turns);
@@ -778,30 +770,51 @@ export function toolResults(message: ChatMessage): string[] {
 	return [...(envelopeOf(message.additional_kwargs).results ?? [])];
 }
 
+const CHAT_KINDS: ReadonlySet<string> = new Set([
+	ATTACHMENTS_KIND,
+	viewKind.name,
+	intentKind.name,
+	activityKind.name,
+	questionKind.name,
+	asksKind.name,
+]);
+
+const TRACE_STANDING: ReadonlySet<string> = new Set([memoryKind.name]);
+
+function chatPlacement(entry: Entry): "carried" | "dropped" {
+	return CHAT_KINDS.has(entry.kind) ? "carried" : "dropped";
+}
+
+export function tracePlacement(entry: Entry): "carried" | "standing" {
+	return TRACE_STANDING.has(entry.kind) ? "standing" : "carried";
+}
+
 export function toolUi(message: ChatMessage): ViewRef | undefined {
-	return readAnnotation(message.additional_kwargs, viewKey);
+	return view(entriesOfMessage(message), viewKind);
 }
 
 export function toolActivity(message: ChatMessage): ActivityEntry[] {
-	return readAnnotation(message.additional_kwargs, activityKey) ?? [];
+	return view(entriesOfMessage(message), activityKind);
 }
 
 export function toolIntent(message: ChatMessage): Intent | undefined {
-	return readAnnotation(message.additional_kwargs, intentKey);
+	return view(entriesOfMessage(message), intentKind);
 }
 
 export function toolAsks(message: ChatMessage): Ask[] {
-	return asksOf(message.additional_kwargs);
+	return [...(view(entriesOfMessage(message), asksKind).open ?? [])];
 }
 
 export function toolQuestion(message: ChatMessage): Question | undefined {
-	return readAnnotation(message.additional_kwargs, questionKey);
+	return view(entriesOfMessage(message), questionKind);
 }
 
 export function toolAnswers(
 	message: ChatMessage,
 ): ReadonlyMap<string, Answered> {
-	return answersOf(message.additional_kwargs);
+	return new Map(
+		Object.entries(view(entriesOfMessage(message), asksKind).answered ?? {}),
+	);
 }
 
 export function toolModelOutput(message: ChatMessage): {
