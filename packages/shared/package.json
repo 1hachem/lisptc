@@ -15,6 +15,7 @@
     "./messages": "./src/messages.ts",
     "./providers": "./src/providers.ts",
     "./search": "./src/search.ts",
+    "./system-one": "./src/system-one.ts",
     "./split-layout": "./src/split-layout.ts",
     "./panel-layout": "./src/panel-layout.ts",
     "./desktop": "./src/desktop.ts",

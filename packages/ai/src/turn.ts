@@ -8,6 +8,7 @@ import type {
 	StepVerdict,
 	TurnOutcome,
 } from "@repo/interpreter/session";
+import { resolveModel } from "@repo/models/providers";
 import type { AgentRepl, LiveEntries } from "@repo/repl/repl";
 import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
@@ -16,7 +17,6 @@ import { type AgentConfig, streamAgent } from "./agent.ts";
 import { evalMessage } from "./eval.ts";
 import type { Envelope } from "./mailbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
-import { resolveModel } from "./provider/registry.ts";
 import {
 	evalCode,
 	isUserPrompt,
