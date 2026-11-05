@@ -7,8 +7,6 @@ export {
 export { Budget, type Limits, type Usage } from "./budget.ts";
 export { type Envelope, type Mailbox, MemoryMailbox } from "./mailbox.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
-export type { ModelOptions, Provider } from "./provider/core.ts";
-export { getProvider, providers } from "./provider/registry.ts";
 export {
 	evalCode,
 	replResultContent,
