@@ -38,6 +38,8 @@ export const DUPLICATE_SIMILARITY = 0.9;
 
 export const CLUSTER_SIMILARITY = 0.7;
 
+export const OUTLIER_SIMILARITY = 0.5;
+
 export interface SemanticHost {
 	systemOne: SystemOneModel;
 	embedder: EmbeddingModel;
@@ -207,6 +209,37 @@ function cosine(a: number[], b: number[]): number {
 		nb += (b[i] as number) ** 2;
 	}
 	return na === 0 || nb === 0 ? 0 : dot / Math.sqrt(na * nb);
+}
+
+function examplesFrom(
+	x: unknown,
+	options: Option[],
+): { option: Option; text: unknown }[] {
+	const examples: { option: Option; text: unknown }[] = [];
+	for (const entry of itemsOf(x, ":examples")) {
+		const head = entry instanceof Cell ? entry.car : undefined;
+		const label =
+			head instanceof LispKeyword
+				? head.name
+				: typeof head === "string"
+					? head
+					: undefined;
+		const option = options.find((o) => o.label === label);
+		if (option === undefined || !(entry instanceof Cell))
+			throw new EvalException(
+				"%choose: an entry of :examples is (option example...), naming one of the options",
+				entry,
+			);
+		for (const text of itemsOf(entry.cdr, ":examples"))
+			examples.push({ option, text });
+	}
+	const missing = options.find((o) => !examples.some((e) => e.option === o));
+	if (missing !== undefined)
+		throw new EvalException(
+			`%choose: option ${missing.label} has no examples`,
+			x,
+		);
+	return examples;
 }
 
 function distinctOf(xs: unknown[]): { reps: unknown[]; repOf: number[] } {
@@ -526,11 +559,16 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%choose",
 		-1,
-		'(%choose x options [:none value] [:min p] [:question "..."] [:timeout ms])',
-		'Pick the option that fits `x` best and return it as written: (%choose ticket \'(:billing :technical :other)). An option is a keyword, a string, or (option . "what it means"). With :none, "none of these" is an option too, and choosing it returns that value; :min returns it as well when the best option is less likely than p. :question says what is being picked.',
+		'(%choose x options [:none value] [:min p] [:question "..."] [:examples examples] [:timeout ms])',
+		'Pick the option that fits `x` best and return it as written: (%choose ticket \'(:billing :technical :other)). An option is a keyword, a string, or (option . "what it means"). With :none, "none of these" is an option too, and choosing it returns that value; :min returns it as well when the best option is less likely than p. :question says what is being picked. With :examples, a list of (option example...), it picks the option whose examples are nearest in meaning instead, and :min is the least similarity: (%choose ticket \'(:billing :technical) :examples \'((:billing "I was charged twice") (:technical "the app crashes"))).',
 		z.tuple([zList]),
 		([rest]) => {
-			const allowed = [...PREDICATE_OPTIONS, "none", "question"] as const;
+			const allowed = [
+				...PREDICATE_OPTIONS,
+				"none",
+				"question",
+				"examples",
+			] as const;
 			const { args, opts } = argsOf(
 				rest,
 				"%choose",
@@ -553,6 +591,29 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 				: "Which option fits best?";
 			const fallback = withNone ? opts.get("none") : null;
 			const min = opts.has("min") ? minOf(opts) : 0;
+			if (opts.has("examples")) {
+				const examples = examplesFrom(opts.get("examples"), options);
+				const exact = examples.find(
+					(e) => textFor(e.text) === textFor(args[0]),
+				);
+				if (exact !== undefined) return exact.option.value;
+				return embed(
+					"%choose",
+					[args[0], ...examples.map((e) => e.text)],
+					opts,
+				).then(([target, ...vectors]) => {
+					let best: { option: Option; similarity: number } | undefined;
+					vectors.forEach((v, i) => {
+						const similarity = cosine(target ?? [], v);
+						const option = (examples[i] as { option: Option }).option;
+						if (best === undefined || similarity > best.similarity)
+							best = { option, similarity };
+					});
+					return best === undefined || best.similarity < min
+						? fallback
+						: best.option.value;
+				});
+			}
 			return ask(
 				"%choose",
 				{
@@ -936,6 +997,75 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 		},
 	);
 
+	interp.def(
+		"%similarity-each",
+		-1,
+		"(%similarity-each x items [:timeout ms])",
+		"Return how close `x` is in meaning to every element of `items`, in order, measured in one call. What %sort, %min and %max with :near are built on.",
+		z.tuple([zList]),
+		([rest]) => {
+			const { args, opts } = argsOf(
+				rest,
+				"%similarity-each",
+				2,
+				CALL_OPTIONS,
+				"a value and a list",
+			);
+			const [x, xs] = args;
+			const items = itemsOf(xs, "%similarity-each");
+			const same = items.map(
+				(y) => sameSyntax(x, y) === true || textFor(x) === textFor(y),
+			);
+			const others = items.filter((_, i) => !same[i]);
+			if (others.length === 0) return arrayToList(items.map(() => 1));
+			return embed("%similarity-each", [x, ...others], opts).then(
+				([target, ...vectors]) => {
+					let at = 0;
+					return arrayToList(
+						items.map((_, i) =>
+							same[i] ? 1 : cosine(target ?? [], vectors[at++] ?? []),
+						),
+					);
+				},
+			);
+		},
+	);
+
+	interp.def(
+		"%outliers",
+		-1,
+		"(%outliers xs [:min similarity] [:timeout ms])",
+		`Return the elements of xs that nothing else in xs is close to in meaning, in the order of xs: (%outliers reviews). An element is an outlier when its nearest other element is less than :min similar, default ${OUTLIER_SIMILARITY}. An element with an equal twin in xs is never one.`,
+		z.tuple([zList]),
+		([rest]) => {
+			const { args, opts } = argsOf(
+				rest,
+				"%outliers",
+				1,
+				PREDICATE_OPTIONS,
+				"a list",
+			);
+			const items = itemsOf(args[0], "%outliers");
+			const { reps, repOf } = distinctOf(items);
+			const min = similarityMin(opts, OUTLIER_SIMILARITY);
+			const twinned = reps.map(
+				(_, r) => repOf.filter((at) => at === r).length > 1,
+			);
+			if (reps.length < 2) return null;
+			return embed("%outliers", reps, opts).then((vectors) => {
+				const lonely = vectors.map((v, r) => {
+					if (twinned[r]) return false;
+					let nearest = -1;
+					vectors.forEach((w, o) => {
+						if (o !== r) nearest = Math.max(nearest, cosine(v, w));
+					});
+					return nearest < min;
+				});
+				return arrayToList(items.filter((_, i) => lonely[repOf[i] as number]));
+			});
+		},
+	);
+
 	runSync(interp, MACROS);
 }
 
@@ -1014,12 +1144,24 @@ const MACROS = `
                                         rest))
                         xs)))))
 
+(setq _%distances
+      (lambda (xs near rest)
+        (_%zip (mapcar (lambda (s) (- 1 s))
+                       (apply %similarity-each (cons near (cons xs rest))))
+               xs)))
+
 (setq _%rated
       (lambda (xs options)
-        (_%rate xs
-                (_%option options :by nil)
-                (_%option options :levels nil)
-                (_%drop (_%drop (_%drop options :by) :levels) :desc))))
+        (cond ((null (_%option options :near nil))
+               (_%rate xs
+                       (_%option options :by nil)
+                       (_%option options :levels nil)
+                       (_%drop (_%drop (_%drop options :by) :levels) :desc)))
+              ((_%option options :by nil)
+               (error "say :by or :near, not both"))
+              (t (_%distances xs
+                              (_%option options :near nil)
+                              (_%drop (_%drop (_%drop options :near) :levels) :desc))))))
 
 (setq _%ordered
       (lambda (ordered desc)
@@ -1031,20 +1173,20 @@ const MACROS = `
         (_%ordered (mapcar cdr (sort (_%rated xs options)
                                      (lambda (a b) (< (car a) (car b)))))
                    (_%option options :desc nil))))
-(_set-doc '%sort "(%sort xs :by dimension [:levels levels] [:desc t] [:timeout ms])"
-          "Return xs ordered by a judged dimension, lowest first, or highest first with :desc t: (%sort tickets :by \\"urgency\\" :desc t). One call rates them all, then a plain sort orders them.")
+(_set-doc '%sort "(%sort xs :by dimension [:levels levels] [:desc t] [:timeout ms]) or (%sort xs :near query [:desc t] [:timeout ms])"
+          "Return xs ordered by a judged dimension, lowest first, or highest first with :desc t: (%sort tickets :by \\"urgency\\" :desc t). One call rates them all, then a plain sort orders them. With :near, xs is ordered by distance in meaning from the query, closest first: (head (%sort issues :near \\"billing problems\\") 5) is the five closest.")
 
 (setq %max
       (lambda (xs &rest options)
         (car (apply %sort (cons xs (_append options (list :desc t)))))))
-(_set-doc '%max "(%max xs :by dimension [:levels levels] [:timeout ms])"
-          "Return the element of xs rated highest on the dimension: (%max offers :by \\"value for money\\").")
+(_set-doc '%max "(%max xs :by dimension [:levels levels] [:timeout ms]) or (%max xs :near query)"
+          "Return the element of xs rated highest on the dimension: (%max offers :by \\"value for money\\"). With :near, the element farthest in meaning from the query.")
 
 (setq %min
       (lambda (xs &rest options)
         (car (apply %sort (cons xs options)))))
-(_set-doc '%min "(%min xs :by dimension [:levels levels] [:timeout ms])"
-          "Return the element of xs rated lowest on the dimension.")
+(_set-doc '%min "(%min xs :by dimension [:levels levels] [:timeout ms]) or (%min xs :near query)"
+          "Return the element of xs rated lowest on the dimension. With :near, the element closest in meaning to the query: (%min faqs :near question).")
 
 (setq _%tests
       (lambda (clauses)

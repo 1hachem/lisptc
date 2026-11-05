@@ -56,6 +56,15 @@ session = one call:
   :min similarity, default 0.9.
 - (%cluster xs) gives groups, list of lists, list order kept; :min similarity,
   default 0.7. Raise :min for tighter groups.
+- (%sort xs :near q) orders by meaning distance from q, closest first:
+  (head (%sort issues :near "billing problems") 5) = five closest.
+  (%min xs :near q) = closest, (%max xs :near q) = farthest.
+- (%similarity-each x items) gives one similarity per item, one call.
+- (%outliers xs) gives elements nothing else in xs is close to; :min
+  similarity, default 0.5.
+- (%choose x options :examples '((:billing "I was charged twice")
+  (:technical "app crashes"))) picks option with nearest example, no
+  probability call; :min = least similarity.
 
 Option, every % call: :timeout ms, default 30000.
 
