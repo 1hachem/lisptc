@@ -1,9 +1,10 @@
-import { appliesJudge, openRouterSystemOne } from "@repo/ai";
+import { appliesJudge } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
+import { jev } from "@repo/models/providers";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -103,7 +104,7 @@ const judged = () => [
 	memoryExtension({
 		...memoryHost,
 		store: new VolatileStore(),
-		judge: appliesJudge(openRouterSystemOne(), EVAL_APPLIES_TIMEOUT_MS),
+		judge: appliesJudge(jev, EVAL_APPLIES_TIMEOUT_MS),
 	}),
 ];
 
