@@ -5,8 +5,12 @@ import { memoryKind } from "@repo/journal-catalog/memory";
 import { view } from "@repo/shared/journal";
 import {
 	type ComponentProps,
+	createContext,
 	Fragment,
+	type KeyboardEvent,
 	type RefObject,
+	useCallback,
+	useContext,
 	useEffect,
 	useMemo,
 	useRef,
@@ -25,10 +29,9 @@ import {
 	isSystemMessage,
 	isToolMessage,
 	messageText,
-	stepMeta,
 } from "../lib/chat.tsx";
 import { entriesOfMessage, isEntryMessage } from "../lib/entries.ts";
-import { useModelPicker } from "../lib/model-picker.tsx";
+import { messageMatches } from "../lib/trace-find.ts";
 import { useTrace } from "../lib/trace-source.tsx";
 import {
 	type TraceChild,
@@ -36,16 +39,81 @@ import {
 	type TraceStep,
 	traceEntries,
 } from "../lib/trace-steps.ts";
-import { formatElapsed } from "../lib/turn-timeline.ts";
-import { useUI } from "../lib/ui.tsx";
 import { AttachedFiles } from "./attached-files.tsx";
 import {
 	ChannelsShown,
 	ChatLine,
+	Revealed,
 	ToolMessage,
 	useChannels,
 } from "./chat-view.tsx";
 import { MessageMeta } from "./message-meta.tsx";
+
+const FindQuery = createContext("");
+
+function useMatched(message: ChatMessage): boolean {
+	return messageMatches(message, useContext(FindQuery));
+}
+
+function FindBar({
+	query,
+	setQuery,
+	at,
+	count,
+	go,
+	input,
+}: {
+	query: string;
+	setQuery: (query: string) => void;
+	at: number;
+	count: number;
+	go: (by: number) => void;
+	input: RefObject<HTMLInputElement | null>;
+}) {
+	const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			go(event.shiftKey ? -1 : 1);
+		} else if (event.key === "Escape") setQuery("");
+	};
+	return (
+		<div className="flex min-w-0 items-center gap-2 border-dim/20 border-b px-4 py-1.5 text-[11.5px]">
+			<input
+				ref={input}
+				type="search"
+				aria-label="find in trace"
+				placeholder="find in trace"
+				value={query}
+				onChange={(event) => setQuery(event.target.value)}
+				onKeyDown={onKeyDown}
+				className="min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-dim/50"
+			/>
+			{query.trim() !== "" && (
+				<span data-find-count className="flex-none text-dim tabular-nums">
+					{count === 0 ? "no match" : `${Math.max(at, 0) + 1}/${count}`}
+				</span>
+			)}
+			<button
+				type="button"
+				aria-label="previous match"
+				disabled={count === 0}
+				onClick={() => go(-1)}
+				className="flex-none text-dim hover:text-fg disabled:opacity-30"
+			>
+				‹
+			</button>
+			<button
+				type="button"
+				aria-label="next match"
+				disabled={count === 0}
+				onClick={() => go(1)}
+				className="flex-none text-dim hover:text-fg disabled:opacity-30"
+			>
+				›
+			</button>
+		</div>
+	);
+}
 
 function ChannelToggles({
 	shown,
@@ -79,6 +147,11 @@ function ChannelToggles({
 	);
 }
 
+function shownMemory(message: ChatMessage, shown: Shown) {
+	if (!shown.memory) return undefined;
+	return view(entriesOfMessage(message), memoryKind).at(-1);
+}
+
 function EntryLine({
 	message,
 	focused,
@@ -86,10 +159,7 @@ function EntryLine({
 	message: ChatMessage;
 	focused: boolean;
 }) {
-	const shown = useChannels();
-	if (!shown.memory) return null;
-	const entries = entriesOfMessage(message);
-	const memory = view(entries, memoryKind).at(-1);
+	const memory = shownMemory(message, useChannels());
 	if (memory === undefined) return null;
 	return <MessageMemories memories={[memory]} focused={focused} />;
 }
@@ -101,9 +171,6 @@ function TraceLine({
 	message: ChatMessage;
 	focused: boolean;
 }) {
-	const { metaShown } = useUI();
-	const { openModelPicker } = useModelPicker();
-	const stats = useMemo(() => stepMeta(message), [message]);
 	return (
 		<div className="group relative min-w-0 empty:hidden">
 			{isEntryMessage(message) ? (
@@ -112,13 +179,6 @@ function TraceLine({
 				<ToolMessage message={message} />
 			) : (
 				<ChatLine message={message} />
-			)}
-			{stats && (
-				<MessageMeta
-					meta={stats}
-					show={metaShown}
-					onPickModel={openModelPicker}
-				/>
 			)}
 		</div>
 	);
@@ -185,14 +245,15 @@ function StepDivider({ step }: { step: TraceStep }) {
 	return (
 		<div
 			data-step-header
-			className="flex min-w-0 items-center gap-2 border-dim/20 border-t pt-1.5 text-[11.5px] text-dim"
+			className="flex min-w-0 items-baseline gap-2 border-dim/20 border-t pt-1.5 text-[11.5px] text-dim"
 		>
 			<span className="flex-none">step {step.number}</span>
-			{step.durationMs !== undefined && (
-				<span className="ml-auto flex-none tabular-nums">
-					{formatElapsed(step.durationMs)}
-				</span>
-			)}
+			<div className="min-w-0 flex-1 [&>div]:mt-0">
+				<MessageMeta
+					meta={step.meta}
+					show={{ steps: false, model: false, provider: false }}
+				/>
+			</div>
 		</div>
 	);
 }
@@ -207,15 +268,17 @@ function TracedMessage({
 	children: React.ReactNode;
 }) {
 	const flashed = message.id !== undefined && message.id === flashing;
+	const matched = useMatched(message);
 	return (
 		<div
 			data-message-id={message.id}
 			data-flash={flashed || undefined}
-			className={`min-w-0 transition-colors duration-700 empty:hidden ${
-				flashed ? "bg-yellow/10" : ""
+			data-match={matched || undefined}
+			className={`min-w-0 transition-colors duration-700 empty:hidden has-[>div:empty]:hidden data-[find-current]:outline data-[find-current]:outline-1 data-[find-current]:outline-yellow/60 ${
+				flashed || matched ? "bg-yellow/10" : ""
 			}`}
 		>
-			{children}
+			<Revealed.Provider value={matched}>{children}</Revealed.Provider>
 		</div>
 	);
 }
@@ -244,14 +307,10 @@ function messageKind(parent: boolean, system: boolean): MessageKind {
 	return system ? "system" : "you";
 }
 
-function MessageMark({ kind, system }: { kind: MessageKind; system: boolean }) {
-	if (!system)
-		return (
-			<span aria-hidden className="flex-none select-none">
-				›
-			</span>
-		);
-	const marked = channelOf(kind === "agent" ? "agents" : "system");
+function MessageMark({ kind }: { kind: MessageKind }) {
+	const marked = channelOf(
+		kind === "agent" ? "agents" : kind === "system" ? "system" : "user",
+	);
 	return (
 		<HugeiconsIcon
 			icon={marked.icon}
@@ -290,13 +349,16 @@ function MessageEntry({
 	flashing: string | undefined;
 }) {
 	const shown = useChannels();
-	const [open, setOpen] = useState(false);
+	const matched = useMatched(message);
+	const [unfolded, setOpen] = useState(false);
+	const open = unfolded || matched;
 	const line = useRef<HTMLSpanElement>(null);
 	const text = messageText(message);
 	const clipped = useClipped(line, text);
 	const parent = isParentMessage(message);
 	const system = isSystemMessage(message);
-	if (parent ? !shown.agents : system && !shown.system) return null;
+	if (parent ? !shown.agents : system ? !shown.system : !shown.user)
+		return null;
 	const kind = messageKind(parent, system);
 	const attached = shown.attachments ? attachedTo(message) : [];
 	const foldable =
@@ -313,7 +375,7 @@ function MessageEntry({
 					aria-expanded={foldable ? open : undefined}
 					onClick={() => setOpen((was) => !was)}
 				>
-					<MessageMark kind={kind} system={system} />
+					<MessageMark kind={kind} />
 					<MessageLine line={line} text={text} open={open} />
 				</TraceRow>
 				{files.length > 0 && <AttachedFiles files={files} />}
@@ -375,27 +437,84 @@ function TraceEntries({
 						className="flex min-w-0 flex-col gap-2"
 					>
 						<StepDivider step={step} />
-						{step.messages.map((message, at) => (
-							<Fragment key={message.id ?? at}>
-								<TracedMessage message={message} flashing={flashing}>
-									<TraceLine
-										message={message}
-										focused={message.id !== undefined && message.id === focused}
-									/>
-								</TracedMessage>
-								{shown.agents &&
-									step.children
-										.filter((child) => child.after === at)
-										.map((child) => (
-											<ChildTrace key={child.chatId} child={child} />
-										))}
-							</Fragment>
-						))}
+						{step.messages.map((message, at) =>
+							isEntryMessage(message) &&
+							shownMemory(message, shown) === undefined ? null : (
+								<Fragment key={message.id ?? at}>
+									<TracedMessage message={message} flashing={flashing}>
+										<TraceLine
+											message={message}
+											focused={
+												message.id !== undefined && message.id === focused
+											}
+										/>
+									</TracedMessage>
+									{shown.agents &&
+										step.children
+											.filter((child) => child.after === at)
+											.map((child) => (
+												<ChildTrace key={child.chatId} child={child} />
+											))}
+								</Fragment>
+							),
+						)}
 					</div>
 				);
 			})}
 		</div>
 	);
+}
+
+const CURRENT = "data-find-current";
+
+function useFind(scroller: RefObject<HTMLDivElement | null>) {
+	const [query, setRawQuery] = useState("");
+	const [at, setAt] = useState(-1);
+	const [count, setCount] = useState(0);
+	const input = useRef<HTMLInputElement>(null);
+	const hits = useCallback(
+		() =>
+			[
+				...(scroller.current?.querySelectorAll<HTMLElement>("[data-match]") ??
+					[]),
+			].filter((hit) => hit.childElementCount > 0),
+		[scroller],
+	);
+	const clear = useCallback(() => {
+		for (const hit of scroller.current?.querySelectorAll(`[${CURRENT}]`) ?? [])
+			hit.removeAttribute(CURRENT);
+	}, [scroller]);
+	useEffect(() => {
+		const root = scroller.current;
+		if (root === null) return;
+		const recount = () => setCount(hits().length);
+		recount();
+		const observer = new MutationObserver(recount);
+		observer.observe(root, {
+			subtree: true,
+			childList: true,
+			attributeFilter: ["data-match"],
+		});
+		return () => observer.disconnect();
+	}, [scroller, hits]);
+	const setQuery = (next: string) => {
+		clear();
+		setAt(-1);
+		setRawQuery(next);
+	};
+	const go = (by: number) => {
+		const found = hits();
+		setCount(found.length);
+		if (found.length === 0) return;
+		const next =
+			((((at < 0 && by < 0 ? 0 : at) + by) % found.length) + found.length) %
+			found.length;
+		clear();
+		found[next]?.setAttribute(CURRENT, "");
+		found[next]?.scrollIntoView?.({ block: "center" });
+		setAt(next);
+	};
+	return { query, setQuery, at, count, go, input };
 }
 
 export function TraceLines({
@@ -409,26 +528,41 @@ export function TraceLines({
 	const scroller = useRef<HTMLDivElement>(null);
 	const entries = useMemo(() => traceEntries(messages), [messages]);
 	const flashing = useFlash(turn);
+	const find = useFind(scroller);
 	useScrollTo(scroller, turn, messages.length > 0);
 	const toggle = (id: keyof Shown) =>
 		setShown((was) => ({ ...was, [id]: !was[id] }));
+	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+			event.preventDefault();
+			find.input.current?.focus();
+			find.input.current?.select();
+		}
+	};
 	return (
 		<ChannelsShown shown={shown}>
-			<div className="flex h-full min-h-0 flex-col">
-				<ChannelToggles shown={shown} toggle={toggle} />
-				<div
-					ref={scroller}
-					className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4"
+			<FindQuery.Provider value={find.query}>
+				<section
+					aria-label="trace"
+					className="flex h-full min-h-0 flex-col"
+					onKeyDown={onKeyDown}
 				>
-					<div className="mx-auto w-full max-w-[680px]">
-						<TraceEntries
-							entries={entries}
-							flashing={flashing}
-							focused={turn}
-						/>
+					<FindBar {...find} />
+					<ChannelToggles shown={shown} toggle={toggle} />
+					<div
+						ref={scroller}
+						className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]"
+					>
+						<div className="mx-auto w-full max-w-[680px]">
+							<TraceEntries
+								entries={entries}
+								flashing={flashing}
+								focused={turn}
+							/>
+						</div>
 					</div>
-				</div>
-			</div>
+				</section>
+			</FindQuery.Provider>
 		</ChannelsShown>
 	);
 }

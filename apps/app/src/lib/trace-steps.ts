@@ -3,6 +3,7 @@ import {
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
+	type StepMeta,
 	stepMeta,
 	toolActivity,
 	tracePlacement,
@@ -20,18 +21,30 @@ export interface TraceStep {
 	number: number;
 	messages: ChatMessage[];
 	children: TraceChild[];
-	durationMs?: number;
+	meta?: StepMeta;
 }
 
 export type TraceEntry =
 	| { kind: "message"; message: ChatMessage; at: number }
 	| { kind: "step"; step: TraceStep };
 
-function durationOf(messages: readonly ChatMessage[]): number | undefined {
-	const timed = messages
-		.map((m) => stepMeta(m)?.durationMs)
-		.filter((ms): ms is number => ms !== undefined);
-	return timed.length === 0 ? undefined : timed.reduce((a, b) => a + b, 0);
+function sum(values: (number | undefined)[]): number | undefined {
+	const known = values.filter((n): n is number => n !== undefined);
+	return known.length === 0 ? undefined : known.reduce((a, b) => a + b, 0);
+}
+
+function metaOf(messages: readonly ChatMessage[]): StepMeta | undefined {
+	const metas = messages
+		.map((m) => stepMeta(m))
+		.filter((meta): meta is StepMeta => meta !== undefined);
+	if (metas.length === 0) return undefined;
+	return {
+		at: metas[0]?.at,
+		durationMs: sum(metas.map((m) => m.durationMs)),
+		inputTokens: sum(metas.map((m) => m.inputTokens)),
+		cachedInputTokens: sum(metas.map((m) => m.cachedInputTokens)),
+		outputTokens: sum(metas.map((m) => m.outputTokens)),
+	};
 }
 
 function childrenOf(messages: readonly ChatMessage[]): TraceChild[] {
@@ -50,7 +63,7 @@ function stepOf(messages: ChatMessage[], number: number): TraceStep {
 		number,
 		messages,
 		children: childrenOf(messages),
-		durationMs: durationOf(messages),
+		meta: metaOf(messages),
 	};
 }
 

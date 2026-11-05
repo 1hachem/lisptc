@@ -1,4 +1,5 @@
 import {
+	AiChat02Icon,
 	Attachment01Icon,
 	Brain02Icon,
 	BulbIcon,
@@ -7,10 +8,13 @@ import {
 	HelpCircleIcon,
 	InformationCircleIcon,
 	UserGroupIcon,
+	UserIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
 export type ChannelId =
+	| "user"
+	| "assistant"
 	| "output"
 	| "ui"
 	| "attachments"
@@ -29,6 +33,20 @@ export interface Channel {
 }
 
 export const CHANNELS: Channel[] = [
+	{
+		id: "user",
+		icon: UserIcon,
+		label: "user",
+		hint: "what you sent the agent",
+		text: "text-fg",
+	},
+	{
+		id: "assistant",
+		icon: AiChat02Icon,
+		label: "assistant",
+		hint: "what the agent wrote: its prose and the code it ran",
+		text: "text-blue",
+	},
 	{
 		id: "ui",
 		icon: DashboardSquare01Icon,

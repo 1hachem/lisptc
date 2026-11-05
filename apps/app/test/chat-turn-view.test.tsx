@@ -521,28 +521,71 @@ describe("the trace", () => {
 		);
 	});
 
-	it("heads a step with its number and duration only", async () => {
+	const METERED: ChatMessage[] = [
+		{ id: "h1", type: "human", content: "go" },
+		{
+			id: "a1",
+			type: "ai",
+			content: "(draw-chart)",
+			additional_kwargs: {
+				meta: {
+					durationMs: 1500,
+					inputTokens: 1200,
+					outputTokens: 30,
+					model: "acme/fast-1",
+				},
+			},
+		},
+		{ id: "t1", type: "tool", content: '{"source":"lisp-repl"}' },
+		{
+			id: "a2",
+			type: "ai",
+			content: "(draw-chart)",
+			additional_kwargs: {
+				meta: { durationMs: 500, inputTokens: 4000, outputTokens: 20 },
+			},
+		},
+		{ id: "t2", type: "tool", content: '{"source":"lisp-repl"}' },
+	];
+
+	it("heads a step with its number and what it took, no model, and leaves none of it under the message", async () => {
+		const host = await mount(<TraceLines messages={METERED} />);
+		const [first] = host.querySelectorAll("[data-step-header]");
+
+		expect(first?.textContent).toContain("step 1");
+		expect(first?.textContent).toContain("took 1.5s");
+		expect(first?.textContent).toContain("1.2k in");
+		expect(first?.textContent).toContain("30 out");
+		expect(first?.textContent).not.toContain("fast-1");
+		expect(host.querySelector("[data-step-bar]")).toBeNull();
+		expect(
+			host.querySelector('[data-message-id="a1"]')?.textContent,
+		).not.toContain("took");
+	});
+
+	it("draws no row for an entry that shows nothing, whether memories are on or off", async () => {
 		const host = await mount(
 			<TraceLines
 				messages={[
 					{ id: "h1", type: "human", content: "go" },
+					{ id: "a1", type: "ai", content: "(plan)" },
 					{
-						id: "a1",
-						type: "ai",
-						content: "(draw-chart)",
-						additional_kwargs: { meta: { durationMs: 1500 } },
+						id: "i1",
+						type: "entry",
+						content: "",
+						additional_kwargs: entry("intent", { doing: "planning" }),
 					},
 					{ id: "t1", type: "tool", content: '{"source":"lisp-repl"}' },
-					{ id: "a2", type: "ai", content: "(draw-chart)" },
-					{ id: "t2", type: "tool", content: '{"source":"lisp-repl"}' },
 				]}
 			/>,
 		);
-		const headers = [...host.querySelectorAll("[data-step-header]")].map(
-			(h) => h.textContent,
-		);
+		const memories = [
+			...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]"),
+		].find((b) => b.textContent === "memories");
 
-		expect(headers).toEqual([`step 1${formatElapsed(1500)}`, "step 2"]);
+		expect(host.querySelector('[data-message-id="i1"]')).toBeNull();
+		await act(async () => memories?.click());
+		expect(host.querySelector('[data-message-id="i1"]')).toBeNull();
 	});
 
 	const CHANNEL_TRACE: ChatMessage[] = [
@@ -605,6 +648,8 @@ describe("the trace", () => {
 	];
 
 	const MARKS: Record<ChannelId, string> = {
+		user: "make a chart",
+		assistant: "(draw-chart)",
 		output: "MODEL-MARK",
 		ui: "UI-MARK",
 		attachments: "USER-FILE.pdf",
@@ -984,6 +1029,98 @@ const STEPS: ChatMessage[] = [
 		},
 	]).flat(),
 ];
+
+async function find(host: HTMLElement, query: string) {
+	const field = host.querySelector<HTMLInputElement>(
+		'input[aria-label="find in trace"]',
+	);
+	if (field === null) throw new Error("no find field");
+	const setValue = Object.getOwnPropertyDescriptor(
+		HTMLInputElement.prototype,
+		"value",
+	)?.set;
+	await act(async () => {
+		setValue?.call(field, query);
+		field.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+	return field;
+}
+
+describe("finding in a trace", () => {
+	it("counts every match across steps and steps through them", async () => {
+		const host = await mount(<TraceLines messages={STEPS} />);
+		const field = await find(host, "out-");
+		const count = () => host.querySelector("[data-find-count]")?.textContent;
+
+		expect(count()).toBe("1/9");
+		expect(host.querySelector("[data-find-current]")).toBeNull();
+
+		await act(async () =>
+			field.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+			),
+		);
+		await act(async () =>
+			host
+				.querySelector<HTMLButtonElement>('[aria-label="next match"]')
+				?.click(),
+		);
+
+		expect(count()).toBe("2/9");
+		expect(
+			host
+				.querySelector("[data-find-current]")
+				?.getAttribute("data-message-id"),
+		).toBe("t1");
+	});
+
+	it("unfolds a folded message and a long output it matches", async () => {
+		const tail = "NEEDLE-AT-THE-END";
+		const host = await mount(
+			<TraceLines
+				messages={[
+					{
+						id: "h1",
+						type: "human",
+						content: `first line\nsecond line ${tail}`,
+					},
+					{ id: "a1", type: "ai", content: "(read-log)" },
+					{
+						id: "t1",
+						type: "tool",
+						content: JSON.stringify({
+							source: "lisp-repl",
+							output: `${"line\n".repeat(40)}${tail}`,
+						}),
+					},
+				]}
+			/>,
+		);
+
+		expect(host.textContent).not.toContain(`line\n${tail}`);
+
+		await find(host, "needle");
+
+		expect(host.querySelectorAll("[data-match]")).toHaveLength(2);
+		expect(host.querySelector('[data-message-id="t1"]')?.textContent).toContain(
+			tail,
+		);
+		expect(
+			host
+				.querySelector('[data-trace-message="you"] > button')
+				?.getAttribute("aria-expanded"),
+		).toBe("true");
+	});
+
+	it("says so when nothing matches", async () => {
+		const host = await mount(<TraceLines messages={STEPS} />);
+		await find(host, "nowhere-to-be-found");
+
+		expect(host.querySelector("[data-find-count]")?.textContent).toBe(
+			"no match",
+		);
+	});
+});
 
 describe("a trace's steps", () => {
 	it("lays every step out open, one level deep, under its header", async () => {

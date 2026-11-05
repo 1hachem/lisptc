@@ -87,6 +87,8 @@ const PAGE_LINES = 200;
 
 const Traced = createContext(false);
 
+export const Revealed = createContext(false);
+
 function Marked({
 	id,
 	tone,
@@ -135,11 +137,12 @@ function ChannelText({
 	code?: boolean;
 }) {
 	const traced = useContext(Traced);
+	const revealed = useContext(Revealed);
 	const [expanded, setExpanded] = useState(false);
 	const [page, setPage] = useState(0);
 	const head = foldOf(text, traced ? TRACE_FOLD : CHAT_FOLD);
 	const long = head.length < text.length;
-	const folded = long && !expanded;
+	const folded = long && !expanded && !revealed;
 	const lines = text.split("\n");
 	const pages = Math.ceil(lines.length / PAGE_LINES);
 	const paged = !folded && pages > 1;
@@ -345,6 +348,7 @@ function UserMessage({ message }: { message: ChatMessage }) {
 
 export function ChatLine({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
+	const traced = useContext(Traced);
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
 	return (
@@ -358,8 +362,14 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 			)}
 			{isUserMessage(message) ? (
 				<UserMessage message={message} />
-			) : (
+			) : !traced ? (
 				<ChannelBody text={messageText(message)} code />
+			) : (
+				shown.assistant && (
+					<Marked id="assistant">
+						<ChannelBody text={messageText(message)} code />
+					</Marked>
+				)
 			)}
 		</div>
 	);
