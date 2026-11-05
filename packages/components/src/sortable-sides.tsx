@@ -29,7 +29,6 @@ import { CursorDragOverlay } from "./cursor-drag-overlay.tsx";
 import { SortableEntry, usePrefersReducedMotion } from "./sortable-tree.tsx";
 
 const DRAG_AFTER_PX = 4;
-const SETTLE = { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" };
 const SIDE_PREFIX = "side:";
 
 export type Sides<Side extends string, Id extends string> = Record<
@@ -82,6 +81,23 @@ export function movedAcross<Side extends string, Id extends string>(
 	};
 }
 
+function sameSides<Side extends string, Id extends string>(
+	a: Sides<Side, Id>,
+	b: Sides<Side, Id>,
+): boolean {
+	const all = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<Side>;
+	return [...all].every(
+		(side) => (a[side] ?? []).join("\0") === (b[side] ?? []).join("\0"),
+	);
+}
+
+export function awaitingSides<Side extends string, Id extends string>(
+	given: Sides<Side, Id>,
+	dropped: { next: Sides<Side, Id>; over: Sides<Side, Id> } | undefined,
+): Sides<Side, Id> {
+	return dropped && sameSides(dropped.over, given) ? dropped.next : given;
+}
+
 const preferEntries: CollisionDetection = (args) => {
 	const within = pointerWithin(args);
 	const isSide = (hit: Collision) => String(hit.id).startsWith(SIDE_PREFIX);
@@ -117,7 +133,12 @@ export function SortableSides<Side extends string, Id extends string>({
 	const shown: MotionId = reduced || motion === "none" ? "none" : "overlay";
 	const [live, setLive] = useState<Sides<Side, Id>>();
 	const [dragged, setDragged] = useState<Id>();
-	const sides = live ?? given;
+	const [dropped, setDropped] = useState<{
+		next: Sides<Side, Id>;
+		over: Sides<Side, Id>;
+	}>();
+	const settledSides = awaitingSides(given, dropped);
+	const sides = live ?? settledSides;
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
 			activationConstraint: { distance: DRAG_AFTER_PX },
@@ -133,7 +154,7 @@ export function SortableSides<Side extends string, Id extends string>({
 	const onDragStart = ({ active }: DragStartEvent) => {
 		const picked = entry(active.id);
 		setDragged(picked);
-		setLive(given);
+		setLive(settledSides);
 		if (picked) onPickUp?.(picked);
 	};
 	const onDragOver = ({ active, over }: DragOverEvent) => {
@@ -149,7 +170,9 @@ export function SortableSides<Side extends string, Id extends string>({
 		const settled = next ?? sides;
 		setDragged(undefined);
 		setLive(undefined);
-		if (settled !== given) onMove(settled);
+		if (sameSides(settled, settledSides)) return;
+		setDropped({ next: settled, over: given });
+		onMove(settled);
 	};
 	const onDragCancel = () => {
 		setDragged(undefined);
@@ -166,12 +189,8 @@ export function SortableSides<Side extends string, Id extends string>({
 			onDragCancel={onDragCancel}
 		>
 			<SidesContext value={{ sides, motion: shown }}>{children}</SidesContext>
-			<CursorDragOverlay dropAnimation={shown === "none" ? null : SETTLE}>
-				{dragged && (
-					<div className="cursor-grabbing bg-bg2 shadow-lg">
-						{overlay(dragged)}
-					</div>
-				)}
+			<CursorDragOverlay dropAnimation={null}>
+				{dragged && <div className="cursor-grabbing">{overlay(dragged)}</div>}
 			</CursorDragOverlay>
 		</DndContext>
 	);

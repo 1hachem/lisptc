@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { movedAcross } from "./sortable-sides.tsx";
+import { awaitingSides, movedAcross } from "./sortable-sides.tsx";
 
 const SIDES = { left: ["a", "b", "c"], right: ["x", "y"] };
 
@@ -33,5 +33,25 @@ describe("moving an entry between sides", () => {
 		expect(movedAcross(SIDES, "a", "a")).toBeUndefined();
 		expect(movedAcross(SIDES, "a", undefined)).toBeUndefined();
 		expect(movedAcross(SIDES, "a", "side:nowhere")).toBeUndefined();
+	});
+});
+
+describe("the order held after a drop", () => {
+	it("shows the dropped order until the stored one catches up", () => {
+		const next = { left: ["a", "c"], right: ["x", "b", "y"] };
+		const dropped = { next, over: SIDES };
+		expect(awaitingSides(SIDES, dropped)).toEqual(next);
+		expect(awaitingSides({ ...next }, dropped)).toEqual(next);
+	});
+
+	it("follows the stored order once it changes from elsewhere", () => {
+		const elsewhere = { left: ["c", "a", "b"], right: ["x", "y"] };
+		expect(
+			awaitingSides(elsewhere, {
+				next: { left: ["a"], right: ["b"] },
+				over: SIDES,
+			}),
+		).toEqual(elsewhere);
+		expect(awaitingSides(SIDES, undefined)).toEqual(SIDES);
 	});
 });
