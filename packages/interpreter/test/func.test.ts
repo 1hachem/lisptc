@@ -78,15 +78,15 @@ describe("a builtin with keyword arguments", () => {
 			undefined,
 			["a"],
 		);
-		expect(() => runSync(interp, "(keyed :b 1)")).toThrow(
-			/no such keyword argument: :b/,
-		);
-		try {
-			runSync(interp, "(keyed :b 1)");
-		} catch (ex) {
-			expect(ex).toBeInstanceOf(KeywordException);
-			expect((ex as KeywordException).accepted).toEqual(["a"]);
-		}
+		const refused = (() => {
+			try {
+				runSync(interp, "(keyed :b 1)");
+			} catch (ex) {
+				return ex;
+			}
+		})();
+		expect(refused).toBeInstanceOf(KeywordException);
+		expect((refused as KeywordException).accepted).toEqual(["a"]);
 	});
 });
 

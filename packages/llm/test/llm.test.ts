@@ -103,9 +103,6 @@ describe("llm/complete", () => {
 	});
 
 	it("reports a timeout instead of hanging", async () => {
-		const { interp } = llmInterp(() => {
-			throw new Error("unreachable");
-		});
 		const stuck = new Interp({
 			extensions: [
 				llmExtension({
@@ -118,7 +115,6 @@ describe("llm/complete", () => {
 		expect(await failure(stuck, '(llm/complete "hi" :timeout 10)')).toContain(
 			"llm timed out",
 		);
-		expect(interp).toBeDefined();
 	});
 });
 

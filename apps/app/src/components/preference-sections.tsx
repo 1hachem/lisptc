@@ -1,26 +1,12 @@
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
-	CodeIcon,
-	ComputerIcon,
-	KeyboardIcon,
-	LayoutTwoColumnIcon,
-	Move01Icon,
-	PaintBoardIcon,
-	Tag01Icon,
-	TextFontIcon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { SortableTree, ThemeSwatches } from "@repo/components";
+	SortableSide,
+	SortableSides,
+	SortableTree,
+	ThemeSwatches,
+} from "@repo/components";
 import type { StatusBarItem } from "@repo/shared/status-bar";
-import {
-	fonts,
-	Sidebar,
-	SidebarContent,
-	SidebarMenu,
-	SidebarMenuButton,
-	SidebarMenuItem,
-	SidebarRail,
-	useSidebar,
-} from "@repo/ui";
+import { fonts } from "@repo/ui";
 import { motions } from "@repo/ui/motions.ts";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
@@ -32,10 +18,13 @@ import {
 	useTraceBesideChat,
 	useTraceLink,
 } from "../lib/preferences.ts";
-import { useSidebarMotion } from "../lib/sidebar.ts";
+import { useSidebarMotion, useSidebarSides } from "../lib/sidebar.ts";
+import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
 import { isGap } from "../lib/status-bar-order.ts";
 import { useUI } from "../lib/ui.tsx";
+import { EntryDragged } from "./entry-rail.tsx";
+import { ENTRY_ICONS } from "./workspace-tree.tsx";
 
 function MetaToggle({ field }: { field: { id: MetaField; label: string } }) {
 	const { metaShown, toggleMeta } = useUI();
@@ -119,6 +108,59 @@ function StatusBarList() {
 				}
 			</SortableTree>
 		</div>
+	);
+}
+
+function SidebarRow({ entry, on }: { entry: SidebarEntry; on: boolean }) {
+	return (
+		<span className="flex w-full items-center gap-2">
+			<HugeiconsIcon
+				icon={ENTRY_ICONS[entry]}
+				className={`size-icon flex-none ${on ? "text-fg" : "text-dim"}`}
+			/>
+			<span
+				className={`min-w-0 flex-1 truncate ${on ? "text-fg" : "text-dim line-through"}`}
+			>
+				{entry}
+			</span>
+			<span className="flex-none text-dim">{on ? "on" : "off"}</span>
+		</span>
+	);
+}
+
+function SidebarList() {
+	const { sides, hidden, move, toggle } = useSidebarSides();
+	const { motion } = useSidebarMotion();
+	const on = (entry: SidebarEntry) => !hidden.includes(entry);
+	return (
+		<SortableSides
+			sides={sides}
+			onMove={move}
+			motion={motion}
+			overlay={(entry) => <EntryDragged entry={entry} />}
+		>
+			<div className="grid grid-cols-2 gap-4 px-4 text-[11.5px]">
+				{(["left", "right"] as const).map((side) => (
+					<div key={side} className="flex min-w-0 flex-col gap-1">
+						<span className="text-dim">{side}</span>
+						<SortableSide<SidebarEntry> side={side} className="min-h-24">
+							{(entry) => (
+								<div className="py-0.5">
+									<button
+										type="button"
+										aria-pressed={on(entry)}
+										onClick={() => toggle(entry)}
+										className="w-full cursor-pointer text-left"
+									>
+										<SidebarRow entry={entry} on={on(entry)} />
+									</button>
+								</div>
+							)}
+						</SortableSide>
+					</div>
+				))}
+			</div>
+		</SortableSides>
 	);
 }
 
@@ -297,55 +339,9 @@ function MotionList() {
 	);
 }
 
-const SECTIONS: { name: string; icon: IconSvgElement }[] = [
-	{ name: "metadata", icon: Tag01Icon },
-	{ name: "input", icon: KeyboardIcon },
-	{ name: "recent themes", icon: PaintBoardIcon },
-	{ name: "font", icon: TextFontIcon },
-	{ name: "drag motion", icon: Move01Icon },
-	{ name: "panel motion", icon: LayoutTwoColumnIcon },
-	{ name: "developer", icon: CodeIcon },
-	{ name: "desktop", icon: ComputerIcon },
-];
-
-function SectionRail() {
-	const { setOpen } = useSidebar();
-	const desktop = inDesktopShell();
+export function PreferenceSections() {
 	return (
-		<SidebarMenu className="items-center gap-0.5 py-3.5">
-			{SECTIONS.filter((section) => desktop || section.name !== "desktop").map(
-				(section) => (
-					<SidebarMenuItem key={section.name}>
-						<SidebarMenuButton
-							tooltip={section.name}
-							className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
-							onClick={() => setOpen(true)}
-						>
-							<HugeiconsIcon icon={section.icon} />
-							<span>{section.name}</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				),
-			)}
-		</SidebarMenu>
-	);
-}
-
-export function PreferencesPanel() {
-	const { state } = useSidebar();
-	return (
-		<Sidebar side="right" collapsible="icon" className="border-sidebar">
-			<SidebarContent>
-				{state === "expanded" ? <Preferences /> : <SectionRail />}
-			</SidebarContent>
-			<SidebarRail className="w-2 translate-x-0 hover:after:bg-transparent" />
-		</Sidebar>
-	);
-}
-
-function Preferences() {
-	return (
-		<div className="flex h-full flex-col gap-5 overflow-y-auto py-3.5">
+		<>
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 				metadata
 			</div>
@@ -362,6 +358,10 @@ function Preferences() {
 					<InputToggle key={helper.id} helper={helper} />
 				))}
 			</div>
+			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
+				sidebar
+			</div>
+			<SidebarList />
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 				bottom bar
 			</div>
@@ -394,6 +394,6 @@ function Preferences() {
 					<DesktopToggles />
 				</>
 			)}
-		</div>
+		</>
 	);
 }

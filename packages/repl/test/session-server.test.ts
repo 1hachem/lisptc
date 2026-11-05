@@ -83,7 +83,8 @@ describe("connectOrSpawn", () => {
 		cleanups.push(() => {
 			server.close();
 		});
-		const client = await connectOrSpawn(path, ENTRY);
+		const unspawnable = join(tmpdir(), `no-such-entry-${randomUUID()}.ts`);
+		const client = await connectOrSpawn(path, unspawnable);
 		cleanups.push(() => client.destroy());
 		expect(await client.version()).toBe(PROTOCOL_VERSION);
 	});

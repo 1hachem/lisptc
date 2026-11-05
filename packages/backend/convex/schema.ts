@@ -148,12 +148,14 @@ export default defineSchema({
 		.index("by_seen", ["connected", "seenAt"]),
 
 	preferences: defineTable({
-		userId: v.id("users"),
+		userId: v.optional(v.id("users")),
+		workspaceId: v.optional(v.id("workspaces")),
 		font: v.optional(v.string()),
 		themeUses: v.optional(v.record(v.string(), v.number())),
 		metadata: v.optional(v.record(v.string(), v.boolean())),
 		input: v.optional(v.record(v.string(), v.boolean())),
 		sidebar: v.optional(v.array(v.string())),
+		sidebarRight: v.optional(v.array(v.string())),
 		hidden: v.optional(v.array(v.string())),
 		statusBar: v.optional(v.array(v.string())),
 		statusBarHidden: v.optional(v.array(v.string())),
@@ -161,7 +163,7 @@ export default defineSchema({
 		panelMotion: v.optional(v.boolean()),
 		traceBesideChat: v.optional(v.boolean()),
 		traceLink: v.optional(v.boolean()),
-	}).index("by_user", ["userId"]),
+	}).index("by_workspace", ["workspaceId"]),
 
 	workspaces: defineTable({
 		ownerId: v.id("users"),

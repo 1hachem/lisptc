@@ -13,7 +13,9 @@ const SPECS = {
 } as unknown as Parameters<typeof providerSpecFor>[1];
 
 describe("provider names", () => {
-	it("knows the four providers", () => {
+	it("knows the providers it can call, and nothing else", () => {
+		expect(isProviderName("digitalocean")).toBe(true);
+		expect(isProviderName("openrouter")).toBe(true);
 		expect(isProviderName("fireworks")).toBe(false);
 		expect(isProviderName("nowhere")).toBe(false);
 	});

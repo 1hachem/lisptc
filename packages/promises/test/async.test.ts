@@ -1,7 +1,6 @@
 import type { Eval } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { Cell } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
@@ -171,11 +170,10 @@ describe("a promise is the host's own promise", () => {
 		return { interp, runs: () => runs };
 	}
 
-	it("is a real Promise the host can await", async () => {
+	it("hands the host the settled value once it awaits", async () => {
 		const interp = interpWithSlow();
 		const { value } = await runAsync(interp, "(list (slow 1))");
-		expect(value).toBeInstanceOf(Cell);
-		expect((value as Cell).car).toBe(1n);
+		expect(str(value)).toBe("(1)");
 	});
 
 	it("does not suspend when the promise is the value", () => {
