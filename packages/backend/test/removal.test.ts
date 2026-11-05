@@ -562,11 +562,10 @@ describe("removing a user", () => {
 			workspaceId: alice.workspace,
 			preferences: { font: "mono", themeUses: {} },
 		});
-		await t.run(async (ctx) => {
-			await ctx.db.insert("preferences", { userId: alice.user, font: "mono" });
-		});
 
+		vi.useFakeTimers();
 		await t.mutation(internal.users.purge, { userId: alice.user });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
 		const left = await t.run(
 			async (ctx) => await ctx.db.query("preferences").collect(),

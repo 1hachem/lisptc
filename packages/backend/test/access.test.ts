@@ -1323,34 +1323,6 @@ describe("preferences access", () => {
 		});
 	});
 
-	it("starts each workspace from the preferences saved before they were per workspace", async () => {
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		await t.run(async (ctx) => {
-			await ctx.db.insert("preferences", {
-				userId: alice.user,
-				font: "mono",
-				hidden: ["tests"],
-			});
-		});
-		const workspaceId = alice.workspace;
-		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual({
-			...DEFAULTS,
-			font: "mono",
-			hidden: ["tests"],
-		});
-		await alice.as.mutation(api.preferences.put, {
-			workspaceId,
-			preferences: { motion: "lift" },
-		});
-		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual({
-			...DEFAULTS,
-			font: "mono",
-			hidden: ["tests"],
-			motion: "lift",
-		});
-	});
-
 	it("merges each save into one row per workspace", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

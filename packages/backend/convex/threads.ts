@@ -42,11 +42,7 @@ export const record = internalQuery({
 		const chat = await threadChat(ctx, chatId);
 		const workspace = await ctx.db.get(chat.workspaceId);
 		if (workspace === null) throw new ConvexError({ code: "NOT_FOUND" });
-		const preferences = await preferencesOf(
-			ctx,
-			workspace.ownerId,
-			chat.workspaceId,
-		);
+		const preferences = await preferencesOf(ctx, chat.workspaceId);
 		return {
 			workspaceId: chat.workspaceId,
 			ownerId: workspace.ownerId,

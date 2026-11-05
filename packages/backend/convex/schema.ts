@@ -147,7 +147,7 @@ export default defineSchema({
 		.index("by_seen", ["connected", "seenAt"]),
 
 	preferences: defineTable({
-		userId: v.id("users"),
+		userId: v.optional(v.id("users")),
 		workspaceId: v.optional(v.id("workspaces")),
 		font: v.optional(v.string()),
 		themeUses: v.optional(v.record(v.string(), v.number())),
@@ -162,9 +162,7 @@ export default defineSchema({
 		panelMotion: v.optional(v.boolean()),
 		traceBesideChat: v.optional(v.boolean()),
 		traceLink: v.optional(v.boolean()),
-	})
-		.index("by_user_workspace", ["userId", "workspaceId"])
-		.index("by_workspace", ["workspaceId"]),
+	}).index("by_workspace", ["workspaceId"]),
 
 	workspaces: defineTable({
 		ownerId: v.id("users"),

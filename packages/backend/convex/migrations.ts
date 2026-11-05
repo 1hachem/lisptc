@@ -3,7 +3,7 @@ import {
 	Migrations,
 } from "@convex-dev/migrations";
 import { v } from "convex/values";
-import { components } from "./_generated/api.js";
+import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
 import { internalMutation } from "./_generated/server.js";
 
@@ -11,7 +11,16 @@ export const migrations = new Migrations<DataModel>(components.migrations);
 
 export const run = migrations.runner();
 
-const SERIES: MigrationFunctionReference[] = [];
+export const dropPreferencesBeforeWorkspaces = migrations.define({
+	table: "preferences",
+	migrateOne: async (ctx, row) => {
+		if (row.workspaceId === undefined) await ctx.db.delete(row._id);
+	},
+});
+
+const SERIES: MigrationFunctionReference[] = [
+	internal.migrations.dropPreferencesBeforeWorkspaces,
+];
 
 export const runAll = internalMutation({
 	args: {},

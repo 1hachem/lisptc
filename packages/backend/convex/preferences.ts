@@ -41,32 +41,19 @@ async function workspaceRow(ctx: QueryCtx, workspaceId: Id<"workspaces">) {
 		.unique();
 }
 
-async function rowFromBeforeWorkspaces(ctx: QueryCtx, userId: Id<"users">) {
-	return await ctx.db
-		.query("preferences")
-		.withIndex("by_user_workspace", (q) =>
-			q.eq("userId", userId).eq("workspaceId", undefined),
-		)
-		.unique();
-}
-
 export async function preferencesOf(
 	ctx: QueryCtx,
-	userId: Id<"users">,
 	workspaceId: Id<"workspaces">,
 ) {
-	const row =
-		(await workspaceRow(ctx, workspaceId)) ??
-		(await rowFromBeforeWorkspaces(ctx, userId));
-	return withDefaults(stripped(row));
+	return withDefaults(stripped(await workspaceRow(ctx, workspaceId)));
 }
 
 export const get = query({
 	args: { workspaceId: v.id("workspaces") },
 	returns: preferences,
 	handler: async (ctx, { workspaceId }) => {
-		const { workspace } = await requireWorkspace(ctx, workspaceId);
-		return await preferencesOf(ctx, workspace.ownerId, workspaceId);
+		await requireWorkspace(ctx, workspaceId);
+		return await preferencesOf(ctx, workspaceId);
 	},
 });
 
@@ -74,16 +61,9 @@ export const put = mutation({
 	args: { workspaceId: v.id("workspaces"), preferences },
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, preferences }) => {
-		const { workspace } = await requireWorkspace(ctx, workspaceId);
+		await requireWorkspace(ctx, workspaceId);
 		const existing = await workspaceRow(ctx, workspaceId);
-		const base =
-			existing ?? (await rowFromBeforeWorkspaces(ctx, workspace.ownerId));
-		const fields = {
-			...stripped(base),
-			...preferences,
-			userId: workspace.ownerId,
-			workspaceId,
-		};
+		const fields = { ...stripped(existing), ...preferences, workspaceId };
 		if (encoder.encode(JSON.stringify(fields)).length > MAX_PREFERENCES_BYTES) {
 			throw new ConvexError({ code: "PREFERENCES_TOO_LARGE" });
 		}
