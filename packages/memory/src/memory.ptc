@@ -68,7 +68,7 @@ conversation: put role and goal there. Loads once: a revision is read only by
 the next conversation.
 
 Fired memory arrives as a REPL feedback line, to you alone. Not run, user does
-not see it. To run, replay. To show the user, echo.
+not see it. To run, replay.
 
 CHAINING
 

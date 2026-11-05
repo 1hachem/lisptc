@@ -19,7 +19,12 @@ describe("the compaction extension teaches its own half of the language", () => 
 	});
 
 	it("says a truncated echo is not the whole output", () => {
-		expect(prompt).toMatch(/capped for you.{0,20}not for the user/i);
+		expect(prompt).toMatch(/capped for you/i);
 		expect(prompt).toMatch(/read on with/i);
+	});
+
+	it("says echo never reaches the user", () => {
+		expect(prompt).toMatch(/user never sees echo/i);
+		expect(prompt).not.toMatch(/to the user alike/i);
 	});
 });

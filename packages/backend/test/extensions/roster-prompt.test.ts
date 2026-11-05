@@ -47,8 +47,10 @@ describe("what the REPL reports back", () => {
 	});
 
 	it("tells the model a truncated echo is not the whole output", () => {
-		expect(PROMPT).toMatch(/Echo output is capped for you, not for the user/);
-		expect(PROMPT).toMatch(/Page on with the given offset/);
+		expect(PROMPT).toMatch(
+			/Echo output is capped for you; user never sees echo/,
+		);
+		expect(PROMPT).toMatch(/Page on with the given\s+offset/);
 	});
 });
 
@@ -149,6 +151,10 @@ describe("interactive views", () => {
 
 	it("says the user never sees text output, so what they read is rendered", () => {
 		expect(FLAT).toMatch(/User sees no text output: echo is for you alone/);
+		expect(FLAT).toMatch(
+			/every printout stays in REPL\s+feedback, never reaches chat/,
+		);
+		expect(FLAT).not.toMatch(/To show the user, echo/);
 		expect(FLAT).toMatch(/echo\s+shows user nothing, widget or text/);
 		expect(FLAT).toContain("(ui/render (ui/table issues-1))");
 	});
