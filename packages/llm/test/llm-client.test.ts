@@ -65,7 +65,7 @@ beforeAll(async () => {
 	process.env.OPENROUTER_BASE_URL = "http://openrouter.test/v1";
 	llmExtension = (await import("../src/llm.ts")).llmExtension;
 	llmHost = (await import("../src/llm-host.ts")).llmHost;
-	await import("@langchain/openai");
+	await import("@repo/models/providers");
 });
 
 afterEach(() => {
