@@ -23,6 +23,7 @@ import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
 import { isGap } from "../lib/status-bar-order.ts";
 import { useUI } from "../lib/ui.tsx";
+import { EntryDragged } from "./entry-rail.tsx";
 import { ENTRY_ICONS } from "./workspace-tree.tsx";
 
 function MetaToggle({ field }: { field: { id: MetaField; label: string } }) {
@@ -136,11 +137,7 @@ function SidebarList() {
 			sides={sides}
 			onMove={move}
 			motion={motion}
-			overlay={(entry) => (
-				<div className="px-1 py-0.5 text-[11.5px]">
-					<SidebarRow entry={entry} on={on(entry)} />
-				</div>
-			)}
+			overlay={(entry) => <EntryDragged entry={entry} />}
 		>
 			<div className="grid grid-cols-2 gap-4 px-4 text-[11.5px]">
 				{(["left", "right"] as const).map((side) => (

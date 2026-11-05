@@ -57,7 +57,7 @@ export function EntryRail({ side }: { side: SidebarSide }) {
 
 export function EntryDragged({ entry }: { entry: SidebarEntry }) {
 	return (
-		<div className={`${TREE_ROW} gap-2 px-2`}>
+		<div className={`${TREE_ROW} gap-2 whitespace-nowrap px-2 text-fg`}>
 			<HugeiconsIcon className="size-icon-sm" icon={ENTRY_ICONS[entry]} />
 			<span>{entry}</span>
 		</div>
