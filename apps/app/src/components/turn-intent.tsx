@@ -5,6 +5,7 @@ import {
 	FileEditIcon,
 	FileViewIcon,
 	FirstBracketIcon,
+	JusticeScale01Icon,
 	LockKeyIcon,
 	PlugSocketIcon,
 	SquareIcon,
@@ -61,6 +62,7 @@ const ACTIVITY_ICON: Record<ActivityIcon, IconSvgElement> = {
 	agent: UserMultipleIcon,
 	read: FileViewIcon,
 	write: FileEditIcon,
+	meaning: JusticeScale01Icon,
 };
 
 function markOf(entry: TimelineEntry, live: boolean) {

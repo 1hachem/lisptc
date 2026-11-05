@@ -19,6 +19,7 @@ import { str } from "@repo/interpreter/print";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { withTimeout } from "@repo/interpreter/timeout";
+import type { EmbeddingModel } from "@repo/shared/embedding";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import type {
 	JudgeRequest,
@@ -33,8 +34,13 @@ export const SEMANTIC_TIMEOUT_MS = 30_000;
 
 export const DEFAULT_MIN = 0.5;
 
+export const DUPLICATE_SIMILARITY = 0.9;
+
+export const CLUSTER_SIMILARITY = 0.7;
+
 export interface SemanticHost {
 	systemOne: SystemOneModel;
+	embedder: EmbeddingModel;
 	clock: Clock;
 	prompt: PromptSource;
 }
@@ -67,28 +73,20 @@ export function semanticExtension(host: SemanticHost): InterpExtension {
 	);
 }
 
-type Ask = (
+type Track = <T>(
 	form: string,
-	req: JudgeRequest,
 	opts: Map<string, unknown>,
-) => Promise<JudgeResult>;
+	run: (signal: AbortSignal) => Promise<T>,
+) => Promise<T>;
 
-function asker(interp: Interp, host: SemanticHost): Ask {
+function tracker(interp: Interp, host: SemanticHost): Track {
 	const calls = interp.state(
 		"semantic/calls",
 		callSeqCodec,
 		0,
-		"The number of the last judgment call, which numbers the activity the user sees.",
+		"The number of the last call by meaning, which numbers the activity the user sees.",
 	);
-	const asked = new Map<string, Promise<JudgeResult>>();
-	return (form, req, opts) => {
-		const model = opts.has("model")
-			? textOf(opts.get("model"), ":model")
-			: undefined;
-		const full: JudgeRequest = model === undefined ? req : { ...req, model };
-		const key = JSON.stringify(full);
-		const known = asked.get(key);
-		if (known !== undefined) return known;
+	return (form, opts, run) => {
 		const n = calls.get() + 1;
 		calls.set(n);
 		const id = `semantic-${n}`;
@@ -101,9 +99,8 @@ function asker(interp: Interp, host: SemanticHost): Ask {
 			judgeActivity.emit(interp.channels, {
 				user: {
 					kind: "semantic",
-					icon: "model",
-					label: `${host.systemOne.provider} · ${model ?? host.systemOne.model}`,
-					detail: form,
+					icon: "meaning",
+					label: form,
 					state,
 					...(error === undefined ? {} : { error: messageOf(error) }),
 					id,
@@ -113,11 +110,7 @@ function asker(interp: Interp, host: SemanticHost): Ask {
 			});
 		announce("started");
 		const controller = new AbortController();
-		const pending = withTimeout(
-			host.systemOne.judge(full, controller.signal),
-			timeoutOf(opts),
-			"judge",
-		).then(
+		return withTimeout(run(controller.signal), timeoutOf(opts), form).then(
 			(res) => {
 				announce("done", host.clock.now() - startedAt);
 				return res;
@@ -125,13 +118,109 @@ function asker(interp: Interp, host: SemanticHost): Ask {
 			(ex) => {
 				announce("failed", host.clock.now() - startedAt, ex);
 				controller.abort();
-				asked.delete(key);
 				throw ex;
 			},
 		);
+	};
+}
+
+type Ask = (
+	form: string,
+	req: JudgeRequest,
+	opts: Map<string, unknown>,
+) => Promise<JudgeResult>;
+
+function modelOf(opts: Map<string, unknown>): string | undefined {
+	return opts.has("model") ? textOf(opts.get("model"), ":model") : undefined;
+}
+
+function asker(track: Track, host: SemanticHost): Ask {
+	const asked = new Map<string, Promise<JudgeResult>>();
+	return (form, req, opts) => {
+		const model = modelOf(opts);
+		const full: JudgeRequest = model === undefined ? req : { ...req, model };
+		const key = JSON.stringify(full);
+		const known = asked.get(key);
+		if (known !== undefined) return known;
+		const pending = track(form, opts, (signal) =>
+			host.systemOne.judge(full, signal),
+		);
+		pending.catch(() => asked.delete(key));
 		asked.set(key, pending);
 		return pending;
 	};
+}
+
+type Embed = (
+	form: string,
+	xs: unknown[],
+	opts: Map<string, unknown>,
+) => Promise<number[][]>;
+
+function textFor(x: unknown): string {
+	return typeof x === "string" ? x : str(x);
+}
+
+function embedder(track: Track, host: SemanticHost): Embed {
+	const known = new Map<string, Promise<number[]>>();
+	return (form, xs, opts) => {
+		const model = modelOf(opts);
+		const texts = xs.map(textFor);
+		const keyOf = (text: string): string => JSON.stringify([model, text]);
+		const fresh = [...new Set(texts.filter((t) => !known.has(keyOf(t))))];
+		if (fresh.length > 0) {
+			const batch = track(form, opts, (signal) =>
+				host.embedder.embed(
+					{ inputs: fresh, ...(model === undefined ? {} : { model }) },
+					signal,
+				),
+			);
+			fresh.forEach((text, i) => {
+				const one = batch.then((res) => {
+					const vector = res.vectors[i];
+					if (vector === undefined)
+						throw new EvalException(`no embedding came back for ${text}`, text);
+					return vector;
+				});
+				known.set(keyOf(text), one);
+				one.catch(() => known.delete(keyOf(text)));
+			});
+		}
+		return Promise.all(
+			texts.map((t) => known.get(keyOf(t)) as Promise<number[]>),
+		);
+	};
+}
+
+function cosine(a: number[], b: number[]): number {
+	if (a.length !== b.length)
+		throw new EvalException(
+			"two meanings measured on different scales cannot be compared",
+			null,
+		);
+	let dot = 0;
+	let na = 0;
+	let nb = 0;
+	for (let i = 0; i < a.length; i++) {
+		dot += (a[i] as number) * (b[i] as number);
+		na += (a[i] as number) ** 2;
+		nb += (b[i] as number) ** 2;
+	}
+	return na === 0 || nb === 0 ? 0 : dot / Math.sqrt(na * nb);
+}
+
+function distinctOf(xs: unknown[]): { reps: unknown[]; repOf: number[] } {
+	const reps: unknown[] = [];
+	const seen = new Map<string, number>();
+	const repOf = xs.map((x) => {
+		const key = textFor(x);
+		const at = seen.get(key);
+		if (at !== undefined) return at;
+		seen.set(key, reps.length);
+		reps.push(x);
+		return reps.length - 1;
+	});
+	return { reps, repOf };
 }
 
 function textOf(x: unknown, what: string): string {
@@ -193,7 +282,7 @@ function argsOf(
 function noulOf(res: JudgeResult, id: string): number {
 	const answer = res.answers[id];
 	if (answer?.type !== "noul")
-		throw new EvalException(`the judge gave no yes/no answer for ${id}`, id);
+		throw new EvalException(`no yes/no answer came back for ${id}`, id);
 	return answer.noul;
 }
 
@@ -203,14 +292,14 @@ function choiceOf(
 ): Extract<Verdict, { type: "choice" }> {
 	const answer = res.answers[id];
 	if (answer?.type !== "choice")
-		throw new EvalException(`the judge gave no choice for ${id}`, id);
+		throw new EvalException(`no choice came back for ${id}`, id);
 	return answer;
 }
 
 function scoreOf(res: JudgeResult, id: string): number {
 	const answer = res.answers[id];
 	if (answer?.type !== "score")
-		throw new EvalException(`the judge gave no score for ${id}`, id);
+		throw new EvalException(`no score came back for ${id}`, id);
 	return answer.score;
 }
 
@@ -327,7 +416,7 @@ const SUBJECTS: Subject[] = [
 	{
 		name: "%string-contains?",
 		usage: '(%string-contains? text "concept" [:min p])',
-		doc: 'Return t when `text` mentions the concept, in any words: (%string-contains? mail "a refund"). A literal match answers without the judge.',
+		doc: 'Return t when `text` mentions the concept, in any words: (%string-contains? mail "a refund"). A literal match answers without a call.',
 		question: (concept) => `Does this text mention ${concept}?`,
 		syntax: (x, concept) =>
 			typeof x === "string" && x.includes(concept) ? true : undefined,
@@ -335,7 +424,7 @@ const SUBJECTS: Subject[] = [
 	{
 		name: "%string-prefix?",
 		usage: '(%string-prefix? text "concept" [:min p])',
-		doc: 'Return t when `text` opens with what is described: (%string-prefix? msg "a greeting"). A literal prefix answers without the judge.',
+		doc: 'Return t when `text` opens with what is described: (%string-prefix? msg "a greeting"). A literal prefix answers without a call.',
 		question: (concept) => `Does this text begin with ${concept}?`,
 		syntax: (x, concept) =>
 			typeof x === "string" && x.startsWith(concept) ? true : undefined,
@@ -343,7 +432,7 @@ const SUBJECTS: Subject[] = [
 	{
 		name: "%string-suffix?",
 		usage: '(%string-suffix? text "concept" [:min p])',
-		doc: 'Return t when `text` ends with what is described: (%string-suffix? msg "a question"). A literal suffix answers without the judge.',
+		doc: 'Return t when `text` ends with what is described: (%string-suffix? msg "a question"). A literal suffix answers without a call.',
 		question: (concept) => `Does this text end with ${concept}?`,
 		syntax: (x, concept) =>
 			typeof x === "string" && x.endsWith(concept) ? true : undefined,
@@ -351,7 +440,9 @@ const SUBJECTS: Subject[] = [
 ];
 
 export function registerSemantic(interp: Interp, host: SemanticHost): void {
-	const ask = asker(interp, host);
+	const track = tracker(interp, host);
+	const ask = asker(track, host);
+	const embed = embedder(track, host);
 
 	const noul = (
 		form: string,
@@ -389,8 +480,8 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%p",
 		-1,
-		'(%p x "question" [:model "id"] [:timeout ms])',
-		'Ask the judge a yes/no question about `x` and return the probability of yes, from 0 to 1: (%p mail "is a refund request"). The raw number, for a threshold or a weight of your own; every % predicate is this compared with :min.',
+		'(%p x "question" [:timeout ms])',
+		'Ask a yes/no question about `x` and return the probability of yes, from 0 to 1: (%p mail "is a refund request"). The raw number, for a threshold or a weight of your own; every % predicate is this compared with :min.',
 		z.tuple([zList]),
 		([rest]) => {
 			const { args, opts } = argsOf(
@@ -412,8 +503,8 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%p-each",
 		-1,
-		'(%p-each items "question" [:model "id"] [:timeout ms])',
-		"Ask the same yes/no question about every element of `items` in one judge call and return the probabilities, in order. What %filter, %some, %every and %count-if are built on.",
+		'(%p-each items "question" [:timeout ms])',
+		"Ask the same yes/no question about every element of `items` in one call and return the probabilities, in order. What %filter, %some, %every and %count-if are built on.",
 		z.tuple([zList]),
 		([rest]) => {
 			const { args, opts } = argsOf(
@@ -435,7 +526,7 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%choose",
 		-1,
-		'(%choose x options [:none value] [:min p] [:question "..."] [:model "id"] [:timeout ms])',
+		'(%choose x options [:none value] [:min p] [:question "..."] [:timeout ms])',
 		'Pick the option that fits `x` best and return it as written: (%choose ticket \'(:billing :technical :other)). An option is a keyword, a string, or (option . "what it means"). With :none, "none of these" is an option too, and choosing it returns that value; :min returns it as well when the best option is less likely than p. :question says what is being picked.',
 		z.tuple([zList]),
 		([rest]) => {
@@ -482,7 +573,7 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%score",
 		-1,
-		'(%score x "dimension" [levels] [:model "id"] [:timeout ms])',
+		'(%score x "dimension" [levels] [:timeout ms])',
 		'Rate `x` along a dimension and return where it falls on the levels, from 0 for the first level up, possibly between two: (%score ticket "urgency" \'("can wait" "today" "right now")). Without levels it rates on five, from very low to very high. Compare scores only when they share their levels.',
 		z.tuple([zList]),
 		([rest]) => {
@@ -515,8 +606,8 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%score-each",
 		-1,
-		'(%score-each items "dimension" [levels] [:model "id"] [:timeout ms])',
-		"Rate every element of `items` on the same dimension and levels in one judge call and return the scores, in order. What %sort, %max and %min are built on.",
+		'(%score-each items "dimension" [levels] [:timeout ms])',
+		"Rate every element of `items` on the same dimension and levels in one call and return the scores, in order. What %sort, %max and %min are built on.",
 		z.tuple([zList]),
 		([rest]) => {
 			const { values, options } = splitKeywordArgs(rest, CALL_OPTIONS);
@@ -557,7 +648,7 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 		interp.def(
 			name,
 			-1,
-			`(${name} a b [:${by} "..."] [:min p] [:model "id"] [:timeout ms])`,
+			`(${name} a b [:${by} "..."] [:min p] [:timeout ms])`,
 			doc,
 			z.tuple([zList]),
 			([rest]) => {
@@ -581,7 +672,7 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 		"%=",
 		"same",
 		false,
-		'Return t when `a` and `b` mean the same thing: (%= "Hi there!" "Hello!"). Two numbers, or two equal values, answer without the judge, so (%= 2 2.0) is t and (%= 1 2) is nil. :context names what sameness is judged by.',
+		'Return t when `a` and `b` mean the same thing: (%= "Hi there!" "Hello!"). Two numbers, or two equal values, answer without a call, so (%= 2 2.0) is t and (%= 1 2) is nil. :context names what sameness is judged by.',
 	);
 	definePair(
 		"%/=",
@@ -593,25 +684,25 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 		"%<",
 		"less",
 		false,
-		'Return t when `a` is less than `b`: (%< "a cat" "a horse" :by "size"). Two numbers compare as numbers, without the judge.',
+		'Return t when `a` is less than `b`: (%< "a cat" "a horse" :by "size"). Two numbers compare as numbers, without a call.',
 	);
 	definePair(
 		"%>",
 		"greater",
 		false,
-		'Return t when `a` is greater than `b`: (%> "scorching" "warm" :by "temperature"). Two numbers compare as numbers, without the judge.',
+		'Return t when `a` is greater than `b`: (%> "scorching" "warm" :by "temperature"). Two numbers compare as numbers, without a call.',
 	);
 	definePair(
 		"%<=",
 		"at-most",
 		false,
-		"Return t when `a` is at most `b`. Two numbers compare as numbers, without the judge.",
+		"Return t when `a` is at most `b`. Two numbers compare as numbers, without a call.",
 	);
 	definePair(
 		"%>=",
 		"at-least",
 		false,
-		"Return t when `a` is at least `b`. Two numbers compare as numbers, without the judge.",
+		"Return t when `a` is at least `b`. Two numbers compare as numbers, without a call.",
 	);
 
 	for (const subject of SUBJECTS)
@@ -644,8 +735,8 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%member",
 		-1,
-		'(%member item xs [:min p] [:model "id"] [:timeout ms])',
-		'Return the tail of `xs` from the first element that means the same as `item`, or nil: (%member "a refund" topics). An equal element answers without the judge.',
+		"(%member item xs [:min p] [:timeout ms])",
+		'Return the tail of `xs` from the first element that means the same as `item`, or nil: (%member "a refund" topics). An equal element answers without a call.',
 		z.tuple([zList]),
 		([rest]) => {
 			const { args, opts } = argsOf(
@@ -717,8 +808,8 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%find",
 		-1,
-		'(%find "description" xs [:min p] [:model "id"] [:timeout ms])',
-		'Return the element of `xs` that best matches the description, or nil when none does: (%find "a pet" animals). One judge call over the whole list.',
+		'(%find "description" xs [:min p] [:timeout ms])',
+		'Return the element of `xs` that best matches the description, or nil when none does: (%find "a pet" animals). One call over the whole list.',
 		z.tuple([zList]),
 		([rest]) => pick("%find", rest, (items, at) => items[at]),
 	);
@@ -726,10 +817,123 @@ export function registerSemantic(interp: Interp, host: SemanticHost): void {
 	interp.def(
 		"%position",
 		-1,
-		'(%position "description" xs [:min p] [:model "id"] [:timeout ms])',
+		'(%position "description" xs [:min p] [:timeout ms])',
 		"Return the index of the element of `xs` that best matches the description, or nil when none does.",
 		z.tuple([zList]),
 		([rest]) => pick("%position", rest, (_, at) => BigInt(at)),
+	);
+
+	interp.def(
+		"%embed",
+		-1,
+		"(%embed x [:timeout ms])",
+		'Return the meaning of `x` as a vector, a list of numbers: (%embed "a refund request"). A text is embedded as written, any other value as it prints. The same text twice in a session is embedded once.',
+		z.tuple([zList]),
+		([rest]) => {
+			const { args, opts } = argsOf(rest, "%embed", 1, CALL_OPTIONS, "a value");
+			return embed("%embed", args, opts).then(([v]) => arrayToList(v ?? []));
+		},
+	);
+
+	interp.def(
+		"%similarity",
+		-1,
+		"(%similarity a b [:timeout ms])",
+		'Return how close `a` and `b` are in meaning, the cosine of their embeddings, near 1 for the same meaning: (%similarity "refund" "money back"). Two equal values answer 1 without embedding. The raw number, for a threshold of your own.',
+		z.tuple([zList]),
+		([rest]) => {
+			const { args, opts } = argsOf(
+				rest,
+				"%similarity",
+				2,
+				CALL_OPTIONS,
+				"two values",
+			);
+			const [a, b] = args;
+			if (sameSyntax(a, b) === true || textFor(a) === textFor(b)) return 1;
+			return embed("%similarity", [a, b], opts).then(([va, vb]) =>
+				cosine(va ?? [], vb ?? []),
+			);
+		},
+	);
+
+	const similarityMin = (
+		opts: Map<string, unknown>,
+		fallback: number,
+	): number => (opts.has("min") ? minOf(opts) : fallback);
+
+	interp.def(
+		"%remove-duplicates",
+		-1,
+		"(%remove-duplicates xs [:min similarity] [:timeout ms])",
+		`Return xs with every element dropped that means the same as an earlier one, first occurrences kept in order: (%remove-duplicates questions). Two elements are the same when the similarity of their embeddings is at least :min, default ${DUPLICATE_SIMILARITY}. Equal elements drop without embedding.`,
+		z.tuple([zList]),
+		([rest]) => {
+			const { args, opts } = argsOf(
+				rest,
+				"%remove-duplicates",
+				1,
+				PREDICATE_OPTIONS,
+				"a list",
+			);
+			const { reps } = distinctOf(itemsOf(args[0], "%remove-duplicates"));
+			const min = similarityMin(opts, DUPLICATE_SIMILARITY);
+			if (reps.length < 2) return arrayToList(reps);
+			return embed("%remove-duplicates", reps, opts).then((vectors) => {
+				const kept: number[] = [];
+				vectors.forEach((v, i) => {
+					if (kept.every((k) => cosine(vectors[k] ?? [], v) < min))
+						kept.push(i);
+				});
+				return arrayToList(kept.map((i) => reps[i]));
+			});
+		},
+	);
+
+	interp.def(
+		"%cluster",
+		-1,
+		"(%cluster xs [:min similarity] [:timeout ms])",
+		`Group the elements of xs by meaning and return the groups, a list of lists, each in the order of xs and ordered by its first element: (%cluster reviews). Two elements share a group when a chain of elements links them whose neighbours are at least :min similar, default ${CLUSTER_SIMILARITY}. Raise :min for tighter groups. Equal elements share a group without embedding.`,
+		z.tuple([zList]),
+		([rest]) => {
+			const { args, opts } = argsOf(
+				rest,
+				"%cluster",
+				1,
+				PREDICATE_OPTIONS,
+				"a list",
+			);
+			const items = itemsOf(args[0], "%cluster");
+			const { reps, repOf } = distinctOf(items);
+			const min = similarityMin(opts, CLUSTER_SIMILARITY);
+			const grouped = (root: (i: number) => number): unknown => {
+				const groups = new Map<number, unknown[]>();
+				items.forEach((x, i) => {
+					const g = root(repOf[i] as number);
+					const group = groups.get(g);
+					if (group === undefined) groups.set(g, [x]);
+					else group.push(x);
+				});
+				return arrayToList([...groups.values()].map(arrayToList));
+			};
+			if (reps.length < 2) return grouped(() => 0);
+			return embed("%cluster", reps, opts).then((vectors) => {
+				const parent = reps.map((_, i) => i);
+				const root = (i: number): number => {
+					while (parent[i] !== i) i = parent[i] as number;
+					return i;
+				};
+				for (let i = 0; i < vectors.length; i++)
+					for (let j = i + 1; j < vectors.length; j++)
+						if (cosine(vectors[i] ?? [], vectors[j] ?? []) >= min) {
+							const a = root(i);
+							const b = root(j);
+							if (a !== b) parent[Math.max(a, b)] = Math.min(a, b);
+						}
+				return grouped(root);
+			});
+		},
 	);
 
 	runSync(interp, MACROS);
@@ -770,31 +974,31 @@ const MACROS = `
 (setq %filter
       (lambda (description xs &rest options)
         (_%keep xs (_%judged description xs options) t)))
-(_set-doc '%filter "(%filter description xs [:min p] [:model id] [:timeout ms])"
+(_set-doc '%filter "(%filter description xs [:min p] [:timeout ms])"
           "Return the elements of xs the description fits, judged in one call: (%filter \\"engineers\\" staff).")
 
 (setq %remove-if
       (lambda (description xs &rest options)
         (_%keep xs (_%judged description xs options) nil)))
-(_set-doc '%remove-if "(%remove-if description xs [:min p] [:model id] [:timeout ms])"
+(_set-doc '%remove-if "(%remove-if description xs [:min p] [:timeout ms])"
           "Return the elements of xs the description does not fit, judged in one call: (%remove-if \\"spam\\" mails).")
 
 (setq %count-if
       (lambda (description xs &rest options)
         (length (_%keep xs (_%judged description xs options) t))))
-(_set-doc '%count-if "(%count-if description xs [:min p] [:model id] [:timeout ms])"
+(_set-doc '%count-if "(%count-if description xs [:min p] [:timeout ms])"
           "Return how many elements of xs the description fits, judged in one call.")
 
 (setq %some
       (lambda (description xs &rest options)
         (cond ((memq t (_%judged description xs options)) t))))
-(_set-doc '%some "(%some description xs [:min p] [:model id] [:timeout ms])"
+(_set-doc '%some "(%some description xs [:min p] [:timeout ms])"
           "Return t when the description fits at least one element of xs, judged in one call.")
 
 (setq %every
       (lambda (description xs &rest options)
         (cond ((memq nil (_%judged description xs options)) nil) (t t))))
-(_set-doc '%every "(%every description xs [:min p] [:model id] [:timeout ms])"
+(_set-doc '%every "(%every description xs [:min p] [:timeout ms])"
           "Return t when the description fits every element of xs, judged in one call.")
 
 (setq _%zip
@@ -827,19 +1031,19 @@ const MACROS = `
         (_%ordered (mapcar cdr (sort (_%rated xs options)
                                      (lambda (a b) (< (car a) (car b)))))
                    (_%option options :desc nil))))
-(_set-doc '%sort "(%sort xs :by dimension [:levels levels] [:desc t] [:model id] [:timeout ms])"
-          "Return xs ordered by a judged dimension, lowest first, or highest first with :desc t: (%sort tickets :by \\"urgency\\" :desc t). One judge call rates them all, then a plain sort orders them.")
+(_set-doc '%sort "(%sort xs :by dimension [:levels levels] [:desc t] [:timeout ms])"
+          "Return xs ordered by a judged dimension, lowest first, or highest first with :desc t: (%sort tickets :by \\"urgency\\" :desc t). One call rates them all, then a plain sort orders them.")
 
 (setq %max
       (lambda (xs &rest options)
         (car (apply %sort (cons xs (_append options (list :desc t)))))))
-(_set-doc '%max "(%max xs :by dimension [:levels levels] [:model id] [:timeout ms])"
+(_set-doc '%max "(%max xs :by dimension [:levels levels] [:timeout ms])"
           "Return the element of xs rated highest on the dimension: (%max offers :by \\"value for money\\").")
 
 (setq %min
       (lambda (xs &rest options)
         (car (apply %sort (cons xs options)))))
-(_set-doc '%min "(%min xs :by dimension [:levels levels] [:model id] [:timeout ms])"
+(_set-doc '%min "(%min xs :by dimension [:levels levels] [:timeout ms])"
           "Return the element of xs rated lowest on the dimension.")
 
 (setq _%tests
@@ -871,11 +1075,11 @@ const MACROS = `
       (macro (x &rest clauses)
         (_%dispatch (gensym) x (cons 'list (_%tests clauses)) clauses 'equal)))
 (_set-doc '%cond "(%cond x (\\"test\\" body...)... (t body...))"
-          "Run the body of the clause whose test describes x best, chosen in one judge call: (%cond ticket (\\"asks for a refund\\" (refund ticket)) (\\"reports a bug\\" (file-bug ticket)) (t (escalate ticket))). The t clause runs when no test fits; with none, the value is nil. Only the choice is judged: the body runs as ordinary Lisp.")
+          "Run the body of the clause whose test describes x best, chosen in one call: (%cond ticket (\\"asks for a refund\\" (refund ticket)) (\\"reports a bug\\" (file-bug ticket)) (t (escalate ticket))). The t clause runs when no test fits; with none, the value is nil. Only the choice is judged: the body runs as ordinary Lisp.")
 
 (setq %case
       (macro (x &rest clauses)
         (_%dispatch (gensym) x (list 'quote (_%tests clauses)) (_%quoted clauses) 'eq)))
 (_set-doc '%case "(%case x (:key body...)... (t body...))"
-          "Run the body of the clause whose keyword fits x best, chosen in one judge call: (%case weather (:hot (stay-in)) (:mild (walk)) (t (check-again))). The t clause runs when no keyword fits; with none, the value is nil.")
+          "Run the body of the clause whose keyword fits x best, chosen in one call: (%case weather (:hot (stay-in)) (:mild (walk)) (t (check-again))). The t clause runs when no keyword fits; with none, the value is nil.")
 `;

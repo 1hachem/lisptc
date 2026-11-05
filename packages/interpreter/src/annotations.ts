@@ -125,6 +125,7 @@ export const activityIcons = [
 	"agent",
 	"read",
 	"write",
+	"meaning",
 ] as const;
 
 export type ActivityIcon = (typeof activityIcons)[number];
