@@ -1,7 +1,7 @@
 # @repo/llm
 
-The language-model extension. It carries `@langchain/core` and
-`@langchain/openai` so the interpreter never has to, which is a rule
+The language-model extension. It reaches a model through a chat provider from
+`@repo/models`, so the interpreter never carries langchain, which is a rule
 `pnpm check:arch` enforces on the interpreter's manifest.
 
 Turbo tag: `extension`.
@@ -28,7 +28,9 @@ files that speak langchain.
 Read the host-port and seam rules in `packages/interpreter/AGENTS.md`. They
 govern this package.
 
-A new provider is a provider entry, not a branch inside the extension. A new
+A new provider is a provider entry in `@repo/models`, not a branch inside the
+extension. The options a call sends are set in `src/llm-client.ts`, never by
+editing the shared provider. A new
 thing to observe is a field on the observation contract beside the slot, never
 a type imported from a layer above.
 
