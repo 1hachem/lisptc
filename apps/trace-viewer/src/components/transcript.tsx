@@ -17,6 +17,7 @@ import { view } from "@repo/shared/journal";
 import type { ReactNode } from "react";
 import { Turn } from "@/components/ui.tsx";
 import { captureReview } from "@/lib/analytics.ts";
+import { memoryReviewProperties } from "@/lib/memory-review.ts";
 import type { ReviewTarget } from "@/lib/reviews.ts";
 
 function EntryRow({
@@ -51,8 +52,10 @@ type Item =
 			kind: "memories";
 			at: number;
 			memories: FiredMemory[];
-			recognized: boolean;
+			recognition?: Recognized;
 	  };
+
+type Capture = (properties: Record<string, unknown>) => void;
 
 function recognizedOf(line: TranscriptLine): Recognized | undefined {
 	if (line.role !== "entry") return undefined;
@@ -75,7 +78,7 @@ function itemsOf(lines: readonly TranscriptLine[], reflex: boolean): Item[] {
 					kind: "memories",
 					at,
 					memories: recognized.fired,
-					recognized: true,
+					recognition: recognized,
 				});
 			return;
 		}
@@ -85,35 +88,45 @@ function itemsOf(lines: readonly TranscriptLine[], reflex: boolean): Item[] {
 			return;
 		}
 		const last = items.at(-1);
-		if (last?.kind === "memories" && !last.recognized)
+		if (last?.kind === "memories" && last.recognition === undefined)
 			last.memories.push(memory);
-		else
-			items.push({
-				kind: "memories",
-				at,
-				memories: [memory],
-				recognized: false,
-			});
+		else items.push({ kind: "memories", at, memories: [memory] });
 	});
 	return items;
+}
+
+function Feedback({ capture }: { capture?: Capture }) {
+	if (capture === undefined) return null;
+	return (
+		<MessageFeedback
+			capture={capture}
+			className="absolute top-1 right-3"
+			reveal="always"
+		/>
+	);
 }
 
 function Memories({
 	memories,
 	recognized,
+	capture,
 }: {
 	memories: FiredMemory[];
 	recognized: boolean;
+	capture?: Capture;
 }) {
 	return (
-		<EntryRow kind={memoryKind.name} selected={recognized}>
-			<MessageMemories
-				memories={memories}
-				{...(recognized
-					? { selected: new Set(memories.map((memory) => memory.key)) }
-					: {})}
-			/>
-		</EntryRow>
+		<div className="group relative">
+			<EntryRow kind={memoryKind.name} selected={recognized}>
+				<MessageMemories
+					memories={memories}
+					{...(recognized
+						? { selected: new Set(memories.map((memory) => memory.key)) }
+						: {})}
+				/>
+			</EntryRow>
+			<Feedback capture={capture} />
+		</div>
 	);
 }
 
@@ -132,41 +145,57 @@ function SystemPrompt({ text }: { text: string }) {
 	);
 }
 
-function Entry({ line }: { line: EntryLine }) {
+function Entry({
+	line,
+	review,
+}: {
+	line: EntryLine;
+	review: (extra: Record<string, unknown>) => Capture | undefined;
+}) {
 	const [recognized] = view([{ ...line, id: line.kind }], recognizedKind);
 	if (recognized !== undefined)
 		return (
-			<EntryRow kind={line.kind}>
-				<details className="group/recognition text-[11px] leading-[1.7]">
-					<summary className="cursor-pointer select-none text-dim marker:text-dim">
-						{recognized.error === undefined ? (
-							<span>
-								recognition log · {Object.keys(recognized.scores).length}{" "}
-								situations · {recognized.fired?.length ?? 0} fired
-							</span>
-						) : (
-							<span className="text-red">
-								recognition failed: {recognized.error}
-							</span>
-						)}
-					</summary>
-					<div className="mt-1 flex flex-col gap-1 border-bg2 border-l pl-2.5">
-						<div className="text-dim">on “{recognized.message}”</div>
-						{recognized.step === undefined ? null : (
-							<pre className="m-0 whitespace-pre-wrap break-words font-mono text-dim">
-								{recognized.step}
-							</pre>
-						)}
-						<MessageJudgements
-							scores={recognized.scores}
-							firesAt={WHEN_FIRES_AT}
-							{...(recognized.error === undefined
-								? {}
-								: { error: recognized.error })}
-						/>
-					</div>
-				</details>
-			</EntryRow>
+			<div className="group relative">
+				<EntryRow kind={line.kind}>
+					<details className="group/recognition text-[11px] leading-[1.7]">
+						<summary className="cursor-pointer select-none text-dim marker:text-dim">
+							{recognized.error === undefined ? (
+								<span>
+									recognition log · {Object.keys(recognized.scores).length}{" "}
+									situations · {recognized.fired?.length ?? 0} fired
+								</span>
+							) : (
+								<span className="text-red">
+									recognition failed: {recognized.error}
+								</span>
+							)}
+						</summary>
+						<div className="mt-1 flex flex-col gap-1 border-bg2 border-l pl-2.5">
+							<div className="text-dim">on “{recognized.message}”</div>
+							{recognized.step === undefined ? null : (
+								<pre className="m-0 whitespace-pre-wrap break-words font-mono text-dim">
+									{recognized.step}
+								</pre>
+							)}
+							<MessageJudgements
+								scores={recognized.scores}
+								firesAt={WHEN_FIRES_AT}
+								{...(recognized.error === undefined
+									? {}
+									: { error: recognized.error })}
+							/>
+						</div>
+					</details>
+				</EntryRow>
+				<Feedback
+					capture={review(
+						memoryReviewProperties({
+							memories: recognized.fired ?? [],
+							recognition: recognized,
+						}),
+					)}
+				/>
+			</div>
 		);
 	return (
 		<EntryRow kind={line.kind}>
@@ -190,6 +219,21 @@ export function Transcript({
 }) {
 	const run = runId(identity, row);
 	const items = itemsOf(row.transcript, reflex);
+	const review =
+		(at: number) =>
+		(extra: Record<string, unknown>): Capture | undefined =>
+			target === undefined
+				? undefined
+				: (properties) =>
+						captureReview(target, {
+							runId: run,
+							trace: traceEvents(identity, row),
+							properties: {
+								...properties,
+								...reviewProperties(identity, row, at),
+								...extra,
+							},
+						});
 
 	return (
 		<div className="pt-1 pb-2.5">
@@ -200,27 +244,27 @@ export function Transcript({
 						<Memories
 							key={`${item.at}:memories`}
 							memories={item.memories}
-							recognized={item.recognized}
+							recognized={item.recognition !== undefined}
+							capture={review(item.at)(
+								memoryReviewProperties({
+									memories: item.memories,
+									...(item.recognition === undefined
+										? {}
+										: { recognition: item.recognition }),
+								}),
+							)}
 						/>
 					);
 				const { at, line } = item;
-				if (line.role === "entry") return <Entry key={at} line={line} />;
+				if (line.role === "entry")
+					return <Entry key={at} line={line} review={review(at)} />;
 				return (
 					<div className="group relative" key={at}>
 						<Turn role={line.role}>{line.content.trimEnd()}</Turn>
 						{target && line.role === "assistant" ? (
 							<div className="pr-4 pl-[66px]">
 								<MessageFeedback
-									capture={(properties) =>
-										captureReview(target, {
-											runId: run,
-											trace: traceEvents(identity, row),
-											properties: {
-												...properties,
-												...reviewProperties(identity, row, at),
-											},
-										})
-									}
+									capture={(properties) => review(at)({})?.(properties)}
 									className="absolute top-1.5 right-3"
 									reveal="always"
 								/>
