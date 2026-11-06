@@ -734,6 +734,18 @@ function refuseBuiltin(bank: MemoryBank, key: string): void {
 		);
 }
 
+function areaOf(key: string): string {
+	const slash = key.indexOf("/");
+	return slash === -1 ? key : key.slice(0, slash);
+}
+
+function situationOf(memory: Memory): unknown {
+	if (memory.on === undefined) return null;
+	return memory.on.kind === "when"
+		? memory.on.pattern
+		: triggerToForm(memory.on);
+}
+
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.channels);
@@ -831,6 +843,46 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 							memory.on === undefined ? null : triggerToForm(memory.on),
 						]),
 					),
+			);
+		},
+	);
+
+	interp.def(
+		"memory/builtins",
+		-1,
+		"(builtins [area])",
+		'List the built-in memories each extension ships, as (key situation): the :when situation that fires it, or its :on trigger. With an area, such as "mcp", only the keys under it. Recall one by key to read its body.',
+		z.tuple([zList]),
+		([rest]) => {
+			const [area] = listToArray(rest);
+			if (area !== undefined && typeof area !== "string")
+				throw new EvalException(
+					'an area is a string, the part of a key before its slash: "mcp"',
+					area,
+				);
+			const prefix = area?.replace(/\/$/, "");
+			return arrayToList(
+				[...bank.builtins().values()]
+					.filter(
+						(memory) => prefix === undefined || areaOf(memory.key) === prefix,
+					)
+					.map((memory) => arrayToList([memory.key, situationOf(memory)])),
+			);
+		},
+	);
+
+	interp.def(
+		"memory/areas",
+		0,
+		"(areas)",
+		"List the areas the built-in memories are filed under, as (area count), in the order the extensions ship them. Pass one to memory/builtins to list its keys.",
+		z.tuple([]),
+		() => {
+			const counts = new Map<string, number>();
+			for (const key of bank.builtins().keys())
+				counts.set(areaOf(key), (counts.get(areaOf(key)) ?? 0) + 1);
+			return arrayToList(
+				[...counts].map(([area, count]) => arrayToList([area, BigInt(count)])),
 			);
 		},
 	);

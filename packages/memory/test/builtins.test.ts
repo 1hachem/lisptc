@@ -181,6 +181,27 @@ describe("built-in memories", () => {
 		expect(await ev(f, `(memory/recall "quiet")`)).toContain("browser/flags");
 	});
 
+	it("are listed on their own, with the situation or trigger that fires each", async () => {
+		const f = fixture();
+		await ev(f, '(memory/remember "mine" "a note of my own")');
+		const listed = await ev(f, "(memory/builtins)");
+		expect(listed).toContain(
+			'("browser/local" "user wants to automate a web browser")',
+		);
+		expect(listed).toContain('("browser/flags" nil)');
+		expect(listed).toContain('("deploy/notes" (user "^deploy"))');
+		expect(listed).not.toContain('"mine"');
+	});
+
+	it("are listed by area", async () => {
+		const f = fixture();
+		expect(
+			await ev(f, '(mapcar (lambda (r) (car r)) (memory/builtins "browser"))'),
+		).toBe('("browser/local" "browser/flags")');
+		expect(await ev(f, '(memory/builtins "nowhere")')).toBe("nil");
+		expect(await ev(f, "(memory/areas)")).toBe('(("browser" 2) ("deploy" 1))');
+	});
+
 	it("are read-only", async () => {
 		const f = fixture();
 		for (const code of [

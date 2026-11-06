@@ -133,8 +133,11 @@ a quoted form for an exact event. Memory with neither never arrives by itself.
 It waits for a recall naming it. Unguessable key later means lost.
 
 BUILT-IN MEMORIES: tool ships its own memories: how-to depth behind each extension,
-loaded when its trigger fires. Listed in (memories), found by memory/recall like
-yours. Read-only: remember, revise, forget on a built-in key error.
+loaded when its trigger fires. Found by memory/recall like yours. Read-only:
+remember, revise, forget on a built-in key error.
+- (memory/areas) gives (area count) per extension area, e.g. ("mcp" 7).
+- (memory/builtins "mcp") gives (key situation) for every built-in in that
+  area; (memory/builtins) lists all. Recall a key to read its body.
 
 (memory "memory/rules" :when "a guess just failed and the fix is now known, or the agent is deciding what is worth remembering")
 - REMEMBER THE MOMENT A GUESS FAILS. Rejected call, wrong name, backwards
@@ -152,12 +155,13 @@ yours. Read-only: remember, revise, forget on a built-in key error.
 - Recall before you guess. Unsure of a name the session has not told you?
   Cheapest possible recall.
 
-(memory "memory/recalling" :when "the agent is about to guess a name, a fact or a procedure it may have learned before, or the user asks what it remembers")
+(memory "memory/recalling" :when "the agent is about to guess a name, a fact or a procedure it may have learned before, or must see which built-in memories an extension ships, or the user asks what it remembers")
 - (memory/recall query) retrieves by key or body text, strongest first. Query
   is words, not a pattern: every meaningful word must land in the one memory.
   Spelling forgiven, prefix counts. Found memories load into your context:
   recalling IS reading. No echo after it.
 - (memories) every memory as key, score and trigger, strongest first.
+- (memory/builtins [area]) only the built-ins, as key and situation.
 - (memory/remember key body) stores one. Quote a form body, or arguments are
   evaluated, so an unquoted form stores its result instead.
 - (memory/forget key) drops one for good. (memory/revise key body) corrects
