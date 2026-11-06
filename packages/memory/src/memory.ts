@@ -12,8 +12,10 @@ import {
 import {
 	arrayToList,
 	Cell,
+	LispKeyword,
 	type List,
 	listToArray,
+	newLispKeyword,
 	newSym,
 	Sym,
 } from "@repo/interpreter/objects";
@@ -41,15 +43,18 @@ import {
 	authoredTrigger,
 	type Cue,
 	combinatorIn,
+	formToMemory,
 	INITIAL_SCORE,
 	LINKED_FIRES_AT,
 	type Memory,
 	type MemoryHost,
 	type MemoryStore,
+	memoryToForm,
 	type Recognize,
 	readBuiltins,
 	recognizeNothing,
 	type Situation,
+	TRIGGER_KINDS,
 	type Trigger,
 	type TriggerKind,
 	type Turn,
@@ -154,15 +159,53 @@ function conversationOf(interp: Interp): Turn[] {
 
 const GIST_CHARS = 240;
 
-function cueOf(memory: Memory): Cue {
-	const on = memory.on as Trigger;
+function gistOf(memory: Memory): string {
 	const gist = bodyText(memory.body).replace(/\s+/g, " ").trim();
+	return gist.length > GIST_CHARS ? `${gist.slice(0, GIST_CHARS)}…` : gist;
+}
+
+const LIST = "memory/list";
+
+function entryOf(memory: Memory): unknown {
+	return arrayToList([
+		new Cell("key", memory.key),
+		new Cell("hook", memory.on?.kind ?? null),
+		new Cell("pattern", memory.on?.pattern ?? null),
+		new Cell("unless", memory.on?.unless ?? null),
+		new Cell("gist", gistOf(memory)),
+	]);
+}
+
+function cueFromEntry(entry: unknown): Cue {
+	const field = (name: string): unknown =>
+		(
+			listToArray(entry as List).find(
+				(pair) => pair instanceof Cell && pair.car === name,
+			) as Cell | undefined
+		)?.cdr;
+	const unless = field("unless");
 	return {
-		key: memory.key,
-		situation: on.pattern as string,
-		...(on.unless === undefined ? {} : { unless: on.unless }),
-		gist: gist.length > GIST_CHARS ? `${gist.slice(0, GIST_CHARS)}…` : gist,
+		key: field("key") as string,
+		situation: field("pattern") as string,
+		...(typeof unless === "string" ? { unless } : {}),
+		gist: field("gist") as string,
 	};
+}
+
+function hookOf(value: unknown): TriggerKind | undefined {
+	if (value === undefined) return undefined;
+	const name =
+		value instanceof LispKeyword
+			? value.name
+			: typeof value === "string"
+				? value.replace(/^:/, "")
+				: undefined;
+	if (name === undefined || !TRIGGER_KINDS.includes(name as TriggerKind))
+		throw new EvalException(
+			`a hook is one of :${TRIGGER_KINDS.join(" :")}`,
+			value,
+		);
+	return name as TriggerKind;
 }
 
 function latestStep(turns: readonly Turn[]): string | undefined {
@@ -209,6 +252,19 @@ const countCodec: StateCodec<number> = {
 const keysCodec: StateCodec<readonly string[]> = {
 	toLisp: (keys) => arrayToList([...keys]),
 	fromLisp: (list) => listToArray(list as List) as string[],
+};
+
+const runtimeCodec: StateCodec<readonly Memory[] | undefined> = {
+	toLisp: (memories) =>
+		memories === undefined
+			? null
+			: new Cell("read", arrayToList(memories.map(memoryToForm))),
+	fromLisp: (read) =>
+		read instanceof Cell
+			? listToArray(read.cdr as List).flatMap(
+					(form) => formToMemory(form) ?? [],
+				)
+			: undefined,
 };
 
 function carriesLine(message: ChatMessage, key: string): boolean {
@@ -284,6 +340,8 @@ export class MemoryBank {
 	private builtinSource: () => readonly string[] = () => [];
 	private firing: FiredMemory[] | undefined;
 	private builtinTable: ReadonlyMap<string, Memory> | undefined;
+	private runtime: State<readonly Memory[] | undefined> =
+		detachedState(undefined);
 
 	private get heard(): number {
 		return this.heardState?.get() ?? 0;
@@ -318,6 +376,12 @@ export class MemoryBank {
 			[],
 			"The memories a when trigger fired since the user last spoke, so a later step does not fire them again.",
 		);
+		this.runtime = interp.state(
+			"memory/runtime",
+			runtimeCodec,
+			undefined,
+			'Nil until the store is read, then ("read" . memories) with the remembered memories as (memory ...) forms, read from the store once and answered from here after. Every write, update or forget made in this session empties it, so the next read goes back to the store. Built-ins are never copied here.',
+		);
 	}
 
 	readBuiltinsFrom(source: () => readonly string[]): void {
@@ -347,7 +411,7 @@ export class MemoryBank {
 	}
 
 	isBuiltin(memory: Memory): boolean {
-		return this.builtins().get(memory.key) === memory;
+		return this.builtins().has(memory.key);
 	}
 
 	keepLoaded(messages: readonly ChatMessage[]): void {
@@ -363,8 +427,25 @@ export class MemoryBank {
 	}
 
 	*everything(): Eval<Memory[]> {
+		const known = this.runtime.get();
+		if (known === undefined) return yield* this.reload();
+		return [...this.builtins().values(), ...known];
+	}
+
+	private *reload(): Eval<Memory[]> {
 		const stored = yield* settled(this.store.all());
+		this.runtime.set(stored);
 		return [...this.builtins().values(), ...stored];
+	}
+
+	*listed(hook?: TriggerKind): Eval<Memory[]> {
+		return (yield* this.everything()).filter(
+			(memory) => hook === undefined || memory.on?.kind === hook,
+		);
+	}
+
+	private stale(): void {
+		this.runtime.set(undefined);
 	}
 
 	private change(next: Partial<Step>): void {
@@ -436,17 +517,29 @@ export class MemoryBank {
 		return [...surfaced];
 	}
 
+	private *askRepl(interp: Interp): Eval<Cue[]> {
+		this.change({ stepping: false });
+		try {
+			const value = yield* interp.evalGen(
+				arrayToList([newSym(LIST), newLispKeyword("when")]),
+				null,
+			);
+			return listToArray(value as List).map(cueFromEntry);
+		} finally {
+			this.change({ stepping: true });
+		}
+	}
+
 	private *recognizeSituation(
 		situation: Situation,
 		seen: { message: string; step?: string },
 		interp: Interp,
 	): Eval<void> {
 		const spent = [...this.loaded.get(), ...this.asked.get()];
-		const candidates = (yield* this.everything()).filter(
-			(memory) => memory.on?.kind === "when" && !spent.includes(memory.key),
+		const cues = (yield* this.askRepl(interp)).filter(
+			(cue) => !spent.includes(cue.key),
 		);
-		if (candidates.length === 0) return;
-		const cues = candidates.map(cueOf);
+		if (cues.length === 0) return;
 		let scores: ReadonlyMap<string, number> = new Map();
 		let error: string | undefined;
 		try {
@@ -514,6 +607,13 @@ export class MemoryBank {
 
 	*remember(memory: Memory): Eval<void> {
 		yield* settled(this.store.put(memory));
+		this.stale();
+	}
+
+	*forget(key: string): Eval<boolean> {
+		const dropped = yield* settled(this.store.delete(key));
+		this.stale();
+		return dropped;
 	}
 
 	*recall(interp: Interp, query: string, limit: number): Eval<Memory[]> {
@@ -566,7 +666,7 @@ export class MemoryBank {
 		memory.score = this.strength(memory) + REINFORCEMENT;
 		memory.used += 1;
 		memory.lastUsed = this.now();
-		yield* settled(this.store.put(memory));
+		yield* this.remember(memory);
 	}
 
 	private *wireTogether(): Eval<void> {
@@ -578,15 +678,14 @@ export class MemoryBank {
 			for (const other of keys)
 				if (other !== key)
 					memory.links.set(other, (memory.links.get(other) ?? 0) + 1);
-			yield* settled(this.store.put(memory));
+			yield* this.remember(memory);
 		}
 	}
 
 	private *sweep(): Eval<void> {
-		const all = yield* settled(this.store.all());
-		for (const memory of all)
-			if (this.strength(memory) < FORGET_BELOW)
-				yield* settled(this.store.delete(memory.key));
+		for (const memory of yield* this.everything())
+			if (!this.isBuiltin(memory) && this.strength(memory) < FORGET_BELOW)
+				yield* this.forget(memory.key);
 	}
 
 	private *dispatch(event: MemoryEvent, interp: Interp): Eval<void> {
@@ -888,6 +987,18 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		},
 	);
 
+	interp.defGen(
+		LIST,
+		-1,
+		"(list [hook])",
+		"List every memory, built-in or remembered, as an alist of key, hook, pattern, unless and gist. With a hook such as :when or :call, only the memories that fire on it. Recognition asks (list :when) before every step.",
+		z.tuple([zList]),
+		function* ([rest]): Eval {
+			const hook = hookOf(listToArray(rest)[0]);
+			return arrayToList((yield* bank.listed(hook)).map(entryOf));
+		},
+	);
+
 	interp.def(
 		"memory/builtins",
 		-1,
@@ -936,7 +1047,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		z.tuple([zString]),
 		function* ([key]): Eval {
 			refuseBuiltin(bank, key);
-			return (yield* settled(bank.store.delete(key))) || null;
+			return (yield* bank.forget(key)) || null;
 		},
 	);
 
@@ -947,8 +1058,10 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Drop every memory for good; returns how many there were. Only when the user asks for a clean slate.",
 		z.tuple([]),
 		function* (): Eval {
-			const all = yield* settled(bank.store.all());
-			for (const memory of all) yield* settled(bank.store.delete(memory.key));
+			const all = (yield* bank.everything()).filter(
+				(memory) => !bank.isBuiltin(memory),
+			);
+			for (const memory of all) yield* bank.forget(memory.key);
 			return quotient(all.length, 1);
 		},
 	);

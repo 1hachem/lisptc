@@ -409,6 +409,43 @@ describe("the when trigger", () => {
 		);
 	});
 
+	it("lists built-in and remembered memories alike, narrowed by hook", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "mine" "x" :when "${ASK}")`);
+		await ev(f, `(memory/remember "exact" "y" :on '(user "^deploy"))`);
+		expect(
+			await ev(
+				f,
+				`(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list :when))`,
+			),
+		).toBe('("browser/local" "mine")');
+		expect(
+			await ev(
+				f,
+				`(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list :user))`,
+			),
+		).toBe('("deploy/notes" "exact")');
+		expect(await ev(f, "(length (memory/list))")).toBe("5");
+	});
+
+	it("answers listings from the session's copy until the session writes a memory", async () => {
+		const f = fixture();
+		const keys = `(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list :when))`;
+		expect(await ev(f, keys)).toBe('("browser/local")');
+		await f.bank.store.put({
+			key: "elsewhere",
+			body: "x",
+			on: { kind: "when", pattern: "user asks about billing" },
+			links: new Map(),
+			score: 1,
+			used: 0,
+			lastUsed: 0,
+		});
+		expect(await ev(f, keys)).toBe('("browser/local")');
+		await ev(f, `(memory/remember "mine" "y" :when "${ASK}")`);
+		expect(await ev(f, keys)).toBe('("browser/local" "elsewhere" "mine")');
+	});
+
 	it("fires the agent's own memories too", async () => {
 		const { recognize } = recognizing({ "user asks about billing": 0.9 });
 		const f = fixture({ recognize });
