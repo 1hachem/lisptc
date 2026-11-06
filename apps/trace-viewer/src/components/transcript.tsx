@@ -7,7 +7,7 @@ import type { EntryLine, ReportRow, TranscriptLine } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
 import { judgedKind, memoryKind } from "@repo/journal-catalog/memory";
-import { ASKS_FIRES_AT } from "@repo/memory-extension/ports";
+import { WHEN_FIRES_AT } from "@repo/memory-extension/ports";
 import { view } from "@repo/shared/journal";
 import type { ReactNode } from "react";
 import { Turn } from "@/components/ui.tsx";
@@ -74,7 +74,7 @@ function Entry({ line, selected }: { line: EntryLine; selected: boolean }) {
 					<summary className="cursor-pointer select-none text-dim marker:text-dim">
 						{judged.error === undefined ? (
 							<span>
-								judge log · {Object.keys(judged.scores).length} asks ·{" "}
+								judge log · {Object.keys(judged.scores).length} situations ·{" "}
 								{judged.selected?.length ?? 0} selected
 							</span>
 						) : (
@@ -90,7 +90,7 @@ function Entry({ line, selected }: { line: EntryLine; selected: boolean }) {
 						)}
 						<MessageJudgements
 							scores={judged.scores}
-							firesAt={ASKS_FIRES_AT}
+							firesAt={WHEN_FIRES_AT}
 							{...(judged.error === undefined ? {} : { error: judged.error })}
 						/>
 					</div>

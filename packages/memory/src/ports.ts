@@ -15,7 +15,7 @@ import type { SearchEngine } from "@repo/shared/search";
 
 export const INITIAL_SCORE = 1;
 export const LINKED_FIRES_AT = 2;
-export const ASKS_FIRES_AT = 0.7;
+export const WHEN_FIRES_AT = 0.7;
 
 export const TRIGGER_KINDS = [
 	"call",
@@ -26,7 +26,7 @@ export const TRIGGER_KINDS = [
 	"user",
 	"recall",
 	"start",
-	"asks",
+	"when",
 ] as const;
 
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
@@ -107,9 +107,9 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 			value.car,
 		);
 	const rest = value.cdr;
-	if (rest === null && kind === "asks")
+	if (rest === null && kind === "when")
 		throw new EvalException(
-			'an asks trigger says in words when the memory applies: write (asks "user wants to automate a browser")',
+			'a when trigger describes in words the situation that needs the memory: write :when "the agent is about to drive a web page, or a page call just failed"',
 			value,
 		);
 	if (rest === null) return { kind };
@@ -126,9 +126,9 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',
 			pattern,
 		);
-	if (kind === "asks" && typeof pattern !== "string")
+	if (kind === "when" && typeof pattern !== "string")
 		throw new EvalException(
-			"an asks trigger is judged against what the user said, so its pattern is one string describing when it applies",
+			"a when trigger is judged against the situation, so it is one string describing the situation that needs the memory",
 			pattern,
 		);
 	if (kind !== "call" && !isTextPattern(pattern))
@@ -137,6 +137,33 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 			pattern,
 		);
 	return { kind, pattern };
+}
+
+export function authoredTrigger(
+	on: unknown,
+	when: unknown,
+): Trigger | undefined {
+	const given = (value: unknown) => value !== null && value !== undefined;
+	if (given(on) && given(when))
+		throw new EvalException(
+			"a memory fires on one trigger: give :on or :when, not both",
+			when,
+		);
+	if (given(when)) {
+		if (typeof when !== "string" || when.trim() === "")
+			throw new EvalException(
+				"a :when is one string describing the situation that needs the memory: what the user asks, what the agent is doing, an error or a result it just got",
+				when,
+			);
+		return { kind: "when", pattern: when };
+	}
+	const trigger = parseTrigger(on);
+	if (trigger?.kind === "when")
+		throw new EvalException(
+			'a situation is written with :when, not :on: write :when "the agent is about to drive a web page"',
+			on,
+		);
+	return trigger;
 }
 
 function readableTrigger(value: unknown): Trigger | undefined {
@@ -210,7 +237,7 @@ function builtinHeader(line: string, body: string): Memory {
 		form.car.name !== "memory"
 	)
 		throw new EvalException(
-			'a built-in memory opens with a header line, (memory "key" :on (kind "pattern") :links ("key"...)), and its body is the text below it',
+			'a built-in memory opens with a header line, (memory "key" :when "situation" :links ("key"...)) or (memory "key" :on (kind "pattern")), and its body is the text below it',
 			line,
 		);
 	const rest = form.cdr;
@@ -218,7 +245,7 @@ function builtinHeader(line: string, body: string): Memory {
 		throw new EvalException("a built-in memory needs a string key", line);
 	if (body === "")
 		throw new EvalException("a built-in memory needs a body", rest.car);
-	const opts = plistOptions(rest.cdr as List, ["on", "links"]);
+	const opts = plistOptions(rest.cdr as List, ["on", "when", "links"]);
 	const links = new Map<string, number>();
 	for (const linked of listToArray((opts.get("links") ?? null) as List)) {
 		if (typeof linked !== "string")
@@ -228,7 +255,7 @@ function builtinHeader(line: string, body: string): Memory {
 	return {
 		key: rest.car,
 		body,
-		on: parseTrigger(opts.get("on")),
+		on: authoredTrigger(opts.get("on"), opts.get("when")),
 		links,
 		score: INITIAL_SCORE,
 		used: 0,

@@ -294,7 +294,7 @@ describe("a case runs against a scripted model", () => {
 				max: 8,
 				extensions: judgingExtensions,
 				mocks: { servers: { playwright } },
-				prelude: `(memory/remember "headline" "the headline is on the page" :on '(asks "the user wants the headline"))`,
+				prelude: `(memory/remember "headline" "the headline is on the page" :when "the user wants the headline")`,
 				seed: [{ user: "open hyko.ai and tell me the headline" }],
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
@@ -312,7 +312,7 @@ describe("a case runs against a scripted model", () => {
 			},
 		});
 		expect(result.transcript[fired]).toMatchObject({
-			value: { key: "headline", on: "asks" },
+			value: { key: "headline", on: "when" },
 		});
 		expect(judged).toBeLessThan(fired);
 		expect(fired).toBeLessThan(first);
@@ -327,7 +327,7 @@ describe("a case runs against a scripted model", () => {
 				max: 8,
 				extensions: failingJudgeExtensions,
 				mocks: { servers: { playwright } },
-				prelude: `(memory/remember "headline" "the headline is on the page" :on '(asks "the user wants the headline"))`,
+				prelude: `(memory/remember "headline" "the headline is on the page" :when "the user wants the headline")`,
 				seed: [{ user: "open hyko.ai and tell me the headline" }],
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",

@@ -1,5 +1,15 @@
-(memory "memory/triggers" :on (asks "user wants the agent to remember something that should come back on its own when a command, an error, a result or certain words show up") :links ("memory/call-triggers"))
-Trigger is a quoted form of kind and pattern. Nine kinds:
+(memory "memory/triggers" :when "the agent is about to remember something that should come back on its own when a situation, a command, an error, a result or certain words show up" :links ("memory/call-triggers"))
+Two ways to fire by itself.
+
+:when "situation" is the usual one: one string describing the situation that
+needs the memory. Judged by meaning before every step, not regex, against what
+user just said plus your last step: the code, its result or its error. Fires
+once per user message. Describe the whole situation, not only a request: what
+user asks, what you are about to do, an error or a result that just came back.
+
+  :when "agent is about to drive a web page, or a page call failed with a missing browser"
+
+:on is a quoted form of kind and pattern, for an exact event. Eight kinds:
 
   call     a form about to be evaluated, at any depth, so it catches a call
            nested inside a setq or a let
@@ -11,12 +21,10 @@ Trigger is a quoted form of kind and pattern. Nine kinds:
   user     words in what the user just said
   recall   another memory being retrieved
   start    the user's first message, once, with no pattern: written (start)
-  asks     what user said and what last step did, judged by meaning before
-           every step, not regex. Fires once per user message. Pattern is
-           one string saying when it applies:
-           (asks "user wants to automate a web browser")
 
-(memory "memory/call-triggers" :on (asks "user wants a memory to fire on a particular call, such as one tool or one server, and not on every call"))
+One trigger per memory: :when or :on, not both.
+
+(memory "memory/call-triggers" :when "the agent is writing a memory that must fire on one particular call, such as one tool or one server, and not on every call")
 For call the pattern is A FORM, written like the call, matched structurally:
 
 (call (load-mcp "acme")) only that server, not every load
@@ -53,13 +61,13 @@ Firing runs nothing. Fired recipe? Replay it. Triggers watch code you write
 into the REPL. A form evaluated inside a replay or a function body is not a
 step and fires nothing.
 
-(memory "memory/chaining" :on (asks "user wants a memory to load along with another one, or to load at the start of every conversation"))
+(memory "memory/chaining" :when "a memory should load along with another one, or at the start of every conversation")
 CHAINING
 
 Retrieval is an event, so one memory can hook another and both arrive
 together. Say so outright with :links, a list of keys:
 
-  (memory "browser/local" :on (asks "user wants to automate a web browser") :links ("browser/flags"))
+  (memory "browser/local" :when "agent is about to automate a web browser" :links ("browser/flags"))
 
 Also automatic: memories firing in the same step get wired together.
 
@@ -73,7 +81,7 @@ not see it. To run, replay.
 Loads once: once a built-in is loaded, it stays in context. It loads again only
 after its text leaves context. Need one now? Recall it by key or words.
 
-(memory "memory/fading" :on (asks "user asks why the agent forgot something, or how long a memory lasts"))
+(memory "memory/fading" :when "the agent cannot find something it remembered, or the user asks why it forgot or how long a memory lasts")
 STRENGTH AND FORGETTING
 
 Every memory has a score. Recall strengthens it. Unused, it fades, half its
@@ -82,7 +90,7 @@ memory/forget exists for what is wrong, not for what is merely old.
 
 Built-in memories never fade.
 
-(memory "memory/revising" :on (asks "user says the agent got something wrong and wants it corrected for next time"))
+(memory "memory/revising" :when "a memory that just fired or was recalled turned out wrong or vague, or the user says the agent got something wrong and wants it fixed for next time")
 THE WINDOW
 
 Retrieving a memory opens it: until step end you can revise its body. Outside
@@ -95,7 +103,7 @@ looking at it:
 Read-only built-ins never revise. Remember the correction under a new key, with
 a trigger that will repeat.
 
-(memory "memory/bodies" :on (asks "user wants the agent to save a recipe, a function or a reusable procedure for later"))
+(memory "memory/bodies" :when "the agent is about to save a recipe, a function or a reusable procedure, or remember just refused a live value")
 GOTCHAS
 
 - Body must be prose or a readable form. Closure, promise or secret is a live
@@ -107,7 +115,7 @@ GOTCHAS
 - Replaying a defun installs that function. Remembered recipe becomes running
   one.
 
-(memory "memory/writing" :on (asks "user wants the agent to save, change or forget a memory, or asks what built-in memories exist"))
+(memory "memory/writing" :when "the agent is about to save, change or forget a memory, or the user asks what built-in memories exist")
 Work from one session is gone next session unless remembered. Memory = key +
 body. Body is prose or code, one slot: here they are the same material.
 
@@ -118,21 +126,22 @@ body. Body is prose or code, one slot: here they are the same material.
 - Names are slashed: bare remember, recall, forget are English verbs and would
   be read as code in an aside.
 
-FIRING BY ITSELF: with :on a memory watches for an event and loads itself, unasked.
-Trigger is a quoted form. Usual trigger is asks, judged by meaning before every
-step against what user said and what last step did. Memory with no :on never arrives by itself. It waits for a
-recall naming it. Unguessable key later means lost.
+FIRING BY ITSELF: with :when or :on a memory loads itself, unasked. Usual is
+:when, a string describing the situation that needs it, judged by meaning before
+every step against what user said and what last step did and got back. :on is
+a quoted form for an exact event. Memory with neither never arrives by itself.
+It waits for a recall naming it. Unguessable key later means lost.
 
 BUILT-IN MEMORIES: tool ships its own memories: how-to depth behind each extension,
 loaded when its trigger fires. Listed in (memories), found by memory/recall like
 yours. Read-only: remember, revise, forget on a built-in key error.
 
-(memory "memory/rules" :on (asks "user asks how to decide what is worth remembering, or the agent just got a guess wrong"))
+(memory "memory/rules" :when "a guess just failed and the fix is now known, or the agent is deciding what is worth remembering")
 - REMEMBER THE MOMENT A GUESS FAILS. Rejected call, wrong name, backwards
   argument order: worth keeping. Write it before moving on, while the right
   answer is on screen.
-- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description. Hook what you
-  will be doing when you next need it. Misnamed tool goes on the call that
+- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description. Describe, or
+  hook, what you will be doing when you next need it. Misnamed tool goes on the call that
   loads its server, so it arrives before you misname it again. Rejected
   mistake goes on that error. A memory you must remember to look for, you will
   not look for.
@@ -143,7 +152,7 @@ yours. Read-only: remember, revise, forget on a built-in key error.
 - Recall before you guess. Unsure of a name the session has not told you?
   Cheapest possible recall.
 
-(memory "memory/recalling" :on (asks "user wants the agent to find something it remembered earlier, or asks what memories exist"))
+(memory "memory/recalling" :when "the agent is about to guess a name, a fact or a procedure it may have learned before, or the user asks what it remembers")
 - (memory/recall query) retrieves by key or body text, strongest first. Query
   is words, not a pattern: every meaningful word must land in the one memory.
   Spelling forgiven, prefix counts. Found memories load into your context:

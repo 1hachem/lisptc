@@ -1,4 +1,4 @@
-(memory "llm/extract" :on (asks "user wants fields or structured data pulled out of a text, page, comment or mail"))
+(memory "llm/extract" :when "the agent holds a text, page, comment or mail and must pull fields or structured data out of it")
 llm/extract shape: alist of (key . field), written by (shape (name spec...) ...)
 : no quote, no dotted pairs. Field is:
   :string, :number, :integer, :boolean, :any; plain string = string field
@@ -22,7 +22,7 @@ llm/extract-1: alist, keys "title" "stars" "state" "links"
 Text arguments: prompt, :system, :instructions, llm/extract text, message
 content. Any value works.
 
-(memory "llm/complete" :on (asks "user wants a single prompt sent to the model, or several messages sent as one conversation"))
+(memory "llm/complete" :when "the agent is about to send one prompt to a model, or several messages as one conversation, or a model call just failed")
 - (llm/complete "prompt") waits, gives reply string. Prompt is any value: list or alist goes in printed, no (string …) needed.
 - (llm/chat messages) gives reply string, multi-turn. Message is (message :system "...") or (message :user "...") . Bare string = user message.
 
@@ -34,7 +34,7 @@ llm/complete-1: 84 words
 Text arguments: prompt, :system, :instructions, llm/extract text, message
 content. Any value works.
 
-(memory "llm/macros" :on (asks "user wants a long text or list of records summarized, or a question answered from a given text or data"))
+(memory "llm/macros" :when "the agent holds a long text or many records that must be summarized, or a question must be answered from a given text or data")
 Three forms over llm/complete carry prompt for you; (doc 'summarize) and
 expansion are all there is. Each takes llm/complete options plus :words,
 capping asked length and token budget.
@@ -57,7 +57,7 @@ owner: "Nadia"
 
 (echo (if owner owner "the issues do not say who is assigned"))
 
-(memory "llm/options" :on (asks "user wants a particular model or provider used, a timeout set, or defaults changed for many model calls"))
+(memory "llm/options" :when "a model call needs a particular model or provider, a timeout, or defaults changed for many calls, or a model call just timed out")
 Options, all optional, every call: :provider, keyword from (llm/providers) ·
 :model, string · :system · :max-tokens · :temperature · :reasoning-effort,
 :low, :medium or :high · :timeout ms, default 60000.

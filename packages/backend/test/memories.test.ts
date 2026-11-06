@@ -3,7 +3,7 @@ import { type FunctionReference, getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
-import { MAX_ASKS_MEMORIES, MAX_MEMORY_BYTES } from "../convex/limits.js";
+import { MAX_MEMORY_BYTES, MAX_WHEN_MEMORIES } from "../convex/limits.js";
 import {
 	ConvexMemoryStore,
 	type MemoryClient,
@@ -110,24 +110,24 @@ describe("memory access", () => {
 	it("caps the memories a judge is asked about, since each one is paid on every message", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
-		const asking = (key: string): StoredMemory => ({
+		const situational = (key: string): StoredMemory => ({
 			...row(key, '"note"'),
-			on: `(asks "${key}")`,
+			on: `(when "${key}")`,
 		});
-		for (let i = 0; i < MAX_ASKS_MEMORIES; i++)
+		for (let i = 0; i < MAX_WHEN_MEMORIES; i++)
 			await alice.as.mutation(api.memories.put, {
 				workspaceId: alice.workspace,
-				memory: asking(`a${i}`),
+				memory: situational(`a${i}`),
 			});
 		await expect(
 			alice.as.mutation(api.memories.put, {
 				workspaceId: alice.workspace,
-				memory: asking("one-more"),
+				memory: situational("one-more"),
 			}),
-		).rejects.toThrow(/TOO_MANY_ASKS_MEMORIES/);
+		).rejects.toThrow(/TOO_MANY_WHEN_MEMORIES/);
 		await alice.as.mutation(api.memories.put, {
 			workspaceId: alice.workspace,
-			memory: { ...asking("a0"), score: 2 },
+			memory: { ...situational("a0"), score: 2 },
 		});
 		await alice.as.mutation(api.memories.put, {
 			workspaceId: alice.workspace,

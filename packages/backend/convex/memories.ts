@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
-import { MAX_ASKS_MEMORIES, MAX_MEMORIES, MAX_MEMORY_BYTES } from "./limits.js";
+import { MAX_MEMORIES, MAX_MEMORY_BYTES, MAX_WHEN_MEMORIES } from "./limits.js";
 
 const PURGE_BATCH = 256;
 
@@ -52,7 +52,7 @@ export const get = query({
 });
 
 function judged(on: string | undefined): boolean {
-	return on?.startsWith("(asks ") ?? false;
+	return on?.startsWith("(when ") ?? false;
 }
 
 export const put = mutation({
@@ -76,9 +76,9 @@ export const put = mutation({
 				.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 				.take(MAX_MEMORIES);
 		if (judged(memory.on) && !judged(existing?.on)) {
-			const asking = (await owned()).filter((m) => judged(m.on));
-			if (asking.length >= MAX_ASKS_MEMORIES) {
-				throw new ConvexError({ code: "TOO_MANY_ASKS_MEMORIES" });
+			const situational = (await owned()).filter((m) => judged(m.on));
+			if (situational.length >= MAX_WHEN_MEMORIES) {
+				throw new ConvexError({ code: "TOO_MANY_WHEN_MEMORIES" });
 			}
 		}
 		if (existing !== null) {

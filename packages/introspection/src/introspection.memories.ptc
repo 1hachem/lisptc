@@ -1,4 +1,4 @@
-(memory "introspection/forms" :on (asks "user wants to know a definition's arity, signature, doc or source, or whether a value is a function or macro"))
+(memory "introspection/forms" :when "the agent needs a definition's arity, signature, doc or source, or must tell a function from a macro; or a call just failed on its arguments")
 - (describe 'name) prints kind, arity, signature, doc at once.
 - (apropos "text") documented names whose name or doc contains text. Finds form
   by what it does, not what it is called.

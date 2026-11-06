@@ -1,4 +1,4 @@
-(memory "preferences/layout" :on (asks "user wants sidebar entries reordered, moved between the left and right sidebar or hidden, or bottom status bar items moved, hidden or left as gaps"))
+(memory "preferences/layout" :when "sidebar entries must be reordered, moved between sidebars or hidden, or status bar items moved, hidden or left as gaps")
 - Two sidebars, left and right. :sidebar is left one's entries, top first;
   :sidebar-right is right one's. Each entry sits in one.
   (preferences/set :sidebar '("README.md" "chat")) moves those two to top of
@@ -19,7 +19,7 @@
 - :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
   (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
 
-(memory "preferences/chat" :on (asks "user wants chat changes: which message metadata fields show, which helpers the chat input runs, or where a trace opens"))
+(memory "preferences/chat" :when "the chat must change: which message metadata shows, which helpers the input runs, or where a trace opens")
 - :input is helpers chat input runs while user types. :attach is attach
   button. :lisp is highlight, completion, errors, docs for lisp in input:
   (preferences/set :input '(:lisp nil)).
@@ -29,14 +29,14 @@
 - :trace-link t shows "show in trace" on message metadata; opens trace at
   that message. Default t. nil hides it: (preferences/set :trace-link nil).
 
-(memory "preferences/motion" :on (asks "user wants animations changed: how the sidebar moves on a drag, or whether panels animate when they open or split"))
+(memory "preferences/motion" :when "animations must change: how the sidebar moves on a drag, or whether panels animate when they open or split")
 - :motion is how sidebar animates that drag. (motions) gives alist of
   (id . description) to choose from. System asks for reduced motion: nothing
   animates, whatever :motion says.
 - :panel-motion t animates panels as they open, split, switch tab; nil keeps
   them still: (preferences/set :panel-motion nil). Reduced motion wins here too.
 
-(memory "preferences/desktop" :on (asks "user wants the desktop app to close to the tray or start at login"))
+(memory "preferences/desktop" :when "the desktop app must close to the tray or start at login, or stop doing so")
 - (desktop-preferences) gives desktop app's own: (:close-to-tray t :open-at-login nil).
   Live on user's machine, not in app. Work only while desktop app connected;
   else error says no desktop app connected.
@@ -45,7 +45,7 @@
 - :open-at-login t starts desktop app hidden in tray at login. Default nil:
   (desktop-preferences/set :open-at-login t).
 
-(memory "preferences/set" :on (asks "a preference change errors, or user wants to see or change the font, a chat metadata field or a chat input helper"))
+(memory "preferences/set" :when "a preference change just failed, or the agent must read or change the font, a chat metadata field or a chat input helper")
 - Preferences belong to this workspace, like theme: each workspace keeps own
   set, change here leaves other workspaces alone.
 - (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t).

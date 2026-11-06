@@ -1,4 +1,4 @@
-(memory "knowledge/files" :on (asks "user wants a file they uploaded listed, read, written, deleted or shown to them"))
+(memory "knowledge/files" :when "the agent must list, read, write, delete or show the user a file they uploaded")
 - (knowledge/list) lists file names, like "report.md".
 - (knowledge/read "name") by extension: .ptc gives its one form as data, never
   run; .json as data (see knowledge/structured); .pdf gives page text as string;
@@ -8,7 +8,7 @@
   refused. .json takes data (see knowledge/structured). Other file takes string.
 - (knowledge/delete "name") moves file to bin. User approves it.
 
-(memory "knowledge/structured" :on (asks "user wants a .json or .ptc file read as data, written from data, or one entry of it changed"))
+(memory "knowledge/structured" :when "a .json or .ptc file must be read as data, written from data, or one entry of it changed")
 (knowledge/read) by extension: .json gives JSON as data: object as alist, array as list, null as nil,
 false as :false, [] as :[], {} as :{}; array that would read back as object
 comes led by :[], number index skips it.
@@ -24,7 +24,7 @@ Edit .ptc or .json file: read, change with set-in / update-in / remove-in, write
 Same for .json. Removing last entry leaves nil, written null; set :[] or :{}
 to keep it empty.
 
-(memory "knowledge/attachments" :on (asks "user wants a file attached to a message written, fetched from a link, listed, kept, unkept, read or deleted, or a file handed to them"))
+(memory "knowledge/attachments" :when "a message carries an attached file, a file must be fetched from a link, kept, unkept, read or deleted, or handed to the user")
 Files user attached to message land in attachments, shown as attachments/ in
 sidebar; message then carries "user attached: attachments/spec.pdf". Unkept
 attachment moves to bin after a week.
@@ -49,7 +49,7 @@ quoted when name has space: @"attachments/Q3 Sales.json". Read it with
   your reply; user clicks to open it. Use after attachments/write or
   attachments/fetch to hand user the file. Errors when no such file.
 
-(memory "knowledge/bin" :on (asks "user wants a deleted file back, or wants the bin searched or cleared"))
+(memory "knowledge/bin" :when "a deleted file must come back, or the bin must be searched or cleared")
 Deleted knowledge and attachments land in bin, shown as bin/ in sidebar. Bin
 deletes them for good a month later. Bin file cannot be read; restore it first.
 

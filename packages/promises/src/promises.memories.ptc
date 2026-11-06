@@ -1,4 +1,4 @@
-(memory "promises/waiting" :on (asks "the user's request needs several slow jobs run at once, a wait with a time limit, the first of several results, or a background job stopped"))
+(memory "promises/waiting" :when "several slow jobs could run at once, a wait needs a time limit, only the first of several results matters, or a background job must stop")
 Waiting on promises:
 - (await promise) with no timeout-ms waits 50 seconds, then fails "await timed out".
   The promise keeps running. Wait again, or (cancel promise) to stop it.
@@ -11,7 +11,7 @@ Waiting on promises:
 - (promise-state promise) reads progress without waiting. (promises) lists what still runs.
 - (cancel promise) aborts the request behind one promise; returns t if there was something to abort. Promise-all and friends have nothing of their own to abort: nil.
 
-(memory "promises/live" :on (asks "the user's request reuses a background load, or the agent holds a value printed as #<...>"))
+(memory "promises/live" :when "the agent holds a value printed as #<...>, or is about to reuse a background load")
 - A PROMISE IS A LIVE VALUE, AND AN UNAWAITED LOAD IS DONE. Promise-returning call installs its result itself on settle. Step reporting load-mcp-1: a promise, still running … is COMPLETE: carry on, use what it loaded later.
 - Await only to use value in same step; wrap the single call: (await (load-mcp "acme")) .
 - A promise settles once, keeps its result, and awaiting it twice gives the same answer, as in JavaScript. Host runtime's own promises, JavaScript semantics.

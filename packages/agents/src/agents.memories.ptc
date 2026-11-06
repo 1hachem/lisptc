@@ -1,9 +1,9 @@
-(memory "agents/names" :on (asks "user wants to refer to a spawned agent by name, list the agents this session started, or the agent must tell when a reply will arrive"))
+(memory "agents/names" :when "the agent must refer to a spawned agent by name, list the agents this session started, or tell the user when a reply will arrive")
 Names are unique in session. spawn refuses one taken, finished or not, and "parent" is taken: sub-agents see you as <system-event source="agent:parent">. spawn and delegate print the name they return. agent-wait, agent-state, agent-take and agent-cancel take it.
 (spawned) lists every name this session spawned or delegated. (agents) lists saved definitions only.
 Not waited? Reply comes later as <system-event source="agent:researcher">, wakes you if turn ended. Agent keeps its chat between sends. Spawned names survive restart in your image.
 
-(memory "agents/named" :on (asks "user wants a sub-agent that keeps its own chat across messages, or wants more work sent to, checked on, or stopped in an agent already running"))
+(memory "agents/named" :when "a sub-agent must keep its own chat across messages, or the agent is about to send more work to, check on, or stop an agent already running")
 Named agent, kept chat across sends, order always:
 1. (agents) lists saved names. (agent-definition "researcher") reads one.
    Saved one fits? Spawn it by name. Never save second agent for same job.
@@ -31,7 +31,7 @@ from sub-agents reach user in your chat.
 User @sub-agents/researcher = saved definition "researcher": spawn it, send it
 the ask.
 
-(memory "agents/saved" :on (asks "user wants an agent definition saved, a temporary agent kept for reuse, or a saved agent deleted"))
+(memory "agents/saved" :when "the agent is about to save an agent definition, keep a temporary agent for reuse, or delete a saved one")
 defagent only when user asks for agent definition. defagent and agent-keep
 save sub-agents/<name>.ptc; agent-forget deletes it, only when user asks. All
 three wait on user approval. :prompt on saved name refused. Saved name spawns
@@ -44,7 +44,7 @@ without :prompt.
 agent-forget returns t, or nil if none was saved.
 An agent already spawned from a deleted definition keeps running.
 
-(memory "agents/take" :on (asks "user wants a value a sub-agent produced copied into this session, or wants to see what an agent exports"))
+(memory "agents/take" :when "the agent needs a value a sub-agent produced copied into this session, or wants to see what an agent exports")
 Sub-agent may export values. Reply then ends with exports: name, what it
 holds, shape. Want one? Copy it into your image by agent name, bind it yourself:
   (setq rows (agent-take "scratch" 'prices))
@@ -53,12 +53,12 @@ Reply shows (agent-take "agent" 'name): put real agent name for "agent".
 Value is copied as it stands then. Function taken keeps captured variables;
 globals it names resolve in your image.
 
-(memory "agents/quietly" :on (asks "user wraps a form in quietly, or wants a form run without the agent being woken for its result"))
+(memory "agents/quietly" :when "the agent is about to wrap a form in quietly, or run a form without being woken for its result")
 User may wrap forms in (quietly form...). Forms run, you not woken for that
 message. Message and its result stay in chat; read them next turn. Never call
 quietly yourself.
 
-(memory "agents/delegate" :on (asks "user wants a one-off job done by a fresh agent, or several independent jobs run in parallel"))
+(memory "agents/delegate" :when "a job is a good fit for a fresh agent, or several independent jobs could run in parallel")
 One-off job: (delegate "brief") spawns fresh temporary agent, sends brief,
 prints "delegated to delegate-1", returns "delegate-1" at once. Reply comes as
 <system-event source="agent:delegate-1">, or agent-wait it. Delegate replies

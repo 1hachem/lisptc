@@ -1,4 +1,4 @@
-(memory "prose/skipped" :on (asks "the user asks why part of a reply was skipped, ignored or run as code, or the message carries a note saying a form was skipped"))
+(memory "prose/skipped" :when "a note says part of the last reply was skipped, ignored or run as code, or the user asks why")
 Skipped forms and asides:
 - Prose reads come back as "skipped … note" with the next user message, not at the time. No apology, no explaining the skip, no restating the previous answer. User asked something new: answer only that.
 - An aside whose head names nothing that exists, e.g. (see below) , (one, two, three), is prose, not code.
@@ -8,7 +8,7 @@ Skipped forms and asides:
 - Tool called before its server loads: undefined: error to fix, not skipped.
 - Outside the agent loop, a form-less program is a no-op. REPL and driver behaviour, not core language.
 
-(memory "prose/final" :on (asks "the user asks how a task ends, or a task keeps running past the step cap"))
+(memory "prose/final" :when "the task looks done and the agent is about to end the turn, or work keeps running toward the step cap")
 - No halt, exit or quit. Reply with prose and no form: nothing to evaluate is the done signal. That prose is the final answer to user, e.g. "the sum is 3".
 - Prose around a form is ignored; prose instead of a form stops the loop. Never park a plan or note in a form-less message: put remarks around the form.
 - Still needs to inspect, branch or step? Emit the next form; you will be asked to continue.

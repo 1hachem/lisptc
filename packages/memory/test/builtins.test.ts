@@ -26,11 +26,11 @@ import {
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
 import {
-	ASKS_FIRES_AT,
 	type MemoryJudge,
 	type Situation,
 	unjudged,
 	VolatileStore,
+	WHEN_FIRES_AT,
 } from "../src/ports.ts";
 import { bareHost, MemoryInterp } from "./helpers.ts";
 
@@ -43,7 +43,7 @@ function carrying(memories: string): Installable {
 }
 
 const BROWSER = `
-(memory "browser/local" :on (asks "user wants to automate a web browser") :links ("browser/flags"))
+(memory "browser/local" :when "user wants to automate a web browser" :links ("browser/flags"))
 load it with (load-mcp "playwright" :local t)
 
 (memory "browser/flags")
@@ -247,17 +247,29 @@ describe("built-in memories", () => {
 		expect(() => f.bank.builtins()).toThrow(/needs a body/);
 	});
 
-	it("refuse an asks trigger with no description", () => {
-		const f = fixture({ memories: '(memory "a" :on (asks))\none' });
-		expect(() => f.bank.builtins()).toThrow(/says in words/);
+	it("refuse a :when with no situation", () => {
+		const f = fixture({ memories: '(memory "a" :when "")\none' });
+		expect(() => f.bank.builtins()).toThrow(/describing the situation/);
+	});
+
+	it("refuse a situation written as an :on trigger", () => {
+		const f = fixture({ memories: '(memory "a" :on (when "x"))\none' });
+		expect(() => f.bank.builtins()).toThrow(/written with :when/);
+	});
+
+	it("refuse a header with both :when and :on", () => {
+		const f = fixture({
+			memories: '(memory "a" :when "x" :on (user "y"))\none',
+		});
+		expect(() => f.bank.builtins()).toThrow(/not both/);
 	});
 });
 
-describe("the asks trigger", () => {
+describe("the when trigger", () => {
 	const ASK = "user wants to automate a web browser";
 
 	it("fires at the threshold, with what it links", async () => {
-		const { judge } = judging({ [ASK]: ASKS_FIRES_AT });
+		const { judge } = judging({ [ASK]: WHEN_FIRES_AT });
 		const f = fixture({ judge });
 		expect(await f.hear("open my browser and fill the form")).toEqual([
 			"browser/local",
@@ -266,7 +278,7 @@ describe("the asks trigger", () => {
 	});
 
 	it("stays quiet below the threshold", async () => {
-		const { judge } = judging({ [ASK]: ASKS_FIRES_AT - 0.01 });
+		const { judge } = judging({ [ASK]: WHEN_FIRES_AT - 0.01 });
 		const f = fixture({ judge });
 		expect(await f.hear("what's the weather")).toEqual([]);
 	});
@@ -311,13 +323,13 @@ describe("the asks trigger", () => {
 		]);
 	});
 
-	it("asks each description once per judgement", async () => {
+	it("judges each situation once per judgement", async () => {
 		const { judge, calls } = judging({});
 		const f = fixture({ judge });
-		await ev(f, `(memory/remember "mine" "x" :on '(asks "${ASK}"))`);
+		await ev(f, `(memory/remember "mine" "x" :when "${ASK}")`);
 		await ev(
 			f,
-			`(memory/remember "other" "y" :on '(asks "user asks about billing"))`,
+			`(memory/remember "other" "y" :when "user asks about billing")`,
 		);
 		await f.hear("hello");
 		expect(calls).toEqual([[ASK, "user asks about billing"]]);
@@ -328,7 +340,7 @@ describe("the asks trigger", () => {
 		const f = fixture({ judge });
 		await ev(
 			f,
-			`(memory/remember "billing" "invoices live in stripe" :on '(asks "user asks about billing"))`,
+			`(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")`,
 		);
 		expect(await f.hear("where is my invoice")).toEqual(["billing"]);
 	});
@@ -371,12 +383,12 @@ describe("the asks trigger", () => {
 		]);
 	});
 
-	it("fires an asks memory once per user message, however many steps follow", async () => {
+	it("fires a when memory once per user message, however many steps follow", async () => {
 		const { judge, calls } = judging({ "user asks about billing": 0.9 });
 		const f = fixture({ judge });
 		await ev(
 			f,
-			`(memory/remember "billing" "invoices live in stripe" :on '(asks "user asks about billing"))`,
+			`(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")`,
 		);
 		expect(await f.hear("where is my invoice")).toEqual(["billing"]);
 		expect(await f.step("(invoices)", "3 invoices")).toEqual([]);
@@ -384,7 +396,7 @@ describe("the asks trigger", () => {
 		expect(await f.hear("and the one from march")).toEqual(["billing"]);
 	});
 
-	it("fires a built-in asks memory once per user message, however many steps follow", async () => {
+	it("fires a built-in when memory once per user message, however many steps follow", async () => {
 		const { judge } = judging({ [ASK]: 0.9 });
 		const f = fixture({ judge });
 		expect(await f.hear("open my browser")).toContain("browser/local");
@@ -396,7 +408,7 @@ describe("the asks trigger", () => {
 
 	it("keeps a spent memory quiet even when the judge scores its description again", async () => {
 		const f = fixture({ judge: () => new Map([[ASK, 0.9]]) });
-		await ev(f, `(memory/remember "mine" "x" :on '(asks "${ASK}"))`);
+		await ev(f, `(memory/remember "mine" "x" :when "${ASK}")`);
 		expect(await f.hear("open my browser")).toContain("mine");
 		expect(await f.step("(open)", "opened")).not.toContain("mine");
 	});

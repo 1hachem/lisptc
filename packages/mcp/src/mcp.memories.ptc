@@ -1,4 +1,4 @@
-(memory "mcp/local" :on (asks "user wants the agent to work on their own computer: their local files, git, an app on their desktop, or automating a web browser"))
+(memory "mcp/local" :when "the work happens on the user's own computer: their local files, git, a desktop app or a web browser to drive; or a local server failed to start")
 User's own machine (their files, git, desktop app, browser on their computer): servers run there through desktop app.
 How-to is memory mcp/local, loads itself when user asks; else (memory/recall "mcp/local") .
 User's own machine: predefined local servers, names start local- , e.g.
@@ -24,7 +24,7 @@ app not open.
 - Load fails with message if desktop app not open or user denied: say so,
   don't retry.
 
-(memory "mcp/oauth" :on (asks "user wants to sign in to, authorize, re-authorize or sign out of a connected service"))
+(memory "mcp/oauth" :when "a connected service needs sign-in or authorization, a call just failed on expired or missing authorization, or the user wants to sign out")
 OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
 login/logout only for :oauth t servers:
 - (login "name") gives :logged-in if authenticated. Else, like load needing
@@ -41,7 +41,7 @@ login/logout only for :oauth t servers:
 - Accept only predefined OAuth server name; unknown or non-OAuth errors.
   logout no-op-safe when server not loaded.
 
-(memory "mcp/search" :on (asks "user wants a capability or service it did not name, so the agent must find which MCP server or tool does the job"))
+(memory "mcp/search" :when "the agent needs a capability or service nobody named and must find which MCP server or tool does the job")
 Finding: two different searches, don't confuse.
   - Both PRINT answer, so one is a complete step: read names from print, go
     on. Never follow with (echo …) , never repeat a search.
@@ -59,7 +59,7 @@ lists only those servers. Unloaded name is error.
 (search-tools "acme" "widget") is WRONG, an arity error. For one server: load
 it, then (search-tools "widget") ; list with (list-tools "acme") .
 
-(memory "mcp/timeout" :on (asks "user wants a slow job run through an MCP tool, such as a crawl, scrape, build, render, big export or long query"))
+(memory "mcp/timeout" :when "the agent is about to run a slow job through an MCP tool, such as a crawl, scrape, build, render, big export or long query, or a tool call just timed out")
 Tool call waits 120 seconds, then fails "acme/x timed out".
 Slow tool: add :mcp/timeout with seconds, above 0, max 900, beside tool's own
 keywords:
@@ -68,13 +68,13 @@ keywords:
 args say slow. Call timed out? Retry once with larger :mcp/timeout, not same
 call again. Still too slow? Split work into smaller calls.
 
-(memory "mcp/result" :on (asks "user wants values read out of what a connected service returned, or the agent must report fields from a tool result"))
+(memory "mcp/result" :when "a connected service just returned a result and the agent must read values or report fields out of it")
 Tool result is Lisp data, except a non-JSON string.
 Result is Lisp data: JSON object is alist with string keys, array is list.
 Read with assoc, cdr, mapcar, nth. No parsing. JSON sent as text is parsed too,
 so report names its keys. Only non-JSON string needs (json-parse s) .
 
-(memory "mcp/example" :on (asks "user wants an MCP tool used end to end: find the server, load it, find the tool, call it"))
+(memory "mcp/example" :when "the agent is about to use an MCP tool end to end: find the server, load it, find the tool, call it")
 Worked example. Names made up, never known in advance. Start from search-mcps,
 let each step give next name:
 (search-mcps "widget")
@@ -83,7 +83,7 @@ let each step give next name:
 (acme/get_widget :id "42")
 A loaded tool's (doc 'acme/list_widgets) prints full signature, every argument, which required. Read before guessing a keyword, and again when a call is rejected.
 
-(memory "mcp/load" :on (asks "user wants a predefined or ad-hoc MCP server loaded, several servers loaded at once, or a load started now and used in a later step"))
+(memory "mcp/load" :when "the agent is about to load a predefined or ad-hoc MCP server, several at once, or start a load now to use later; or a load just failed")
 :command , :args , :env NOT supported: error. Only toolkit names and :url .
 Load async: server connects in background; tools install when it settles.
 Unawaited load is finished code. Step reporting "load-mcp-1: a promise, still running …" needs no follow-up: go on, call tools on later step. Await only to get tool list in SAME step.

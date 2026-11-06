@@ -11,6 +11,7 @@ const TRIGGER_COLORS: Record<string, string> = {
 	prose: "bg-purple",
 	recall: "bg-yellow",
 	start: "bg-orange",
+	when: "bg-primary",
 	step: "bg-fg",
 };
 

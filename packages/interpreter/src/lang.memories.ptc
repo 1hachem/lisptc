@@ -1,4 +1,4 @@
-(memory "lang/syntax" :on (asks "user's request needs exact lisptc syntax: quoting, quasiquote, lists, dotted pairs, strings, keywords, numbers or symbol names"))
+(memory "lang/syntax" :when "the agent is about to write lisptc that needs exact syntax: quoting, quasiquote, dotted pairs, strings, keywords, numbers or symbol names; or a form just failed to read, or read as something else than meant")
 Syntax detail.
 - Quote: 'x same as (quote x) — x unevaluated.
 - Quasiquote: leading backtick same as (quasiquote x) . Inside, ,x unquotes, inserts evaluated x; ,@x unquote-splicing, splices a list.
@@ -10,7 +10,7 @@ Syntax detail.
 - Comments: there is no comment syntax — prose around forms is the comment. ; is ordinary symbol character, so "; note" inside a form is code.
 - Symbols: any token not number, string, keyword, nil or t. / and - legal in names, e.g. string-split, acme/get_widget.
 
-(memory "lang/prose-asides" :on (asks "user's request makes a reply hold parentheses, asides or remarks that could be read as code, or a reply that ran nothing"))
+(memory "lang/prose-asides" :when "the agent is about to write a remark, an aside or parentheses next to its code, or its last reply ran nothing, or prose was just run as code and failed with undefined")
 Asides and parens in prose.
 Aside whose head names nothing — (see below) , (one, two,
   three) — reads as prose, comes back as skipped note. Mistake the reader
@@ -23,7 +23,7 @@ fix, not a skip. Reply of only asides ran nothing, ends the loop, see "Ending
 the loop".
 Stray paren in prose still reads as code, so never write one; paren smiley unsayable.
 
-(memory "lang/data-types" :on (asks "user's request checks for empty or false values, or needs the type of a value: list, symbol, keyword, string, number, hash table, vector, function or secret"))
+(memory "lang/data-types" :when "the agent is about to test for an empty or false value or branch on a value's type, or a type check just returned something unexpected, such as zero or an empty string read as true")
 Data types.
 - nil = () = null = empty list = the ONLY false value.
 - t canonical true. Everything except nil truthy, including 0, "", empty structures.
@@ -39,7 +39,7 @@ Data types.
 
 Test emptiness with null or not. Never rely on 0 or "" being false — they are TRUE.
 
-(memory "lang/special-forms" :on (asks "user's request needs the special forms, what evaluates specially, or how tail calls and loops avoid stack overflow"))
+(memory "lang/special-forms" :when "the agent is about to use a special form, a loop or deep recursion, or a step just failed with a stack overflow or a form that did not evaluate as expected")
 Evaluated specially, not as function calls. Complete list:
 
 | Form | Shape | Meaning |
@@ -64,7 +64,7 @@ unwind-protect are prelude macros, not special forms; use the same way.
 Tail calls optimized: tail recursion and loop macros never overflow the stack.
 Iterate with tail-recursive helpers or loop macros.
 
-(memory "lang/numbers" :on (asks "user's request does arithmetic, division, or needs to know whether a number is exact, a float, or an integer"))
+(memory "lang/numbers" :when "the agent is about to do arithmetic or division, or a result just came back as a float, a ratio or an integer where another was expected")
 NUMBERS
 - Integer literal is exact bigint: 42.
 - Decimal or exponent makes inexact float: 42.0, 4.2e1.
@@ -79,7 +79,7 @@ is 3.0. Exact integer division: truncate, gives bigint:
 - Divide by zero: / follows JS, (/ 1 0) is Infinity, (/ 0 0) is NaN, no error.
   Integer truncate, % and mod on bigints throw. Guard divisors.
 
-(memory "lang/arithmetic" :on (asks "user's request calls for a math function: add, subtract, multiply, divide, remainder, rounding, power, root, gcd, min or max, or a number test such as even or zero"))
+(memory "lang/arithmetic" :when "the agent is about to call a math function: add, subtract, multiply, divide, remainder, rounding, power, root, gcd, min, max, or a number test such as even or zero; or one just failed with a wrong argument")
 Arithmetic built-ins:
 - (+ n...) sum, 0 if none · (* n...) product, 1 if none ·
 (- n m...) subtract, or negate one arg · (/ n m...) float divide.
@@ -96,7 +96,7 @@ Arithmetic built-ins:
 (gcd n...) · (lcm n...) .
 - (parse-integer s) decimal string to bigint, error otherwise.
 
-(memory "lang/lists" :on (asks "user's request builds, reads or changes lists, pairs, symbols, or tests a value's type with atom, eq, eql, stringp or numberp"))
+(memory "lang/lists" :when "the agent is about to build, read or change lists, pairs or symbols, or test a value with atom, eq, eql, stringp or numberp; or a list call just failed or returned nil unexpectedly")
 Lists and pairs:
 - (car x) first · (cdr x) rest · (cons a b) new cell · (list x...) .
 - (length x) length of list or string, bigint.
@@ -111,7 +111,7 @@ Symbols:
 - (gensym) fresh uninterned symbol · (make-symbol name) · (intern name) ·
 (symbol-name sym) .
 
-(memory "lang/hash-vectors" :on (asks "user's request stores keyed data in a hash table, or uses a mutable vector with indexes"))
+(memory "lang/hash-vectors" :when "the agent is about to keep keyed data in a hash table or index into a mutable vector, or a hash or vector call just failed")
 Hash tables:
 - (make-hash-table) · (gethash key table [default]) · (puthash key value table)
   · (remhash key table) · (clrhash table) · (hash-has-key key table) ·
@@ -126,7 +126,7 @@ Vectors:
 - (length x) , (elt seq i) and (subseq seq start [end]) take list, string or
   vector.
 
-(memory "lang/strings" :on (asks "user's request reads, builds, compares, upcases, pads or converts text, or turns a value into a string"))
+(memory "lang/strings" :when "the agent is about to read, build, compare, upcase, pad or convert text or turn a value into a string, or a string call just failed or returned the wrong text")
 Strings:
 - (char s i) one-char string at i, or nil · (concat s...) concatenate
   · (string-upcase s) · (string-downcase s) .
@@ -144,7 +144,7 @@ Strings:
 (concat "Chapter " (string n)) . Float keeps .0: (string 3.0)
 is "3.0"; (string (truncate x)) gives bare integer.
 
-(memory "lang/json-read" :on (asks "user's request parses JSON text, or parses Lisp text held in a string into data"))
+(memory "lang/json-read" :when "the agent holds JSON text or Lisp text in a string and is about to parse it, or a parse just failed")
 Parsing text into data:
 - (read s) parse FIRST Lisp expression in s, return as data, unevaluated:
   (read "(+ 1 2)") gives the list (+ 1 2) , not 3. Trailing text ignored;
@@ -157,13 +157,13 @@ Parsing text into data:
   ordinary symbol character, so {"a": 1} reads as symbol {. json-parse for
   JSON, read for Lisp.
 
-(memory "lang/eval-control" :on (asks "user's request applies a function to a list of arguments, raises an error value, or leaves a loop early with break or return"))
+(memory "lang/eval-control" :when "the agent is about to apply a function to a list of arguments, raise an error value, or leave a loop early with break or return; or such a call just failed")
 Eval and control:
 - (apply f args) call f with elements of list args.
 - (error value) raise catchable error carrying value, caught by try.
 - (break) exit nearest loop; (return value) exit it with value.
 
-(memory "lang/output" :on (asks "user's request needs the agent to show a value, print a result, narrate reasoning, or print a keyword"))
+(memory "lang/output" :when "the agent wants to look at a value, print a result, narrate its reasoning or print a keyword, or a value it meant to see did not show")
 Output — echo is the ONLY thing that prints. Nothing computed is seen until echoed.
 - (echo x...) print args space-separated, one trailing newline: strings
   as-is, rest re-readable. (echo) is blank line.
@@ -176,7 +176,7 @@ Narration:
   evaluated first, e.g. (think "sum is" ,(+ 1 2)) . Returns nil; real answer
   goes in separate expression.
 
-(memory "lang/introspection" :on (asks "user's request looks up what a name does, lists every global, loads another Lisp file, or removes a global binding"))
+(memory "lang/introspection" :when "the agent needs to know what a name does, list the globals, load another Lisp file or remove a global binding, or a name it used just came back undefined")
 Introspection:
 - (doc name) print binding's signature and doc; (doc) lists all documented
   names. Read it before guessing an argument, and again after a rejected call.
@@ -186,7 +186,7 @@ Introspection:
 
 Globals: *gensym-counter*, *version*.
 
-(memory "lang/prelude-lists" :on (asks "user's request maps, filters, folds, sorts, searches or deduplicates a list, looks up an alist or member, or composes car and cdr"))
+(memory "lang/prelude-lists" :when "the agent is about to map, filter, fold, sort, search or deduplicate a list, look up an alist or member, or compose car and cdr")
 Prelude, all available by default.
 
 List access — composed car and cdr: caar cadr cdar cddr caaar caadr cadar
@@ -208,7 +208,7 @@ List building / manipulation:
 (sort '(3 1 2) <) gives (1 2 3) ; strings use string< .
 - (reverse list) · (copy-list list) · (nthcdr n list) ·
 (butlast list [n]) · (mapc f list) for effect, returns list.
-(memory "lang/prelude-search" :on (asks "user's request searches a list for an item or a match, counts or removes matching items, or asks whether any or all elements pass a test"))
+(memory "lang/prelude-search" :when "the agent is about to search a list for an item or match, count or remove matching items, or test whether any or all elements pass")
 Prelude, all available by default.
 
 Search:
@@ -223,14 +223,14 @@ Predicates:
 (listp x) true if nil or cons · (keywordp x) true if keyword ·
 (equal x y) deep structural equality.
 
-(memory "lang/prelude-alists" :on (asks "user's request looks up a key in an alist or a list by membership, or reads a field out of an alist"))
+(memory "lang/prelude-alists" :when "the agent is about to look up a key in an alist, test list membership, or read a field out of an alist or a tool result made of alists")
 Membership / alists:
 - (memq key list) tail from first eq match · (member key list) first equal
   match · (assq key alist) first pair with eq car · (assoc key alist) first
   pair with equal car. Alist field:
 (cdr (assoc "content" msg)) .
 
-(memory "lang/prelude-nested" :on (asks "user's request reads or changes a nested record, config, plist or alist by a path of keys, or edits a data file"))
+(memory "lang/prelude-nested" :when "the agent is about to read or change a nested record, config, plist or alist by a path of keys, or edit a data file")
 - (get-in record key...) read through nested alists, keyword plists and lists,
   every step guarded: (get-in config "server" "port") is nil when no
   "server", not an error. No or guard, no assoc chain.
@@ -251,7 +251,7 @@ Nested data, write side of get-in. Pure: return new copy, record unchanged.
 (remove-in '(:a 1 :b 2) :a) gives (:b 2) .
 - Edit data file: read it, set-in / update-in / remove-in, write whole value back.
 
-(memory "lang/prelude-control" :on (asks "user's request branches, loops, binds local names, or defines a function with optional, keyword or rest arguments"))
+(memory "lang/prelude-control" :when "the agent is about to branch, loop, bind local names, or define a function with optional, keyword or rest arguments, or a defun just failed on its argument list")
 Control-flow macros:
 - (if test then else...) · (when test body...) · (unless test body...) ·
 (and x...) , nil on first nil, else last · (or x...) , first non-nil ·
@@ -282,7 +282,7 @@ Defining:
 Misc:
 - (identity x) return x.
 
-(memory "lang/prelude-strings" :on (asks "user's request splits, joins, trims, searches, replaces or formats strings, or builds a sentence around a value"))
+(memory "lang/prelude-strings" :when "the agent is about to split, join, trim, search, replace or format strings, or build a sentence around a value")
 Prelude string functions:
 - (string= s1 s2) string content equality, same test as equal ·
 (substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
@@ -295,14 +295,14 @@ Prelude string functions:
   (format "The sum was ~a" n) writes a sentence around a value. Prints
   nothing: echo result.
 
-(memory "lang/places" :on (asks "user's request stores into a variable, a car or cdr, a list index, a vector slot, a hash entry or a nested record, or increments a counter"))
+(memory "lang/places" :when "the agent is about to store into a variable, a car or cdr, a list index, a vector slot, a hash entry or a nested record, or increment a counter; or a setf just failed")
 Places:
 - (setf place value ...) store, return value. Place: variable, (car x) ,
 (cdr x) , (nth n xs) , (aref v i) , (gethash key table) , or
 (get-in record key...) , which rebinds record to updated copy.
 - (push x place) · (pop place) · (incf place [n]) · (decf place [n]) .
 
-(memory "lang/macros" :on (asks "user's request defines a macro, generates code from a template, or needs a temporary name that will not clash with user variables"))
+(memory "lang/macros" :when "the agent is about to define a macro, generate code from a template, or needs a name that will not clash with user variables; or a macro expanded wrong")
 MACROS
 
 defmacro defines compile-time transformer. Build expansion with quasiquote:
@@ -314,7 +314,7 @@ defmacro defines compile-time transformer. Build expansion with quasiquote:
 (gensym) for temporaries you introduce, so user variables are not captured.
 Expansion depth max 20 nesting levels at compile time.
 
-(memory "lang/errors" :on (asks "user's request handles a failure, catches an error, unwinds on exit, or uses block, return-from, catch or throw for early exit"))
+(memory "lang/errors" :when "the agent is about to handle a failure, catch an error, unwind on exit, or leave early with block, return-from, catch or throw; or an error escaped a handler it wrote")
 ERRORS & CONTROL FLOW
 - (error value) raises; value any Lisp value, often string.
 - (try
@@ -338,7 +338,7 @@ ERRORS & CONTROL FLOW
 - (unwind-protect form cleanup...) returns form's value, runs cleanup
   however form exits: normal, error, throw, return-from, break.
 
-(memory "lang/gotchas" :on (asks "user's request has a likely trap: zero or empty string as false, float versus integer output, read versus json-parse, sort in place, or a catch clause mistaken for a throw"))
+(memory "lang/gotchas" :when "a result surprised the agent: zero or an empty string taken as false, a float where an integer was expected, read used where json-parse was meant, a list sorted in place, or a catch clause mistaken for a throw")
 GOTCHAS
 - Only nil is false — 0, 0.0, "" all TRUE.
 - / gives float; truncate for exact integer.

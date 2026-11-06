@@ -323,8 +323,8 @@ describe("the prompt", () => {
 
 	it("leaves the motions and the desktop app to memories", () => {
 		const memories = preferencesHost.memories();
-		expect(memories).toMatch(/^\(memory "preferences\/motion" :on \(asks /m);
-		expect(memories).toMatch(/^\(memory "preferences\/desktop" :on \(asks /m);
+		expect(memories).toMatch(/^\(memory "preferences\/motion" :when /m);
+		expect(memories).toMatch(/^\(memory "preferences\/desktop" :when /m);
 		expect(memories).toContain("(motions)");
 		expect(memories).toContain("(desktop-preferences/set");
 	});

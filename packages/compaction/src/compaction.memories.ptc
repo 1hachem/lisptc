@@ -1,4 +1,4 @@
-(memory "compaction/repl-names" :on (asks "user wants to know what name the REPL bound a result to, or a result's shape"))
+(memory "compaction/repl-names" :when "the agent needs a result it computed earlier, does not know what name the REPL bound it to, or is about to retype data the REPL printed")
 Variable is named after the function that produced it. It always holds the
 whole value. setq or defun reports under the name it bound. Never invent a
 name: the REPL always tells you the one it bound.
@@ -11,7 +11,7 @@ acme/list-issues-1: list of 27 alists, keys "id" "identifier" "title" "state" "u
 
 (mapcar (lambda (i) (cdr (assoc "id" i))) acme/list-issues-1)
 
-(memory "compaction/echo-window" :on (asks "user wants the rest of a long printed output, or one part of it found"))
+(memory "compaction/echo-window" :when "a printed output came back truncated with a ... line, or the agent needs one part of a long value found")
 Echo windowing, what it prints:
 - (echo x :offset 0 :length n) print a window of x, counted in
   whitespace-separated words. Closing ... line gives offset to continue from.
@@ -30,7 +30,7 @@ a ... line says how much is left:
 
 ... 10 of 40 words shown, 30 below — read on with (echo report-1 :offset 10)
 
-(memory "compaction/extract" :on (asks "user wants rows, matches or items picked out of a large result, filtered, searched or counted"))
+(memory "compaction/extract" :when "a large result came back and the agent must pick out rows, matches or items: filter, search or count them")
 Extracting, what each returns:
 - head, tail and grep RETURN a value, which the REPL names. Only echo prints.
   Exception: a bare head or tail step, and a discovery call, print in full.
@@ -64,7 +64,7 @@ Bare slice already answers "what is in there":
 ((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
   (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
 
-(memory "compaction/render-rows" :on (asks "agent must read rows of data it fetched as a table, list or summary"))
+(memory "compaction/render-rows" :when "the agent fetched rows of data and must read them, or show them as a table, list or summary")
 To read rows, keep whole list and echo a rendering of it:
 
 (defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))

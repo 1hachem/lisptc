@@ -1,4 +1,4 @@
-(memory "intent/todo-example" :on (asks "user gave a multi-step task to track as a todo list, or the agent must show a step's todo mark as work runs"))
+(memory "intent/todo-example" :when "a task of several steps begins and should be tracked as a todo, or a step finished and its todo mark must move")
 (intent/todo "label"...) sets todo list, every item open. Label kept from list before keeps its done mark.
 (intent/check "label") marks one todo done. Unknown label fails and names open ones.
 Code checks each item, never memory. Work returns, item done at once. Work raises: check never runs, item stays open. Promise work: await before check.
@@ -11,11 +11,11 @@ Write intent forms inside the code, never a step of their own: intent/doing befo
       (intent/check "average")
       (list total mean))))
 
-(memory "intent/user-view" :on (asks "user asks what they see of the agent's work, or the agent must decide whether a step shows in chat"))
+(memory "intent/user-view" :when "the agent is deciding whether a step shows in chat, or the user asks what they see of the agent's work")
 User sees only: intent line, todo list, rendered ui, tabs opened beside chat,
 questions, final answer. Say intent through these forms.
 
-(memory "intent/progress" :on (asks "user gave a list or loop of known size, or a batch of items, to work through one by one"))
+(memory "intent/progress" :when "the agent is about to work through a list, a loop of known size or a batch of items one by one")
 Known step count (loop over N items, batch): intent/progress each item. Named
 steps: intent/todo.
 - (intent/progress done total ["label"]) progress bar, done of total. Integers,
@@ -28,7 +28,7 @@ steps: intent/todo.
     (setq i (+ i 1))
     (intent/progress i n "issues")))
 
-(memory "intent/todo-edit" :on (asks "the plan changed while work was under way, so an item must be removed, moved or the whole list cleared"))
+(memory "intent/todo-edit" :when "the plan changed while work was under way, so a todo item must be removed, moved or the whole list cleared")
 Plan changed: edit list, keep it true.
 Label kept from list before keeps its done mark. (intent/doing "text") replaces line before.
 - (intent/drop "label") removes one todo. Unknown label fails and names open ones.
@@ -36,10 +36,10 @@ Label kept from list before keeps its done mark. (intent/doing "text") replaces 
   it last.
 - (intent/clear) empties list.
 
-(memory "intent/ask" :on (asks "the agent must ask the user a question with a closed set of answers, or let them pick one or several options"))
+(memory "intent/ask" :when "the agent cannot go on without a choice from the user among a closed set of answers, one or several")
 (intent/ask "prompt" '("A" "B") [:multi t]) closed question, one pick; :multi t
 allows several. Ends turn after this step. Answer arrives as next message.
 (intent/ask "Which board?" '("Sales" "Support"))
 
-(memory "intent/ui-view" :on (asks "the agent must build a rendered ui view for the user, or test one before showing it"))
+(memory "intent/ui-view" :when "the agent is about to build a rendered ui view for the user, or test one before showing it")
 Build ui view and test it without rendering. ui/render only once it works.
