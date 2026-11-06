@@ -3,22 +3,8 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import type { LLMResult } from "@langchain/core/outputs";
 import { defaultProvider, providerSpecs } from "@repo/env/providers";
 import { contentToText } from "@repo/shared/messages";
-import {
-	PROVIDER_NAMES,
-	type ProviderName,
-	providerSpecFor,
-} from "@repo/shared/providers";
-import type { Generate, LlmRequest, ProviderReport } from "./llm.ts";
-
-export function listProviders(): ProviderReport[] {
-	const first = defaultProvider;
-	const order = [first, ...PROVIDER_NAMES.filter((name) => name !== first)];
-	return order.map((name) => ({
-		name,
-		model: providerSpecs[name].defaultModel,
-		ready: providerSpecs[name].apiKey !== undefined,
-	}));
-}
+import { type ProviderName, providerSpecFor } from "@repo/shared/providers";
+import type { Generate, LlmRequest } from "./llm.ts";
 
 interface Usage {
 	inputTokens?: number;

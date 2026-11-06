@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
+    "./embedding": "./src/embedding.ts",
     "./files": "./src/files.ts",
     "./journal": "./src/journal.ts",
     "./host": "./src/host.ts",

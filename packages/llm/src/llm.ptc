@@ -1,15 +1,92 @@
-LANGUAGE MODELS
+WRITING
 
-Second model inside REPL, as ordinary calls. Use only for model work: summarize, rewrite, judge, pull fields from prose. Rest stays Lisp. Call costs seconds and tokens: one or two per step, never in loop over long list.
-- llm/complete
-- llm/chat
-- llm/extract
-- llm/providers
-- llm/answer
-- summarize
-- summarize-each
-- with-llm
+Forms below write text. Use only for writing work: summarize, rewrite, pull
+fields from prose. Rest stays Lisp. Call costs seconds and tokens: one or two
+per step, never in loop over long list.
 
-Failed or timed-out call raises: wrap in try when you have fallback. Promise refused: await first. llm/complete and llm/chat return text; llm/extract returns data. nil from llm/answer means not in context, never a failed call.
+- (write "prompt") waits, gives reply string.
 
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>"): llm/complete, llm/extract, llm/macros, llm/options.
+(write "Name three risks in this plan" :system "Be blunt." :max-tokens 200)
+write-1: 84 words
+
+- (converse messages) gives reply string, multi-turn. Message is
+  (message :system "...") or (message :user "...") , alist with "role" and
+  "content", so alist transcript is already valid. Bare string = user message.
+
+(converse (list (message :system "Answer in one sentence.") (message :user q)))
+
+- (extract text shape) gives data shape describes, as Lisp data. Answer is
+  constrained to shape: no parsing, no prose to strip. Turns page, comment or
+  mail into fields read with assoc.
+
+(extract page (shape (title "the page title")
+    (stars :integer)
+    (state (:enum "open" "closed"))
+    (links (:list :string))
+    (author (:optional (:string "who wrote it")))))
+extract-1: alist, keys "title" "stars" "state" "links"
+
+  Shape is alist of (key . field) , written by (shape (name spec...) ...)
+: no quote, no dotted pairs. Field is:
+  :string, :number, :integer, :boolean, :any; plain string = string field
+  described by its text;
+(:string "what it means") and same for other scalars;
+(:enum "a" "b") ; (:list field) ; (:optional field) , only field answer may
+  omit; nested alist = nested object. Alist shape returns alist, (:list …)
+  returns list. :instructions "..." says what to pull out.
+  Nested group = nested object; (:list …) and (:optional …) take groups too:
+(shape (items (:list (id :number) (title :string))))
+  is list of objects. Shape is literal, built at compile time: computed enum
+  needs hand-written alist.
+- Text arguments: prompt, :system, :instructions, extract text, message
+  content. Any value works: list or alist goes in printed. No (string …)
+  needed. Promise refused: await first.
+
+Options, all optional, every call: :system · :max-tokens · :temperature ·
+:reasoning-effort, :low, :medium or :high · :timeout ms, default 60000. Failed
+or timed-out call raises: wrap in try when you have fallback.
+
+Global *writing-defaults* = keyword list every call starts from; call-site
+option wins. (with-writing (option...) body...) extends it for one block,
+restores after:
+
+(with-writing (:max-tokens 120)
+  (summarize-each (head pages-1 3)))
+
+Three macros over write carry prompt for you; (doc 'summarize) and expansion
+are all there is. Each takes write options plus :words, capping asked length
+and token budget.
+
+- (summarize value :words 60 [option...]) gives summary. Printed form goes in
+  prompt, so list of records works like page of text.
+- (summarize-each values :words 25 [option...]) gives summaries in order, one
+  sequential call per element: slice with (head x 5) first, never hundreds.
+- (answer question context :words 60 [option...]) answers from context
+  only. Not in context: nil, not a guess. nil never means failed call: branch
+  on it, do not echo it.
+
+(setq brief (summarize acme/list-issues-1 :words 40))
+brief: 39 words
+
+(echo brief)
+
+(setq owner (answer "who is assigned to ENG-12?" acme/list-issues-1))
+owner: "Nadia"
+
+(echo (if owner owner "the issues do not say who is assigned"))
+
+Rewrites: new text from value. Any value works, printed. Each takes write
+options, one call each:
+
+- (invert x) swaps roles/direction: "I stand on giants." -> "Giants stand on me."
+- (negate x) says opposite: "I am happy." -> "I am not happy."
+- (blend x y) blends both into one text. (strip x y) takes y out of x:
+  (blend (strip "Hello my enemy" "enemy") "friend") -> "Hello my friend".
+- (open-with x y) works y in at start of x , (close-with x y) at end.
+- (conclude x y) states what follows from both. (either x y) states as
+  alternatives. (one-of x y) states exactly one holds.
+
+GOTCHAS
+
+- Writing call waits and can fail: worth try with fallback, never loop over
+  long list. write and converse return text; extract returns data.

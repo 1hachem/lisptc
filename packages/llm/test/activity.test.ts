@@ -47,18 +47,17 @@ async function activityOf(
 }
 
 describe("a model call from lisp", () => {
-	it("reports started, then done under the model that answered", async () => {
+	it("reports started, then done under the form that was called", async () => {
 		const { activity, states } = await activityOf(
 			async () => ({ text: "hi", provider: "digitalocean", model: "gemma" }),
-			'(llm/complete "greet me")',
+			'(write "greet me")',
 		);
 		expect(states).toEqual(["started", "done"]);
 		expect(activity).toEqual([
 			{
 				kind: "llm",
 				icon: "model",
-				label: "llm · gemma",
-				detail: "llm/complete",
+				label: "write",
 				state: "done",
 				id: "llm-1",
 				startedAt: 1000,
@@ -71,7 +70,7 @@ describe("a model call from lisp", () => {
 		const { activity } = await activityOf(async (req) => {
 			if (req.model === "broken") throw new Error("down");
 			return { text: "ok" };
-		}, '(llm/complete "a") (llm/complete "b" :model "broken")');
+		}, '(write "a") (write "b" :model "broken")');
 		expect(
 			activity?.map((a) => [
 				a.id,
@@ -82,8 +81,8 @@ describe("a model call from lisp", () => {
 				a.error,
 			]),
 		).toEqual([
-			["llm-1", "llm · default model", "done", 1000, 25, undefined],
-			["llm-2", "llm · broken", "failed", 1050, 25, "down"],
+			["llm-1", "write", "done", 1000, 25, undefined],
+			["llm-2", "write", "failed", 1050, 25, "down"],
 		]);
 	});
 });
