@@ -12,7 +12,7 @@ import {
 	type Question,
 	questionKind,
 } from "@repo/journal-catalog/intent";
-import { judgedKind, memoryKind } from "@repo/journal-catalog/memory";
+import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
 import { type ViewRef, viewKind } from "@repo/journal-catalog/view";
 import { ATTACHMENTS_KIND } from "@repo/shared/files";
 import { type Entry, view } from "@repo/shared/journal";
@@ -781,7 +781,7 @@ const CHAT_KINDS: ReadonlySet<string> = new Set([
 
 const TRACE_STANDING: ReadonlySet<string> = new Set([
 	memoryKind.name,
-	judgedKind.name,
+	recognizedKind.name,
 ]);
 
 function chatPlacement(entry: Entry): "carried" | "dropped" {

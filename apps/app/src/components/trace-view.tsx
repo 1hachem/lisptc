@@ -1,7 +1,11 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
-import { MessageJudgements, MessageMemories } from "@repo/components";
-import { judgedKind, memoryKind } from "@repo/journal-catalog/memory";
+import { MessageMemories } from "@repo/components";
+import {
+	type FiredMemory,
+	memoryKind,
+	recognizedKind,
+} from "@repo/journal-catalog/memory";
 import { view } from "@repo/shared/journal";
 import {
 	type ComponentProps,
@@ -147,45 +151,21 @@ function ChannelToggles({
 	);
 }
 
-function shownMemory(message: ChatMessage, shown: Shown) {
+function shownMemories(
+	message: ChatMessage,
+	shown: Shown,
+): FiredMemory[] | undefined {
 	if (!shown.memory) return undefined;
-	return view(entriesOfMessage(message), memoryKind).at(-1);
+	const entries = entriesOfMessage(message);
+	const memory = view(entries, memoryKind).at(-1);
+	if (memory !== undefined) return [memory];
+	return view(entries, recognizedKind).at(-1)?.fired;
 }
 
-function EntryLine({
-	message,
-	focused,
-}: {
-	message: ChatMessage;
-	focused: boolean;
-}) {
-	const shown = useChannels();
-	const memory = shownMemory(message, shown);
-	if (memory !== undefined)
-		return <MessageMemories memories={[memory]} focused={focused} />;
-	if (!shown.memory) return null;
-	const judged = view(entriesOfMessage(message), judgedKind).at(-1);
-	if (judged === undefined) return null;
-	return (
-		<div className="min-w-0 text-[11px] text-dim">
-			<span>judged “{judged.message}”</span>
-			<MessageJudgements scores={judged.scores} error={judged.error} />
-		</div>
-	);
-}
-
-function TraceLine({
-	message,
-	focused,
-}: {
-	message: ChatMessage;
-	focused: boolean;
-}) {
+function TraceLine({ message }: { message: ChatMessage }) {
 	return (
 		<div className="group relative min-w-0 empty:hidden">
-			{isEntryMessage(message) ? (
-				<EntryLine message={message} focused={focused} />
-			) : isToolMessage(message) ? (
+			{isToolMessage(message) ? (
 				<ToolMessage message={message} />
 			) : (
 				<ChatLine message={message} />
@@ -415,6 +395,20 @@ function NestedTrace({ chatId }: { chatId: string }) {
 	return <TraceEntries entries={entries} />;
 }
 
+interface StepRow {
+	at: number;
+	message: ChatMessage;
+	memories?: FiredMemory[];
+}
+
+function stepRows(messages: readonly ChatMessage[], shown: Shown): StepRow[] {
+	return messages.flatMap((message, at) => {
+		if (!isEntryMessage(message)) return [{ at, message }];
+		const memories = shownMemories(message, shown);
+		return memories === undefined ? [] : [{ at, message, memories }];
+	});
+}
+
 function TraceEntries({
 	entries,
 	flashing,
@@ -447,27 +441,28 @@ function TraceEntries({
 						className="flex min-w-0 flex-col gap-2"
 					>
 						<StepDivider step={step} />
-						{step.messages.map((message, at) =>
-							isEntryMessage(message) &&
-							shownMemory(message, shown) === undefined ? null : (
-								<Fragment key={message.id ?? at}>
-									<TracedMessage message={message} flashing={flashing}>
-										<TraceLine
-											message={message}
+						{stepRows(step.messages, shown).map(({ at, message, memories }) => (
+							<Fragment key={message.id ?? at}>
+								<TracedMessage message={message} flashing={flashing}>
+									{memories === undefined ? (
+										<TraceLine message={message} />
+									) : (
+										<MessageMemories
+											memories={memories}
 											focused={
 												message.id !== undefined && message.id === focused
 											}
 										/>
-									</TracedMessage>
-									{shown.agents &&
-										step.children
-											.filter((child) => child.after === at)
-											.map((child) => (
-												<ChildTrace key={child.chatId} child={child} />
-											))}
-								</Fragment>
-							),
-						)}
+									)}
+								</TracedMessage>
+								{shown.agents &&
+									step.children
+										.filter((child) => child.after === at)
+										.map((child) => (
+											<ChildTrace key={child.chatId} child={child} />
+										))}
+							</Fragment>
+						))}
 					</div>
 				);
 			})}
