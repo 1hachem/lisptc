@@ -450,6 +450,7 @@ describe("the gate scores a case instead of failing on any miss", () => {
 				name: `check-${index}`,
 				verdict,
 			})),
+			system: "",
 			transcript: [],
 		};
 	}

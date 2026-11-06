@@ -28,7 +28,10 @@ const FAILED = {
 	value: { message: "open hyko.ai", scores: {}, error: "timed out" },
 };
 
-function runtimeFor(events: EvalTurnEvent[]): EvalRuntime<EvalSpec, object> {
+function runtimeFor(
+	events: EvalTurnEvent[],
+	systemPrompt = "",
+): EvalRuntime<EvalSpec, object> {
 	const agent: AgentDriver<object> = {
 		eval: async () => ({
 			output: "",
@@ -37,7 +40,7 @@ function runtimeFor(events: EvalTurnEvent[]): EvalRuntime<EvalSpec, object> {
 			emitted: "",
 		}),
 		resultContent: (output) => output,
-		systemPrompt: () => "",
+		systemPrompt: () => systemPrompt,
 		turn: async function* () {
 			for (const event of events) yield event;
 		},
@@ -142,5 +145,25 @@ describe("entries land where they were recorded", () => {
 		expect(formatRun("case", { ...run, case: "case", sample: 1 })).toContain(
 			"memory │ navigate: browser_navigate, not navigate",
 		);
+	});
+});
+
+describe("a run keeps the system prompt it ran under", () => {
+	test("the agent's own prompt when the case sets none", async () => {
+		const run = await runCase(
+			runtimeFor([{ type: "halt", answer: "done" }], "you are a lisp machine"),
+			spec,
+			target,
+		);
+		expect(run.system).toBe("you are a lisp machine");
+	});
+
+	test("the case's prompt when it sets one", async () => {
+		const run = await runCase(
+			runtimeFor([{ type: "halt", answer: "done" }], "you are a lisp machine"),
+			{ ...spec, system: "answer in lisptc." },
+			target,
+		);
+		expect(run.system).toBe("answer in lisptc.");
 	});
 });

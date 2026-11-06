@@ -111,6 +111,7 @@ export interface RunResult {
 	errors: number;
 	skips: number;
 	checks: CheckOutcome[];
+	system: string;
 	transcript: TranscriptLine[];
 }
 
@@ -422,13 +423,14 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 	trace.beginStep(0);
 	await replaySeed(runtime.agent, repl, spec.seed ?? [], transcript, see);
 
+	const system = spec.system ?? runtime.agent.systemPrompt(repl);
 	const startedAt = Date.now();
 	const tally = await followTurn(
 		runtime.agent.turn(transcript, {
 			repl,
 			maxSteps: spec.max,
 			target,
-			system: spec.system ?? runtime.agent.systemPrompt(repl),
+			system,
 		}),
 		trace,
 		checks,
@@ -447,6 +449,7 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 		errors: trace.errors(),
 		skips: trace.skips(),
 		checks: verdicts,
+		system,
 		transcript: seen,
 	};
 }
