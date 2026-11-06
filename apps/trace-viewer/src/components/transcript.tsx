@@ -6,7 +6,11 @@ import { MessageMemories } from "@repo/components/message-memories.tsx";
 import type { EntryLine, ReportRow, TranscriptLine } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
-import { judgedKind, memoryKind } from "@repo/journal-catalog/memory";
+import {
+	type FiredMemory,
+	judgedKind,
+	memoryKind,
+} from "@repo/journal-catalog/memory";
 import { WHEN_FIRES_AT } from "@repo/memory-extension/ports";
 import { view } from "@repo/shared/journal";
 import type { ReactNode } from "react";
@@ -40,6 +44,50 @@ function EntryRow({
 	);
 }
 
+type Item =
+	| { kind: "line"; at: number; line: TranscriptLine }
+	| {
+			kind: "memories";
+			at: number;
+			memories: FiredMemory[];
+			selected: Set<string>;
+	  };
+
+function memoryOf(line: TranscriptLine): FiredMemory | undefined {
+	if (line.role !== "entry") return undefined;
+	return view([{ ...line, id: line.kind }], memoryKind)[0];
+}
+
+function itemsOf(
+	lines: readonly TranscriptLine[],
+	shown: (line: TranscriptLine) => boolean,
+): Item[] {
+	const selected = selectedMemories(lines);
+	const items: Item[] = [];
+	lines.forEach((line, at) => {
+		if (!shown(line)) return;
+		const memory = memoryOf(line);
+		if (memory === undefined) {
+			items.push({ kind: "line", at, line });
+			return;
+		}
+		const last = items.at(-1);
+		const group =
+			last?.kind === "memories"
+				? last
+				: {
+						kind: "memories" as const,
+						at,
+						memories: [],
+						selected: new Set<string>(),
+					};
+		if (group !== last) items.push(group);
+		group.memories.push(memory);
+		if (selected.has(at)) group.selected.add(memory.key);
+	});
+	return items;
+}
+
 function selectedMemories(
 	lines: readonly TranscriptLine[],
 ): ReadonlySet<number> {
@@ -52,20 +100,45 @@ function selectedMemories(
 			waiting = new Set(judged.selected ?? []);
 			return;
 		}
-		const [memory] = view([{ ...line, id: line.kind }], memoryKind);
+		const memory = memoryOf(line);
 		if (memory !== undefined && waiting.delete(memory.key)) selected.add(at);
 	});
 	return selected;
 }
 
-function Entry({ line, selected }: { line: EntryLine; selected: boolean }) {
-	const [memory] = view([{ ...line, id: line.kind }], memoryKind);
-	if (memory !== undefined)
-		return (
-			<EntryRow kind={line.kind} selected={selected}>
-				<MessageMemories memories={[memory]} />
-			</EntryRow>
-		);
+function Memories({
+	memories,
+	selected,
+}: {
+	memories: FiredMemory[];
+	selected: ReadonlySet<string>;
+}) {
+	return (
+		<EntryRow
+			kind={memoryKind.name}
+			selected={memories.some((memory) => selected.has(memory.key))}
+		>
+			<MessageMemories memories={memories} selected={selected} />
+		</EntryRow>
+	);
+}
+
+function SystemPrompt({ text }: { text: string }) {
+	return (
+		<EntryRow kind="system">
+			<details className="text-[11px] leading-[1.7]">
+				<summary className="cursor-pointer select-none text-dim marker:text-dim">
+					system prompt · {text.length.toLocaleString()} chars
+				</summary>
+				<pre className="m-0 mt-1 whitespace-pre-wrap break-words border-bg2 border-l pl-2.5 font-mono text-dim">
+					{text}
+				</pre>
+			</details>
+		</EntryRow>
+	);
+}
+
+function Entry({ line }: { line: EntryLine }) {
 	const [judged] = view([{ ...line, id: line.kind }], judgedKind);
 	if (judged !== undefined)
 		return (
@@ -118,19 +191,27 @@ export function Transcript({
 	reflex: boolean;
 }) {
 	const run = runId(identity, row);
-	const selected = selectedMemories(row.transcript);
+	const items = itemsOf(
+		row.transcript,
+		(line) => reflex || line.role !== "entry" || line.kind !== judgedKind.name,
+	);
 
 	return (
 		<div className="pt-1 pb-2.5">
-			{row.transcript.map((line, i) =>
-				line.role === "entry" ? (
-					!reflex && line.kind === judgedKind.name ? null : (
-						// biome-ignore lint/suspicious/noArrayIndexKey: a transcript is static and repeated identical entries are the signal, not a bug
-						<Entry key={i} line={line} selected={selected.has(i)} />
-					)
-				) : (
-					// biome-ignore lint/suspicious/noArrayIndexKey: a transcript is static and repeated identical turns are the signal, not a bug
-					<div className="group relative" key={i}>
+			{row.system === undefined ? null : <SystemPrompt text={row.system} />}
+			{items.map((item) => {
+				if (item.kind === "memories")
+					return (
+						<Memories
+							key={item.at}
+							memories={item.memories}
+							selected={item.selected}
+						/>
+					);
+				const { at, line } = item;
+				if (line.role === "entry") return <Entry key={at} line={line} />;
+				return (
+					<div className="group relative" key={at}>
 						<Turn role={line.role}>{line.content.trimEnd()}</Turn>
 						{target && line.role === "assistant" ? (
 							<div className="pr-4 pl-[66px]">
@@ -141,7 +222,7 @@ export function Transcript({
 											trace: traceEvents(identity, row),
 											properties: {
 												...properties,
-												...reviewProperties(identity, row, i),
+												...reviewProperties(identity, row, at),
 											},
 										})
 									}
@@ -151,8 +232,8 @@ export function Transcript({
 							</div>
 						) : null}
 					</div>
-				),
-			)}
+				);
+			})}
 		</div>
 	);
 }
