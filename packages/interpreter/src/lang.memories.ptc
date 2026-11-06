@@ -186,38 +186,45 @@ Introspection:
 
 Globals: *gensym-counter*, *version*.
 
-(memory "lang/prelude-lists" :when "the agent is about to map, filter, fold, sort, search or deduplicate a list, look up an alist or member, or compose car and cdr")
-Prelude, all available by default.
+(memory "lang/prelude-access" :when "the agent is about to take the second, third or nth element of a list, its tail, its last cell or all but the last, or compose car and cdr; or such a call returned nil unexpectedly")
+List access by position:
+- Composed car and cdr: caar cadr cdar cddr caaar caadr cadar caddr cdaar
+  cdadr cddar cdddr. cadr is 2nd element, caddr 3rd, and so on.
+- (nth n list) element at index n from 0; nil past end · (nthcdr n list) ·
+(last list) last cons cell, not element · (butlast list [n]) .
 
-List access — composed car and cdr: caar cadr cdar cddr caaar caadr cadar
-caddr cdaar cdadr cddar cdddr. cadr is 2nd element, caddr 3rd, and so on.
-
-List building / manipulation:
-- (append list...) concatenate lists, non-destructive.
-- (nreverse list) destructive reverse · (last list) last cons cell ·
-(nconc lists...) destructive concat.
+(memory "lang/prelude-map" :when "the agent is about to transform every element of a list, keep the ones that pass a test, or fold a list into one value; or mapcar, filter or reduce just failed or returned the wrong value")
+Map, filter, fold:
 - (mapcar f list) new list of f over each element:
 (mapcar (lambda (n) (* n n)) '(1 2 3)) gives (1 4 9) .
-- (nth n list) element at index n from 0; nil past end.
+- (mapc f list) for effect, returns list.
 - (filter f list) elements f says yes to:
 (filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40) .
 - (reduce f list [initial]) fold left: f takes accumulator and element.
   No initial: first element starts; empty list gives nil.
   (reduce + '(1 2 3)) is 6. List SECOND, initial last.
-- (sort list pred) new sorted list, stable, list unchanged:
-(sort '(3 1 2) <) gives (1 2 3) ; strings use string< .
-- (reverse list) · (copy-list list) · (nthcdr n list) ·
-(butlast list [n]) · (mapc f list) for effect, returns list.
-(memory "lang/prelude-search" :when "the agent is about to search a list for an item or match, count or remove matching items, or test whether any or all elements pass")
-Prelude, all available by default.
+- (identity x) return x.
 
-Search:
+(memory "lang/prelude-sort" :when "the agent is about to sort, order, rank or reverse a list, or a sorted list came back unchanged")
+Sort and reverse:
+- (sort list pred) new sorted list, stable, list unchanged:
+(sort '(3 1 2) <) gives (1 2 3) ; strings use string< . Keep result:
+(setq xs (sort xs <)) .
+- (reverse list) new reversed list · (nreverse list) destructive reverse.
+
+(memory "lang/prelude-build" :when "the agent is about to concatenate or copy lists, or append to a list")
+List building:
+- (append list...) concatenate lists, non-destructive ·
+(nconc lists...) destructive concat · (copy-list list) .
+
+(memory "lang/prelude-search" :when "the agent is about to search a list for an item or match, count or remove matching items, deduplicate a list, or test whether any or all elements pass")
+Search, item matched by equal:
 - (find item list) · (find-if f list) · (position item list) ·
 (position-if f list) · (count item list) · (count-if f list) ·
-(remove item list) · (remove-if f list) · (remove-duplicates list) . Item
-  matched by equal.
+(remove item list) · (remove-if f list) · (remove-duplicates list) .
 - (some f list) first non-nil (f x) · (every f list) t if all pass.
 
+(memory "lang/prelude-predicates" :when "the agent is about to test whether a value is nil, a cons, a list or a keyword, or compare two structures deeply")
 Predicates:
 - (not x) and (null x) true if nil · (consp x) true if cons ·
 (listp x) true if nil or cons · (keywordp x) true if keyword ·
@@ -230,7 +237,7 @@ Membership / alists:
   pair with equal car. Alist field:
 (cdr (assoc "content" msg)) .
 
-(memory "lang/prelude-nested" :when "the agent is about to read or change a nested record, config, plist or alist by a path of keys, or edit a data file")
+(memory "lang/prelude-get-in" :when "the agent is about to read a value out of a nested record, config, plist, alist or tool result by a path of keys or indexes")
 - (get-in record key...) read through nested alists, keyword plists and lists,
   every step guarded: (get-in config "server" "port") is nil when no
   "server", not an error. No or guard, no assoc chain.
@@ -238,7 +245,9 @@ Membership / alists:
   matches string of its name, :port finds "port". Plist key matches by name:
 (get-in '(:theme (:accent "red")) :theme :accent) gives "red" .
 
+(memory "lang/prelude-set-in" :when "the agent is about to change, add or remove a value inside a nested record, config, plist or alist, or edit a data file")
 Nested data, write side of get-in. Pure: return new copy, record unchanged.
+Paths same as get-in.
 - (set-in record value key...) value at path. Missing key added: plist gets
   keyword, alist gets pair; nil record becomes plist for keyword key, else alist.
   Index replaces element, index = length appends:
@@ -251,13 +260,14 @@ Nested data, write side of get-in. Pure: return new copy, record unchanged.
 (remove-in '(:a 1 :b 2) :a) gives (:b 2) .
 - Edit data file: read it, set-in / update-in / remove-in, write whole value back.
 
-(memory "lang/prelude-control" :when "the agent is about to branch, loop, bind local names, or define a function with optional, keyword or rest arguments, or a defun just failed on its argument list")
-Control-flow macros:
+(memory "lang/prelude-branch" :when "the agent is about to branch on a condition or dispatch on a value with if, when, unless, and, or or case; or a branch took the wrong arm")
+Branching macros:
 - (if test then else...) · (when test body...) · (unless test body...) ·
 (and x...) , nil on first nil, else last · (or x...) , first non-nil ·
 (case key (keys forms...) ... (t default...)) — matches key by equal
   against each clause's key list; t clause is default.
 
+(memory "lang/prelude-let" :when "the agent is about to bind local names, bind one name from another, or define local recursive functions; or a let binding came back nil or undefined")
 Binding macros:
 - (let ((name val) ...) body...) parallel bindings; bare name binds nil.
 - (let* ((name val) ...) body...) sequential; each val may use earlier names:
@@ -265,11 +275,13 @@ Binding macros:
 - (letrec ((name val) ...) body...) bindings reference each other — local
   recursive functions.
 
+(memory "lang/prelude-loops" :when "the agent is about to loop over a list, repeat something n times or loop while a condition holds, or leave a loop early")
 Loops, all support (break) and (return value):
 - (while test body...) .
 - (dolist (name list [result]) body...) iterate elements.
 - (dotimes (name count [result]) body...) iterate 0..count-1.
 
+(memory "lang/prelude-defun" :when "the agent is about to define a function, especially with optional, keyword or rest arguments, or a defun just failed on its argument list")
 Defining:
 - (defun name (args...) [doc] body...) define function; &rest x variadic.
 - &key after required args makes the rest optional and nameable:
@@ -277,19 +289,21 @@ Defining:
 (kpi "Revenue" 42000) or (kpi :label "Revenue" :value 42000 :unit "USD") .
   Filled left to right until first keyword; missing one is nil.
   &key and &rest cannot both appear.
-- (defmacro name (args...) [doc] body...) define macro.
+- (defmacro name (args...) [doc] body...) define macro, see lang/macros.
 
-Misc:
-- (identity x) return x.
-
-(memory "lang/prelude-strings" :when "the agent is about to split, join, trim, search, replace or format strings, or build a sentence around a value")
-Prelude string functions:
+(memory "lang/prelude-string-search" :when "the agent is about to compare strings, take a substring, or test whether a string starts with, ends with, contains or counts a piece of text")
+String search:
 - (string= s1 s2) string content equality, same test as equal ·
 (substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
 (string-index s sub [start]) index or nil · (string-contains? s sub) ·
-(string-count s sub) · (string-replace s old new) ·
-(string-split s sep) , empty sep gives characters · (string-join list sep) ·
-(string-trim s) .
+(string-count s sub) .
+
+(memory "lang/prelude-string-edit" :when "the agent is about to split a string into parts, join parts into a string, trim whitespace or replace text")
+String editing:
+- (string-replace s old new) · (string-split s sep) , empty sep gives
+  characters · (string-join list sep) · (string-trim s) .
+
+(memory "lang/prelude-format" :when "the agent is about to build a sentence or message around values, or fill a text template")
 - (format template arg...) fill template, return string: ~a inserts next arg
   as string would, ~% newline, ~~ tilde; letter case-insensitive.
   (format "The sum was ~a" n) writes a sentence around a value. Prints
