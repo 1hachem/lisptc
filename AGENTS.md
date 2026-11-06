@@ -238,6 +238,22 @@ handed one.
 to. **Adding an extension, or a new outward reach in one, means adding a port.**
 Do not import `node:fs` "just for this one path".
 
+**Stored data has one source of truth: the persistence host.** In the served
+agent that is Convex. A host keeps no copy of what it stores: every call it
+answers goes to the store.
+
+**Every other module reads stored data by evaluating a form in the REPL**, never
+by calling a host. The loop, the server and another module's chain hook all go
+through the extension's own form, and that form reads the store each time it is
+evaluated. Only the extension's forms and the composition root touch a host. The
+UI is the one exception: it may read Convex directly to draw.
+
+An extension may keep one cache of what it read, in the image and nowhere else,
+for data that changes rarely. Its forms answer from that cache, and every write,
+update or delete the session makes empties it, so the next read goes back to the
+store. A write made outside the session is seen once the session writes, or when
+a new image starts. Nothing notifies a live REPL.
+
 The shape of the pattern, the rule about ports that may have to wait, and where
 a shared port lives are in `packages/interpreter/AGENTS.md`.
 
@@ -284,6 +300,34 @@ rewrite that treats `*` or a backtick as markdown and strips it teaches the
 model code that does not run: `(* n n)` becomes `(n n)`, `let*` becomes `let`,
 `*version*` becomes `version`, a quasiquoted expansion loses its backtick. An
 example a prompt shows still evaluates to the result the prompt claims for it.
+
+**A built-in memory ships with the package that owns its surface.** How to show
+the user something is the UI extension's, how to remember is the memory
+extension's, and the loop keeps only what is about the loop. A memory about
+another surface written in the loop's file is moved to that extension's file.
+
+**A built-in memory lives in a `.memories.ptc` file, never in a TypeScript or
+JavaScript string.** The editor opens a `.ptc` file as lisptc, so the forms a
+memory carries get the language server's completion, hover and errors. In a
+template string they get none, and a broken example ships unseen. A value the
+text needs from code, like a cap, is a {{name}} placeholder in the .ptc file,
+filled by the code that loads it, the way the UI extension fills its widget
+list. A test checks that no placeholder is left. A package that ships a new `.ptc` is
+added to what `apps/app` ships, by the rule in `apps/app/AGENTS.md`.
+
+A built-in memory is for what only some turns need. One that fires on every
+first message, a bare greeting included, is paid for twice: once as recognition,
+once as a side load. Remove it, and move its text into the prompt that lands in
+the system prompt: the extension's own `.ptc` prompt, or the agent's system
+prompt for a loop memory.
+
+Decide from the traces, not from the triggers. The served agent's traces are in
+the PostHog project `lisptc`, not `lisptc coding agents`, which holds the coding
+agents' own sessions. Take the first `chat turn` trace of each thread, and read
+its first generation's input in `posthog.ai_events`. The `<memories>` block on
+the user's message lists the keys that fired. Check a bare greeting and a real
+task: a key in both, on every thread, is one to move. After the move, send a
+greeting in a fresh conversation and check the block comes back empty.
 
 ## Comments
 
