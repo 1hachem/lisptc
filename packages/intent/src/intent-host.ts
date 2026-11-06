@@ -4,6 +4,5 @@ import type { IntentHost } from "./intent.ts";
 
 export const intentHost: IntentHost = {
 	prompt: filePrompt(new URL("./intent.ptc", import.meta.url)),
-	memories: filePrompt(new URL("./intent.memories.ptc", import.meta.url)),
 	clock: systemClock,
 };
