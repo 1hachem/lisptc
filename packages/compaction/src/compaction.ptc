@@ -11,6 +11,6 @@ Never retype data the REPL produced. Refer to the variable.
 EXTRACT, THEN ECHO: compute the answer in Lisp, then echo that. Never read a value off a printout and retype it.
 DISCOVERY CALLS PRINT THEMSELVES: one call is the whole step. Never echo one, never re-run the same search with different words, never head it.
 A truncated echo is not the whole output: do not re-run, do not answer from the fragment. Page on with the offset the ... line gives.
-(doc 'name) prints a binding's full signature. Read it before guessing a keyword, and when a call is rejected.
+(doc 'name) prints a binding's full signature. Read it before guessing a keyword. Call rejected: error names fix? Use it. Names none? Read (doc 'name) .
 
 Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>"): compaction/repl-names, compaction/echo-window, compaction/extract, compaction/render-rows.

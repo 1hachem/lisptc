@@ -45,8 +45,7 @@ Branching, one call picks clause, body runs as plain Lisp:
 t clause runs when nothing fits; no t clause gives nil.
 
 (memory "semantic/embedding" :when "the agent must measure how close texts are in meaning, drop near-duplicates, group similar items, rank by closeness to a query, spot outliers, or classify from examples")
-Meaning as numbers. Equal values answer without call; same text twice in
-session = one call:
+Meaning as numbers:
 
 - (%embed x) gives vector, list of numbers.
 - (%similarity a b) gives cosine, near 1 = same meaning. Raw number for own threshold.

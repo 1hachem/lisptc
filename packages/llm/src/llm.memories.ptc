@@ -12,7 +12,7 @@ write-1: 84 words
 
 Text arguments: prompt, :system, :instructions, extract text, message
 content. Any value works: list or alist goes in printed. No (string …)
-needed. Promise refused: await first.
+needed.
 
 (memory "llm/extract" :when "the agent holds a text, page, comment or mail and must pull fields or structured data out of it, or an extract call just failed or returned the wrong shape")
 (extract text shape) gives data shape describes, as Lisp data. Answer is
@@ -49,8 +49,7 @@ and token budget.
 - (summarize-each values :words 25 [option...]) gives summaries in order, one
   sequential call per element: slice with (head x 5) first, never hundreds.
 - (answer question context :words 60 [option...]) answers from context
-  only. Not in context: nil, not a guess. nil never means failed call: branch
-  on it, do not echo it.
+  only. nil: branch on it, do not echo it.
 
 (setq brief (summarize acme/list-issues-1 :words 40))
 brief: 39 words
@@ -76,8 +75,8 @@ options, one call each:
 
 (memory "llm/options" :when "a writing call needs a length cap, a temperature, a system line or a timeout, defaults must change for many calls, or a writing call just timed out")
 Options, all optional, every call: :system · :max-tokens · :temperature ·
-:reasoning-effort, :low, :medium or :high · :timeout ms, default 60000. Failed
-or timed-out call raises: wrap in try when you have fallback.
+:reasoning-effort, :low, :medium or :high · :timeout ms, default 60000.
+Timed-out call raises.
 
 Global *writing-defaults* = keyword list every call starts from; call-site
 option wins. (with-writing (option...) body...) extends it for one block,

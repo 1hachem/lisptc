@@ -46,8 +46,6 @@
   (desktop-preferences/set :open-at-login t).
 
 (memory "preferences/set" :when "a preference change just failed, or the agent must read or change the font, a chat metadata field or a chat input helper")
-- Preferences belong to this workspace, like theme: each workspace keeps own
-  set, change here leaves other workspaces alone.
 - (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t).
 - (fonts) gives alist of (id . name) to choose from.
 - (preferences/set :font "geist") changes only keys you give.

@@ -19,6 +19,6 @@ Files user uploaded to workspace. User sees same files in sidebar; every change 
 - bin/restore
 - bin/delete
 
-User message can point at file: @knowledge/report.md or @attachments/spec.pdf. Read it with (knowledge/read "report.md") or (attachments/read "spec.pdf"), name without folder.
+User message can point at file: @knowledge/report.md or @attachments/spec.pdf; quoted when name has space: @"attachments/Q3 Sales.json". Read it with (knowledge/read "report.md") or (attachments/read "spec.pdf"), name without folder.
 
 Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>"): knowledge/files, knowledge/structured, knowledge/attachments, knowledge/bin.

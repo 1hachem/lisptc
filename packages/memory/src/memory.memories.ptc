@@ -28,7 +28,9 @@ one when memory fired where it did not help:
   recall   another memory being retrieved
   start    the user's first message, once, with no pattern: written (start)
 
-One trigger per memory: :when or :on, not both.
+One trigger per memory: :when or :on, not both. Memory with neither never
+arrives by itself. It waits for a recall naming it. Unguessable key later
+means lost.
 
 (memory "memory/call-triggers" :when "the agent is writing a memory that must fire on one particular call, such as one tool or one server, and not on every call")
 For call the pattern is A FORM, written like the call, matched structurally:
@@ -63,8 +65,7 @@ the next, so (call (load-mcp "acme")) is right where (call (load-mcp)) would
 fire on every server and teach wrong things about most. Hook the whole call,
 not only the name.
 
-Firing runs nothing. Fired recipe? Replay it. Triggers watch code you write
-into the REPL. A form evaluated inside a replay or a function body is not a
+Triggers watch code you write into the REPL. A form evaluated inside a replay or a function body is not a
 step and fires nothing.
 
 (memory "memory/fading" :when "the agent cannot find something it remembered, or the user asks why it forgot or how long a memory lasts")
@@ -79,15 +80,15 @@ Built-in memories never fade.
 (memory "memory/revising" :when "a memory that just fired or was recalled turned out wrong or vague, or the user says the agent got something wrong and wants it fixed for next time")
 THE WINDOW
 
-Retrieving a memory opens it: until step end you can revise its body. Outside
-that window revise errors, telling you to recall first. Fix a memory while
-looking at it:
+Memory recalled or fired is open: until step end you can revise its body.
+Outside that window revise errors, telling you to recall first. Fix a memory
+while looking at it:
 
 (memory/recall "deploy/notes")
 (memory/revise "deploy/notes" "deploys go through task deploy, not kubectl")
 
-Read-only built-ins never revise. Remember the correction under a new key, with
-a trigger that will repeat.
+Built-in wrong? Remember the correction under a new key, with a trigger that
+will repeat.
 
 (memory "memory/bodies" :when "the agent is about to save a recipe, a function or a reusable procedure, or remember just refused a live value")
 GOTCHAS
@@ -95,15 +96,13 @@ GOTCHAS
 - Body must be prose or a readable form. Closure, promise or secret is a live
   value, prints in angle brackets, and remember rejects it. Store the quoted
   form that builds it, never the built thing.
-- memory/recall output is already in front of you. No echo after.
 - A recipe worth keeping belongs in a memory, not a defun. Memories outlive the
   interpreter; definitions die on reset.
 - Replaying a defun installs that function. Remembered recipe becomes running
   one.
 
 (memory "memory/writing" :when "the agent is about to save, change or forget a memory, or the user asks what built-in memories exist")
-Work from one session is gone next session unless remembered. Memory = key +
-body. Body is prose or code, one slot: here they are the same material.
+Memory = key + body. Body is prose or code, one slot: here they are the same material.
 
 - Prose body is something to know. Quoted form body is a recipe to run later.
   Quote it: arguments are evaluated, so unquoted form stores its result instead.
@@ -111,13 +110,6 @@ body. Body is prose or code, one slot: here they are the same material.
 - (memory/forget-all) drop every memory, only when the user asks for a clean slate.
 - Names are slashed: bare remember, recall, forget are English verbs and would
   be read as code in an aside.
-
-FIRING BY ITSELF: with :when or :on a memory loads itself, unasked. Usual is
-:when, a string describing the situation that needs it, recognized by meaning before
-every step against the conversation, latest step weighed most. :unless beside
-it names look-alike that must not fire it. :on is
-a quoted form for an exact event. Memory with neither never arrives by itself.
-It waits for a recall naming it. Unguessable key later means lost.
 
 BUILT-IN MEMORIES: tool ships its own memories: how-to depth behind each extension,
 loaded when its trigger fires. Found by memory/recall like yours. Read-only:
@@ -127,20 +119,11 @@ remember, revise, forget on a built-in key error.
   area; (memory/builtins) lists all. Recall a key to read its body.
 
 (memory "memory/rules" :when "a guess just failed and the fix is now known, or the agent is deciding what is worth remembering")
-- REMEMBER THE MOMENT A GUESS FAILS. Rejected call, wrong name, backwards
-  argument order: worth keeping. Write it before moving on, while the right
-  answer is on screen.
-- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description. Describe, or
-  hook, what you will be doing when you next need it. Misnamed tool goes on the call that
-  loads its server, so it arrives before you misname it again. Rejected
-  mistake goes on that error. A memory you must remember to look for, you will
-  not look for.
+- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description: memory/hooks.
 - Remember the correction, not the transcript. "browser_navigate, not navigate"
   is worth keeping; the whole tool listing is not.
 - Do not remember what the REPL can tell you: doc output, discovery results,
-  anything recomputable. Memory is for what you found out the hard way.
-- Recall before you guess. Unsure of a name the session has not told you?
-  Cheapest possible recall.
+  anything recomputable.
 
 (memory "memory/recalling" :when "the agent is about to guess a name, a fact or a procedure it may have learned before, or must see which built-in memories an extension ships, or the user asks what it remembers")
 - (memory/recall query) retrieves by key or body text, strongest first. Query
@@ -148,17 +131,16 @@ remember, revise, forget on a built-in key error.
   Spelling forgiven, prefix counts. Found memories load into your context:
   recalling IS reading. No echo after it.
 - (memories) every memory as key, score and trigger, strongest first.
-- (memory/builtins [area]) only the built-ins, as key and situation.
-- (memory/remember key body) stores one. Quote a form body, or arguments are
-  evaluated, so an unquoted form stores its result instead.
+- Built-ins by area: memory/writing.
+- (memory/remember key body) stores one.
 - (memory/forget key) drops one for good. (memory/revise key body) corrects
-  one, only inside the window of a recall.
+  one inside its window: memory/revising.
 
 (memory "memory/learning" :when "a step just failed and the agent worked out what works, or it found a solution worth keeping for later")
-LEARN FROM EVERY MISTAKE. A step failed and you worked out what actually works: store that solution with `memory/remember` before you move on, because the moment you have the fix in front of you is the only moment you will have it. The solution is either kind of memory. A DECLARATIVE one is prose, what you now know: "the tool is acme/get_widget, not acme/get". A PROCEDURAL one is a quoted form, the thing that worked, a call or a `defun` you replay later: `(memory/remember "widget-id" '(defun widget-id (w) (cdr (assoc "id" w))))`. Same slot, both kinds.
-EVERY USE OPENS A WINDOW OF PLASTICITY. When a memory is retrieved or fires, it stays open to correction until the end of that step, and `(memory/revise key body)` rewrites its body. Spend that window: a memory that arrived vague, half-right, or missing the argument that mattered gets sharpened on the spot, while you can see both what it said and what was actually true. Outside the window revise is an error. Recall, use, revise, so each use leaves the memory more useful than it was.
+Memory is for what you found out the hard way. Step failed, you worked out what works: rejected call, wrong name, backwards argument order. Store the fix with `memory/remember` before moving on, while the right answer is on screen. That moment is the only one you get. The solution is either kind of memory. A DECLARATIVE one is prose, what you now know: "the tool is acme/get_widget, not acme/get". A PROCEDURAL one is a quoted form, the thing that worked, a call or a `defun` you replay later: `(memory/remember "widget-id" '(defun widget-id (w) (cdr (assoc "id" w))))`. Same slot, both kinds.
+SPEND THE REVISE WINDOW. Memory arrived vague, half-right, or missing the argument that mattered? Sharpen it with `(memory/revise key body)` on the spot, while you see both what it said and what was true. Recall, use, revise: each use leaves the memory more useful than it was.
 
 (memory "memory/hooks" :when "the agent is about to give a memory a trigger, :when or :on, so a lesson fires before the mistake")
 HOOK IT TO WHAT PRECEDES THE ERROR, and NEVER TO THE CALL THAT FAILED. Hooking the failing form is the one trigger guaranteed to be useless: `:on '(call (acme/get _))` on a name that does not exist fires only while you are making the mistake a second time, too late to stop it, and if the next wrong guess is spelled differently it never fires at all. Before you write a trigger, check it against the step you just lost: would this have reached me BEFORE I wrote the bad form? If it only fires as the mistake happens, it is the wrong trigger.
-HOOK THE LAST THING THAT WORKED ON THE WAY IN, the gate you always pass through before the moment of choice. After loading a server you name its tools, so what you learn about those names belongs on the load: `:on '(call (load-mcp "acme"))`, which puts the correction in front of you while the server is still coming up and before you can name a single tool. Ask what you will be doing just before you need this again, and hook THAT. Name the argument that made the lesson true, so a fix about one server does not fire on every other. Keep `:on '(error "...")` for a failure with no such gate, where the error text is the earliest warning that exists. A memory you have to remember to look for will not be there when you need it.
-A `:when` describes that moment in words: `:when "the agent is about to name a tool of the acme server"`, never `:when "acme/get failed"`. Describe the situation: what you are doing, or an error or result that just came back.
+HOOK THE LAST THING THAT WORKED ON THE WAY IN, the gate you always pass through before the moment of choice. After loading a server you name its tools, so what you learn about those names belongs on the load: `:on '(call (load-mcp "acme"))`, which puts the correction in front of you while the server is still coming up and before you can name a single tool. Ask what you will be doing just before you need this again, and hook THAT. Keep `:on '(error "...")` for a failure with no such gate, where the error text is the earliest warning that exists. A memory you have to remember to look for will not be there when you need it.
+A `:when` describes that moment in words: `:when "the agent is about to name a tool of the acme server"`, never `:when "acme/get failed"`.

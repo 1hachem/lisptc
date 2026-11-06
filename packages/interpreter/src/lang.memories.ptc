@@ -4,7 +4,7 @@ Syntax detail.
 - Quasiquote: leading backtick same as (quasiquote x) . Inside, ,x unquotes, inserts evaluated x; ,@x unquote-splicing, splices a list.
   Example: (a ,(+ 1 2) ,@(list 3 4)) evaluates to the list a 3 3 4.
 - Lists: (a b c) . Dotted pair: (a . b) is one cons cell.
-- Strings: "..." with escapes \\ \" \n \r \f \b \t \v. No character type: "character" is one-character string.
+- Strings: "..." with escapes \\ \" \n \r \f \b \t \v. No character type: "character" is one-character string; char-code and friends take them.
 - Keywords: :foo self-evaluating, interned, so (eq :a :a) is t.
 - Numbers: see lang/numbers. nil and () same value: empty list and false. t is canonical true.
 - Comments: there is no comment syntax — prose around forms is the comment. ; is ordinary symbol character, so "; note" inside a form is code.
@@ -19,19 +19,15 @@ like a call runs. Keyword argument, string literal, nested call, or slashed or
 underscored name with no words around it — (server/tool :key "value") , dummy
 names — is code whatever is missing. (see below) skips; (see
   "below") raises undefined: see. Tool of unloaded server: undefined: error to
-fix, not a skip. Reply of only asides ran nothing, ends the loop, see "Ending
-the loop".
+fix, not a skip. Reply of only asides ran nothing, ends the loop.
 Stray paren in prose still reads as code, so never write one; paren smiley unsayable.
 
 (memory "lang/data-types" :when "the agent is about to test for an empty or false value or branch on a value's type, or a type check just returned something unexpected, such as zero or an empty string read as true")
 Data types.
-- nil = () = null = empty list = the ONLY false value.
-- t canonical true. Everything except nil truthy, including 0, "", empty structures.
 - Cons cell — pair (car . cdr) ; list is chain of cells ending in nil.
 - Symbol — interned name; gensym and make-symbol make uninterned ones, printed #:name.
 - Keyword — :foo, self-evaluating.
-- String — text; no char type.
-- Number — exact bigint integer or inexact float.
+- String — text.
 - Hash table — mutable map, keys compare by equal. Prints #<hash-table n>.
 - Vector — mutable indexed sequence. Prints #<vector 1 2 3>.
 - Function / closure / macro — from lambda, defun, defmacro.
@@ -55,11 +51,6 @@ Evaluated specially, not as function calls. Complete list:
   body
   (catch (e)
     handler...)) | Eval body; on error, bind e to the error value and run the handler. |
-
-if, when, unless, and, or,
-let, let*, letrec, while, dolist, dotimes, case, defun,
-defmacro, setf, push, pop, incf, decf, block, return-from, catch and
-unwind-protect are prelude macros, not special forms; use the same way.
 
 Tail calls optimized: tail recursion and loop macros never overflow the stack.
 Iterate with tail-recursive helpers or loop macros.
@@ -164,7 +155,7 @@ Eval and control:
 - (break) exit nearest loop; (return value) exit it with value.
 
 (memory "lang/output" :when "the agent wants to look at a value, print a result, narrate its reasoning or print a keyword, or a value it meant to see did not show")
-Output — echo is the ONLY thing that prints. Nothing computed is seen until echoed.
+Output — echo is the ONLY thing that prints; no print, princ, terpri or view. Nothing computed is seen until echoed.
 - (echo x...) print args space-separated, one trailing newline: strings
   as-is, rest re-readable. (echo) is blank line.
   Keyword prints as itself only when nothing follows — (echo :ok) prints :ok —
@@ -352,24 +343,11 @@ ERRORS & CONTROL FLOW
 - (unwind-protect form cleanup...) returns form's value, runs cleanup
   however form exits: normal, error, throw, return-from, break.
 
-(memory "lang/gotchas" :when "a result surprised the agent: zero or an empty string taken as false, a float where an integer was expected, read used where json-parse was meant, a list sorted in place, or a catch clause mistaken for a throw")
+(memory "lang/gotchas" :when "the agent is about to write a helper the prelude may already have, keep many values looked up by key, or type back a value from its hash-and-angle-brackets printout")
 GOTCHAS
-- Only nil is false — 0, 0.0, "" all TRUE.
-- / gives float; truncate for exact integer.
-- Output shows 3 vs 3.0.
-- read parses LISP, json-parse parses JSON. read on JSON returns junk, no error.
-- JSON numbers are floats: integer id prints 7.0; = and eql still equal 7.
-- No character type: one-character strings; char-code and friends take them.
 - Check prelude before writing helper: sort, find, position, count, some,
   every, remove, reverse, min, max, abs, floor, round exist.
-- Many lookups by key: hash table, not alist. gethash key comes FIRST,
-  table second; puthash is key value table.
-- sort returns new list, never sorts in place: keep result,
-  (setq xs (sort xs <)) .
-- try catches errors only. catch and throw are separate pair; block and
-  return-from for early exit from function body.
-- No comment syntax: remarks in prose around forms, never inside one.
-- No print, princ, terpri or view — echo does all.
+- Many lookups by key: hash table, not alist.
 - Hash-and-angle-brackets printout — closure, live value reader cannot read
   back — is printout, not syntax; typing one always errors. Use the name the
   value was reported under.

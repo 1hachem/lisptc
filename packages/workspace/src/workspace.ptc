@@ -13,5 +13,5 @@ Workspace you work in, and its chats. Changes show in sidebar at once.
 - chat/unarchive
 - chat/read
 
-User approves settings/set, chat/archive, chat/read first. Theme is per workspace. Ids come from chats: never guess one. Title a new chat once you know its topic: few words, no full stop.
+User approves settings/set, chat/archive, chat/read first. Theme is per workspace, not per user: each workspace wears its own. Ids come from chats: never guess one. Title a new chat once you know its topic: few words, no full stop.
 Details: memory/recall "workspace/choices", "workspace/chats", or by trigger.

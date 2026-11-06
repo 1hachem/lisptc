@@ -11,7 +11,6 @@ Write intent forms inside the code, never a step of their own. User sees each up
 - (intent/progress done total ["label"]) progress bar, done of total, inside the loop, each item. Integers, total at least 1, done at most total. Independent of todo. Known step count: intent/progress. Named steps: intent/todo.
 - Plan changed: edit list, keep it true. (intent/drop "label") removes one todo. (intent/move "label" position) moves it, 0 first, past the end puts it last. (intent/clear) empties list. Unknown label fails and names open ones.
 - (intent/ask "prompt" '("A" "B") [:multi t]) closed question, one pick; :multi t allows several. Closed choice for user: intent/ask, never question in prose. Ends turn after this step. Answer arrives as next message.
-- Ui view: build it and test it without rendering. ui/render only once it works.
 
 (intent/todo "sum scores" "average")
 (let ((scores '(3 9 4)))

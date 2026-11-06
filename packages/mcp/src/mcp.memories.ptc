@@ -42,18 +42,15 @@ login/logout only for :oauth t servers:
   logout no-op-safe when server not loaded.
 
 (memory "mcp/search" :when "the agent needs a capability or service nobody named and must find which MCP server or tool does the job")
-Finding: two different searches, don't confuse.
-  - Both PRINT answer, so one is a complete step: read names from print, go
-    on. Never follow with (echo …) , never repeat a search.
-Two searches, two jobs:
+Two searches, two jobs, don't confuse:
 - (search-mcps "query") searches toolkit of predefined servers, loaded or not.
   Matches keywords, name, description, so search capability in own words:
   vision, spreadsheet, tickets, analytics. Don't guess product name.
   Misspelling still lands, prefix counts: read near miss before retyping. Also
   (list-mcps) , and (list-toolkit) with every server's keywords.
-- (search-tools "query") searches tools of loaded servers by name and
-  description, best-first, forgives misspelling.
-(search-tools "query") finds tool of loaded servers. ONE query string, ALL loaded servers, NO server argument. Search depth: (memory/recall "mcp/search") .
+- (search-tools "query") searches tools of ALL loaded servers by name and
+  description, best-first, forgives misspelling. ONE query string, NO server
+  argument.
 (list-tools) lists tools of ALL loaded servers. (list-tools "acme" "beta")
 lists only those servers. Unloaded name is error.
 (search-tools "acme" "widget") is WRONG, an arity error. For one server: load
@@ -69,33 +66,28 @@ args say slow. Call timed out? Retry once with larger :mcp/timeout, not same
 call again. Still too slow? Split work into smaller calls.
 
 (memory "mcp/result" :when "a connected service just returned a result and the agent must read values or report fields out of it")
-Tool result is Lisp data, except a non-JSON string.
-Result is Lisp data: JSON object is alist with string keys, array is list.
+Tool result is Lisp data: JSON object is alist with string keys, array is list.
 Read with assoc, cdr, mapcar, nth. No parsing. JSON sent as text is parsed too,
 so report names its keys. Only non-JSON string needs (json-parse s) .
 
 (memory "mcp/example" :when "the agent is about to use an MCP tool end to end: find the server, load it, find the tool, call it")
-Worked example. Names made up, never known in advance. Start from search-mcps,
-let each step give next name:
+Worked example, names made up:
 (search-mcps "widget")
 (await (load-mcp "acme"))
 (search-tools "widget")
 (acme/get_widget :id "42")
-A loaded tool's (doc 'acme/list_widgets) prints full signature, every argument, which required. Read before guessing a keyword, and again when a call is rejected.
+A loaded tool's (doc 'acme/list_widgets) prints full signature, every argument, which required.
 
 (memory "mcp/load" :when "the agent is about to load a predefined or ad-hoc MCP server, several at once, or start a load now to use later; or a load just failed")
 :command , :args , :env NOT supported: error. Only toolkit names and :url .
 Load async: server connects in background; tools install when it settles.
-Unawaited load is finished code. Step reporting "load-mcp-1: a promise, still running …" needs no follow-up: go on, call tools on later step. Await only to get tool list in SAME step.
 (await (load-mcp "acme")) blocks until ready, returns tools as
 (name argument-count description) , same rows as (list-tools) , so no listing
-after load. (promise-state p) checks progress without blocking:
-:pending, :fulfilled or :rejected.
+after load.
   Do NOT call (load-mcp "acme") then (await (load-mcp "acme")) : TWO
   connections. Wrap directly, or bind one promise:
   (setq p (load-mcp "acme")) then later (await p) .
 - Ad-hoc remote server, awaited same way:
   (load-mcp :name "x" :url "https://..." :headers '(("Authorization" . "Bearer …")))
 - Several concurrently:
-(await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) . Settled,
-  not all: one failing server discards no others.
+(await (promise-all-settled (list (load-mcp "a") (load-mcp "b")))) .

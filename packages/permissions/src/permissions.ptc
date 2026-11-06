@@ -12,5 +12,5 @@ Config decides every call: allow, deny, or ask user.
 - permission/hide-server
 - permission/delete
 - permission/clear-all
-Change config only when user asks. Denied call: final, no retry, no other route. Ask call: stop, say why in one line, wait.
+Change config only when user asks. Denied call: final, no retry, no other route; say what you could not do. Ask call: stop, say why in one line, wait.
 Signatures, examples, rules: memory/recall "permissions/config" or "permissions/calls", or by trigger.

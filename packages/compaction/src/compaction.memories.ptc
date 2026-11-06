@@ -32,15 +32,12 @@ a ... line says how much is left:
 
 (memory "compaction/extract" :when "a large result came back and the agent must pick out rows, matches or items: filter, search or count them")
 Extracting, what each returns:
-- head, tail and grep RETURN a value, which the REPL names. Only echo prints.
-  Exception: a bare head or tail step, and a discovery call, print in full.
+- Exception to silence: a bare head or tail step prints in full.
 - (head x [n]) first n of x; (tail x [n]) last n. On a list, n ELEMENTS:
   (head issues 4) is first four rows. On text, n words.
   A slice written as a step of its own is PRINTED and gets no name: you asked
   to read it. Nested in another form it prints nothing, only the value:
   (mapcar row (head issues 4)) , (setq top (head issues 4)) .
-  A discovery call, a search or listing of what is available, prints in full
-  the same way.
 - (grep x "pattern" :group n :max n :ignore-case t) what pattern matched, as a
   list, or nil. On a list, ELEMENTS whose printed form matches:
   (grep issues "auth") is the issues about auth. On text, matched substrings:
@@ -77,5 +74,3 @@ row: function
 Both wrong. Never do either:
 (echo "https://x.dev/a") the URL typed from a printout
 (echo "| ENG-12 | Auth token refresh fails |") the rows typed out by hand
-
-Compute the rows from the variable. Echo the computed string.

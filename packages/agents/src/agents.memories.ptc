@@ -8,8 +8,7 @@ Named agent, kept chat across sends, order always:
 1. (agents) lists saved names. (agent-definition "researcher") reads one.
    Saved one fits? Spawn it by name. Never save second agent for same job.
 2. None fits? Spawn temporary one with :prompt. Nothing saved. :prompt is first
-   task, run at once, not persona: say what to do and what to reply. Reply
-   comes as <system-event source="agent:scratch">.
+   task, run at once, not persona: say what to do and what to reply.
 3. Temporary one did job well, same job will come again? (agent-keep "scratch")
    saves it. Else let it go.
 
@@ -26,20 +25,17 @@ system event. Need each reply? agent-wait before next send.
 Spawn options: :repl :fresh gives new image, :fork copy of this one as it
 stands. :chat :fresh starts with no conversation; :chat :fork with a copy of
 this chat so far. Prefer :chat :fresh; :chat :fork only to continue this exact
-work. :budget caps its steps. :permissions only tighten workspace rules. Asks
-from sub-agents reach user in your chat.
+work. :budget caps its steps. :permissions holds permission forms as text,
+only tightens workspace rules. Asks from sub-agents reach user in your chat.
 User @sub-agents/researcher = saved definition "researcher": spawn it, send it
 the ask.
 
 (memory "agents/saved" :when "the agent is about to save an agent definition, keep a temporary agent for reuse, or delete a saved one")
-defagent only when user asks for agent definition. defagent and agent-keep
-save sub-agents/<name>.ptc; agent-forget deletes it, only when user asks. All
-three wait on user approval. :prompt on saved name refused. Saved name spawns
-without :prompt.
+defagent and agent-keep save sub-agents/<name>.ptc; agent-forget deletes it.
+:prompt on saved name refused. Saved name spawns without :prompt.
 
   (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)
 
-:permissions holds permission forms as text and only tightens workspace rules.
 :roster names the agents it may spawn in turn. :budget caps its steps.
 agent-forget returns t, or nil if none was saved.
 An agent already spawned from a deleted definition keeps running.
@@ -54,14 +50,11 @@ Value is copied as it stands then. Function taken keeps captured variables;
 globals it names resolve in your image.
 
 (memory "agents/quietly" :when "the agent is about to wrap a form in quietly, or run a form without being woken for its result")
-User may wrap forms in (quietly form...). Forms run, you not woken for that
-message. Message and its result stay in chat; read them next turn. Never call
-quietly yourself.
+Message and its result stay in chat; read them next turn.
 
 (memory "agents/delegate" :when "a job is a good fit for a fresh agent, or several independent jobs could run in parallel")
 One-off job: (delegate "brief") spawns fresh temporary agent, sends brief,
-prints "delegated to delegate-1", returns "delegate-1" at once. Reply comes as
-<system-event source="agent:delegate-1">, or agent-wait it. Delegate replies
-result, evidence, what not checked.
+prints "delegated to delegate-1", returns "delegate-1" at once. agent-wait it, or reply comes as system event.
+Delegate replies result, evidence, what not checked.
   (setq a (delegate "read A, reply path and line")) (setq b (delegate "read B"))
   (list (agent-wait a) (agent-wait b))   ; parallel: delegate all first, wait after

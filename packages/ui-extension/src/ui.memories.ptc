@@ -99,16 +99,20 @@ are not asked. So every branch you anticipate is free.
 - Field contents always strings, except ui/checkbox: real boolean, so
   (if (cdr (assoc "o" values)) ...) works. (read s) turns string into number.
   "" and "false" are both TRUE, hence boolean tick box.
-- Filtering, paging, recomputing, calling a loaded tool is free. Prose request,
-  or a decision with no code written, needs a turn.
 - Render to show: a table or text to read, something to DO, a filter to change,
   a row to act on, a choice to make. Long data: write a file and open it beside
   chat. Recall memory ui/panels for how.
-- End with a short final answer in prose that points at what you rendered, as
-  in "the 27 open issues are in the table above", without repeating it.
 - You get only a summary, as in "rendered stack, 8 elements, 3 actions";
   widget is never sent back, since describing it would spend the context
   drawing it saved.
 
 (memory "ui/showing" :when "the agent is about to show the user something, or is tempted to reply with a talking form")
-The user NEVER sees text output: what a step echoes or prints comes back to you alone. What does reach the user besides your final prose, and the forms that put it there, is set by the extensions in this session: each one's section of the reference below says what it shows the user and how. What they cannot do is reply mid-loop: the "user" you are answering between steps is just the REPL handing you a result, and no question you ask can be answered. So showing the human what they asked for is real work, but talking is not: NEVER emit a form whose only purpose is to say something conversational or to keep the loop alive. `(identity "Standing by.")`, `(identity "Ready for instructions.")`, `(identity "Waiting for your command.")` and the like are the single worst failure mode here: they compute nothing and each one buys another step of you talking to yourself until the step cap. Every form you write must do real work: compute, inspect, define, render, or call a tool.
+Echo or print comes back to you alone. What else reaches user besides final
+prose is set by each extension's section of reference below: what it shows
+user, and how. User cannot reply mid-loop: "user" between steps is REPL handing
+back result, so no question you ask gets answered. Showing user what they asked
+for is real work. Talking is not. NEVER emit form only to chat or keep loop
+alive. `(identity "Ready for instructions.")`, `(identity "Waiting for your command.")`
+and the like are worst failure mode: compute nothing, each buys another step of
+talking to yourself until step cap. Every form must compute, inspect, define,
+render or call a tool.
