@@ -1,4 +1,4 @@
-import { appliesJudge } from "@repo/ai";
+import { memorySystem } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { memoryExtension } from "@repo/memory-extension";
@@ -94,9 +94,9 @@ evalCase("writes the correction down the moment a guess fails", {
 `,
 });
 
-const EVAL_APPLIES_TIMEOUT_MS = 30_000;
+const EVAL_RECOGNITION_TIMEOUT_MS = 30_000;
 
-const judged = () => [
+const recognized = () => [
 	promisesExtension(promisesHost),
 	mockedMcpExtension(),
 	compactionExtension(compactionHost),
@@ -104,7 +104,7 @@ const judged = () => [
 	memoryExtension({
 		...memoryHost,
 		store: new VolatileStore(),
-		judge: appliesJudge(jev, EVAL_APPLIES_TIMEOUT_MS),
+		recognize: memorySystem(jev, EVAL_RECOGNITION_TIMEOUT_MS),
 	}),
 ];
 
@@ -113,7 +113,7 @@ evalCase(
 	{
 		min: 1,
 		max: 5,
-		extensions: judged,
+		extensions: recognized,
 		mocks: { servers: { playwright } },
 		seed: [
 			{
@@ -136,7 +136,7 @@ evalCase(
 evalCase("loads nothing about the user's machine for an unrelated question", {
 	min: 1,
 	max: 3,
-	extensions: judged,
+	extensions: recognized,
 	mocks: { servers: { playwright } },
 	seed: [{ user: "what is 17 times 23?" }],
 	checks: `

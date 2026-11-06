@@ -34,6 +34,7 @@ export type TriggerKind = (typeof TRIGGER_KINDS)[number];
 export interface Trigger {
 	kind: TriggerKind;
 	pattern?: unknown;
+	unless?: string;
 }
 
 export interface Memory {
@@ -87,6 +88,8 @@ export function combinatorIn(pattern: unknown): string | undefined {
 export function triggerToForm(trigger: Trigger): unknown {
 	const parts: unknown[] = [newSym(trigger.kind)];
 	if (trigger.pattern !== undefined) parts.push(trigger.pattern);
+	if (trigger.unless !== undefined)
+		parts.push(newLispKeyword("unless"), trigger.unless);
 	return arrayToList(parts);
 }
 
@@ -128,7 +131,7 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 		);
 	if (kind === "when" && typeof pattern !== "string")
 		throw new EvalException(
-			"a when trigger is judged against the situation, so it is one string describing the situation that needs the memory",
+			"a when trigger is matched against the situation, so it is one string describing the situation that needs the memory",
 			pattern,
 		);
 	if (kind !== "call" && !isTextPattern(pattern))
@@ -136,14 +139,34 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 			`a ${kind} trigger matches text, so its pattern must be a string or a combinator over strings`,
 			pattern,
 		);
-	return { kind, pattern };
+	if (kind !== "when" || rest.cdr === null) return { kind, pattern };
+	const unless = exclusion(
+		plistOptions(rest.cdr as List, ["unless"]).get("unless"),
+	);
+	return unless === undefined ? { kind, pattern } : { kind, pattern, unless };
+}
+
+function exclusion(unless: unknown): string | undefined {
+	if (unless === null || unless === undefined) return undefined;
+	if (typeof unless !== "string" || unless.trim() === "")
+		throw new EvalException(
+			'an :unless is one string describing the look-alike situation that must not fire the memory: write :unless "the agent only names a page, without driving it"',
+			unless,
+		);
+	return unless;
 }
 
 export function authoredTrigger(
 	on: unknown,
 	when: unknown,
+	unless?: unknown,
 ): Trigger | undefined {
 	const given = (value: unknown) => value !== null && value !== undefined;
+	if (given(unless) && !given(when))
+		throw new EvalException(
+			"an :unless narrows a :when, so it is given alongside one",
+			unless,
+		);
 	if (given(on) && given(when))
 		throw new EvalException(
 			"a memory fires on one trigger: give :on or :when, not both",
@@ -155,7 +178,10 @@ export function authoredTrigger(
 				"a :when is one string describing the situation that needs the memory: what the user asks, what the agent is doing, an error or a result it just got",
 				when,
 			);
-		return { kind: "when", pattern: when };
+		const excluded = exclusion(unless);
+		return excluded === undefined
+			? { kind: "when", pattern: when }
+			: { kind: "when", pattern: when, unless: excluded };
 	}
 	const trigger = parseTrigger(on);
 	if (trigger?.kind === "when")
@@ -237,7 +263,7 @@ function builtinHeader(line: string, body: string): Memory {
 		form.car.name !== "memory"
 	)
 		throw new EvalException(
-			'a built-in memory opens with a header line, (memory "key" :when "situation" :links ("key"...)) or (memory "key" :on (kind "pattern")), and its body is the text below it',
+			'a built-in memory opens with a header line, (memory "key" :when "situation" :unless "situation" :links ("key"...)) or (memory "key" :on (kind "pattern")), and its body is the text below it',
 			line,
 		);
 	const rest = form.cdr;
@@ -245,7 +271,12 @@ function builtinHeader(line: string, body: string): Memory {
 		throw new EvalException("a built-in memory needs a string key", line);
 	if (body === "")
 		throw new EvalException("a built-in memory needs a body", rest.car);
-	const opts = plistOptions(rest.cdr as List, ["on", "when", "links"]);
+	const opts = plistOptions(rest.cdr as List, [
+		"on",
+		"when",
+		"unless",
+		"links",
+	]);
 	const links = new Map<string, number>();
 	for (const linked of listToArray((opts.get("links") ?? null) as List)) {
 		if (typeof linked !== "string")
@@ -255,7 +286,7 @@ function builtinHeader(line: string, body: string): Memory {
 	return {
 		key: rest.car,
 		body,
-		on: authoredTrigger(opts.get("on"), opts.get("when")),
+		on: authoredTrigger(opts.get("on"), opts.get("when"), opts.get("unless")),
 		links,
 		score: INITIAL_SCORE,
 		used: 0,
@@ -287,17 +318,28 @@ export function readBuiltins(source: string): Memory[] {
 	return memories;
 }
 
-export interface Situation {
-	readonly message: string;
-	readonly step?: string;
+export interface Turn {
+	readonly role: string;
+	readonly content: string;
 }
 
-export type MemoryJudge = (
+export interface Situation {
+	readonly conversation: readonly Turn[];
+}
+
+export interface Cue {
+	readonly key: string;
+	readonly situation: string;
+	readonly unless?: string;
+	readonly gist: string;
+}
+
+export type Recognize = (
 	situation: Situation,
-	asks: readonly string[],
+	cues: readonly Cue[],
 ) => Awaitable<ReadonlyMap<string, number>>;
 
-export const unjudged: MemoryJudge = () => new Map();
+export const recognizeNothing: Recognize = () => new Map();
 
 export interface MemoryHost {
 	store: MemoryStore;
@@ -305,5 +347,5 @@ export interface MemoryHost {
 	prompt: PromptSource;
 	memories: PromptSource;
 	search: SearchEngine;
-	judge: MemoryJudge;
+	recognize: Recognize;
 }

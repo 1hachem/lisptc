@@ -75,7 +75,7 @@ describe("a host with no filesystem behind it still builds", () => {
 			prompt: () => "",
 			memories: memoryHost.memories,
 			search: memoryHost.search,
-			judge: () => new Map(),
+			recognize: () => new Map(),
 		});
 		expect(extension.bank.store).toBe(store);
 		expect(extension.prompt).toBe("");

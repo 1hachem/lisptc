@@ -15,18 +15,18 @@ export const memoryKind = entryKind({
 	fold: every,
 });
 
-const judged = z.object({
+const recognized = z.object({
 	message: z.string(),
 	step: z.string().optional(),
 	scores: z.record(z.string(), z.number().min(0).max(1)),
-	selected: z.array(z.string()).optional(),
+	fired: z.array(firedMemory).optional(),
 	error: z.string().optional(),
 });
 
-export type Judged = z.infer<typeof judged>;
+export type Recognized = z.infer<typeof recognized>;
 
-export const judgedKind = entryKind({
-	name: "judged",
-	schema: judged,
+export const recognizedKind = entryKind({
+	name: "recognized",
+	schema: recognized,
 	fold: every,
 });

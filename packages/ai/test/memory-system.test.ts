@@ -1,8 +1,8 @@
 import type { JudgeRequest, SystemOneModel } from "@repo/shared/system-one";
 import { describe, expect, it } from "vitest";
-import { APPLIES_TIMEOUT_MS, appliesJudge } from "../src/applies.ts";
+import { memorySystem, RECOGNITION_TIMEOUT_MS } from "../src/memory-system.ts";
 
-function judging(noul: (instructions: string) => number): {
+function systemOne(noul: (instructions: unknown) => number): {
 	seen: JudgeRequest[];
 	model: SystemOneModel;
 } {
@@ -28,46 +28,105 @@ function judging(noul: (instructions: string) => number): {
 	};
 }
 
-describe("judging which descriptions a message calls for", () => {
-	it("asks one noul per description, with the message as the state", async () => {
-		const { seen, model } = judging((i) => (i.includes("browser") ? 0.9 : 0.1));
-		const judged = await appliesJudge(model)({ message: "open my browser" }, [
-			"user wants to automate a browser",
-			"user asks about billing",
-		]);
-		expect(judged).toEqual(
+const BROWSER = {
+	key: "browser/local",
+	situation: "the agent is about to drive a web page",
+	unless: "the agent only reads a page's text",
+	gist: "start a local Chrome first",
+};
+
+const BILLING = {
+	key: "billing/plans",
+	situation: "the user asks about billing",
+	gist: "plans are monthly",
+};
+
+const CONVERSATION = [
+	{ role: "user", content: "hi" },
+	{ role: "assistant", content: "hello" },
+	{ role: "user", content: "get me the price" },
+	{ role: "assistant", content: "(search q)" },
+	{ role: "tool", content: "one hit" },
+	{ role: "assistant", content: "(fetch url)" },
+	{ role: "tool", content: "needs javascript" },
+];
+
+describe("recognizing which memories the conversation calls for", () => {
+	it("asks every memory in one request, one noul each, scored by key", async () => {
+		const { seen, model } = systemOne((i) =>
+			JSON.stringify(i).includes("browser") ? 0.9 : 0.1,
+		);
+		const recognized = await memorySystem(model)(
+			{ conversation: CONVERSATION },
+			[BROWSER, BILLING],
+		);
+		expect(recognized).toEqual(
 			new Map([
-				["user wants to automate a browser", 0.9],
-				["user asks about billing", 0.1],
+				["browser/local", 0.9],
+				["billing/plans", 0.1],
 			]),
 		);
-		expect(seen[0]?.state).toEqual({ message: "open my browser" });
+		expect(seen).toHaveLength(1);
 		expect(Object.values(seen[0]?.questions ?? {}).map((q) => q.type)).toEqual([
 			"noul",
 			"noul",
 		]);
 	});
 
-	it("hands the latest step to System One beside the message", async () => {
-		const { seen, model } = judging(() => 0.5);
-		await appliesJudge(model)(
-			{ message: "get me the price", step: "(fetch url)\n\nneeds javascript" },
-			["user wants to automate a browser"],
-		);
-		expect(seen[0]?.state).toEqual({
-			message: "get me the price",
-			step: "(fetch url)\n\nneeds javascript",
+	it("hands over the current message and the last step as latest, the rest as earlier", async () => {
+		const { seen, model } = systemOne(() => 0.5);
+		await memorySystem(model)({ conversation: CONVERSATION }, [BROWSER]);
+		expect(seen[0]?.state).toMatchObject({
+			latest: {
+				message: "get me the price",
+				code: "(fetch url)",
+				result: "needs javascript",
+			},
+			earlier: [
+				{ role: "user", content: "hi" },
+				{ role: "assistant", content: "hello" },
+				{ role: "assistant", content: "(search q)" },
+				{ role: "tool", content: "one hit" },
+			],
 		});
 	});
 
-	it("fails when the model leaves a description unanswered", async () => {
+	it("hands over a fresh message alone as latest, before any step", async () => {
+		const { seen, model } = systemOne(() => 0.5);
+		await memorySystem(model)({ conversation: CONVERSATION.slice(0, 3) }, [
+			BROWSER,
+		]);
+		expect(seen[0]?.state).toMatchObject({
+			latest: { message: "get me the price" },
+			earlier: CONVERSATION.slice(0, 2),
+		});
+	});
+
+	it("tells each question its memory's situation, exclusion, key and gist", async () => {
+		const { seen, model } = systemOne(() => 0.5);
+		await memorySystem(model)({ conversation: CONVERSATION }, [
+			BROWSER,
+			BILLING,
+		]);
+		const [browser, billing] = Object.values(seen[0]?.questions ?? {});
+		expect(browser?.instructions).toMatchObject({
+			situation: BROWSER.situation,
+			unless: BROWSER.unless,
+			memory: { key: BROWSER.key, teaches: BROWSER.gist },
+		});
+		expect(billing?.instructions).not.toHaveProperty("unless");
+	});
+
+	it("fails when the model leaves a memory unanswered", async () => {
 		const model: SystemOneModel = {
 			provider: "fake",
 			model: "fake/jev",
 			judge: async () => ({ model: "fake/jev", answers: {} }),
 		};
 		await expect(
-			appliesJudge(model)({ message: "hi" }, ["x"]),
+			memorySystem(model)({ conversation: [{ role: "user", content: "hi" }] }, [
+				BILLING,
+			]),
 		).rejects.toThrow();
 	});
 
@@ -81,11 +140,14 @@ describe("judging which descriptions a message calls for", () => {
 				),
 		};
 		await expect(
-			appliesJudge(model, 10)({ message: "hi" }, ["x"]),
+			memorySystem(model, 10)(
+				{ conversation: [{ role: "user", content: "hi" }] },
+				[BILLING],
+			),
 		).rejects.toThrow();
 	});
 
 	it("waits at most two seconds for a judgment before a step goes ahead without it", () => {
-		expect(APPLIES_TIMEOUT_MS).toBe(2_000);
+		expect(RECOGNITION_TIMEOUT_MS).toBe(2_000);
 	});
 });

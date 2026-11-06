@@ -21,7 +21,7 @@ import {
 	type MemoryHost,
 	type MemoryStore,
 	memoryToForm,
-	unjudged,
+	recognizeNothing,
 } from "./ports.ts";
 
 export function memoryDirFor(scope?: string): string {
@@ -176,7 +176,7 @@ export function memoryHostFor(scope?: string): MemoryHost {
 		prompt: memoryPrompt,
 		memories: memoryMemories,
 		search: memorySearchEngine,
-		judge: unjudged,
+		recognize: recognizeNothing,
 	};
 }
 
@@ -188,5 +188,5 @@ export const memoryHost: MemoryHost = {
 	prompt: memoryPrompt,
 	memories: memoryMemories,
 	search: memorySearchEngine,
-	judge: unjudged,
+	recognize: recognizeNothing,
 };

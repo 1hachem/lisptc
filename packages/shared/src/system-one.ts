@@ -1,7 +1,9 @@
+type Instructions = string | { readonly [field: string]: unknown };
+
 export type Judgment =
 	| {
 			type: "noul";
-			instructions: string;
+			instructions: Instructions;
 			criteria?: { true?: string; false?: string };
 	  }
 	| {

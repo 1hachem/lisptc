@@ -2,12 +2,18 @@
 Two ways to fire by itself.
 
 :when "situation" is the usual one: one string describing the situation that
-needs the memory. Judged by meaning before every step, not regex, against what
-user just said plus your last step: the code, its result or its error. Fires
-once per user message. Describe the whole situation, not only a request: what
-user asks, what you are about to do, an error or a result that just came back.
+needs the memory. Recognized by meaning before every step, not regex, against
+whole conversation, latest step weighed most: what user said, your last code,
+its result or its error. Recognizer also reads memory key and start of body.
+Fires once per user message. Describe the whole situation, not only a request:
+what user asks, what you are about to do, an error or a result that just came back.
 
   :when "agent is about to drive a web page, or a page call failed with a missing browser"
+
+:unless "situation" beside :when names look-alike that must NOT fire it. Add
+one when memory fired where it did not help:
+
+  :when "agent is about to drive a web page" :unless "agent only reads a page's text with fetch"
 
 :on is a quoted form of kind and pattern, for an exact event. Eight kinds:
 
@@ -127,8 +133,9 @@ body. Body is prose or code, one slot: here they are the same material.
   be read as code in an aside.
 
 FIRING BY ITSELF: with :when or :on a memory loads itself, unasked. Usual is
-:when, a string describing the situation that needs it, judged by meaning before
-every step against what user said and what last step did and got back. :on is
+:when, a string describing the situation that needs it, recognized by meaning before
+every step against the conversation, latest step weighed most. :unless beside
+it names look-alike that must not fire it. :on is
 a quoted form for an exact event. Memory with neither never arrives by itself.
 It waits for a recall naming it. Unguessable key later means lost.
 

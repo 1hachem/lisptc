@@ -4,13 +4,13 @@ export {
 	DEFAULT_SYSTEM_PROMPT,
 	streamAgent,
 } from "./agent.ts";
-export {
-	APPLIES_TIMEOUT_MS,
-	type AppliesJudge,
-	appliesJudge,
-} from "./applies.ts";
 export { Budget, type Limits, type Usage } from "./budget.ts";
 export { type Envelope, type Mailbox, MemoryMailbox } from "./mailbox.ts";
+export {
+	type MemorySystem,
+	memorySystem,
+	RECOGNITION_TIMEOUT_MS,
+} from "./memory-system.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 export { POLICY_MEMORIES } from "./prompts/policy-memories.ts";
 export {

@@ -51,7 +51,7 @@ export const get = query({
 	},
 });
 
-function judged(on: string | undefined): boolean {
+function onSituation(on: string | undefined): boolean {
 	return on?.startsWith("(when ") ?? false;
 }
 
@@ -75,8 +75,8 @@ export const put = mutation({
 				.query("memories")
 				.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 				.take(MAX_MEMORIES);
-		if (judged(memory.on) && !judged(existing?.on)) {
-			const situational = (await owned()).filter((m) => judged(m.on));
+		if (onSituation(memory.on) && !onSituation(existing?.on)) {
+			const situational = (await owned()).filter((m) => onSituation(m.on));
 			if (situational.length >= MAX_WHEN_MEMORIES) {
 				throw new ConvexError({ code: "TOO_MANY_WHEN_MEMORIES" });
 			}

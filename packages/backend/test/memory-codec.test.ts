@@ -40,6 +40,15 @@ describe("the memory codec", () => {
 		});
 	});
 
+	it("carries a situation and the look-alike it must not fire on", () => {
+		const on = {
+			kind: "when" as const,
+			pattern: "the agent is about to drive a web page",
+			unless: "the agent only reads a page's text",
+		};
+		expect(roundTrip({ ...base, on }).on).toEqual(on);
+	});
+
 	it("leaves an untriggered memory untriggered", () => {
 		expect(roundTrip(base).on).toBeUndefined();
 	});

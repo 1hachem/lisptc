@@ -16,15 +16,15 @@ const FIRED = {
 		on: "call",
 	},
 };
-const JUDGED = {
-	kind: "judged",
+const RECOGNIZED = {
+	kind: "recognized",
 	value: {
 		message: "open hyko.ai",
 		scores: { "the user wants the headline": 0.9 },
 	},
 };
 const FAILED = {
-	kind: "judged",
+	kind: "recognized",
 	value: { message: "open hyko.ai", scores: {}, error: "timed out" },
 };
 
@@ -72,7 +72,7 @@ describe("entries land where they were recorded", () => {
 	test("each entry is a line of its own, in the order it arrived", async () => {
 		const run = await runCase(
 			runtimeFor([
-				{ type: "entry", entry: JUDGED },
+				{ type: "entry", entry: RECOGNIZED },
 				{ type: "entry", entry: FIRED },
 				{ type: "assistant", code: '(load-mcp "playwright")', meta: {} },
 				{ type: "entry", entry: FIRED },
@@ -93,8 +93,8 @@ describe("entries land where they were recorded", () => {
 			"assistant",
 		]);
 		expect(run.transcript[0]).toMatchObject({
-			kind: "judged",
-			value: JUDGED.value,
+			kind: "recognized",
+			value: RECOGNIZED.value,
 			content: "the user wants the headline → 0.90",
 		});
 		expect(run.transcript[1]).toMatchObject({
@@ -105,7 +105,7 @@ describe("entries land where they were recorded", () => {
 		expect(run.transcript[3]).toMatchObject({ kind: "memory" });
 	});
 
-	test("a judge that failed shows its error in the printed run", async () => {
+	test("a failed recognition shows its error in the printed run", async () => {
 		const run = await runCase(
 			runtimeFor([
 				{ type: "entry", entry: FAILED },
@@ -118,11 +118,11 @@ describe("entries land where they were recorded", () => {
 
 		expect(run.transcript[0]).toMatchObject({
 			role: "entry",
-			kind: "judged",
+			kind: "recognized",
 			content: "failed: timed out",
 		});
 		expect(formatRun("case", { ...run, case: "case", sample: 1 })).toContain(
-			"judged │ failed: timed out",
+			"recognized │ failed: timed out",
 		);
 	});
 

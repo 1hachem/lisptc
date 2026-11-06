@@ -171,13 +171,19 @@ function entryText({ kind, value }: EvalEntry): string {
 	const fields = record(value);
 	if (kind === "memory" && typeof fields.key === "string")
 		return `${fields.key}: ${typeof fields.body === "string" ? fields.body : ""}`;
-	if (kind === "judged") {
+	if (kind === "recognized") {
 		const scores = Object.entries(record(fields.scores)).map(
 			([ask, score]) =>
 				`${ask} → ${typeof score === "number" ? score.toFixed(2) : String(score)}`,
 		);
 		if (typeof fields.error === "string")
 			scores.push(`failed: ${fields.error}`);
+		const fired = Array.isArray(fields.fired) ? fields.fired.map(record) : [];
+		for (const memory of fired)
+			if (typeof memory.key === "string")
+				scores.push(
+					`fired ${memory.key}: ${typeof memory.body === "string" ? memory.body : ""}`,
+				);
 		return scores.join("\n");
 	}
 	return JSON.stringify(value) ?? "";

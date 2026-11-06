@@ -27,8 +27,8 @@ import {
 } from "@repo/interpreter/session";
 import {
 	type FiredMemory,
-	judgedKind,
 	memoryKind,
+	recognizedKind,
 } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
@@ -39,19 +39,21 @@ import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
 	authoredTrigger,
+	type Cue,
 	combinatorIn,
 	INITIAL_SCORE,
 	LINKED_FIRES_AT,
 	type Memory,
 	type MemoryHost,
-	type MemoryJudge,
 	type MemoryStore,
+	type Recognize,
 	readBuiltins,
+	recognizeNothing,
 	type Situation,
 	type Trigger,
 	type TriggerKind,
+	type Turn,
 	triggerToForm,
-	unjudged,
 	VolatileStore,
 	WHEN_FIRES_AT,
 } from "./ports.ts";
@@ -134,23 +136,42 @@ function someSubform(form: unknown, test: (s: unknown) => boolean): boolean {
 	return false;
 }
 
-function latestStep(interp: Interp): string | undefined {
+function conversationOf(interp: Interp): Turn[] {
 	const said = interp.getGlobal(newSym("conversation"));
-	if (!(said instanceof Cell)) return undefined;
-	const turns = listToArray(said).map((turn) => {
+	if (!(said instanceof Cell)) return [];
+	return listToArray(said).flatMap((turn) => {
 		const fields = new Map<string, unknown>();
 		for (let at: unknown = turn; at instanceof Cell; at = at.cdr)
 			if (at.car instanceof Cell && typeof at.car.car === "string")
 				fields.set(at.car.car, at.car.cdr);
-		return fields;
+		const role = fields.get("role");
+		const content = fields.get("content");
+		return typeof role === "string" && typeof content === "string"
+			? [{ role, content }]
+			: [];
 	});
+}
+
+const GIST_CHARS = 240;
+
+function cueOf(memory: Memory): Cue {
+	const on = memory.on as Trigger;
+	const gist = bodyText(memory.body).replace(/\s+/g, " ").trim();
+	return {
+		key: memory.key,
+		situation: on.pattern as string,
+		...(on.unless === undefined ? {} : { unless: on.unless }),
+		gist: gist.length > GIST_CHARS ? `${gist.slice(0, GIST_CHARS)}…` : gist,
+	};
+}
+
+function latestStep(turns: readonly Turn[]): string | undefined {
 	let at = turns.length - 1;
-	while (at >= 0 && turns[at]?.get("role") !== "assistant") at--;
+	while (at >= 0 && turns[at]?.role !== "assistant") at--;
 	if (at === -1) return undefined;
 	return turns
 		.slice(at)
-		.map((turn) => turn.get("content"))
-		.filter((content): content is string => typeof content === "string")
+		.map((turn) => turn.content)
 		.join("\n\n");
 }
 
@@ -164,12 +185,12 @@ interface MemoryEvent {
 	kind: TriggerKind;
 	text?: string;
 	form?: unknown;
-	judged?: ReadonlyMap<string, number>;
+	recognized?: ReadonlyMap<string, number>;
 }
 
-function fires(trigger: Trigger, event: MemoryEvent): boolean {
-	if (event.judged !== undefined)
-		return (event.judged.get(trigger.pattern as string) ?? 0) >= WHEN_FIRES_AT;
+function fires(key: string, trigger: Trigger, event: MemoryEvent): boolean {
+	if (event.recognized !== undefined)
+		return (event.recognized.get(key) ?? 0) >= WHEN_FIRES_AT;
 	if (trigger.pattern === undefined) return true;
 	if (event.form !== undefined)
 		return evalPattern(trigger.pattern, (p) =>
@@ -261,6 +282,7 @@ export class MemoryBank {
 	private loaded: State<readonly string[]> = detachedState([]);
 	private asked: State<readonly string[]> = detachedState([]);
 	private builtinSource: () => readonly string[] = () => [];
+	private firing: FiredMemory[] | undefined;
 	private builtinTable: ReadonlyMap<string, Memory> | undefined;
 
 	private get heard(): number {
@@ -353,7 +375,7 @@ export class MemoryBank {
 		readonly store: MemoryStore = new VolatileStore(),
 		readonly clock: Clock = systemClock,
 		readonly search: SearchEngine = memorySearchEngine,
-		readonly judge: MemoryJudge = unjudged,
+		readonly recognize: Recognize = recognizeNothing,
 	) {}
 
 	private now(): number {
@@ -392,12 +414,13 @@ export class MemoryBank {
 		yield* this.sweep();
 		const before = this.step.get().surfaced.length;
 		if (fresh) yield* this.dispatch({ kind: "user", text: last }, interp);
-		const step = fresh ? undefined : latestStep(interp);
-		const judged = yield* this.judgeSituation(
+		const conversation = conversationOf(interp);
+		const step = fresh ? undefined : latestStep(conversation);
+		yield* this.recognizeSituation(
+			{ conversation },
 			step === undefined ? { message: last } : { message: last, step },
+			interp,
 		);
-		if (judged.size > 0)
-			yield* this.dispatch({ kind: "when", text: last, judged }, interp);
 		this.change({ stepping: false });
 		this.drain();
 		return this.step.get().surfaced.slice(before);
@@ -413,37 +436,42 @@ export class MemoryBank {
 		return [...surfaced];
 	}
 
-	private *judgeSituation(
+	private *recognizeSituation(
 		situation: Situation,
-	): Eval<ReadonlyMap<string, number>> {
+		seen: { message: string; step?: string },
+		interp: Interp,
+	): Eval<void> {
 		const spent = [...this.loaded.get(), ...this.asked.get()];
 		const candidates = (yield* this.everything()).filter(
 			(memory) => memory.on?.kind === "when" && !spent.includes(memory.key),
 		);
-		const situations = new Set(candidates.map((m) => m.on?.pattern as string));
-		if (situations.size === 0) return new Map();
+		if (candidates.length === 0) return;
+		const cues = candidates.map(cueOf);
 		let scores: ReadonlyMap<string, number> = new Map();
 		let error: string | undefined;
 		try {
-			scores = yield* settled(this.judge(situation, [...situations]));
+			scores = yield* settled(this.recognize(situation, cues));
 		} catch (ex) {
 			error = ex instanceof Error ? ex.message : String(ex);
 		}
-		const selected = candidates
-			.filter(
-				(memory) =>
-					memory.on !== undefined &&
-					fires(memory.on, { kind: "when", judged: scores }),
-			)
-			.map((memory) => memory.key);
-		if (scores.size > 0 || error !== undefined)
-			record(this.channels, judgedKind, {
-				...situation,
-				scores: Object.fromEntries(scores),
-				...(selected.length === 0 ? {} : { selected }),
-				...(error === undefined ? {} : { error }),
-			});
-		return scores;
+		if (scores.size === 0 && error === undefined) return;
+		const fired: FiredMemory[] = [];
+		this.firing = fired;
+		try {
+			if (scores.size > 0)
+				yield* this.dispatch(
+					{ kind: "when", text: seen.message, recognized: scores },
+					interp,
+				);
+		} finally {
+			this.firing = undefined;
+		}
+		record(this.channels, recognizedKind, {
+			...seen,
+			scores: Object.fromEntries(scores),
+			...(fired.length === 0 ? {} : { fired }),
+			...(error === undefined ? {} : { error }),
+		});
 	}
 
 	*beginStep(code: string, interp: Interp): Eval<string> {
@@ -566,7 +594,7 @@ export class MemoryBank {
 		for (const memory of yield* this.everything()) {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
-			if (!fires(on, event)) continue;
+			if (!fires(memory.key, on, event)) continue;
 			if (event.kind === "when") {
 				const asked = this.asked.get();
 				if (asked.includes(memory.key)) continue;
@@ -595,7 +623,8 @@ export class MemoryBank {
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
-		record(this.channels, memoryKind, surfaced);
+		if (this.firing !== undefined) this.firing.push(surfaced);
+		else record(this.channels, memoryKind, surfaced);
 	}
 }
 
@@ -669,7 +698,7 @@ export function memoryExtension(
 ): MemoryExtension {
 	const bank =
 		options.bank ??
-		new MemoryBank(host.store, host.clock, host.search, host.judge);
+		new MemoryBank(host.store, host.clock, host.search, host.recognize);
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
 		asks: [FORGET_ALL],
@@ -697,7 +726,14 @@ const REMEMBER_ARGS = [
 		type: "string",
 		required: false,
 		description:
-			"the situation that needs this memory, in words, judged before every step against what the user said and what the agent just did and got back: a request, an action, an error, a result",
+			"the situation that needs this memory, in words, recognized before every step against what the user said and what the agent just did and got back: a request, an action, an error, a result",
+	},
+	{
+		name: "unless",
+		type: "string",
+		required: false,
+		description:
+			"beside :when, a look-alike situation that must not fire this memory, in words",
 	},
 	{
 		name: "links",
@@ -766,13 +802,14 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	interp.defGen(
 		"memory/remember",
 		-1,
-		'(remember key body [:when "situation" | :on (kind "pattern")] [:links (key...)])',
-		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:when` it fires by itself once the situation it describes arises: the user's request, what you are doing, an error or a result you just got. With `:on` it fires on an exact event; `:on (start)` loads it once, on the user's first message, so it is the place for your role and your goal. Returns the key.",
+		'(remember key body [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links (key...)])',
+		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:when` it fires by itself once the situation it describes arises: the user's request, what you are doing, an error or a result you just got. `:unless` names a look-alike situation that must not fire it. With `:on` it fires on an exact event; `:on (start)` loads it once, on the user's first message, so it is the place for your role and your goal. Returns the key.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const { values, options } = splitKeywordArgs(rest, [
 				"on",
 				"when",
+				"unless",
 				"links",
 			]);
 			const args = listToArray(values);
@@ -786,7 +823,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 					body,
 				);
 			refuseBuiltin(bank, key);
-			const opts = plistOptions(options, ["on", "when", "links"]);
+			const opts = plistOptions(options, ["on", "when", "unless", "links"]);
 			const links = new Map<string, number>();
 			for (const linked of listToArray((opts.get("links") ?? null) as List))
 				if (typeof linked === "string") links.set(linked, LINKED_FIRES_AT);
@@ -794,7 +831,11 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			yield* bank.remember({
 				key,
 				body,
-				on: authoredTrigger(opts.get("on"), opts.get("when")),
+				on: authoredTrigger(
+					opts.get("on"),
+					opts.get("when"),
+					opts.get("unless"),
+				),
 				links,
 				score: existing?.score ?? INITIAL_SCORE,
 				used: existing?.used ?? 0,

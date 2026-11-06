@@ -24,7 +24,7 @@ const extensions = () => [
 	proseExtension(proseHost),
 ];
 
-const judgingExtensions = () => [
+const recognizingExtensions = () => [
 	tracedSecretsExtension(),
 	promisesExtension(promisesHost),
 	mockedMcpExtension(),
@@ -32,12 +32,12 @@ const judgingExtensions = () => [
 	memoryExtension({
 		...memoryHost,
 		store: new VolatileStore(),
-		judge: () => new Map([["the user wants the headline", 0.9]]),
+		recognize: () => new Map([["headline", 0.9]]),
 	}),
 	proseExtension(proseHost),
 ];
 
-const failingJudgeExtensions = () => [
+const failingRecognitionExtensions = () => [
 	tracedSecretsExtension(),
 	promisesExtension(promisesHost),
 	mockedMcpExtension(),
@@ -45,7 +45,7 @@ const failingJudgeExtensions = () => [
 	memoryExtension({
 		...memoryHost,
 		store: new VolatileStore(),
-		judge: () => Promise.reject(new Error("timed out")),
+		recognize: () => Promise.reject(new Error("timed out")),
 	}),
 	proseExtension(proseHost),
 ];
@@ -286,13 +286,13 @@ describe("a case runs against a scripted model", () => {
 		}
 	});
 
-	test("the judge's scores land before the step that read them", async () => {
+	test("the memory system's scores and the memories it fired land before the step that read them", async () => {
 		turn = 0;
 		const result = await runCase(
 			{
 				min: 4,
 				max: 8,
-				extensions: judgingExtensions,
+				extensions: recognizingExtensions,
 				mocks: { servers: { playwright } },
 				prelude: `(memory/remember "headline" "the headline is on the page" :when "the user wants the headline")`,
 				seed: [{ user: "open hyko.ai and tell me the headline" }],
@@ -302,30 +302,28 @@ describe("a case runs against a scripted model", () => {
 			{ provider: "digitalocean", model: "stub" },
 		);
 
-		const first = firstAssistant(result);
-		const [judged] = entriesAt(result, "judged");
-		const [fired] = entriesAt(result, "memory");
-		expect(result.transcript[judged]).toMatchObject({
+		const [recognized] = entriesAt(result, "recognized");
+		expect(result.transcript[recognized]).toMatchObject({
 			value: {
 				message: "open hyko.ai and tell me the headline",
-				scores: { "the user wants the headline": 0.9 },
+				scores: { headline: 0.9 },
+				fired: [{ key: "headline", on: "when" }],
 			},
+			content: expect.stringContaining(
+				"fired headline: the headline is on the page",
+			),
 		});
-		expect(result.transcript[fired]).toMatchObject({
-			value: { key: "headline", on: "when" },
-		});
-		expect(judged).toBeLessThan(fired);
-		expect(fired).toBeLessThan(first);
-		expect(entriesAt(result, "memory")).toEqual([fired]);
+		expect(recognized).toBeLessThan(firstAssistant(result));
+		expect(entriesAt(result, "memory")).toEqual([]);
 	});
 
-	test("a judge that fails lands in the transcript with its error", async () => {
+	test("a failed recognition lands in the transcript with its error", async () => {
 		turn = 0;
 		const result = await runCase(
 			{
 				min: 4,
 				max: 8,
-				extensions: failingJudgeExtensions,
+				extensions: failingRecognitionExtensions,
 				mocks: { servers: { playwright } },
 				prelude: `(memory/remember "headline" "the headline is on the page" :when "the user wants the headline")`,
 				seed: [{ user: "open hyko.ai and tell me the headline" }],
@@ -335,12 +333,12 @@ describe("a case runs against a scripted model", () => {
 			{ provider: "digitalocean", model: "stub" },
 		);
 
-		const [judged] = entriesAt(result, "judged");
-		expect(result.transcript[judged]).toMatchObject({
+		const [recognized] = entriesAt(result, "recognized");
+		expect(result.transcript[recognized]).toMatchObject({
 			value: { scores: {}, error: "timed out" },
 			content: "failed: timed out",
 		});
-		expect(judged).toBeLessThan(firstAssistant(result));
+		expect(recognized).toBeLessThan(firstAssistant(result));
 		expect(entriesAt(result, "memory")).toEqual([]);
 	});
 

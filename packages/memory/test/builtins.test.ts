@@ -12,7 +12,7 @@ import {
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
-import { judgedKind, memoryKind } from "@repo/journal-catalog/memory";
+import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { type Entry, view } from "@repo/shared/journal";
 import type { ChatMessage } from "@repo/shared/messages";
@@ -26,9 +26,11 @@ import {
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
 import {
-	type MemoryJudge,
+	type Cue,
+	type Recognize,
+	recognizeNothing,
 	type Situation,
-	unjudged,
+	type Turn,
 	VolatileStore,
 	WHEN_FIRES_AT,
 } from "../src/ports.ts";
@@ -53,26 +55,31 @@ pass :quiet t only when the row lists it
 deploys go through task deploy
 `;
 
-interface Judged {
+interface Recognized {
 	calls: (readonly string[])[];
+	cues: (readonly Cue[])[];
 	situations: Situation[];
-	judge: MemoryJudge;
+	recognize: Recognize;
 }
 
-function judging(
+function recognizing(
 	scores: Record<string, number>,
 	afterStep: Record<string, number> = scores,
-): Judged {
+): Recognized {
 	const calls: (readonly string[])[] = [];
+	const cues: (readonly Cue[])[] = [];
 	const situations: Situation[] = [];
 	return {
 		calls,
+		cues,
 		situations,
-		judge: (situation, asks) => {
-			calls.push(asks);
+		recognize: (situation, asked) => {
+			calls.push(asked.map((cue) => cue.situation));
+			cues.push(asked);
 			situations.push(situation);
-			const scored = situation.step === undefined ? scores : afterStep;
-			return new Map(asks.map((a) => [a, scored[a] ?? 0]));
+			const scored =
+				situation.conversation.at(-1)?.role === "user" ? scores : afterStep;
+			return new Map(asked.map((cue) => [cue.key, scored[cue.situation] ?? 0]));
 		},
 	};
 }
@@ -87,14 +94,14 @@ interface Fixture {
 }
 
 function fixture(
-	options: { judge?: MemoryJudge; clock?: Clock; memories?: string } = {},
+	options: { recognize?: Recognize; clock?: Clock; memories?: string } = {},
 ): Fixture {
 	const store = new VolatileStore();
 	const bank = new MemoryBank(
 		store,
 		options.clock ?? memoryHost.clock,
 		memoryHost.search,
-		options.judge,
+		options.recognize,
 	);
 	const extension = memoryExtension({ ...bareHost, store }, { bank });
 	const interp = new MemoryInterp({
@@ -104,6 +111,11 @@ function fixture(
 	const hooks = openSession([extension]);
 	const buffer = bufferTransport();
 	interp.channels.pipe(buffer);
+	const conversation: Turn[] = [];
+	const say = (...turns: Turn[]) => {
+		conversation.push(...turns);
+		interp.defineGlobal(newSym("conversation"), jsonToLisp(conversation));
+	};
 	return {
 		interp,
 		bank,
@@ -114,17 +126,15 @@ function fixture(
 			const before = interp.getGlobal(newSym("user-messages"));
 			const all = before instanceof Cell ? listToArray(before) : [];
 			interp.defineGlobal(newSym("user-messages"), arrayToList([...all, text]));
+			say({ role: "user", content: text });
 			const fired = await drive(bank.hear(interp));
 			await drive(bank.endStep());
 			return fired.map((m) => m.key);
 		},
 		async step(code, result) {
-			interp.defineGlobal(
-				newSym("conversation"),
-				jsonToLisp([
-					{ role: "assistant", content: code },
-					{ role: "tool", content: result },
-				]),
+			say(
+				{ role: "assistant", content: code },
+				{ role: "tool", content: result },
 			);
 			const fired = await drive(bank.hear(interp));
 			await drive(bank.endStep());
@@ -158,7 +168,7 @@ describe("built-in memories", () => {
 			new VolatileStore(),
 			memoryHost.clock,
 			memoryHost.search,
-			unjudged,
+			recognizeNothing,
 		);
 		bank.readBuiltinsFrom(() => interp.builtinMemories());
 		expect([...bank.builtins().keys()]).toEqual(
@@ -290,8 +300,8 @@ describe("the when trigger", () => {
 	const ASK = "user wants to automate a web browser";
 
 	it("fires at the threshold, with what it links", async () => {
-		const { judge } = judging({ [ASK]: WHEN_FIRES_AT });
-		const f = fixture({ judge });
+		const { recognize } = recognizing({ [ASK]: WHEN_FIRES_AT });
+		const f = fixture({ recognize });
 		expect(await f.hear("open my browser and fill the form")).toEqual([
 			"browser/local",
 			"browser/flags",
@@ -299,66 +309,109 @@ describe("the when trigger", () => {
 	});
 
 	it("stays quiet below the threshold", async () => {
-		const { judge } = judging({ [ASK]: WHEN_FIRES_AT - 0.01 });
-		const f = fixture({ judge });
+		const { recognize } = recognizing({ [ASK]: WHEN_FIRES_AT - 0.01 });
+		const f = fixture({ recognize });
 		expect(await f.hear("what's the weather")).toEqual([]);
 	});
 
-	it("records what it judged and the scores, keyed by pattern", async () => {
-		const { judge } = judging({ [ASK]: 0.42 });
-		const f = fixture({ judge });
+	it("records what it recognized and the scores, keyed by memory", async () => {
+		const { recognize } = recognizing({ [ASK]: 0.42 });
+		const f = fixture({ recognize });
 		await f.hear("open my browser");
-		expect(view(f.entries(), judgedKind)).toEqual([
-			{ message: "open my browser", scores: { [ASK]: 0.42 } },
+		expect(view(f.entries(), recognizedKind)).toEqual([
+			{ message: "open my browser", scores: { "browser/local": 0.42 } },
 		]);
 	});
 
-	it("records which memories the judgement selected, apart from what they link", async () => {
-		const { judge } = judging({ [ASK]: 0.9 });
-		const f = fixture({ judge });
-		await f.hear("open my browser and fill the form");
-		expect(view(f.entries(), judgedKind)).toEqual([
+	it("hands each memory to the recognizer with its key, situation and gist", async () => {
+		const { recognize, cues } = recognizing({});
+		const f = fixture({ recognize });
+		await f.hear("open my browser");
+		expect(cues[0]).toEqual([
 			{
-				message: "open my browser and fill the form",
-				scores: { [ASK]: 0.9 },
-				selected: ["browser/local"],
+				key: "browser/local",
+				situation: ASK,
+				gist: 'load it with (load-mcp "playwright" :local t)',
 			},
 		]);
 	});
 
-	it("records no judgement when no judge result exists", async () => {
-		const f = fixture();
+	it("hands over the look-alike a memory must not fire on", async () => {
+		const { recognize, cues } = recognizing({});
+		const f = fixture({ recognize });
+		await ev(
+			f,
+			`(memory/remember "mine" "x" :when "${ASK}" :unless "user only names a browser")`,
+		);
 		await f.hear("open my browser");
-		expect(view(f.entries(), judgedKind)).toEqual([]);
+		expect(cues[0]).toContainEqual(
+			expect.objectContaining({
+				key: "mine",
+				unless: "user only names a browser",
+			}),
+		);
 	});
 
-	it("records each memory it fires, in the order they fire", async () => {
-		const { judge } = judging({ [ASK]: 0.9 });
-		const f = fixture({ judge });
+	it("refuses an :unless with no :when to narrow", async () => {
+		const f = fixture();
+		await expect(
+			ev(f, `(memory/remember "mine" "x" :unless "user only names a browser")`),
+		).rejects.toThrow();
+	});
+
+	it("records the memories the recognition fired inside the recognition, linked ones too", async () => {
+		const { recognize } = recognizing({ [ASK]: 0.9 });
+		const f = fixture({ recognize });
 		await f.hear("open my browser and fill the form");
-		const kinds = f.entries().map((e) => e.kind);
-		expect(kinds).toEqual(["judged", "memory", "memory"]);
-		expect(view(f.entries(), memoryKind).map((m) => m.key)).toEqual([
+		const [recognized] = view(f.entries(), recognizedKind);
+		expect(recognized?.scores).toEqual({ "browser/local": 0.9 });
+		expect(recognized?.fired?.map((m) => m.key)).toEqual([
 			"browser/local",
 			"browser/flags",
 		]);
+		expect(recognized?.fired?.[0]?.body).toContain("load-mcp");
 	});
 
-	it("judges each situation once per judgement", async () => {
-		const { judge, calls } = judging({});
-		const f = fixture({ judge });
+	it("records no recognition when nothing recognizes", async () => {
+		const f = fixture();
+		await f.hear("open my browser");
+		expect(view(f.entries(), recognizedKind)).toEqual([]);
+	});
+
+	it("records a recognition's memories once, in its own entry and nowhere else", async () => {
+		const { recognize } = recognizing({ [ASK]: 0.9 });
+		const f = fixture({ recognize });
+		await f.hear("open my browser and fill the form");
+		expect(f.entries().map((e) => e.kind)).toEqual(["recognized"]);
+		expect(view(f.entries(), memoryKind)).toEqual([]);
+	});
+
+	it("records a memory another trigger fires as an entry of its own", async () => {
+		const f = fixture();
+		await f.hear("deploy the app");
+		expect(view(f.entries(), memoryKind).map((m) => m.key)).toEqual([
+			"deploy/notes",
+		]);
+	});
+
+	it("asks about every memory once per pass, in a single call", async () => {
+		const { recognize, calls, cues } = recognizing({});
+		const f = fixture({ recognize });
 		await ev(f, `(memory/remember "mine" "x" :when "${ASK}")`);
 		await ev(
 			f,
 			`(memory/remember "other" "y" :when "user asks about billing")`,
 		);
 		await f.hear("hello");
-		expect(calls).toEqual([[ASK, "user asks about billing"]]);
+		expect(calls).toHaveLength(1);
+		expect(new Set(cues[0]?.map((cue) => cue.key))).toEqual(
+			new Set(["mine", "other", "browser/local"]),
+		);
 	});
 
 	it("fires the agent's own memories too", async () => {
-		const { judge } = judging({ "user asks about billing": 0.9 });
-		const f = fixture({ judge });
+		const { recognize } = recognizing({ "user asks about billing": 0.9 });
+		const f = fixture({ recognize });
 		await ev(
 			f,
 			`(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")`,
@@ -366,37 +419,40 @@ describe("the when trigger", () => {
 		expect(await f.hear("where is my invoice")).toEqual(["billing"]);
 	});
 
-	it("fails open when the judge fails, so the other triggers still fire", async () => {
+	it("fails open when the memory system fails, so the other triggers still fire", async () => {
 		const f = fixture({
-			judge: () => Promise.reject(new Error("timed out")),
+			recognize: () => Promise.reject(new Error("timed out")),
 		});
 		expect(await f.hear("deploy now")).toEqual(["deploy/notes"]);
-		expect(view(f.entries(), judgedKind)).toEqual([
+		expect(view(f.entries(), recognizedKind)).toEqual([
 			{ message: "deploy now", scores: {}, error: "timed out" },
 		]);
 	});
 
-	it("judges again before a later step, with what that step did", async () => {
-		const { judge, situations } = judging({});
-		const f = fixture({ judge });
+	it("recognizes again before a later step, over the whole conversation", async () => {
+		const { recognize, situations } = recognizing({});
+		const f = fixture({ recognize });
 		await f.hear("fetch the page");
 		await f.step('(fetch "https://x")', "error: timed out");
 		expect(situations).toEqual([
-			{ message: "fetch the page" },
+			{ conversation: [{ role: "user", content: "fetch the page" }] },
 			{
-				message: "fetch the page",
-				step: '(fetch "https://x")\n\nerror: timed out',
+				conversation: [
+					{ role: "user", content: "fetch the page" },
+					{ role: "assistant", content: '(fetch "https://x")' },
+					{ role: "tool", content: "error: timed out" },
+				],
 			},
 		]);
-		expect(view(f.entries(), judgedKind).map((j) => j.step)).toEqual([
+		expect(view(f.entries(), recognizedKind).map((j) => j.step)).toEqual([
 			undefined,
 			'(fetch "https://x")\n\nerror: timed out',
 		]);
 	});
 
 	it("fires on a later step what the message alone did not call for", async () => {
-		const { judge } = judging({}, { [ASK]: 0.9 });
-		const f = fixture({ judge });
+		const { recognize } = recognizing({}, { [ASK]: 0.9 });
+		const f = fixture({ recognize });
 		expect(await f.hear("get me the price")).toEqual([]);
 		expect(await f.step('(fetch "https://shop")', "needs javascript")).toEqual([
 			"browser/local",
@@ -405,8 +461,10 @@ describe("the when trigger", () => {
 	});
 
 	it("fires a when memory once per user message, however many steps follow", async () => {
-		const { judge, calls } = judging({ "user asks about billing": 0.9 });
-		const f = fixture({ judge });
+		const { recognize, calls } = recognizing({
+			"user asks about billing": 0.9,
+		});
+		const f = fixture({ recognize });
 		await ev(
 			f,
 			`(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")`,
@@ -418,8 +476,8 @@ describe("the when trigger", () => {
 	});
 
 	it("fires a built-in when memory once per user message, however many steps follow", async () => {
-		const { judge } = judging({ [ASK]: 0.9 });
-		const f = fixture({ judge });
+		const { recognize } = recognizing({ [ASK]: 0.9 });
+		const f = fixture({ recognize });
 		expect(await f.hear("open my browser")).toContain("browser/local");
 		f.context([feedback("browser/local", "browser/flags")]);
 		expect(await f.step("(open)", "opened")).toEqual([]);
@@ -427,14 +485,14 @@ describe("the when trigger", () => {
 		expect(await f.step("(click)", "clicked")).toEqual([]);
 	});
 
-	it("keeps a spent memory quiet even when the judge scores its description again", async () => {
-		const f = fixture({ judge: () => new Map([[ASK, 0.9]]) });
+	it("keeps a spent memory quiet even when the memory system scores its description again", async () => {
+		const f = fixture({ recognize: () => new Map([["mine", 0.9]]) });
 		await ev(f, `(memory/remember "mine" "x" :when "${ASK}")`);
 		expect(await f.hear("open my browser")).toContain("mine");
 		expect(await f.step("(open)", "opened")).not.toContain("mine");
 	});
 
-	it("never fires without a judge", async () => {
+	it("never fires without the memory system", async () => {
 		const f = fixture();
 		expect(await f.hear("open my browser and fill the form")).toEqual([]);
 	});
@@ -444,8 +502,8 @@ describe("a loaded built-in", () => {
 	const ASK = "user wants to automate a web browser";
 
 	it("loads once while its text is still in the conversation", async () => {
-		const { judge, calls } = judging({ [ASK]: 0.9 });
-		const f = fixture({ judge });
+		const { recognize, calls } = recognizing({ [ASK]: 0.9 });
+		const f = fixture({ recognize });
 		expect(await f.hear("open my browser")).toContain("browser/local");
 		f.context([feedback("browser/local", "browser/flags")]);
 		expect(await f.hear("now click the button")).toEqual([]);
@@ -453,8 +511,8 @@ describe("a loaded built-in", () => {
 	});
 
 	it("loads again once its text has left the conversation", async () => {
-		const { judge } = judging({ [ASK]: 0.9 });
-		const f = fixture({ judge });
+		const { recognize } = recognizing({ [ASK]: 0.9 });
+		const f = fixture({ recognize });
 		await f.hear("open my browser");
 		f.context([{ role: "user", content: "a summary of earlier work" }]);
 		expect(await f.hear("open the browser again")).toContain("browser/local");
