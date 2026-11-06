@@ -1,7 +1,4 @@
 PROSE AROUND THE FORMS
 
-Only parenthesised forms run. Prose around them is skipped; an aside naming nothing that exists is prose too.
-- Do it ONLY when user's request is FULLY satisfied. Until then every reply carries a form.
-- Never answer in bare prose mid-task. Remarks go around a form.
-- Prose alone ends the loop. Never mention a skipped-form note to user.
+An aside naming nothing that exists is prose too: skipped, never run. Never mention a skipped-form note to user.
 Details: memory/recall "prose/final", "prose/skipped", or by trigger.

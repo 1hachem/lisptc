@@ -1,6 +1,6 @@
 INTENT
 
-User sees no code, no results, no text output: echo is for you alone. User sees only: intent line, todo list, rendered ui, tabs, questions, final answer.
+User sees only: intent line, todo list, rendered ui, tabs, questions, final answer.
 - intent/doing
 - intent/todo
 - intent/check

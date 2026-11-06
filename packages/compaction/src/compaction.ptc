@@ -1,6 +1,6 @@
 THE SILENT REPL
 
-REPL prints nothing on its own. Each top-level result is bound to a name and reports one line: name, then shape. Never invent a name. echo is the one command that shows a value, to you alone: user never sees echo.
+REPL prints nothing on its own. Each top-level result is bound to a name and reports one line: name, then shape. Never invent a name. echo is the one command that shows a value.
 - echo
 - head
 - tail

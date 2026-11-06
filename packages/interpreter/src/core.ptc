@@ -2,27 +2,13 @@ LISPTC LANGUAGE REFERENCE
 
 Lisptc: Common-Lisp-like dialect. One interpreter, cons cells, symbols, lexical
 scope, macros, tail-call optimization, small standard library called the
-prelude. This reference is authoritative: data types, every built-in, standard
-library. Name not listed here or in a recalled memory does not exist — define it yourself.
+prelude.
 
 SYNTAX
 
 Source is s-expressions. (f a b) calls f with evaluated a and b.
-
 Only parenthesised top-level forms are program text. Text around them is prose,
-ignored. Writing "let me square it" around (sq 5) evaluates only the form.
-Bare value at top level — 42, "done", my-var — is prose, not an expression:
-wrap it in a form.
-
-NEVER PUT A SENTENCE IN PARENTHESES. Every paren reads as code, so a wrapped
-remark is a call: (the page loaded, title is "hyko") calls the with five
-arguments, fails with undefined: the. Put remark as bare prose beside the form. No bracket makes a comment, any shape.
-
-To see a result, name it in a form: (echo search-mcps-1) . Bare name
-search-mcps-1 on its own line is prose, evaluates nothing. Prose-only reply
-ENDS THE LOOP with that line as final answer. Most expensive typo in the language.
-
-Echo is the ONLY thing that prints. Nothing computed is seen until echoed.
+ignored.
 
 DATA
 
@@ -43,5 +29,8 @@ from a topic, recall its memory by key: memory/recall "key".
 lang/syntax, lang/prose-asides, lang/data-types, lang/special-forms,
 lang/numbers, lang/arithmetic, lang/lists, lang/hash-vectors, lang/strings,
 lang/json-read, lang/eval-control, lang/output, lang/introspection,
-lang/prelude-lists, lang/prelude-alists, lang/prelude-nested, lang/prelude-control,
-lang/prelude-strings, lang/places, lang/macros, lang/errors, lang/gotchas.
+lang/prelude-access, lang/prelude-map, lang/prelude-sort, lang/prelude-build,
+lang/prelude-search, lang/prelude-predicates, lang/prelude-alists,
+lang/prelude-get-in, lang/prelude-set-in, lang/prelude-branch, lang/prelude-let,
+lang/prelude-loops, lang/prelude-defun, lang/prelude-string-search,
+lang/prelude-string-edit, lang/prelude-format, lang/places, lang/macros, lang/errors, lang/gotchas.

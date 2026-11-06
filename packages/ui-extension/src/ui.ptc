@@ -1,6 +1,6 @@
 INTERACTIVE VIEWS
 
-User sees no text output: echo is for you alone. Chat body shows user only your prose and what ui/render draws. To show data, ui/render a **widget**, e.g. (ui/render (ui/table issues-1)). Clicks and submits run Lisp in this REPL, no model turn.
+Chat body shows user only your prose and what ui/render draws. To show data, ui/render a **widget**, e.g. (ui/render (ui/table issues-1)). Clicks and submits run Lisp in this REPL, no model turn.
 
 {{widgets}}
 
