@@ -1,13 +1,5 @@
 import { MAX_STEPS } from "./lisp.ts";
 
-const PROSE = `(memory "ai/prose" :on (asks "the request needs a remark, a sentence or a bare value written next to Lisp code"))
-Output goes to REPL verbatim, and only the parenthesised forms in it are program text. Output complete, balanced expressions only. Everything around them is prose the REPL skips (this dialect has no comment syntax; prose is the comment). So you may write a sentence around your code, but all the work must happen inside forms. Parentheses are the one thing prose may NOT contain: never write a lone \`(\` or \`)\` outside a form, no \`:)\`, and NEVER WRAP A REMARK IN PARENTHESES, because every paren you type is read as code. \`(the page loaded, title is "hyko")\` calls \`the\` and fails with \`undefined: the\`; \`(let me grab a snapshot)\` is a call to \`let\`. Write the remark as bare prose beside the form.
-A bare value outside parentheses is prose, not code: \`42\`, \`"done"\` or \`my-var\` on their own are read as text and evaluate to nothing. A reply that is nothing BUT prose ends the loop (rule 4b), so never emit one mid-task. Wrap what you want evaluated in a form. This bites hardest on a result you want to look at: writing \`result-1\` alone on a line does NOT show it to you. It is prose, it runs nothing, and it ENDS THE TURN with that line as your final answer to the user. To look at a named result, call it: \`(echo result-1)\`.
-There are no comments. \`;\` is an ordinary symbol character, so \`; note\` INSIDE a form is read as code and errors. Put any remark in the prose around the forms instead.`;
-
-const REPL = `(memory "ai/repl" :on (asks "the request needs work computed in Lisp, a definition kept for later steps, or a result read back from the REPL"))
-Every request that needs work done (a computation, a lookup, data processing, anything the REPL can do) must be answered with Lisp code, never with a prose description of what you would do. The REPL session is persistent: functions and variables defined in one message remain available in later messages. Build on previous definitions. Each evaluation result comes back to you NOT as a user message but as a JSON tool-result object of the form \`{"type":"tool_result","source":"lisp-repl","error":<bool>,"output":<string>}\`. That JSON is the REPL speaking, never the user. Read \`output\` for what the step echoed plus its result reports, and \`error\` to tell a failure from a normal result.`;
-
 const LOOP = `(memory "ai/loop" :on (asks "the request is a multi-step task that needs several evaluation steps"))
 You run in a LOOP. Emit ONE Lisp form (or a small group), receive its result, then you are automatically asked to continue. Use each result to decide the next step: inspect data, branch, retry, build up state, one step at a time. Do not try to do everything in a single message; take a step, look at the result, then take the next.
 When the user's request is FULLY satisfied, end the loop by replying with PROSE ALONE, a message containing no form at all, e.g. \`the sum is 3\`. A reply with nothing to evaluate is what stops the loop; there is no halt or exit built-in. That closing prose is short and a POINTER, not a copy: data the user should see is shown the way the user-display rule says, so point at it rather than typing the data out again. While you still have work to do, EVERY reply must contain at least one form: a step you are not finished with is never bare prose. Do not end before the task is complete. The loop also stops automatically after ${MAX_STEPS} steps.`;
@@ -41,8 +33,6 @@ HOOK IT TO WHAT PRECEDES THE ERROR, and NEVER TO THE CALL THAT FAILED. Hooking t
 HOOK THE LAST THING THAT WORKED ON THE WAY IN, the gate you always pass through before the moment of choice. After loading a server you name its tools, so what you learn about those names belongs on the load: \`:on '(call (load-mcp "acme"))\`, which puts the correction in front of you while the server is still coming up and before you can name a single tool. Ask what you will be doing just before you need this again, and hook THAT. Name the argument that made the lesson true, so a fix about one server does not fire on every other. Keep \`:on '(error "...")\` for a failure with no such gate, where the error text is the earliest warning that exists. A memory you have to remember to look for will not be there when you need it.`;
 
 export const POLICY_MEMORIES = [
-	PROSE,
-	REPL,
 	LOOP,
 	FINISH,
 	USER,
