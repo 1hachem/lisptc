@@ -248,11 +248,9 @@ through the extension's own form, and that form reads the store each time it is
 evaluated. Only the extension's forms and the composition root touch a host. The
 UI is the one exception: it may read Convex directly to draw.
 
-An extension may keep one cache of what it read, in the image and nowhere else,
-for data that changes rarely. Its forms answer from that cache, and every write,
-update or delete the session makes empties it, so the next read goes back to the
-store. A write made outside the session is seen once the session writes, or when
-a new image starts. Nothing notifies a live REPL.
+A cache of stored data belongs in the image and nowhere else, and only for data
+that rarely changes. The session's own writes are what clear it. Nothing
+notifies a live REPL.
 
 The shape of the pattern, the rule about ports that may have to wait, and where
 a shared port lives are in `packages/interpreter/AGENTS.md`.
@@ -321,13 +319,8 @@ once as a side load. Remove it, and move its text into the prompt that lands in
 the system prompt: the extension's own `.ptc` prompt, or the agent's system
 prompt for a loop memory.
 
-Decide from the traces, not from the triggers. The served agent's traces are in
-the PostHog project `lisptc`, not `lisptc coding agents`, which holds the coding
-agents' own sessions. Take the first `chat turn` trace of each thread, and read
-its first generation's input in `posthog.ai_events`. The `<memories>` block on
-the user's message lists the keys that fired. Check a bare greeting and a real
-task: a key in both, on every thread, is one to move. After the move, send a
-greeting in a fresh conversation and check the block comes back empty.
+Decide from the served agent's traces of fresh conversations, a greeting and a
+real task, never from what the triggers say.
 
 ## Comments
 
