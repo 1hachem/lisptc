@@ -8,8 +8,9 @@ import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
 import {
 	type FiredMemory,
-	judgedKind,
 	memoryKind,
+	type Recognized,
+	recognizedKind,
 } from "@repo/journal-catalog/memory";
 import { WHEN_FIRES_AT } from "@repo/memory-extension/ports";
 import { view } from "@repo/shared/journal";
@@ -50,75 +51,68 @@ type Item =
 			kind: "memories";
 			at: number;
 			memories: FiredMemory[];
-			selected: Set<string>;
+			recognized: boolean;
 	  };
+
+function recognizedOf(line: TranscriptLine): Recognized | undefined {
+	if (line.role !== "entry") return undefined;
+	return view([{ ...line, id: line.kind }], recognizedKind)[0];
+}
 
 function memoryOf(line: TranscriptLine): FiredMemory | undefined {
 	if (line.role !== "entry") return undefined;
 	return view([{ ...line, id: line.kind }], memoryKind)[0];
 }
 
-function itemsOf(
-	lines: readonly TranscriptLine[],
-	shown: (line: TranscriptLine) => boolean,
-): Item[] {
-	const selected = selectedMemories(lines);
+function itemsOf(lines: readonly TranscriptLine[], reflex: boolean): Item[] {
 	const items: Item[] = [];
 	lines.forEach((line, at) => {
-		if (!shown(line)) return;
+		const recognized = recognizedOf(line);
+		if (recognized !== undefined) {
+			if (reflex) items.push({ kind: "line", at, line });
+			if (recognized.fired !== undefined)
+				items.push({
+					kind: "memories",
+					at,
+					memories: recognized.fired,
+					recognized: true,
+				});
+			return;
+		}
 		const memory = memoryOf(line);
 		if (memory === undefined) {
 			items.push({ kind: "line", at, line });
 			return;
 		}
 		const last = items.at(-1);
-		const group =
-			last?.kind === "memories"
-				? last
-				: {
-						kind: "memories" as const,
-						at,
-						memories: [],
-						selected: new Set<string>(),
-					};
-		if (group !== last) items.push(group);
-		group.memories.push(memory);
-		if (selected.has(at)) group.selected.add(memory.key);
+		if (last?.kind === "memories" && !last.recognized)
+			last.memories.push(memory);
+		else
+			items.push({
+				kind: "memories",
+				at,
+				memories: [memory],
+				recognized: false,
+			});
 	});
 	return items;
 }
 
-function selectedMemories(
-	lines: readonly TranscriptLine[],
-): ReadonlySet<number> {
-	const selected = new Set<number>();
-	let waiting = new Set<string>();
-	lines.forEach((line, at) => {
-		if (line.role !== "entry") return;
-		const [judged] = view([{ ...line, id: line.kind }], judgedKind);
-		if (judged !== undefined) {
-			waiting = new Set(judged.selected ?? []);
-			return;
-		}
-		const memory = memoryOf(line);
-		if (memory !== undefined && waiting.delete(memory.key)) selected.add(at);
-	});
-	return selected;
-}
-
 function Memories({
 	memories,
-	selected,
+	recognized,
 }: {
 	memories: FiredMemory[];
-	selected: ReadonlySet<string>;
+	recognized: boolean;
 }) {
 	return (
-		<EntryRow
-			kind={memoryKind.name}
-			selected={memories.some((memory) => selected.has(memory.key))}
-		>
-			<MessageMemories memories={memories} selected={selected} />
+		<EntryRow kind={memoryKind.name} selected={recognized}>
+			<MessageMemories
+				memories={memories}
+				{...(recognized
+					? { selected: new Set(memories.map((memory) => memory.key)) }
+					: {})}
+			/>
 		</EntryRow>
 	);
 }
@@ -139,32 +133,36 @@ function SystemPrompt({ text }: { text: string }) {
 }
 
 function Entry({ line }: { line: EntryLine }) {
-	const [judged] = view([{ ...line, id: line.kind }], judgedKind);
-	if (judged !== undefined)
+	const [recognized] = view([{ ...line, id: line.kind }], recognizedKind);
+	if (recognized !== undefined)
 		return (
 			<EntryRow kind={line.kind}>
-				<details className="group/judge text-[11px] leading-[1.7]">
+				<details className="group/recognition text-[11px] leading-[1.7]">
 					<summary className="cursor-pointer select-none text-dim marker:text-dim">
-						{judged.error === undefined ? (
+						{recognized.error === undefined ? (
 							<span>
-								judge log · {Object.keys(judged.scores).length} situations ·{" "}
-								{judged.selected?.length ?? 0} selected
+								recognition log · {Object.keys(recognized.scores).length}{" "}
+								situations · {recognized.fired?.length ?? 0} fired
 							</span>
 						) : (
-							<span className="text-red">judge failed: {judged.error}</span>
+							<span className="text-red">
+								recognition failed: {recognized.error}
+							</span>
 						)}
 					</summary>
 					<div className="mt-1 flex flex-col gap-1 border-bg2 border-l pl-2.5">
-						<div className="text-dim">on “{judged.message}”</div>
-						{judged.step === undefined ? null : (
+						<div className="text-dim">on “{recognized.message}”</div>
+						{recognized.step === undefined ? null : (
 							<pre className="m-0 whitespace-pre-wrap break-words font-mono text-dim">
-								{judged.step}
+								{recognized.step}
 							</pre>
 						)}
 						<MessageJudgements
-							scores={judged.scores}
+							scores={recognized.scores}
 							firesAt={WHEN_FIRES_AT}
-							{...(judged.error === undefined ? {} : { error: judged.error })}
+							{...(recognized.error === undefined
+								? {}
+								: { error: recognized.error })}
 						/>
 					</div>
 				</details>
@@ -191,10 +189,7 @@ export function Transcript({
 	reflex: boolean;
 }) {
 	const run = runId(identity, row);
-	const items = itemsOf(
-		row.transcript,
-		(line) => reflex || line.role !== "entry" || line.kind !== judgedKind.name,
-	);
+	const items = itemsOf(row.transcript, reflex);
 
 	return (
 		<div className="pt-1 pb-2.5">
@@ -203,9 +198,9 @@ export function Transcript({
 				if (item.kind === "memories")
 					return (
 						<Memories
-							key={item.at}
+							key={`${item.at}:memories`}
 							memories={item.memories}
-							selected={item.selected}
+							recognized={item.recognized}
 						/>
 					);
 				const { at, line } = item;

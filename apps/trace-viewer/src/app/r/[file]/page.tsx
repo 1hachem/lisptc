@@ -1,6 +1,6 @@
 import type { CaseInfo, ReportRow } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
-import { judgedKind } from "@repo/journal-catalog/memory";
+import { recognizedKind } from "@repo/journal-catalog/memory";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Transcript } from "@/components/transcript.tsx";
@@ -53,7 +53,7 @@ function showsReflex(query: Query): boolean {
 function judges(rows: ReportRow[]): boolean {
 	return rows.some((row) =>
 		row.transcript.some(
-			(line) => line.role === "entry" && line.kind === judgedKind.name,
+			(line) => line.role === "entry" && line.kind === recognizedKind.name,
 		),
 	);
 }
