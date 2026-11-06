@@ -1,3 +1,5 @@
+(area "ai" :when "the turn holds something the agent did not write, a form the user ran or a system event, or the agent must reuse exact text from earlier")
+
 (memory "ai/user" :when "the user ran Lisp in the session themselves, or a turn holds a bare form the agent did not write")
 User can run Lisp in your session. Their turn is the bare form they ran. The `tool_result` right after it is that form's output, not yours. Do not run their code again. Such a turn is not a request unless they also asked for something.
 

@@ -1,8 +1,19 @@
-import type { JudgeRequest, SystemOneModel } from "@repo/shared/system-one";
+import type {
+	JudgeRequest,
+	Judgment,
+	SystemOneModel,
+	Verdict,
+} from "@repo/shared/system-one";
 import { describe, expect, it } from "vitest";
-import { memorySystem, RECOGNITION_TIMEOUT_MS } from "../src/memory-system.ts";
+import {
+	type Area,
+	memorySystem,
+	RECOGNITION_TIMEOUT_MS,
+} from "../src/memory-system.ts";
 
-function systemOne(noul: (instructions: unknown) => number): {
+type Answer = (question: Judgment, request: JudgeRequest) => Verdict;
+
+function systemOne(answer: Answer): {
 	seen: JudgeRequest[];
 	model: SystemOneModel;
 } {
@@ -19,7 +30,7 @@ function systemOne(noul: (instructions: unknown) => number): {
 					answers: Object.fromEntries(
 						Object.entries(req.questions).map(([id, q]) => [
 							id,
-							{ type: "noul", noul: noul(q.instructions) },
+							answer(q, req),
 						]),
 					),
 				};
@@ -28,17 +39,47 @@ function systemOne(noul: (instructions: unknown) => number): {
 	};
 }
 
-const BROWSER = {
+function choosing(probabilities: Record<string, number>, gate = 0.9): Answer {
+	return (question) => {
+		if (question.type === "noul") return { type: "noul", noul: gate };
+		const options = Object.keys(question.criteria);
+		const spread = Object.fromEntries(
+			options.map((option) => [option, probabilities[option] ?? 0]),
+		);
+		return {
+			type: "choice",
+			choice: options[0] as string,
+			confidence: 1,
+			probabilities: spread,
+		};
+	};
+}
+
+const LOCAL = {
 	key: "browser/local",
 	situation: "the agent is about to drive a web page",
 	unless: "the agent only reads a page's text",
 	gist: "start a local Chrome first",
+	area: "browser",
+};
+
+const FLAGS = {
+	key: "browser/flags",
+	situation: "the agent passes flags to the browser",
+	gist: "pass :quiet t only when listed",
+	area: "browser",
 };
 
 const BILLING = {
-	key: "billing/plans",
+	key: "billing",
 	situation: "the user asks about billing",
 	gist: "plans are monthly",
+};
+
+const BROWSER: Area = {
+	name: "browser",
+	situation: "the work drives a web browser",
+	open: false,
 };
 
 const CONVERSATION = [
@@ -51,31 +92,124 @@ const CONVERSATION = [
 	{ role: "tool", content: "needs javascript" },
 ];
 
+function choices(req: JudgeRequest | undefined): Record<string, unknown> {
+	const pick = Object.values(req?.questions ?? {}).find(
+		(q) => q.type === "choice",
+	);
+	return pick?.type === "choice" ? pick.criteria : {};
+}
+
 describe("recognizing which memories the conversation calls for", () => {
-	it("asks every memory in one request, one noul each, scored by key", async () => {
-		const { seen, model } = systemOne((i) =>
-			JSON.stringify(i).includes("browser") ? 0.9 : 0.1,
+	it("sends one request per area, and one for memories filed under none", async () => {
+		const { seen, model } = systemOne(choosing({}));
+		await memorySystem(model)(
+			{ conversation: CONVERSATION },
+			[LOCAL, FLAGS, BILLING],
+			[BROWSER],
+		);
+		expect(seen.map((req) => Object.keys(choices(req)).sort())).toEqual(
+			expect.arrayContaining([
+				["browser/flags", "browser/local", "none"],
+				["billing", "none"],
+			]),
+		);
+		expect(seen).toHaveLength(2);
+	});
+
+	it("starts every request before any of them answers", async () => {
+		let started = 0;
+		let release: () => void = () => {};
+		const all = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const model: SystemOneModel = {
+			provider: "fake",
+			model: "fake/jev",
+			async judge(req) {
+				started += 1;
+				if (started === 2) release();
+				await all;
+				return {
+					model: "fake/jev",
+					answers: Object.fromEntries(
+						Object.entries(req.questions).map(([id, q]) => [
+							id,
+							choosing({ none: 1 })(q, req),
+						]),
+					),
+				};
+			},
+		};
+		await memorySystem(model)(
+			{ conversation: CONVERSATION },
+			[LOCAL, BILLING],
+			[BROWSER],
+		);
+		expect(started).toBe(2);
+	});
+
+	it("always offers none, and fires nothing when none wins", async () => {
+		const { model } = systemOne(choosing({ none: 0.9, "browser/local": 0.1 }));
+		const recognized = await memorySystem(model)(
+			{ conversation: CONVERSATION },
+			[LOCAL, FLAGS],
+			[BROWSER],
+		);
+		expect(Math.max(...recognized.values())).toBeLessThan(0.7);
+	});
+
+	it("fires every memory as likely as the best one, so two needed at once both fire", async () => {
+		const { model } = systemOne(
+			choosing({ "browser/local": 0.45, "browser/flags": 0.45, none: 0.1 }),
 		);
 		const recognized = await memorySystem(model)(
 			{ conversation: CONVERSATION },
-			[BROWSER, BILLING],
+			[LOCAL, FLAGS],
+			[BROWSER],
 		);
-		expect(recognized).toEqual(
-			new Map([
-				["browser/local", 0.9],
-				["billing/plans", 0.1],
-			]),
+		expect(recognized.get("browser/local")).toBe(1);
+		expect(recognized.get("browser/flags")).toBe(1);
+	});
+
+	it("weighs an area's memories only when its gate opens", async () => {
+		const { model } = systemOne(choosing({ "browser/local": 1 }, 0.1));
+		const recognized = await memorySystem(model)(
+			{ conversation: CONVERSATION },
+			[LOCAL],
+			[BROWSER],
 		);
-		expect(seen).toHaveLength(1);
+		expect(recognized.get("browser/local")).toBe(0);
+	});
+
+	it("asks no gate for an area the last step already called into", async () => {
+		const { seen, model } = systemOne(choosing({ "browser/local": 1 }, 0));
+		const recognized = await memorySystem(model)(
+			{ conversation: CONVERSATION },
+			[LOCAL],
+			[{ ...BROWSER, open: true }],
+		);
+		expect(recognized.get("browser/local")).toBe(1);
 		expect(Object.values(seen[0]?.questions ?? {}).map((q) => q.type)).toEqual([
-			"noul",
-			"noul",
+			"choice",
 		]);
 	});
 
+	it("tells each option its memory's situation, exclusion and gist", async () => {
+		const { seen, model } = systemOne(choosing({}));
+		await memorySystem(model)(
+			{ conversation: CONVERSATION },
+			[LOCAL],
+			[BROWSER],
+		);
+		const option = String(choices(seen[0])["browser/local"]);
+		expect(option).toContain(LOCAL.situation);
+		expect(option).toContain(LOCAL.unless);
+		expect(option).toContain(LOCAL.gist);
+	});
+
 	it("hands over the current message and the last step as latest, the rest as earlier", async () => {
-		const { seen, model } = systemOne(() => 0.5);
-		await memorySystem(model)({ conversation: CONVERSATION }, [BROWSER]);
+		const { seen, model } = systemOne(choosing({}));
+		await memorySystem(model)({ conversation: CONVERSATION }, [BILLING]);
 		expect(seen[0]?.state).toMatchObject({
 			latest: {
 				message: "get me the price",
@@ -92,9 +226,9 @@ describe("recognizing which memories the conversation calls for", () => {
 	});
 
 	it("hands over a fresh message alone as latest, before any step", async () => {
-		const { seen, model } = systemOne(() => 0.5);
+		const { seen, model } = systemOne(choosing({}));
 		await memorySystem(model)({ conversation: CONVERSATION.slice(0, 3) }, [
-			BROWSER,
+			BILLING,
 		]);
 		expect(seen[0]?.state).toMatchObject({
 			latest: { message: "get me the price" },
@@ -102,22 +236,7 @@ describe("recognizing which memories the conversation calls for", () => {
 		});
 	});
 
-	it("tells each question its memory's situation, exclusion, key and gist", async () => {
-		const { seen, model } = systemOne(() => 0.5);
-		await memorySystem(model)({ conversation: CONVERSATION }, [
-			BROWSER,
-			BILLING,
-		]);
-		const [browser, billing] = Object.values(seen[0]?.questions ?? {});
-		expect(browser?.instructions).toMatchObject({
-			situation: BROWSER.situation,
-			unless: BROWSER.unless,
-			memory: { key: BROWSER.key, teaches: BROWSER.gist },
-		});
-		expect(billing?.instructions).not.toHaveProperty("unless");
-	});
-
-	it("fails when the model leaves a memory unanswered", async () => {
+	it("fails when the model leaves an area unanswered", async () => {
 		const model: SystemOneModel = {
 			provider: "fake",
 			model: "fake/jev",

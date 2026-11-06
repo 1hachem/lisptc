@@ -1,3 +1,5 @@
+(area "promises" :when "slow or background work: several jobs at once, a wait with a limit, a value printed as #<...>, or a load to reuse")
+
 (memory "promises/waiting" :when "several slow jobs could run at once, a wait needs a time limit, only the first of several results matters, or a background job must stop")
 Waiting on promises:
 - (await promise) with no timeout-ms waits 50 seconds, then fails "await timed out".

@@ -1,3 +1,5 @@
+(area "memory" :when "the agent is about to remember, recall, revise or forget something, or a step just failed and the fix is now known")
+
 (memory "memory/triggers" :when "the agent is about to remember something that should come back on its own when a situation, a command, an error, a result or certain words show up" :links ("memory/call-triggers"))
 Two ways to fire by itself.
 

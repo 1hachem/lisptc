@@ -1,3 +1,5 @@
+(area "diagnostics" :when "a call just failed and the failure says how to fix the name, the arguments or a keyword")
+
 (memory "diagnostics/failures" :when "a call just failed and the agent must fix the name, the arguments or a keyword from what the failure said")
 - Unknown name: gives nearest existing name and signature. Call it. Do not list
   server tools to find a name failure already gave.

@@ -1,3 +1,5 @@
+(area "lang" :when "the agent is about to write or fix lisptc code, or a form just failed or returned something unexpected")
+
 (memory "lang/syntax" :when "the agent is about to write lisptc that needs exact syntax: quoting, quasiquote, dotted pairs, strings, keywords, numbers or symbol names; or a form just failed to read, or read as something else than meant")
 Syntax detail.
 - Quote: 'x same as (quote x) — x unevaluated.

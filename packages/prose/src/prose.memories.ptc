@@ -1,3 +1,5 @@
+(area "prose" :when "the turn may be about to end, or a note says part of the last reply was skipped or run as code")
+
 (memory "prose/skipped" :when "a note says part of the last reply was skipped, ignored or run as code, or the user asks why")
 Skipped forms and asides:
 - Prose reads come back as "skipped … note" with the next user message, not at the time. No apology, no explaining the skip, no restating the previous answer. User asked something new: answer only that.

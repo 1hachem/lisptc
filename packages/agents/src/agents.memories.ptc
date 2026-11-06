@@ -1,3 +1,5 @@
+(area "agents" :when "the work involves another agent: starting, messaging, checking on, saving or reusing a sub-agent, or splitting jobs to run in parallel")
+
 (memory "agents/names" :when "the agent must refer to a spawned agent by name, list the agents this session started, or tell the user when a reply will arrive")
 Names are unique in session. spawn refuses one taken, finished or not, and "parent" is taken: sub-agents see you as <system-event source="agent:parent">. spawn and delegate print the name they return. agent-wait, agent-state, agent-take and agent-cancel take it.
 (spawned) lists every name this session spawned or delegated. (agents) lists saved definitions only.

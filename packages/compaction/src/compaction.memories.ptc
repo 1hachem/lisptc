@@ -1,3 +1,5 @@
+(area "compaction" :when "the agent works with a result the REPL bound to a name: a large, truncated or printed value it must find, filter, read or show")
+
 (memory "compaction/repl-names" :when "the agent needs a result it computed earlier, does not know what name the REPL bound it to, or is about to retype data the REPL printed")
 Variable is named after the function that produced it. It always holds the
 whole value. setq or defun reports under the name it bound. Never invent a

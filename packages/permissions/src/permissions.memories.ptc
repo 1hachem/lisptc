@@ -1,3 +1,5 @@
+(area "permissions" :when "what this session may call must change, or a call was just denied, is waiting for approval or is missing")
+
 (memory "permissions/config" :when "what this session may call must change: allow, deny or ask for a tool, hide a server's tools, or remove a rule")
 - (permission/list) gives config as forms.
 - Examples of config forms:

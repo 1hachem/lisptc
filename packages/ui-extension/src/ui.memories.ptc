@@ -1,3 +1,5 @@
+(area "ui" :when "the agent is about to show the user something: a table, form, buttons, chart, view or panel, or a view the user clicked just came back")
+
 (memory "ui/reactive" :when "a view needs a dropdown, toggle or filter that updates it at once, without asking the agent again")
 Reactive controls: :on-change on ui/select or ui/checkbox. One-argument
 function, run when user picks or ticks. No submit, no model turn. Gets same

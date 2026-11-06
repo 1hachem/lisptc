@@ -1,4 +1,15 @@
-import type { SystemOneModel } from "@repo/shared/system-one";
+import type { SystemOneModel, Verdict } from "@repo/shared/system-one";
+import {
+	AREA_LACKS,
+	AREA_OPENS_AT,
+	AREA_QUESTION,
+	AREA_SHOWS,
+	NONE_MEANS,
+	NONE_OPTION,
+	optionFor,
+	PICK_QUESTION,
+	PLATFORM,
+} from "./prompts/recognition.ts";
 
 export const RECOGNITION_TIMEOUT_MS = 2_000;
 
@@ -16,18 +27,20 @@ export interface Cue {
 	readonly situation: string;
 	readonly unless?: string;
 	readonly gist: string;
+	readonly area?: string;
+}
+
+export interface Area {
+	readonly name: string;
+	readonly situation: string;
+	readonly open: boolean;
 }
 
 export type MemorySystem = (
 	situation: Situation,
 	cues: readonly Cue[],
+	areas?: readonly Area[],
 ) => Promise<ReadonlyMap<string, number>>;
-
-const PLATFORM =
-	"An AI agent works for the user by writing lisptc, a Lisp, into a REPL. Each step the agent writes forms; `assistant` turns hold its code, `tool` turns hold what came back: a value, printed output, or an error such as `undefined: name`. Prose around forms is ignored. `system` turns are events from the platform. A memory is a note that loads into the agent's context when its situation arises, so it can act right on its next step.";
-
-const RECOGNITION =
-	"Does the situation in `situation` hold in `latest`, the user's current message and the agent's last step, so that the memory in `memory` helps the agent's next step? `earlier` is context only: a situation that held only there is over.";
 
 interface Latest {
 	message?: string;
@@ -63,43 +76,110 @@ function latestOf(conversation: readonly Turn[]): {
 	};
 }
 
+const UNFILED = "";
+
+function grouped(
+	cues: readonly Cue[],
+	areas: readonly Area[],
+): Map<string, Cue[]> {
+	const gated = new Set(areas.map((area) => area.name));
+	const groups = new Map<string, Cue[]>();
+	for (const cue of cues) {
+		const name =
+			cue.area !== undefined && gated.has(cue.area) ? cue.area : UNFILED;
+		groups.set(name, [...(groups.get(name) ?? []), cue]);
+	}
+	return groups;
+}
+
+function answered(
+	answers: Record<string, Verdict>,
+	id: string,
+	model: string,
+	what: string,
+): Verdict {
+	const verdict = answers[id];
+	if (verdict === undefined)
+		throw new Error(`${model} left ${what} unanswered`);
+	return verdict;
+}
+
+function picks(
+	verdict: Verdict,
+	members: readonly Cue[],
+	model: string,
+	name: string,
+): Map<string, number> {
+	if (verdict.type !== "choice")
+		throw new Error(`${model} did not pick among the memories of "${name}"`);
+	const top = Math.max(...Object.values(verdict.probabilities));
+	return new Map(
+		members.map((cue) => [
+			cue.key,
+			top === 0 ? 0 : (verdict.probabilities[cue.key] ?? 0) / top,
+		]),
+	);
+}
+
 export function memorySystem(
 	model: SystemOneModel,
 	timeoutMs: number = RECOGNITION_TIMEOUT_MS,
 ): MemorySystem {
-	return async (situation, cues) => {
-		const ids = cues.map((_, i) => `m${i}`);
-		const { answers } = await model.judge(
-			{
-				state: { platform: PLATFORM, ...latestOf(situation.conversation) },
-				questions: Object.fromEntries(
-					cues.map((cue, i) => [
-						ids[i],
-						{
-							type: "noul",
-							instructions: {
-								question: RECOGNITION,
-								situation: cue.situation,
-								...(cue.unless === undefined ? {} : { unless: cue.unless }),
-								memory: { key: cue.key, teaches: cue.gist },
+	return async (situation, cues, areas = []) => {
+		const signal = AbortSignal.timeout(timeoutMs);
+		const state = { platform: PLATFORM, ...latestOf(situation.conversation) };
+		const gates = new Map(areas.map((area) => [area.name, area]));
+		const judged = await Promise.all(
+			[...grouped(cues, areas)].map(async ([name, members]) => {
+				const area = gates.get(name);
+				const gate = area !== undefined && !area.open;
+				const { answers } = await model.judge(
+					{
+						state,
+						questions: {
+							pick: {
+								type: "choice",
+								instructions: PICK_QUESTION,
+								criteria: {
+									...Object.fromEntries(
+										members.map((cue) => [cue.key, optionFor(cue)]),
+									),
+									[NONE_OPTION]: NONE_MEANS,
+								},
 							},
-							criteria: {
-								true: "`latest` shows the situation: the user asks for it, the agent is doing it or about to, or the result or error it describes just came back",
-								false: `the situation is absent from \`latest\`, held only in \`earlier\`${cue.unless === undefined ? "" : ", or the look-alike in `unless` holds instead"}`,
-							},
+							...(gate
+								? {
+										gate: {
+											type: "noul",
+											instructions: {
+												question: AREA_QUESTION,
+												area: { name, situation: area.situation },
+											},
+											criteria: { true: AREA_SHOWS, false: AREA_LACKS },
+										},
+									}
+								: {}),
 						},
-					]),
-				),
-			},
-			AbortSignal.timeout(timeoutMs),
-		);
-		return new Map(
-			cues.map((cue, i) => {
-				const verdict = answers[ids[i] as string];
-				if (verdict?.type !== "noul")
-					throw new Error(`${model.model} left "${cue.key}" unanswered`);
-				return [cue.key, verdict.noul];
+					},
+					signal,
+				);
+				const scored = picks(
+					answered(answers, "pick", model.model, `the memories of "${name}"`),
+					members,
+					model.model,
+					name,
+				);
+				if (!gate) return scored;
+				const verdict = answered(
+					answers,
+					"gate",
+					model.model,
+					`area "${name}"`,
+				);
+				const opened = verdict.type === "noul" && verdict.noul >= AREA_OPENS_AT;
+				return opened ? scored : new Map(members.map((cue) => [cue.key, 0]));
 			}),
 		);
+		return new Map(judged.flatMap((scores) => [...scores]));
 	};
 }

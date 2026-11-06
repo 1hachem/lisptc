@@ -26,6 +26,7 @@ import {
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
 import {
+	type Area,
 	type Cue,
 	type Recognize,
 	recognizeNothing,
@@ -323,13 +324,14 @@ describe("the when trigger", () => {
 		]);
 	});
 
-	it("hands each memory to the recognizer with its key, situation and gist", async () => {
+	it("hands each memory to the recognizer with its key, area, situation and gist", async () => {
 		const { recognize, cues } = recognizing({});
 		const f = fixture({ recognize });
 		await f.hear("open my browser");
 		expect(cues[0]).toEqual([
 			{
 				key: "browser/local",
+				area: "browser",
 				situation: ASK,
 				gist: 'load it with (load-mcp "playwright" :local t)',
 			},
@@ -444,6 +446,33 @@ describe("the when trigger", () => {
 		expect(await ev(f, keys)).toBe('("browser/local")');
 		await ev(f, `(memory/remember "mine" "y" :when "${ASK}")`);
 		expect(await ev(f, keys)).toBe('("browser/local" "elsewhere" "mine")');
+	});
+
+	it("lists the gate each area declares", async () => {
+		const f = fixture({
+			memories: `(area "browser" :when "the work drives a web browser")\n${BROWSER}`,
+		});
+		expect(await ev(f, "(memory/areas :when)")).toBe(
+			'(("browser" "the work drives a web browser"))',
+		);
+		expect(await ev(f, "(memory/areas)")).toBe('(("browser" 2) ("deploy" 1))');
+	});
+
+	it("tells recognition which areas the last step already called into", async () => {
+		const seen: (readonly Area[] | undefined)[] = [];
+		const f = fixture({
+			memories: `(area "browser" :when "the work drives a web browser")\n${BROWSER}`,
+			recognize: (_, __, areas) => {
+				seen.push(areas);
+				return new Map();
+			},
+		});
+		await f.hear("get me the price");
+		await f.step('(browser/open "https://shop")', "opened");
+		expect(seen.map((areas) => areas?.map((a) => [a.name, a.open]))).toEqual([
+			[["browser", false]],
+			[["browser", true]],
+		]);
 	});
 
 	it("fires the agent's own memories too", async () => {

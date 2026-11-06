@@ -1,3 +1,5 @@
+(area "mcp" :when "the work needs a connected service, an MCP server or tool, or the user's own computer: finding, loading, signing in to or calling one")
+
 (memory "mcp/local" :when "the work happens on the user's own computer: their local files, git, a desktop app or a web browser to drive; or a local server failed to start")
 User's own machine (their files, git, desktop app, browser on their computer): servers run there through desktop app.
 How-to is memory mcp/local, loads itself when user asks; else (memory/recall "mcp/local") .

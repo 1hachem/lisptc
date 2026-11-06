@@ -1,3 +1,5 @@
+(area "preferences" :when "the app must look or behave differently for this user: sidebar, status bar, chat display, input helpers, motion, font or desktop app")
+
 (memory "preferences/layout" :when "sidebar entries must be reordered, moved between sidebars or hidden, or status bar items moved, hidden or left as gaps")
 - Two sidebars, left and right. :sidebar is left one's entries, top first;
   :sidebar-right is right one's. Each entry sits in one.

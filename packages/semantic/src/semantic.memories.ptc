@@ -1,3 +1,5 @@
+(area "semantic" :when "texts or values must be judged by meaning: classified, compared, filtered, ranked, routed or grouped")
+
 (memory "semantic/judge" :when "the agent must classify, pick a category for, or rate a text or value by meaning and needs the raw probability or score, or set its own threshold")
 Base, raw numbers for own threshold:
 

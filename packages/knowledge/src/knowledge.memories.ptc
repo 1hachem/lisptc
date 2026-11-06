@@ -1,3 +1,5 @@
+(area "knowledge" :when "the work involves the user's files: uploaded files, attachments, links to fetch, data files or the bin")
+
 (memory "knowledge/files" :when "the agent must list, read, write, delete or show the user a file they uploaded")
 - (knowledge/list) lists file names, like "report.md".
 - (knowledge/read "name"): .pdf gives page text as string; other text gives

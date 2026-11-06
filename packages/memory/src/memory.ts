@@ -40,6 +40,8 @@ import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
+	type Area,
+	type AreaGate,
 	authoredTrigger,
 	type Cue,
 	combinatorIn,
@@ -51,6 +53,7 @@ import {
 	type MemoryStore,
 	memoryToForm,
 	type Recognize,
+	readAreas,
 	readBuiltins,
 	recognizeNothing,
 	type Situation,
@@ -165,6 +168,7 @@ function gistOf(memory: Memory): string {
 }
 
 const LIST = "memory/list";
+const AREAS = "memory/areas";
 
 function entryOf(memory: Memory): unknown {
 	return arrayToList([
@@ -184,8 +188,11 @@ function cueFromEntry(entry: unknown): Cue {
 			) as Cell | undefined
 		)?.cdr;
 	const unless = field("unless");
+	const key = field("key") as string;
+	const slash = key.indexOf("/");
 	return {
-		key: field("key") as string,
+		key,
+		...(slash === -1 ? {} : { area: key.slice(0, slash) }),
 		situation: field("pattern") as string,
 		...(typeof unless === "string" ? { unless } : {}),
 		gist: field("gist") as string,
@@ -384,6 +391,17 @@ export class MemoryBank {
 		);
 	}
 
+	gates(): AreaGate[] {
+		const gates = new Map<string, AreaGate>();
+		for (const source of this.builtinSource())
+			for (const gate of readAreas(source)) {
+				if (gates.has(gate.name))
+					throw new EvalException("two areas share this name", gate.name);
+				gates.set(gate.name, gate);
+			}
+		return [...gates.values()];
+	}
+
 	readBuiltinsFrom(source: () => readonly string[]): void {
 		this.builtinSource = source;
 		this.builtinTable = undefined;
@@ -517,14 +535,31 @@ export class MemoryBank {
 		return [...surfaced];
 	}
 
-	private *askRepl(interp: Interp): Eval<Cue[]> {
+	private *askRepl(
+		interp: Interp,
+		step: string | undefined,
+	): Eval<{ cues: Cue[]; areas: Area[] }> {
 		this.change({ stepping: false });
 		try {
-			const value = yield* interp.evalGen(
+			const listed = yield* interp.evalGen(
 				arrayToList([newSym(LIST), newLispKeyword("when")]),
 				null,
 			);
-			return listToArray(value as List).map(cueFromEntry);
+			const gated = yield* interp.evalGen(
+				arrayToList([newSym(AREAS), newLispKeyword("when")]),
+				null,
+			);
+			return {
+				cues: listToArray(listed as List).map(cueFromEntry),
+				areas: listToArray(gated as List).map((entry) => {
+					const [name, situation] = listToArray(entry as List) as string[];
+					return {
+						name: name as string,
+						situation: situation as string,
+						open: step?.includes(`(${name}/`) ?? false,
+					};
+				}),
+			};
 		} finally {
 			this.change({ stepping: true });
 		}
@@ -536,14 +571,13 @@ export class MemoryBank {
 		interp: Interp,
 	): Eval<void> {
 		const spent = [...this.loaded.get(), ...this.asked.get()];
-		const cues = (yield* this.askRepl(interp)).filter(
-			(cue) => !spent.includes(cue.key),
-		);
+		const repl = yield* this.askRepl(interp, seen.step);
+		const cues = repl.cues.filter((cue) => !spent.includes(cue.key));
 		if (cues.length === 0) return;
 		let scores: ReadonlyMap<string, number> = new Map();
 		let error: string | undefined;
 		try {
-			scores = yield* settled(this.recognize(situation, cues));
+			scores = yield* settled(this.recognize(situation, cues, repl.areas));
 		} catch (ex) {
 			error = ex instanceof Error ? ex.message : String(ex);
 		}
@@ -1024,12 +1058,20 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	);
 
 	interp.def(
-		"memory/areas",
-		0,
-		"(areas)",
-		"List the areas the built-in memories are filed under, as (area count), in the order the extensions ship them. Pass one to memory/builtins to list its keys.",
-		z.tuple([]),
-		() => {
+		AREAS,
+		-1,
+		"(areas [:when])",
+		"List the areas the built-in memories are filed under, as (area count), in the order the extensions ship them. Pass one to memory/builtins to list its keys. With :when, the areas that declare a gate, as (area situation): recognition opens an area when its situation holds, or when the last step called one of its forms, and only then weighs its memories.",
+		z.tuple([zList]),
+		([rest]) => {
+			const [hook] = listToArray(rest);
+			if (hook !== undefined) {
+				if (hookOf(hook) !== "when")
+					throw new EvalException("areas are gated by :when only", hook);
+				return arrayToList(
+					bank.gates().map((gate) => arrayToList([gate.name, gate.situation])),
+				);
+			}
 			const counts = new Map<string, number>();
 			for (const key of bank.builtins().keys())
 				counts.set(areaOf(key), (counts.get(areaOf(key)) ?? 0) + 1);

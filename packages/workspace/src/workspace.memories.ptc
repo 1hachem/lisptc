@@ -1,3 +1,5 @@
+(area "workspace" :when "the workspace's settings or its other chats are involved: model, icon, theme, or finding and reading another chat")
+
 (memory "workspace/choices" :when "the workspace's model, icon or theme must change, or the agent must say which ones are on offer")
 - (settings) gives (:name "…" :model "provider/model" :icon "…" :theme id).
 - (settings/models) lists models workspace can run on.

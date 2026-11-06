@@ -252,6 +252,37 @@ export function formToMemory(form: unknown): Memory | undefined {
 }
 
 const BUILTIN_HEADER = /^\(memory\s/;
+const AREA_HEADER = /^\(area\s/;
+
+export interface AreaGate {
+	readonly name: string;
+	readonly situation: string;
+}
+
+function areaHeader(line: string): AreaGate {
+	const reader = new Reader();
+	reader.push(line);
+	const form = reader.read();
+	const rest = form instanceof Cell ? form.cdr : null;
+	const name = rest instanceof Cell ? rest.car : undefined;
+	const situation =
+		rest instanceof Cell
+			? plistOptions(rest.cdr as List, ["when"]).get("when")
+			: undefined;
+	if (typeof name !== "string" || typeof situation !== "string")
+		throw new EvalException(
+			'an area opens a memories file with one line, (area "name" :when "situation"): the work its memories are for',
+			line,
+		);
+	return { name, situation };
+}
+
+export function readAreas(source: string): AreaGate[] {
+	return source
+		.split("\n")
+		.filter((line) => AREA_HEADER.test(line))
+		.map(areaHeader);
+}
 
 function builtinHeader(line: string, body: string): Memory {
 	const reader = new Reader();
@@ -303,6 +334,7 @@ export function readBuiltins(source: string): Memory[] {
 			memories.push(builtinHeader(header, body.join("\n").trim()));
 	};
 	for (const line of source.split("\n")) {
+		if (AREA_HEADER.test(line)) continue;
 		if (BUILTIN_HEADER.test(line)) {
 			close();
 			header = line;
@@ -332,11 +364,17 @@ export interface Cue {
 	readonly situation: string;
 	readonly unless?: string;
 	readonly gist: string;
+	readonly area?: string;
+}
+
+export interface Area extends AreaGate {
+	readonly open: boolean;
 }
 
 export type Recognize = (
 	situation: Situation,
 	cues: readonly Cue[],
+	areas?: readonly Area[],
 ) => Awaitable<ReadonlyMap<string, number>>;
 
 export const recognizeNothing: Recognize = () => new Map();
