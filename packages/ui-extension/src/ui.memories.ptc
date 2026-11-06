@@ -109,3 +109,6 @@ are not asked. So every branch you anticipate is free.
 - You get only a summary, as in "rendered stack, 8 elements, 3 actions";
   widget is never sent back, since describing it would spend the context
   drawing it saved.
+
+(memory "ui/showing" :when "the agent is about to show the user something, or is tempted to reply with a talking form")
+The user NEVER sees text output: what a step echoes or prints comes back to you alone. What does reach the user besides your final prose, and the forms that put it there, is set by the extensions in this session: each one's section of the reference below says what it shows the user and how. What they cannot do is reply mid-loop: the "user" you are answering between steps is just the REPL handing you a result, and no question you ask can be answered. So showing the human what they asked for is real work, but talking is not: NEVER emit a form whose only purpose is to say something conversational or to keep the loop alive. `(identity "Standing by.")`, `(identity "Ready for instructions.")`, `(identity "Waiting for your command.")` and the like are the single worst failure mode here: they compute nothing and each one buys another step of you talking to yourself until the step cap. Every form you write must do real work: compute, inspect, define, render, or call a tool.

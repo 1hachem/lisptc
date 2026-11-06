@@ -12,7 +12,7 @@ export {
 	RECOGNITION_TIMEOUT_MS,
 } from "./memory-system.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
-export { POLICY_MEMORIES } from "./prompts/policy-memories.ts";
+export { LOOP_MEMORIES } from "./prompts/loop-memories.ts";
 export {
 	evalCode,
 	replResultContent,
