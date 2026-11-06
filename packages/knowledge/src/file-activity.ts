@@ -6,7 +6,6 @@ import {
 	type ActivityEntry,
 	activityKind,
 } from "@repo/journal-catalog/activity";
-import type { Clock } from "@repo/shared/host";
 
 const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
@@ -16,28 +15,26 @@ const callSeqCodec: StateCodec<number> = {
 export interface Reporter {
 	readonly interp: Interp;
 	readonly calls: State<number>;
-	readonly clock: Clock;
 }
 
-export function reporterFor(interp: Interp, clock: Clock): Reporter {
+export function reporterFor(interp: Interp): Reporter {
 	const calls = interp.state(
 		"knowledge/calls",
 		callSeqCodec,
 		0,
 		"The number of the last knowledge file read or write, which numbers the activity the user sees.",
 	);
-	return { interp, calls, clock };
+	return { interp, calls };
 }
 
 export function* reporting<T>(
-	{ interp, calls, clock }: Reporter,
+	{ interp, calls }: Reporter,
 	verb: "read" | "write",
 	name: string,
 	run: () => Eval<T>,
 ): Eval<T> {
 	const n = calls.get() + 1;
 	calls.set(n);
-	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
 		record(interp.channels, activityKind, {
 			kind: "file",
@@ -47,8 +44,6 @@ export function* reporting<T>(
 			state,
 			...(error === undefined ? {} : { error: messageOf(error) }),
 			id: `file-${n}`,
-			startedAt,
-			...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 		});
 	report("started");
 	try {

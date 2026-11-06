@@ -25,12 +25,9 @@ async function activityOf(
 	generate: Generate,
 	code: string,
 ): Promise<{ activity: ActivityEntry[]; states: string[] }> {
-	const extension = llmExtension({
-		...llmHost,
-		generate,
-		clock: ticking(1000, 25),
-	});
+	const extension = llmExtension({ ...llmHost, generate });
 	const interp = new Interp({ extensions: [extension] });
+	interp.channels.clock = ticking(1000, 25);
 	runSync(interp, prelude);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
@@ -60,8 +57,9 @@ describe("a model call from lisp", () => {
 				label: "write",
 				state: "done",
 				id: "llm-1",
-				startedAt: 1000,
-				ms: 25,
+				startedAt: 1025,
+				endedAt: 1075,
+				ms: 50,
 			},
 		]);
 	});
@@ -81,8 +79,8 @@ describe("a model call from lisp", () => {
 				a.error,
 			]),
 		).toEqual([
-			["llm-1", "write", "done", 1000, 25, undefined],
-			["llm-2", "write", "failed", 1050, 25, "down"],
+			["llm-1", "write", "done", 1025, 50, undefined],
+			["llm-2", "write", "failed", 1125, 50, "down"],
 		]);
 	});
 });

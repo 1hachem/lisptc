@@ -41,10 +41,10 @@ async function activityOf(
 				},
 			},
 			maxDownloadBytes: 1024,
-			clock: ticking(1000, 25),
 		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
+	interp.channels.clock = ticking(1000, 25);
 	await runAsync(interp, prelude);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
@@ -72,6 +72,7 @@ describe("a knowledge file read or write", () => {
 				state: "done",
 				id: "file-1",
 				startedAt: 1000,
+				endedAt: 1025,
 				ms: 25,
 			},
 			{
@@ -82,6 +83,7 @@ describe("a knowledge file read or write", () => {
 				state: "done",
 				id: "file-2",
 				startedAt: 1050,
+				endedAt: 1075,
 				ms: 25,
 			},
 		]);

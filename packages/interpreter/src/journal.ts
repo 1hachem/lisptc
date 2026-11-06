@@ -12,13 +12,15 @@ export function record<T, V>(
 ): void {
 	checked(kind, value);
 	if (channels === undefined) return;
+	const stamped =
+		kind.stamp === undefined ? value : kind.stamp(value, channels.clock.now());
 	const n = (recordedOn.get(channels) ?? 0) + 1;
 	recordedOn.set(channels, n);
 	journal.emit(channels, {
 		harness: {
 			id: `${channels.step}.${n}`,
 			kind: kind.name,
-			value,
+			value: stamped,
 			...(kind.supersedes ? { supersedes: true } : {}),
 		},
 	});

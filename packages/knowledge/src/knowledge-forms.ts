@@ -15,9 +15,9 @@ export const KNOWLEDGE_ASKS = [KNOWLEDGE_WRITE, KNOWLEDGE_DELETE] as const;
 
 export function registerKnowledge(
 	interp: Interp,
-	{ store, pdf, clock }: KnowledgeHost,
+	{ store, pdf }: KnowledgeHost,
 ): void {
-	const reporter = reporterFor(interp, clock);
+	const reporter = reporterFor(interp);
 	interp.defGen(
 		"knowledge/list",
 		0,

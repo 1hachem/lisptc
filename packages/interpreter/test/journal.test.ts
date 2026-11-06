@@ -74,4 +74,23 @@ describe("recording an entry", () => {
 		).toThrow(/"view" entry does not fit/);
 		expect(buffer.collect(journal)).toEqual([]);
 	});
+
+	test("stamps an entry with the channel clock when its kind asks for the time", () => {
+		const stampedKind = entryKind({
+			name: "stamped",
+			schema: z.object({ text: z.string(), at: z.number().optional() }),
+			stamp: (value, at) => ({ ...value, at }),
+			fold: every,
+		});
+		const channels = new Channels();
+		channels.clock = { now: () => 1234 };
+		const buffer = bufferTransport();
+		channels.pipe(buffer);
+		record(channels, stampedKind, { text: "a" });
+		record(channels, noteKind, { text: "b" });
+		expect(buffer.collect(journal).map(({ value }) => value)).toEqual([
+			{ text: "a", at: 1234 },
+			{ text: "b" },
+		]);
+	});
 });

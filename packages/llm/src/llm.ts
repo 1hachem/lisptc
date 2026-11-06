@@ -47,22 +47,15 @@ const callSeqCodec: StateCodec<number> = {
 	fromLisp: (x) => Number(x),
 };
 
-interface Timing {
-	readonly startedAt: number;
-	readonly ms?: number;
-}
-
 type Announce = (
 	id: string,
 	builtin: string,
 	state: ActivityEntry["state"],
-	target: { provider?: string; model?: string },
-	timing: Timing,
 	error?: unknown,
 ) => void;
 
 function announcer(interp: Interp): Announce {
-	return (id, builtin, state, { provider, model }, timing, error) =>
+	return (id, builtin, state, error) =>
 		record(interp.channels, activityKind, {
 			kind: "llm",
 			icon: "model",
@@ -70,7 +63,6 @@ function announcer(interp: Interp): Announce {
 			state,
 			...(error === undefined ? {} : { error: messageOf(error) }),
 			id,
-			...timing,
 		});
 }
 
@@ -105,7 +97,6 @@ export type Generate = (
 
 export interface LlmHost {
 	generate: Generate;
-	clock: Clock;
 	prompt: PromptSource;
 }
 
@@ -444,7 +435,7 @@ function traceOf(
 
 function caller(
 	generate: Generate,
-	clock: Clock,
+	clock: () => Clock,
 	observe: () => LlmObserver | undefined,
 	calls: State<number>,
 	announce: Announce,
@@ -460,8 +451,8 @@ function caller(
 		const n = calls.get() + 1;
 		calls.set(n);
 		const id = `llm-${n}`;
-		const startedAt = clock.now();
-		announce(id, builtin, "started", req, { startedAt });
+		const startedAt = clock().now();
+		announce(id, builtin, "started");
 		const controller = new AbortController();
 		return withTimeout(
 			generate(req, controller.signal),
@@ -469,23 +460,14 @@ function caller(
 			builtin,
 		).then(
 			(res) => {
-				const ms = clock.now() - startedAt;
-				announce(
-					id,
-					builtin,
-					"done",
-					{
-						provider: res.provider ?? req.provider,
-						model: res.model ?? req.model,
-					},
-					{ startedAt, ms },
-				);
+				const ms = clock().now() - startedAt;
+				announce(id, builtin, "done");
 				report(traceOf(builtin, req, ms, res, undefined));
 				return res;
 			},
 			(ex) => {
-				const ms = clock.now() - startedAt;
-				announce(id, builtin, "failed", req, { startedAt, ms }, ex);
+				const ms = clock().now() - startedAt;
+				announce(id, builtin, "failed", ex);
 				controller.abort();
 				report(traceOf(builtin, req, ms, undefined, ex));
 				throw ex;
@@ -513,7 +495,7 @@ export function registerLlm(
 	);
 	const call = caller(
 		host.generate,
-		host.clock,
+		() => interp.channels.clock,
 		observe,
 		calls,
 		announcer(interp),
