@@ -42,6 +42,47 @@ export {
 	ThemeDialog,
 	ThemeSwatches,
 } from "./theme-selector.tsx";
+export { Trace, type TraceSlots, TraceSteps } from "./trace.tsx";
+export {
+	CHANNELS,
+	type Channel,
+	type ChannelId,
+	channelOf,
+	EVERY_CHANNEL,
+	type Shown,
+} from "./trace-channels.ts";
+export {
+	ChannelsShown,
+	Revealed,
+	useChannels,
+	useTraced,
+} from "./trace-context.tsx";
+export {
+	type EntryCarrier,
+	entriesOfMessage,
+	foldEntries,
+	isEntryMessage,
+	type Placement,
+	toolActivity,
+	tracePlacement,
+} from "./trace-entries.ts";
+export {
+	type ChatMessage,
+	isParentMessage,
+	isSystemMessage,
+	isToolMessage,
+	isUserMessage,
+	messageText,
+	type StepMeta,
+	stepMeta,
+	toolModelOutput,
+} from "./trace-message.ts";
+export {
+	type TraceChild,
+	type TraceEntry,
+	type TraceStep,
+	traceEntries,
+} from "./trace-steps.ts";
 export {
 	Typewriter,
 	type TypewriterProps,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import type { ChatMessage } from "../src/lib/chat.tsx";
-import { foldEntries } from "../src/lib/entries.ts";
+import { foldEntries } from "./trace-entries.ts";
+import type { ChatMessage } from "./trace-message.ts";
 
 const row = (id: string, kind: string, value: unknown, extra = {}) =>
 	({

@@ -1,10 +1,10 @@
+import { entriesOfMessage, isEntryMessage } from "./trace-entries.ts";
 import {
 	type ChatMessage,
 	isToolMessage,
 	messageText,
 	toolModelOutput,
-} from "./chat.tsx";
-import { entriesOfMessage, isEntryMessage } from "./entries.ts";
+} from "./trace-message.ts";
 
 function searchedText(message: ChatMessage): string {
 	if (isEntryMessage(message))

@@ -1,3 +1,12 @@
+import { systemPromptKind } from "@repo/journal-catalog/system";
+import { view } from "@repo/shared/journal";
+import {
+	entriesOfMessage,
+	foldEntries,
+	isEntryMessage,
+	toolActivity,
+	tracePlacement,
+} from "./trace-entries.ts";
 import {
 	type ChatMessage,
 	isSystemMessage,
@@ -5,10 +14,7 @@ import {
 	isUserMessage,
 	type StepMeta,
 	stepMeta,
-	toolActivity,
-	tracePlacement,
-} from "./chat.tsx";
-import { foldEntries, isEntryMessage } from "./entries.ts";
+} from "./trace-message.ts";
 
 export interface TraceChild {
 	chatId: string;
@@ -26,7 +32,12 @@ export interface TraceStep {
 
 export type TraceEntry =
 	| { kind: "message"; message: ChatMessage; at: number }
+	| { kind: "prompt"; message: ChatMessage; text: string; at: number }
 	| { kind: "step"; step: TraceStep };
+
+function promptOf(message: ChatMessage): string | undefined {
+	return view(entriesOfMessage(message), systemPromptKind).at(-1)?.text;
+}
 
 function sum(values: (number | undefined)[]): number | undefined {
 	const known = values.filter((n): n is number => n !== undefined);
@@ -78,13 +89,34 @@ export function traceEntries(messages: readonly ChatMessage[]): TraceEntry[] {
 		entries.push({ kind: "step", step: stepOf(open, steps) });
 		open = undefined;
 	};
+	let prompted: string | undefined;
+	const prompt = (message: ChatMessage, text: string, at: number) => {
+		if (text === prompted) return;
+		prompted = text;
+		const row: TraceEntry = { kind: "prompt", message, text, at };
+		const opening = entries.at(-1);
+		if (
+			open === undefined &&
+			waiting.length === 0 &&
+			opening?.kind === "message"
+		)
+			entries.splice(entries.length - 1, 0, row);
+		else {
+			settle();
+			close();
+			entries.push(row);
+		}
+	};
 	const settle = () => {
 		if (open !== undefined) open.push(...waiting);
 		else if (waiting.length > 0) open = waiting;
 		waiting = [];
 	};
 	for (const [at, message] of foldEntries(messages, tracePlacement).entries()) {
-		if (isEntryMessage(message)) {
+		const text = promptOf(message);
+		if (text !== undefined) {
+			prompt(message, text, at);
+		} else if (isEntryMessage(message)) {
 			waiting.push(message);
 		} else if (isUserMessage(message) || isSystemMessage(message)) {
 			settle();

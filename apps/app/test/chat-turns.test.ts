@@ -1,12 +1,11 @@
-import { type KwargMessage, lighten } from "@repo/shared/messages";
-import { describe, expect, test, vi } from "vitest";
 import {
-	briefingOf,
 	type ChatMessage,
 	isParentMessage,
 	isUserMessage,
-	toolResult,
-} from "../src/lib/chat.tsx";
+} from "@repo/components";
+import { type KwargMessage, lighten } from "@repo/shared/messages";
+import { describe, expect, test, vi } from "vitest";
+import { briefingOf, toolResult } from "../src/lib/chat.tsx";
 import { type Sequenced, timelineOf } from "../src/lib/timeline.ts";
 import { groupTurns, shapeTurn } from "../src/lib/turn-groups.ts";
 import { placeTimeline } from "../src/lib/turn-timeline.ts";

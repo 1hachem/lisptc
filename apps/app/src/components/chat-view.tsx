@@ -1,11 +1,25 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+	type ChannelId,
+	type ChatMessage,
+	channelOf,
+	isParentMessage,
+	isSystemMessage,
+	isToolMessage,
+	isUserMessage,
+	messageText,
+	Revealed,
+	type StepMeta,
+	toolModelOutput,
+	useChannels,
+	useTraced,
+} from "@repo/components";
 import type { Progress } from "@repo/journal-catalog/intent";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import {
 	createContext,
 	memo,
-	type ReactNode,
 	useCallback,
 	useContext,
 	useEffect,
@@ -22,28 +36,14 @@ import {
 import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import {
-	type ChannelId,
-	channelOf,
-	EVERY_CHANNEL,
-	type Shown,
-} from "../lib/channels.ts";
-import {
-	type ChatMessage,
-	isParentMessage,
-	isSystemMessage,
-	isToolMessage,
-	isUserMessage,
 	messageClassified,
 	messageProse,
 	messageReasoning,
-	messageText,
 	parentSourceOf,
-	type StepMeta,
 	toolAnswers,
 	toolAsks,
 	toolFailed,
 	toolFailure,
-	toolModelOutput,
 	toolQuestion,
 	toolResult,
 	toolResults,
@@ -84,10 +84,6 @@ import { UserLine } from "./user-line.tsx";
 const CHAT_FOLD = { lines: 25, chars: Number.POSITIVE_INFINITY };
 const TRACE_FOLD = { lines: 6, chars: 480 };
 const PAGE_LINES = 200;
-
-const Traced = createContext(false);
-
-export const Revealed = createContext(false);
 
 function Marked({
 	id,
@@ -136,7 +132,7 @@ function ChannelText({
 	tone: string;
 	code?: boolean;
 }) {
-	const traced = useContext(Traced);
+	const traced = useTraced();
 	const revealed = useContext(Revealed);
 	const [expanded, setExpanded] = useState(false);
 	const [page, setPage] = useState(0);
@@ -198,26 +194,6 @@ function ChannelText({
 			)}
 		</div>
 	);
-}
-
-const ShownChannels = createContext<Shown | null>(null);
-
-export function ChannelsShown({
-	shown,
-	children,
-}: {
-	shown: Shown;
-	children: ReactNode;
-}) {
-	return (
-		<ShownChannels.Provider value={shown}>
-			<Traced.Provider value>{children}</Traced.Provider>
-		</ShownChannels.Provider>
-	);
-}
-
-export function useChannels(): Shown {
-	return useContext(ShownChannels) ?? EVERY_CHANNEL;
 }
 
 function toolOutput(message: ChatMessage): string {
@@ -348,7 +324,7 @@ function UserMessage({ message }: { message: ChatMessage }) {
 
 export function ChatLine({ message }: { message: ChatMessage }) {
 	const shown = useChannels();
-	const traced = useContext(Traced);
+	const traced = useTraced();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
 	return (

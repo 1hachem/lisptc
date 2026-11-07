@@ -1,10 +1,9 @@
+import { type ChatMessage, entriesOfMessage } from "@repo/components";
 import {
 	ATTACHMENTS_KIND,
 	type AttachedFile,
 	attachedFiles,
 } from "@repo/shared/files";
-import type { ChatMessage } from "./chat.tsx";
-import { entriesOfMessage } from "./entries.ts";
 
 function filesIn(value: unknown): AttachedFile[] {
 	return attachedFiles.safeParse(value).data ?? [];

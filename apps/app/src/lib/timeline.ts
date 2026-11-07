@@ -1,4 +1,4 @@
-import type { ChatMessage } from "./chat.tsx";
+import type { ChatMessage } from "@repo/components";
 
 declare const ordered: unique symbol;
 

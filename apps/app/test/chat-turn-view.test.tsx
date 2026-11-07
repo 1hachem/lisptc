@@ -1,3 +1,4 @@
+import { CHANNELS, type ChannelId, type ChatMessage } from "@repo/components";
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
@@ -6,8 +7,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
 import { TraceLines } from "../src/components/trace-view.tsx";
 import { CallTimeline } from "../src/components/turn-intent.tsx";
-import { CHANNELS, type ChannelId } from "../src/lib/channels.ts";
-import type { ChatMessage } from "../src/lib/chat.tsx";
 import { traceOpen } from "../src/lib/panel-ops.ts";
 import { SideTraceProvider } from "../src/lib/side-trace.tsx";
 import { TraceSourceProvider } from "../src/lib/trace-source.tsx";
