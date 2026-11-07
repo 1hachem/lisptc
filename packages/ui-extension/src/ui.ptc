@@ -1,19 +1,7 @@
 INTERACTIVE VIEWS
 
-Chat body shows user only your prose and what ui/render draws. To show data, ui/render a **widget**, e.g. (ui/render (ui/table issues-1)) . Clicks and submits run Lisp in this REPL, no model turn.
+Chat body shows user only your prose and what ui/render draws. To show data, ui/render a **widget**.
 
-{{widgets}}
+Widget constructors: names in ui-widgets. Each has own memory ui/widget-NAME; (doc 'ui/table) prints one.
 
-- ui/render
-- ui/send
-- ui/open-file
-- ui/open-view
-- ui/close
-- ui/focus
-- ui/tabs
-- ui/file-link
-- ui/forget
-Unrendered widget shows nothing. Put what user should read inside a widget, never in an echo.
-ui/send: the result joins conversation as user message. Send for judgement; handle in Lisp for work.
-End with short prose: point at what you rendered, do not repeat it, e.g. "the 27 open issues are in the table above".
-Details: built-in memories ui/basics, ui/reactive, ui/actions, ui/send, ui/panels, ui/build.
+ui/render, ui/send, ui/open-file, ui/open-view, ui/close, ui/focus, ui/tabs, ui/file-link, ui/forget

@@ -23,6 +23,7 @@ interface Built<T extends Tag> {
 }
 
 interface WidgetForm<T extends Tag> {
+	when: string;
 	arity: number;
 	signature: string;
 	brief: string;
@@ -80,6 +81,7 @@ function arg(name: string, type: string, description: string): DocArg {
 
 export const WIDGET_FORMS = {
 	text: form({
+		when: "the agent must show a plain line of text in a view, where it would otherwise echo it",
 		arity: 1,
 		signature: "(ui/text s)",
 		brief: "a line.",
@@ -89,6 +91,7 @@ export const WIDGET_FORMS = {
 		build: ([s]) => ({ props: { text: typeof s === "string" ? s : str(s) } }),
 	}),
 	heading: form({
+		when: "a view needs a heading over one of its sections",
 		arity: 1,
 		signature: "(ui/heading s)",
 		brief: "heading for section under it.",
@@ -98,6 +101,7 @@ export const WIDGET_FORMS = {
 		build: ([s]) => ({ props: { text: s } }),
 	}),
 	markdown: form({
+		when: "a view must show formatted prose: paragraphs, lists or emphasis",
 		arity: 1,
 		signature: "(ui/markdown s)",
 		brief: "markdown block.",
@@ -107,6 +111,7 @@ export const WIDGET_FORMS = {
 		build: ([s]) => ({ props: { text: s } }),
 	}),
 	link: form({
+		when: "a view must let the user open a URL a tool returned, such as an issue, a pull request or a dashboard",
 		arity: 2,
 		signature: "(ui/link text url)",
 		brief:
@@ -122,6 +127,7 @@ export const WIDGET_FORMS = {
 		build: ([text, url]) => ({ props: { text, href: url } }),
 	}),
 	"file-link": form({
+		when: "a view must let the user open one of their stored files",
 		arity: 3,
 		signature: "(ui/file-link text folder name)",
 		brief:
@@ -134,6 +140,7 @@ export const WIDGET_FORMS = {
 		}),
 	}),
 	badge: form({
+		when: "a view must show a short status or state label next to an item",
 		arity: -2,
 		signature: '(ui/badge text [:tone "ok"])',
 		brief:
@@ -151,6 +158,7 @@ export const WIDGET_FORMS = {
 		}),
 	}),
 	kpi: form({
+		when: "a view must show one headline number, such as a count or a total, at a glance",
 		arity: 3,
 		signature: '(ui/kpi label value [:hint "…"])',
 		brief:
@@ -173,6 +181,7 @@ export const WIDGET_FORMS = {
 		},
 	}),
 	stack: form({
+		when: "widgets must be laid out one above the next",
 		arity: -1,
 		signature: "(ui/stack child...)",
 		brief: "stacked. Bare string child becomes ui/text.",
@@ -182,6 +191,7 @@ export const WIDGET_FORMS = {
 		build: ([rest]) => ({ props: {}, children: childNodes(rest) }),
 	}),
 	row: form({
+		when: "widgets must sit side by side on one line",
 		arity: -1,
 		signature: "(ui/row child...)",
 		brief: "side by side. Bare string child becomes ui/text.",
@@ -191,6 +201,7 @@ export const WIDGET_FORMS = {
 		build: ([rest]) => ({ props: {}, children: childNodes(rest) }),
 	}),
 	card: form({
+		when: "a group of widgets needs a titled box around it",
 		arity: -2,
 		signature: "(ui/card title child...)",
 		brief:
@@ -204,6 +215,7 @@ export const WIDGET_FORMS = {
 		}),
 	}),
 	button: form({
+		when: "a view needs a button that runs something when it is clicked",
 		arity: 2,
 		signature: "(ui/button label action)",
 		brief: "runs action on click. Action is fn or quoted call like '(refresh).",
@@ -218,6 +230,7 @@ export const WIDGET_FORMS = {
 		build: ([label, fn], action) => ({ props: { label, action: action(fn) } }),
 	}),
 	input: form({
+		when: "a view needs a text field the user types into, such as a search box",
 		arity: -1,
 		signature:
 			'(ui/input :name "q" [:label "Search"] [:placeholder "…"] [:value ""])',
@@ -254,6 +267,7 @@ export const WIDGET_FORMS = {
 		},
 	}),
 	select: form({
+		when: "a view needs a dropdown to pick one of several strings",
 		arity: -2,
 		signature:
 			'(ui/select options :name "n" [:label "…"] [:value "…"] [:on-change fn])',
@@ -281,6 +295,7 @@ export const WIDGET_FORMS = {
 		},
 	}),
 	checkbox: form({
+		when: "a view needs a tick box that turns something on or off",
 		arity: -1,
 		signature:
 			'(ui/checkbox :name "open" [:label "…"] [:checked t] [:on-change fn])',
@@ -308,6 +323,7 @@ export const WIDGET_FORMS = {
 		},
 	}),
 	form: form({
+		when: "a view must collect several fields and submit them together",
 		arity: -2,
 		signature: '(ui/form action child... [:submit "Send"])',
 		brief: "fields with submit button.",
@@ -326,6 +342,7 @@ export const WIDGET_FORMS = {
 		},
 	}),
 	table: form({
+		when: "rows of data, such as a tool result, must be shown as a table",
 		arity: -2,
 		signature: '(ui/table rows [:columns \'("id" "title")])',
 		brief:
@@ -353,11 +370,16 @@ export const WIDGET_FORMS = {
 	}),
 } satisfies { [T in Tag]: WidgetForm<T> };
 
-export function widgetPromptSection(): string {
-	return [
-		"**Constructors** each return a widget; none draws on its own.",
-		...TAGS.map(
-			(tag) => `- ${WIDGET_FORMS[tag].signature} ${WIDGET_FORMS[tag].brief}`,
-		),
-	].join("\n");
+export const WIDGET_NAMES = TAGS.map((tag) => `ui/${tag}`);
+
+export function widgetMemories(): string {
+	return TAGS.map((tag) => {
+		const widget = WIDGET_FORMS[tag];
+		return [
+			`(memory "ui/widget-${tag}" :when "${widget.when}")`,
+			`${widget.signature} ${widget.brief}`,
+			widget.doc,
+			`Example: ${widget.example}`,
+		].join("\n");
+	}).join("\n\n");
 }

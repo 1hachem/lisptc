@@ -43,7 +43,12 @@ import {
 } from "./panel.ts";
 import type { UiNode } from "./view.ts";
 import type { ViewStore } from "./view-store.ts";
-import { WIDGET_FORMS, widgetPromptSection, zString } from "./widgets.ts";
+import {
+	WIDGET_FORMS,
+	WIDGET_NAMES,
+	widgetMemories,
+	zString,
+} from "./widgets.ts";
 
 export { nodeToJson } from "./element.ts";
 export {
@@ -441,6 +446,12 @@ function registerUi(
 ): void {
 	surface.bind(interp, views);
 	surface.reset();
+	const widgets = newSym("ui-widgets");
+	interp.defineGlobal(widgets, arrayToList([...WIDGET_NAMES]), {
+		signature: "ui-widgets",
+		doc: "The widget constructors, by name. Each has a built-in memory ui/widget-NAME with its signature and an example; (doc 'ui/table) prints one in full.",
+	});
+	interp.seal(widgets, "ui");
 	interp.recovery.kind({
 		name: UI_TAG,
 		claims: (x) => x instanceof UiElement,
@@ -636,8 +647,8 @@ export function uiExtension(
 			registerUi(interp, surface, host.panel, host.views),
 		{
 			surface,
-			prompt: host.prompt().replace("{{widgets}}", widgetPromptSection()),
-			memories: host.memories(),
+			prompt: host.prompt(),
+			memories: `${host.memories().trimEnd()}\n\n${widgetMemories()}\n`,
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();
