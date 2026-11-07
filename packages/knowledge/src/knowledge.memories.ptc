@@ -7,7 +7,14 @@
 - (knowledge/write "name" value) replaces file, old one to bin; user can open
   and download it. Other file than .ptc or .json takes string.
 - (knowledge/delete "name") moves file to bin.
-User approves knowledge/write and knowledge/delete.
+User approves knowledge/write and knowledge/delete. User sees same files in
+sidebar; every change shows there at once.
+
+(memory "knowledge/mentions" :when "a user message points at a file with @knowledge/ or @attachments/")
+User message can point at file: @knowledge/report.md or @attachments/spec.pdf;
+quoted when name has space: @"attachments/Q3 Sales.json". Read it with
+(knowledge/read "report.md") or (attachments/read "spec.pdf") , name without
+folder.
 
 (memory "knowledge/structured" :when "a .json or .ptc file must be read as data, written from data, or one entry of it changed")
 (knowledge/read) by extension: .ptc gives its one form as data, never run.

@@ -1,14 +1,5 @@
 PROMISES
 
 Promise = work still running.
-- await
-- promise-all
-- promise-all-settled
-- promise-any
-- promise-race
-- promise-state
-- promises
-- cancel
-
-A PROMISE IS A LIVE VALUE. An unawaited load is done: carry on. Await only to use value in same step: (await (load-mcp "acme")) . Never write a #<…> form back into code.
-Details: memory/recall "promises/waiting" or "promises/live", or by trigger.
+await promise-all promise-all-settled promise-any promise-race promise-state promises cancel
+Unawaited load is done: carry on. Never write a #<…> form back into code.

@@ -1,14 +1,4 @@
 INTROSPECTION
 
 Read what is defined without running it. Use before guessing name or argument.
-- describe
-- apropos
-- args
-- arity
-- signature
-- docstring
-- source
-- functionp
-- macrop
-
-Signatures, examples, rules: (memory/recall "introspection/forms") , also by trigger.
+describe apropos args arity signature docstring source functionp macrop

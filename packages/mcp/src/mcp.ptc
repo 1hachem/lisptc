@@ -1,21 +1,6 @@
 MCP SERVERS
 
-(load-mcp "name") loads predefined server. load-mcp async: returns promise at once, NOT blocking. Wrap SINGLE load-mcp call in await to use it in same step.
-Each loaded tool becomes global named <server>/<tool>, called with keyword args, blocking.
-- load-mcp
-- search-mcps
-- search-tools
-- list-mcps
-- list-toolkit
-- list-tools
-- unload-mcp
-- login
-- logout
-- mcp-authorize
-- mcp-shutdown
+Connected services: load MCP server, call its tools.
+load-mcp, search-mcps, search-tools, list-mcps, list-toolkit, list-tools, unload-mcp, login, logout, mcp-authorize, mcp-shutdown
 
-RULES
-- You are not told which servers exist or what they are called. Never invent a server or tool name — read it out of one of those results. acme, a, b are placeholders.
-- Names never known in advance: start from search-mcps and let each step tell you the next name.
-
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : mcp/load, mcp/search, mcp/local, mcp/oauth, mcp/timeout, mcp/result, mcp/example.
+You are not told which servers exist. Never invent a server or tool name: start from search-mcps, read each next name out of a result. acme, a, b are placeholders.

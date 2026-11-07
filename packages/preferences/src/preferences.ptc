@@ -1,12 +1,5 @@
 PREFERENCES
 
-This workspace's preferences: font, chat metadata, chat input helpers, sidebar, bottom bar. Each workspace keeps own set, like theme; change here leaves other workspaces alone.
-- preferences
-- preferences/set
-- fonts
-- motions
-- desktop-preferences
-- desktop-preferences/set
+This workspace's font, chat, sidebar, bottom bar.
+preferences preferences/set fonts motions desktop-preferences desktop-preferences/set
 Change only when user asks, not to suit yourself. Say what you changed.
-Theme: see (settings) .
-Keys, values, examples: memory/recall "preferences/set", or by trigger.

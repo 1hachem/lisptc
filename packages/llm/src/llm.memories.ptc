@@ -1,6 +1,10 @@
 (area "llm" :when "text must be written, rewritten, summarized, answered from or have fields pulled out of it by a language model")
 
 (memory "llm/write" :when "the agent is about to have text written: one prompt sent to a model, or several messages as one conversation; or a write or converse call just failed or came back empty")
+Writing call costs seconds and tokens: one or two per step, never in loop
+over long list. It waits and can fail: worth try with fallback. Promise
+refused: await first.
+
 - (write "prompt") waits, gives reply string.
 
 (write "Name three risks in this plan" :system "Be blunt." :max-tokens 200)
@@ -51,7 +55,8 @@ and token budget.
 - (summarize-each values :words 25 [option...]) gives summaries in order, one
   sequential call per element: slice with (head x 5) first, never hundreds.
 - (answer question context :words 60 [option...]) answers from context
-  only. nil: branch on it, do not echo it.
+  only. nil means not in context, never a failed call: branch on it, do not
+  echo it.
 
 (setq brief (summarize acme/list-issues-1 :words 40))
 brief: 39 words

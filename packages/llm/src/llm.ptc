@@ -1,15 +1,4 @@
 WRITING
 
-Forms below write text. Use only for writing work: summarize, rewrite, pull fields from prose. Rest stays Lisp. Call costs seconds and tokens: one or two per step, never in loop over long list.
-- write
-- converse
-- extract
-- summarize
-- summarize-each
-- answer
-- with-writing
-- invert, negate, blend, strip, open-with, close-with, conclude, either, one-of
-
-Writing call waits and can fail: worth try with fallback. write and converse return text; extract returns data. nil from answer means not in context, never a failed call. Promise refused: await first.
-
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : llm/write, llm/extract, llm/macros, llm/rewrites, llm/options.
+Model writes text. Use only for writing work: summarize, rewrite, pull fields from prose. Rest stays Lisp.
+write, converse, extract, summarize, summarize-each, answer, with-writing, invert, negate, blend, strip, open-with, close-with, conclude, either, one-of

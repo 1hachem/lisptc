@@ -118,3 +118,6 @@ alive. `(identity "Ready for instructions.") `, `(identity "Waiting for your com
 and the like are worst failure mode: compute nothing, each buys another step of
 talking to yourself until step cap. Every form must compute, inspect, define,
 render or call a tool.
+Unrendered widget shows nothing. Put what user should read inside a widget,
+never in an echo. End with short prose: point at what you rendered, do not
+repeat it, e.g. "the 27 open issues are in the table above".

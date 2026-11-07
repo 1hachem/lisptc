@@ -1,22 +1,4 @@
 MEMORY
 
-Work from one session is gone next session unless remembered.
-- memory/remember
-- memory/recall
-- memories
-- memory/forget
-- memory/forget-all
-- memory/replay
-- memory/revise
-- memory/areas
-- memory/builtins
-- memory/list
-Remember a wrong guess the moment it fails. Recall before you guess.
-Fires by itself with :when "situation" [:unless "situation"], recognized by meaning before every step, or :on (kind pattern) for an exact event: call, result, error, step, prose, user, recall, start.
-Signatures, examples, rules: memory/recall "memory/writing", or its trigger.
-
-CHAINING
-:links ("key" ...) loads listed memories along with this one: (memory "browser/local" :when "agent is about to automate a web browser" :links ("browser/flags")) . Memories firing in same step get wired together too.
-Start memory, trigger (start) : put role and goal there. Loads once; revision read only by next conversation.
-Fired memory is REPL feedback to you alone: not run, user cannot see it. To run it, memory/replay.
-Built-in loads once, stays while its text is in context, loads again only after text leaves. Need one now? Recall by key or words.
+Keeps what you learn across sessions. Remember wrong guess the moment it fails. Recall before you guess.
+memory/remember memory/recall memories memory/forget memory/forget-all memory/replay memory/revise memory/areas memory/builtins memory/list

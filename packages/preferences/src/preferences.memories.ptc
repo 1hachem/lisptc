@@ -49,6 +49,8 @@
 
 (memory "preferences/set" :when "a preference change just failed, or the agent must read or change the font, a chat metadata field or a chat input helper")
 - (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t) .
+- Each workspace keeps own set, like theme; change here leaves other workspaces
+  alone. Theme: see (settings) .
 - (fonts) gives alist of (id . name) to choose from.
 - (preferences/set :font "geist") changes only keys you give.
 - (preferences/set :metadata '(:tokens t)) turns tokens on, leaves others as they were.

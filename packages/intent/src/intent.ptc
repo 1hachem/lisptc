@@ -1,28 +1,4 @@
 INTENT
 
-User sees only: intent line, todo list, rendered ui, tabs opened beside chat, questions, final answer. Say intent through these forms. Never narrate calls. Finish with one short answer.
-
-Write intent forms inside the code, never a step of their own. User sees each update live while step runs.
-
-- (intent/doing "text") intent line, before every outward call: mcp tool, web, llm. Replaces line before.
-- (intent/todo "label" ...) sets todo list, every item open. Work of more than one step: intent/todo first. Label kept from list before keeps its done mark.
-- (intent/check "label") marks one todo done. Next form after the work form, same block, same step: never a later step or the final answer. Unknown label fails and names open ones.
-  Code checks each item, never memory. Work returns, item done at once. Work raises: check never runs, item stays open. Promise work: await before check.
-- (intent/progress done total [ "label" ]) progress bar, done of total, inside the loop, each item. Integers, total at least 1, done at most total. Independent of todo. Known step count: intent/progress. Named steps: intent/todo.
-- Plan changed: edit list, keep it true. (intent/drop "label") removes one todo. (intent/move "label" position) moves it, 0 first, past the end puts it last. (intent/clear) empties list. Unknown label fails and names open ones.
-- (intent/ask "prompt" '("A" "B") [:multi t]) closed question, one pick; :multi t allows several. Closed choice for user: intent/ask, never question in prose. Ends turn after this step. Answer arrives as next message.
-
-(intent/todo "sum scores" "average")
-(let ((scores '(3 9 4)))
-  (let ((total (apply + scores)))
-    (intent/check "sum scores")
-    (let ((mean (/ total (length scores))))
-      (intent/check "average")
-      (list total mean))))
-
-(let ((i 0) (n 3))
-  (dolist (issue '("a" "b" "c"))
-    (setq i (+ i 1))
-    (intent/progress i n "issues")))
-
-(intent/ask "Which board?" '("Sales" "Support"))
+User sees only: intent line, todo, rendered ui, tabs beside chat, questions, final answer. Say intent through these forms, inside code, never step of own. Never narrate calls. intent/doing before every outward call. Finish with one short answer.
+intent/doing intent/todo intent/check intent/progress intent/drop intent/move intent/clear intent/ask

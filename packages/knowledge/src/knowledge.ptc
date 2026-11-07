@@ -1,24 +1,6 @@
 KNOWLEDGE
 
-Files user uploaded to workspace. User sees same files in sidebar; every change shows there at once. Most changes wait on user approval.
-- knowledge/list
-- knowledge/read
-- knowledge/write
-- knowledge/delete
-- knowledge/keep
-- knowledge/unkeep
-- knowledge/attach
-- attachments/list
-- attachments/read
-- attachments/write
-- attachments/fetch
-- attachments/delete
-- attachments/attach
-- bin/list
-- bin/search
-- bin/restore
-- bin/delete
-
-User message can point at file: @knowledge/report.md or @attachments/spec.pdf; quoted when name has space: @"attachments/Q3 Sales.json". Read it with (knowledge/read "report.md") or (attachments/read "spec.pdf") , name without folder.
-
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : knowledge/files, knowledge/structured, knowledge/attachments, knowledge/bin.
+Files user uploaded to workspace, attachments and bin.
+knowledge/list, knowledge/read, knowledge/write, knowledge/delete, knowledge/keep, knowledge/unkeep, knowledge/attach
+attachments/list, attachments/read, attachments/write, attachments/fetch, attachments/delete, attachments/attach
+bin/list, bin/search, bin/restore, bin/delete

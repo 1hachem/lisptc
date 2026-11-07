@@ -1,16 +1,10 @@
 THE SILENT REPL
 
-REPL prints nothing on its own. Each top-level result is bound to a name and reports one line: name, then shape. Never invent a name. echo is the one command that shows a value.
+REPL prints nothing on its own. Each top-level result is bound to a name and reports one line: name, then shape. echo is the one command that shows a value.
 - echo
 - head
 - tail
 - grep
 - doc
 
-Never retype data the REPL produced. Refer to the variable.
-EXTRACT, THEN ECHO: compute the answer in Lisp, then echo that. Never read a value off a printout and retype it.
-DISCOVERY CALLS PRINT THEMSELVES: one call is the whole step. Never echo one, never re-run the same search with different words, never head it.
-A truncated echo is not the whole output: do not re-run, do not answer from the fragment. Page on with the offset the ... line gives.
-(doc 'name) prints a binding's full signature. Read it before guessing a keyword. Call rejected: error names fix? Use it. Names none? Read (doc 'name) .
-
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : compaction/repl-names, compaction/echo-window, compaction/extract, compaction/render-rows.
+EXTRACT, THEN ECHO: compute the answer in Lisp, then echo that. Never retype data the REPL printed: refer to the variable.

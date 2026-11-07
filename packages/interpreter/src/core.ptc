@@ -1,36 +1,12 @@
-LISPTC LANGUAGE REFERENCE
+LISPTC LANGUAGE
 
-Lisptc: Common-Lisp-like dialect. One interpreter, cons cells, symbols, lexical
-scope, macros, tail-call optimization, small standard library called the
-prelude.
-
-SYNTAX
-
-Source is s-expressions. (f a b) calls f with evaluated a and b.
-Only parenthesised top-level forms are program text. Text around them is prose,
-ignored.
-
-DATA
-
-nil = () = null = empty list = the ONLY false value. t canonical true.
-Everything except nil truthy, including 0, "", empty structures.
-
-FORMS
+Common-Lisp-like dialect. (f a b) calls f with evaluated a and b. Only top-level
+parenthesised forms are code; text around them is prose, ignored.
+This reference and lang memories authoritative: name in none does not exist.
+nil = () = empty list = ONLY false value. 0, "" and empty structures true. t
+canonical true.
 
 Special forms: quote, progn, cond, setq, lambda, macro, quasiquote, try.
-Prelude macros, used the same way: if, when, unless, and, or, let, let*,
-letrec, while, dolist, dotimes, case, defun, defmacro, setf, push, pop, incf,
-decf, block, return-from, catch, unwind-protect. Prelude functions are all available by default.
-
-MEMORIES
-
-Detail for each topic is in built-in memories. Before you use a name or form
-from a topic, recall its memory by key: memory/recall "key".
-lang/syntax, lang/prose-asides, lang/data-types, lang/special-forms,
-lang/numbers, lang/arithmetic, lang/lists, lang/hash-vectors, lang/strings,
-lang/json-read, lang/eval-control, lang/output, lang/introspection,
-lang/prelude-access, lang/prelude-map, lang/prelude-sort, lang/prelude-build,
-lang/prelude-search, lang/prelude-predicates, lang/prelude-alists,
-lang/prelude-get-in, lang/prelude-set-in, lang/prelude-branch, lang/prelude-let,
-lang/prelude-loops, lang/prelude-defun, lang/prelude-string-search,
-lang/prelude-string-edit, lang/prelude-format, lang/places, lang/macros, lang/errors, lang/gotchas.
+Prelude macros: if, when, unless, and, or, let, let*, letrec, while, dolist,
+dotimes, case, defun, defmacro, setf, push, pop, incf, decf, block,
+return-from, catch, unwind-protect.

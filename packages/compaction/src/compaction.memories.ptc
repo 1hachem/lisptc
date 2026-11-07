@@ -25,7 +25,8 @@ Echo windowing, what it prints:
 - One unbroken word, minified JSON say, is cut by character, and the ... line
   points at a substring. Several echoes in one step share the budget. When it
   runs out you are told how many words you were not shown.
-- Output ending in a ... line is not everything. Page on, do not answer early.
+- Output ending in a ... line is not everything. Do not re-run, do not
+  answer from the fragment. Page on with the offset the ... line gives.
 
 Echo output is capped for you; user never sees echo. Past the cap, text stops and
 a ... line says how much is left:
@@ -44,8 +45,9 @@ Extracting, what each returns:
   list, or nil. On a list, ELEMENTS whose printed form matches:
 (grep issues "auth") is the issues about auth. On text, matched substrings:
 (grep page "https?://[^ ]+") is the URLs in it.
-- A discovery call prints every name and description, no shape.
-- (doc name) prints whole, free against echo budget. Look freely.
+- A discovery call prints every name and description, no shape. One call is
+  the whole step. Never echo one, never re-run the same search with different
+  words, never head it.
 - Prefer computing over reading: (length x) , mapcar, assoc and grep work on
   the complete value. One extracting form beats paging through text.
 
@@ -62,6 +64,11 @@ Bare slice already answers "what is in there":
 (head acme/list-issues-1 2)
 ((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
   (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
+
+(memory "compaction/doc" :when "the agent is about to call a form whose keywords or arguments it is not sure of, or a call was just rejected")
+(doc 'name) prints a binding's full signature, whole, free against echo
+budget. Look freely. Read it before guessing a keyword. Call rejected: error
+names fix? Use it. Names none? Read (doc 'name) .
 
 (memory "compaction/render-rows" :when "the agent fetched rows of data and must read them, or show them as a table, list or summary")
 To read rows, keep whole list and echo a rendering of it:

@@ -1,12 +1,4 @@
 SEMANTIC FORMS
 
-% before plain form = same form, by meaning, not by value. Fast: gives probability, never text. Bare = < member find stay exact: % only where written. Numbers and equal values answer without call, so (%= 2 2.0) free. Same question twice in session = same answer, no second call.
-- %p, %p-each, %choose, %score, %score-each
-- %= %/= %< %> %<= %>= %is-a %enough? %string-contains? %string-prefix? %string-suffix?
-- %member %find %position %filter %remove-if %count-if %some %every %sort %max %min
-- %cond %case
-- %embed %similarity %similarity-each %remove-duplicates %cluster %outliers
-
-% forms answer yes/no, pick, rate, measure. Never write text: rewrite, summarize, extract stay write, summarize, extract. % forms on ids, keys, enum strings: wrong tool, use plain form. Call can fail: try with fallback where wrong guess is costly. Option, every % call: :timeout ms, default 30000.
-
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : semantic/judge, semantic/predicates, semantic/lists, semantic/branching, semantic/embedding.
+% before plain form = same form, by meaning, not by value. Fast: gives probability, never text.
+%p %p-each %choose %score %score-each %= %/= %< %> %<= %>= %is-a %enough? %string-contains? %string-prefix? %string-suffix? %member %find %position %filter %remove-if %count-if %some %every %sort %max %min %cond %case %embed %similarity %similarity-each %remove-duplicates %cluster %outliers

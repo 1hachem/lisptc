@@ -1,17 +1,5 @@
 WORKSPACE
 
-Workspace you work in, and its chats. Changes show in sidebar at once.
-- settings
-- settings/set
-- settings/models
-- settings/icons
-- settings/themes
-- chats
-- chat/title
-- chat/rename
-- chat/archive
-- chat/unarchive
-- chat/read
-
-User approves settings/set, chat/archive, chat/read first. Theme is per workspace, not per user: each workspace wears its own. Ids come from chats: never guess one. Title a new chat once you know its topic: few words, no full stop.
-Details: memory/recall "workspace/choices", "workspace/chats", or by trigger.
+Workspace settings and its chats.
+settings settings/set settings/models settings/icons settings/themes chats chat/title chat/rename chat/archive chat/unarchive chat/read
+Title new chat once you know its topic: few words, no full stop.

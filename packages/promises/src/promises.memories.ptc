@@ -14,6 +14,8 @@ Waiting on promises:
 - (cancel promise) aborts the request behind one promise; returns t if there was something to abort. Promise-all and friends have nothing of their own to abort: nil.
 
 (memory "promises/live" :when "the agent holds a value printed as #<...>, or is about to reuse a background load")
+- A PROMISE IS A LIVE VALUE. Await only to use value in same step:
+(await (load-mcp "acme")) .
 - Promise-returning call installs its result itself on settle. Step reporting load-mcp-1: a promise, still running … is COMPLETE: no follow-up, use what it loaded on later step.
 - A promise settles once, keeps its result, and awaiting it twice gives the same answer, as in JavaScript. Host runtime's own promises, JavaScript semantics.
 - Refer to promise by name REPL reported ((await load-mcp-1)) or one you bound.

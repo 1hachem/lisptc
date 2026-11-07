@@ -10,9 +10,12 @@
 - (settings/set :icon "rocket") or (settings/set :theme "gruvbox-light") changes them.
 - (settings/set :theme "dark") flips current theme to its dark twin. No dark
   twin: default dark theme.
+- Theme is per workspace, not per user: each workspace wears its own.
+- Changes show in sidebar at once.
 
 (memory "workspace/chats" :when "the agent must find, rename, archive, restore or read another chat of this workspace")
-- (chats) lists (:id id :title title) , most recently active first.
+- (chats) lists (:id id :title title) , most recently active first. Ids come
+  from chats: never guess one.
 - (chats :search "login" :limit 5) narrows by title. :limit caps the count.
 - (chat/title "Debug login redirect") titles current chat.
 - (chat/rename id "…") retitles another chat.
