@@ -73,6 +73,7 @@ export const MAX_CASCADE_DEPTH = 3;
 export const MAX_RECALL_WORDS = 200;
 export const DEFAULT_RECALL_LIMIT = 5;
 export const MAX_BUILTIN_WORDS = 300;
+export const RECALLED_RESTS_STEPS = 100;
 
 function matches(pattern: string, text: string): boolean {
 	try {
@@ -215,6 +216,13 @@ function hookOf(value: unknown): TriggerKind | undefined {
 	return name as TriggerKind;
 }
 
+function stepsTaken(interp: Interp): number {
+	const taken = interp.getGlobal(newSym("steps-taken"));
+	return typeof taken === "bigint" || typeof taken === "number"
+		? Number(taken)
+		: 0;
+}
+
 function latestStep(turns: readonly Turn[]): string | undefined {
 	let at = turns.length - 1;
 	while (at >= 0 && turns[at]?.role !== "assistant") at--;
@@ -254,6 +262,18 @@ function fires(key: string, trigger: Trigger, event: MemoryEvent): boolean {
 const countCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
 	fromLisp: (x) => Number(x),
+};
+
+const recalledCodec: StateCodec<ReadonlyMap<string, number>> = {
+	toLisp: (recalled) =>
+		arrayToList([...recalled].map(([key, at]) => new Cell(key, BigInt(at)))),
+	fromLisp: (list) =>
+		new Map(
+			listToArray(list as List).map((pair) => [
+				(pair as Cell).car as string,
+				Number((pair as Cell).cdr),
+			]),
+		),
 };
 
 const keysCodec: StateCodec<readonly string[]> = {
@@ -343,7 +363,9 @@ export class MemoryBank {
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
 	private loaded: State<readonly string[]> = detachedState([]);
-	private asked: State<readonly string[]> = detachedState([]);
+	private recalled: State<ReadonlyMap<string, number>> = detachedState(
+		new Map(),
+	);
 	private builtinSource: () => readonly string[] = () => [];
 	private firing: FiredMemory[] | undefined;
 	private builtinTable: ReadonlyMap<string, Memory> | undefined;
@@ -377,11 +399,11 @@ export class MemoryBank {
 			[],
 			"The built-in memories whose text is still in the conversation, so they do not load twice.",
 		);
-		this.asked = interp.state(
-			"memory/asked",
-			keysCodec,
-			[],
-			"The memories a when trigger fired since the user last spoke, so a later step does not fire them again.",
+		this.recalled = interp.state(
+			"memory/recalled",
+			recalledCodec,
+			new Map(),
+			`The step each memory last fired at, by any trigger or recall. Recognition leaves a memory out until ${RECALLED_RESTS_STEPS} steps have passed since.`,
 		);
 		this.runtime = interp.state(
 			"memory/runtime",
@@ -504,10 +526,7 @@ export class MemoryBank {
 		const said = userMessages(interp);
 		const last = said[said.length - 1];
 		const fresh = said.length !== this.heard;
-		if (fresh) {
-			this.heard = said.length;
-			this.asked.set([]);
-		}
+		if (fresh) this.heard = said.length;
 		if (last === undefined || last === "") return [];
 		this.change({ stepping: true });
 		yield* this.sweep();
@@ -570,7 +589,12 @@ export class MemoryBank {
 		seen: { message: string; step?: string },
 		interp: Interp,
 	): Eval<void> {
-		const spent = [...this.loaded.get(), ...this.asked.get()];
+		const spent = [
+			...this.loaded.get(),
+			...[...this.recalled.get().keys()].filter((key) =>
+				this.resting(key, interp),
+			),
+		];
 		const repl = yield* this.askRepl(interp, seen.step);
 		const cues = repl.cues.filter((cue) => !spent.includes(cue.key));
 		if (cues.length === 0) return;
@@ -609,6 +633,11 @@ export class MemoryBank {
 		if (prose !== "")
 			yield* this.dispatch({ kind: "prose", text: prose }, interp);
 		return this.drain();
+	}
+
+	private resting(key: string, interp: Interp): boolean {
+		const at = this.recalled.get().get(key);
+		return at !== undefined && stepsTaken(interp) - at < RECALLED_RESTS_STEPS;
 	}
 
 	*endStep(): Eval<string> {
@@ -680,6 +709,9 @@ export class MemoryBank {
 			fired: [...fired, memory.key],
 			open: builtin ? open : [...open, memory.key],
 		});
+		this.recalled.set(
+			new Map([...this.recalled.get(), [memory.key, stepsTaken(interp)]]),
+		);
 		if (builtin) this.loaded.set([...loaded, memory.key]);
 		else yield* this.reinforce(memory);
 		this.surface(memory, builtin);
@@ -728,11 +760,7 @@ export class MemoryBank {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
 			if (!fires(memory.key, on, event)) continue;
-			if (event.kind === "when") {
-				const asked = this.asked.get();
-				if (asked.includes(memory.key)) continue;
-				this.asked.set([...asked, memory.key]);
-			}
+			if (event.kind === "when" && this.resting(memory.key, interp)) continue;
 			yield* this.fire(memory, interp);
 		}
 	}
@@ -836,7 +864,9 @@ export function memoryExtension(
 		bank,
 		asks: [FORGET_ALL],
 		prompt: host.prompt(),
-		memories: host.memories(),
+		memories: host
+			.memories()
+			.replaceAll("{{rest-steps}}", String(RECALLED_RESTS_STEPS)),
 		session: memorySession(bank),
 	});
 }

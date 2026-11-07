@@ -7,7 +7,7 @@ Two ways to fire by itself.
 needs the memory. Recognized by meaning before every step, not regex, against
 whole conversation, latest step weighed most: what user said, your last code,
 its result or its error. Recognizer also reads memory key and start of body.
-Fires once per user message. Describe the whole situation, not only a request:
+Once fired, rests {{rest-steps}} steps before it can fire again. Describe the whole situation, not only a request:
 what user asks, what you are about to do, an error or a result that just came back.
 
   :when "agent is about to drive a web page, or a page call failed with a missing browser"

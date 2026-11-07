@@ -23,6 +23,7 @@ import {
 	MAX_RECALL_WORDS,
 	MemoryBank,
 	memoryExtension,
+	RECALLED_RESTS_STEPS,
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
 import {
@@ -116,6 +117,10 @@ function fixture(
 	const say = (...turns: Turn[]) => {
 		conversation.push(...turns);
 		interp.defineGlobal(newSym("conversation"), jsonToLisp(conversation));
+		interp.defineGlobal(
+			newSym("steps-taken"),
+			BigInt(conversation.filter((turn) => turn.role === "assistant").length),
+		);
 	};
 	return {
 		interp,
@@ -448,6 +453,12 @@ describe("the when trigger", () => {
 		expect(await ev(f, keys)).toBe('("browser/local" "elsewhere" "mine")');
 	});
 
+	it("ships its memories with the rest length filled in", () => {
+		const { memories } = memoryExtension(memoryHost);
+		expect(memories).not.toMatch(/\{\{[^}]*\}\}/);
+		expect(memories).toContain(`rests ${RECALLED_RESTS_STEPS} steps`);
+	});
+
 	it("lists the gate each area declares", async () => {
 		const f = fixture({
 			memories: `(area "browser" :when "the work drives a web browser")\n${BROWSER}`,
@@ -526,7 +537,7 @@ describe("the when trigger", () => {
 		]);
 	});
 
-	it("fires a when memory once per user message, however many steps follow", async () => {
+	it("leaves a fired memory out of recognition until its rest is over, across user messages", async () => {
 		const { recognize, calls } = recognizing({
 			"user asks about billing": 0.9,
 		});
@@ -538,7 +549,10 @@ describe("the when trigger", () => {
 		expect(await f.hear("where is my invoice")).toEqual(["billing"]);
 		expect(await f.step("(invoices)", "3 invoices")).toEqual([]);
 		expect(calls.at(-1)).not.toContain("user asks about billing");
-		expect(await f.hear("and the one from march")).toEqual(["billing"]);
+		expect(await f.hear("and the one from march")).toEqual([]);
+		for (let step = 1; step < RECALLED_RESTS_STEPS - 1; step++)
+			await f.step("(invoices)", "3 invoices");
+		expect(await f.step("(invoices)", "3 invoices")).toEqual(["billing"]);
 	});
 
 	it("fires a built-in when memory once per user message, however many steps follow", async () => {
@@ -576,11 +590,14 @@ describe("a loaded built-in", () => {
 		expect(calls).toHaveLength(1);
 	});
 
-	it("loads again once its text has left the conversation", async () => {
+	it("loads again once its text has left the conversation and its rest is over", async () => {
 		const { recognize } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
 		await f.hear("open my browser");
 		f.context([{ role: "user", content: "a summary of earlier work" }]);
-		expect(await f.hear("open the browser again")).toContain("browser/local");
+		expect(await f.hear("open the browser again")).toEqual([]);
+		for (let step = 1; step < RECALLED_RESTS_STEPS; step++)
+			await f.step("(open)", "opened");
+		expect(await f.step("(open)", "opened")).toContain("browser/local");
 	});
 });
