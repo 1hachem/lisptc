@@ -56,13 +56,12 @@ type Announce = (
 	id: string,
 	builtin: string,
 	state: ActivityEntry["state"],
-	target: { provider?: string; model?: string },
 	timing: Timing,
 	error?: unknown,
 ) => void;
 
 function announcer(interp: Interp): Announce {
-	return (id, builtin, state, { provider, model }, timing, error) =>
+	return (id, builtin, state, timing, error) =>
 		record(interp.channels, activityKind, {
 			kind: "llm",
 			icon: "model",
@@ -463,7 +462,7 @@ function caller(
 		calls.set(n);
 		const id = `llm-${n}`;
 		const startedAt = clock.now();
-		announce(id, builtin, "started", req, { startedAt });
+		announce(id, builtin, "started", { startedAt });
 		const controller = new AbortController();
 		return withTimeout(
 			generate(req, controller.signal),
@@ -472,22 +471,13 @@ function caller(
 		).then(
 			(res) => {
 				const ms = clock.now() - startedAt;
-				announce(
-					id,
-					builtin,
-					"done",
-					{
-						provider: res.provider ?? req.provider,
-						model: res.model ?? req.model,
-					},
-					{ startedAt, ms },
-				);
+				announce(id, builtin, "done", { startedAt, ms });
 				report(traceOf(builtin, req, ms, res, undefined));
 				return res;
 			},
 			(ex) => {
 				const ms = clock.now() - startedAt;
-				announce(id, builtin, "failed", req, { startedAt, ms }, ex);
+				announce(id, builtin, "failed", { startedAt, ms }, ex);
 				controller.abort();
 				report(traceOf(builtin, req, ms, undefined, ex));
 				throw ex;
