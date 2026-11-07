@@ -30,17 +30,33 @@ const activityEntry = z.object({
 	error: z.string().optional(),
 	id: z.string(),
 	startedAt: z.number().optional(),
+	endedAt: z.number().optional(),
 	ms: z.number().optional(),
 	chat: z.string().optional(),
 });
 
 export type ActivityEntry = z.infer<typeof activityEntry>;
 
+function stamped(entry: ActivityEntry, at: number): ActivityEntry {
+	if (entry.state === "started")
+		return { ...entry, startedAt: entry.startedAt ?? at };
+	return { ...entry, endedAt: entry.endedAt ?? at };
+}
+
+function timed(entry: ActivityEntry): ActivityEntry {
+	const { startedAt, endedAt } = entry;
+	if (startedAt === undefined || endedAt === undefined) return entry;
+	return { ...entry, ms: Math.max(0, endedAt - startedAt) };
+}
+
 function mergedById(entries: readonly ActivityEntry[]): ActivityEntry[] {
 	const merged = new Map<string, ActivityEntry>();
 	for (const entry of entries) {
 		const held = merged.get(entry.id);
-		merged.set(entry.id, held === undefined ? entry : { ...held, ...entry });
+		merged.set(
+			entry.id,
+			timed(held === undefined ? entry : { ...held, ...entry }),
+		);
 	}
 	return [...merged.values()];
 }
@@ -48,5 +64,6 @@ function mergedById(entries: readonly ActivityEntry[]): ActivityEntry[] {
 export const activityKind = entryKind({
 	name: "activity",
 	schema: activityEntry,
+	stamp: stamped,
 	fold: mergedById,
 });

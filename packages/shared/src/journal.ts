@@ -15,6 +15,7 @@ export interface EntryKind<T, V> {
 	readonly name: string;
 	readonly schema: z.ZodType<T>;
 	readonly supersedes?: true;
+	stamp?(value: T, at: number): T;
 	fold(values: readonly T[]): V;
 }
 

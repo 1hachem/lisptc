@@ -20,7 +20,7 @@ import {
 	activityKind,
 } from "@repo/journal-catalog/activity";
 import type { EmbeddingModel } from "@repo/shared/embedding";
-import type { Clock, PromptSource } from "@repo/shared/host";
+import type { PromptSource } from "@repo/shared/host";
 import type {
 	JudgeRequest,
 	JudgeResult,
@@ -43,7 +43,6 @@ export const OUTLIER_SIMILARITY = 0.47;
 export interface SemanticHost {
 	systemOne: SystemOneModel;
 	embedder: EmbeddingModel;
-	clock: Clock;
 	prompt: PromptSource;
 }
 
@@ -74,7 +73,7 @@ type Track = <T>(
 	run: (signal: AbortSignal) => Promise<T>,
 ) => Promise<T>;
 
-function tracker(interp: Interp, host: SemanticHost): Track {
+function tracker(interp: Interp): Track {
 	const calls = interp.state(
 		"semantic/calls",
 		callSeqCodec,
@@ -85,12 +84,7 @@ function tracker(interp: Interp, host: SemanticHost): Track {
 		const n = calls.get() + 1;
 		calls.set(n);
 		const id = `semantic-${n}`;
-		const startedAt = host.clock.now();
-		const announce = (
-			state: ActivityEntry["state"],
-			ms?: number,
-			error?: unknown,
-		): void =>
+		const announce = (state: ActivityEntry["state"], error?: unknown): void =>
 			record(interp.channels, activityKind, {
 				kind: "semantic",
 				icon: "meaning",
@@ -98,18 +92,16 @@ function tracker(interp: Interp, host: SemanticHost): Track {
 				state,
 				...(error === undefined ? {} : { error: messageOf(error) }),
 				id,
-				startedAt,
-				...(ms === undefined ? {} : { ms }),
 			});
 		announce("started");
 		const controller = new AbortController();
 		return withTimeout(run(controller.signal), timeoutOf(opts), form).then(
 			(res) => {
-				announce("done", host.clock.now() - startedAt);
+				announce("done");
 				return res;
 			},
 			(ex) => {
-				announce("failed", host.clock.now() - startedAt, ex);
+				announce("failed", ex);
 				controller.abort();
 				throw ex;
 			},
@@ -464,7 +456,7 @@ const SUBJECTS: Subject[] = [
 ];
 
 export function registerSemantic(interp: Interp, host: SemanticHost): void {
-	const track = tracker(interp, host);
+	const track = tracker(interp);
 	const ask = asker(track, host);
 	const embed = embedder(track, host);
 

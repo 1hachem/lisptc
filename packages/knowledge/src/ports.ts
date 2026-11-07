@@ -1,5 +1,5 @@
 import type { StoreFolder } from "@repo/shared/files";
-import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
+import type { Awaitable, PromptSource } from "@repo/shared/host";
 
 export interface BinnedFile {
 	name: string;
@@ -41,5 +41,4 @@ export interface KnowledgeHost {
 	downloader: Downloader;
 	pdf: PdfReader;
 	prompt: PromptSource;
-	clock: Clock;
 }

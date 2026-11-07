@@ -75,9 +75,9 @@ async function session(icons?: Icon[]) {
 	const extension = mcpExtension({
 		...mcpHost,
 		client: fakeClient(icons),
-		clock: ticking(1000, 25),
 	});
 	const interp = new Interp({ extensions: [extension] });
+	interp.channels.clock = ticking(1000, 25);
 	runSync(interp, prelude);
 	await (runSync(
 		interp,
@@ -130,6 +130,7 @@ describe("a tool call from lisp", () => {
 				state: "done",
 				id: "mcp-1",
 				startedAt: 1050,
+				endedAt: 1075,
 				ms: 25,
 			},
 		]);
@@ -146,6 +147,7 @@ describe("a tool call from lisp", () => {
 				error: "boom",
 				id: "mcp-1",
 				startedAt: 1050,
+				endedAt: 1075,
 				ms: 25,
 			},
 		]);
@@ -171,9 +173,9 @@ describe("loading a server", () => {
 		const extension = mcpExtension({
 			...mcpHost,
 			client: fakeClient(),
-			clock: ticking(1000, 25),
 		});
 		const interp = new Interp({ extensions: [extension] });
+		interp.channels.clock = ticking(1000, 25);
 		runSync(interp, prelude);
 		const buffer = bufferTransport();
 		const detach = interp.channels.pipe(buffer);
@@ -197,6 +199,7 @@ describe("loading a server", () => {
 				state: "done",
 				id: "mcp-load-1",
 				startedAt: 1000,
+				endedAt: 1025,
 				ms: 25,
 			},
 		]);

@@ -33,7 +33,7 @@ import {
 	activityKind,
 } from "@repo/journal-catalog/activity";
 import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
-import type { Clock, PromptSource } from "@repo/shared/host";
+import type { PromptSource } from "@repo/shared/host";
 import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import {
@@ -317,7 +317,6 @@ export interface McpExtensionHost {
 	toolkit: ToolkitRegistry;
 	search: SearchEngine;
 	prompt: PromptSource;
-	clock: Clock;
 	policy?: McpPolicy;
 	machine?: UserMachine;
 	commands?: boolean;
@@ -688,11 +687,10 @@ interface Wiring {
 	readonly policy: McpPolicy;
 	readonly reconnect: (entry: ServerEntry) => Promise<unknown>;
 	readonly calls: State<number>;
-	readonly clock: Clock;
 }
 
 function callTool(
-	{ interp, client, servers, calls, clock }: Wiring,
+	{ interp, client, servers, calls }: Wiring,
 	ref: ToolRef,
 	f: unknown[],
 ): Promise<unknown> {
@@ -716,7 +714,6 @@ function callTool(
 	calls.set(n);
 	const detail = toolDetail(tool.description);
 	const icon = iconOf(tool.icons, entry.icons);
-	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
 		record(interp.channels, activityKind, {
 			kind: "mcp",
@@ -726,8 +723,6 @@ function callTool(
 			state,
 			...(error === undefined ? {} : { error: messageOf(error) }),
 			id: `mcp-${n}`,
-			startedAt,
-			...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 		});
 	report("started");
 	return withTimeout(
@@ -851,16 +846,10 @@ export function registerMcp(
 	interp: Interp,
 	host: Pick<
 		McpExtensionHost,
-		| "client"
-		| "toolkit"
-		| "search"
-		| "policy"
-		| "clock"
-		| "machine"
-		| "commands"
+		"client" | "toolkit" | "search" | "policy" | "machine" | "commands"
 	>,
 ): void {
-	const { client, toolkit, search, clock } = host;
+	const { client, toolkit, search } = host;
 	const policy = host.policy ?? openPolicy;
 	const commands = host.commands === true;
 
@@ -928,7 +917,6 @@ export function registerMcp(
 		admitServer(policy, name);
 		const n = loads.get() + 1;
 		loads.set(n);
-		const startedAt = clock.now();
 		const report = (state: ActivityEntry["state"], error?: unknown): void =>
 			record(interp.channels, activityKind, {
 				kind: "mcp",
@@ -941,8 +929,6 @@ export function registerMcp(
 				...(state === "held" ? { detail: "requires auth" } : {}),
 				...(error === undefined ? {} : { error: messageOf(error) }),
 				id: `mcp-load-${n}`,
-				startedAt,
-				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 			});
 		report("started");
 		const promise = interp.async.start((signal) => connect(args, signal), {
@@ -1008,7 +994,6 @@ export function registerMcp(
 		policy,
 		reconnect,
 		calls,
-		clock,
 	};
 
 	interp.defGen(
