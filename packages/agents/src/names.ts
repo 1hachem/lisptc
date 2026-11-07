@@ -1,12 +1,5 @@
 export const DELEGATE_PREFIX = "delegate-";
 
-export function onRoster(
-	roster: readonly string[] | undefined,
-	name: string,
-): boolean {
-	return roster === undefined || roster.includes(name);
-}
-
 export function isDelegateName(name: string): boolean {
 	return name.startsWith(DELEGATE_PREFIX);
 }

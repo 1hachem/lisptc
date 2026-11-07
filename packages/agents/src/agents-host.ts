@@ -34,7 +34,6 @@ export class MemorySourceFolder implements SourceFolder {
 export interface AgentsHostOptions {
 	folder?: SourceFolder;
 	workspace?: string;
-	roster?: readonly string[];
 	threads?: AgentThreads;
 }
 
@@ -44,11 +43,13 @@ export function agentsHostFor(options: AgentsHostOptions = {}): AgentsHost {
 		memories: filePrompt(new URL("./agents.memories.ptc", import.meta.url)),
 		folder: options.folder ?? new MemorySourceFolder(),
 		workspace: options.workspace ?? "local",
-		...(options.roster === undefined ? {} : { roster: options.roster }),
 		...(options.threads === undefined ? {} : { threads: options.threads }),
 	};
 }
 
 export function subAgentHost(): SubAgentHost {
-	return { prompt: filePrompt(new URL("./sub-agent.ptc", import.meta.url)) };
+	return {
+		prompt: filePrompt(new URL("./sub-agent.ptc", import.meta.url)),
+		memories: filePrompt(new URL("./sub-agent.memories.ptc", import.meta.url)),
+	};
 }

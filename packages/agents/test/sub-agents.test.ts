@@ -7,9 +7,10 @@ import {
 } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { newSym } from "@repo/interpreter/objects";
+import { type List, listToArray, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { Reader } from "@repo/interpreter/reader";
 import { newSessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import { activityKind } from "@repo/journal-catalog/activity";
@@ -88,14 +89,13 @@ class FakeThreads implements AgentThreads {
 	}
 }
 
-function session(threads?: FakeThreads, roster?: readonly string[]) {
+function session(threads?: FakeThreads) {
 	const folder = new MemorySourceFolder();
 	const extension = agentsExtension(
 		agentsHostFor({
 			folder,
 			workspace: "w",
 			...(threads === undefined ? {} : { threads }),
-			...(roster === undefined ? {} : { roster }),
 		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
@@ -124,7 +124,6 @@ describe("a definition file", () => {
 			name: "lead",
 			prompt: 'say "hi"\nthen dig',
 			permissions: '(permission/deny "fs/*")',
-			roster: ["scout", "digger"],
 			budget: 40,
 		};
 		expect(readDefinition(writeDefinition(full))).toEqual(full);
@@ -137,21 +136,26 @@ describe("a definition file", () => {
 		expect(readDefinition("not a form")).toBeUndefined();
 		expect(readDefinition("(defagent")).toBeUndefined();
 	});
+
+	test("reads a file saved with a :roster, ignoring the key", () => {
+		expect(
+			readDefinition(
+				'(defagent "lead"\n  :prompt "dig"\n  :roster \'("scout" "digger")\n  :budget 40)',
+			),
+		).toEqual({ name: "lead", prompt: "dig", budget: 40 });
+	});
 });
 
 describe("defagent", () => {
 	test("writes sub-agents/<name>.ptc that spawn reuses by name", async () => {
 		const { run, threads, folder } = world();
-		await run(
-			'(defagent "researcher" :prompt "dig" :roster \'("scout") :budget 9)',
-		);
+		await run('(defagent "researcher" :prompt "dig" :budget 9)');
 		expect(folder.list("w", "sub-agents")).toEqual(["researcher.ptc"]);
 		expect(
 			readDefinition(folder.read("w", "sub-agents", "researcher.ptc") ?? ""),
 		).toEqual({
 			name: "researcher",
 			prompt: "dig",
-			roster: ["scout"],
 			budget: 9,
 		});
 		expect(str((await run('(spawn "researcher")')).value)).toBe('"researcher"');
@@ -159,7 +163,6 @@ describe("defagent", () => {
 			definition: {
 				name: "researcher",
 				prompt: "dig",
-				roster: ["scout"],
 				budget: 9,
 			},
 			seed: { from: "fresh" },
@@ -173,20 +176,6 @@ describe("defagent", () => {
 		folder.write("w", "sub-agents", "b.ptc", '(defagent "b" :prompt "y")');
 		folder.write("w", "sub-agents", "notes.txt", "not an agent");
 		expect(str((await run("(agents)")).value)).toBe('("a" "b")');
-	});
-
-	test("shows only the roster the session was handed", async () => {
-		const { interp, folder } = session(new FakeThreads(), ["shown"]);
-		folder.write(
-			"w",
-			"sub-agents",
-			"hidden.ptc",
-			'(defagent "hidden" :prompt "x")',
-		);
-		expect(str((await runAsync(interp, "(agents)")).value)).toBe("nil");
-		await expect(runAsync(interp, '(spawn "hidden")')).rejects.toThrow(
-			"no saved agent by that name",
-		);
 	});
 
 	test("refuses a definition without a prompt", async () => {
@@ -664,6 +653,27 @@ function subAgent() {
 	const answer = (code: string) => hooks.answer.run((_i, c) => c, interp, code);
 	return { interp, answer };
 }
+
+describe("the sub-agent extension", () => {
+	test("ships memories under the sub-agent area, every key in it", () => {
+		const memories = subAgentExtension(subAgentHost()).memories ?? "";
+		const read = (line: string) => {
+			const reader = new Reader();
+			reader.push(line);
+			return listToArray(reader.read() as List);
+		};
+		const lines = memories.split("\n");
+		expect(read(lines[0] ?? "").slice(0, 2)).toEqual([
+			newSym("area"),
+			"sub-agent",
+		]);
+		const keys = lines
+			.filter((line) => line.startsWith("(memory "))
+			.map((line) => read(line)[1]);
+		expect(keys.length).toBeGreaterThan(0);
+		for (const key of keys) expect(String(key)).toMatch(/^sub-agent\//);
+	});
+});
 
 describe("a sub-agent's exports", () => {
 	test("leave the answer alone until something is exported", () => {

@@ -1,23 +1,4 @@
 AGENTS
 
-Never call quietly yourself. Forms wrapped by user in (quietly form...) run without waking you.
-
-Sub-agents: each runs on own thread, own chat, under a name. Sub-agents cannot spawn. Fan out from here only.
-Default: do work yourself, in own loop. Spawn only when several jobs are independent, a job floods your chat with output you do not need after, or a job needs little from this chat. Never split one job into chain of agents by role.
-Names, never ids. Brief carries all it needs: goal, inputs, what done means. Reply is claim, not fact: check key fact yourself before acting on it.
-defagent, agent-keep, agent-forget: only when user asks. They wait on user approval.
-- delegate
-- spawn
-- send
-- agent-wait
-- agent-state
-- agent-cancel
-- spawned
-- agents
-- agent-definition
-- agent-take
-- agent-keep
-- agent-forget
-- defagent
-
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : agents/names, agents/named, agents/delegate, agents/saved, agents/take, agents/quietly.
+Sub-agents: each runs on own thread, own chat, under a name. Default: do work yourself, in own loop.
+delegate spawn send agent-wait agent-state agent-cancel spawned agents agent-definition agent-take agent-keep agent-forget defagent

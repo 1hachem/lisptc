@@ -91,7 +91,6 @@ export interface ThreadScope {
 	readonly chatId?: Id<"chats">;
 	readonly supervisor?: Supervisor;
 	readonly bounds?: readonly string[];
-	readonly roster?: readonly string[];
 	readonly subAgent?: boolean;
 	readonly desktop?: Desktop;
 }
@@ -103,7 +102,7 @@ function loopMemories(): InterpExtension {
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
+	{ chatId, supervisor, bounds, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
@@ -130,7 +129,6 @@ export async function workspaceExtensions(
 		agentsHostFor({
 			folder: new ConvexSourceFolder(connect),
 			workspace: workspaceId,
-			...(roster === undefined ? {} : { roster }),
 			...(supervisor === undefined || chatId === undefined
 				? {}
 				: { threads: new SupervisedAgents(supervisor, chatId) }),
