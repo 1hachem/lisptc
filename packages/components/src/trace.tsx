@@ -374,10 +374,12 @@ function MessageEntry({
 function PromptEntry({
 	message,
 	text,
+	tokens,
 	flashing,
 }: {
 	message: ChatMessage;
 	text: string;
+	tokens: number | undefined;
 	flashing: string | undefined;
 }) {
 	const shown = useChannels();
@@ -391,7 +393,10 @@ function PromptEntry({
 				<TraceRow open={open} onClick={() => setOpen((was) => !was)}>
 					<MessageMark kind="system" />
 					<span className="min-w-0 flex-1 truncate text-fg">
-						system prompt · {text.length.toLocaleString()} chars
+						system prompt
+						{tokens === undefined
+							? ""
+							: ` · ${tokens.toLocaleString()} token${tokens === 1 ? "" : "s"}`}
 					</span>
 				</TraceRow>
 				{open && (
@@ -443,6 +448,7 @@ function TraceEntries({
 							key={entry.message.id ?? entry.at}
 							message={entry.message}
 							text={entry.text}
+							tokens={entry.tokens}
 							flashing={flashing}
 						/>
 					);

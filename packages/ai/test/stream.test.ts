@@ -154,7 +154,9 @@ describe("chat stream", () => {
 			{ config: { system: "be terse" } },
 		);
 
-		expect(prompts(second)).toEqual([{ text: "be terse" }]);
+		expect(prompts(second)).toEqual([
+			{ text: "be terse", tokens: expect.any(Number) },
+		]);
 	});
 
 	test("records the system prompt again when it changes", async () => {
@@ -169,8 +171,8 @@ describe("chat stream", () => {
 		);
 
 		expect(prompts(second)).toEqual([
-			{ text: "be terse" },
-			{ text: "be verbose" },
+			{ text: "be terse", tokens: expect.any(Number) },
+			{ text: "be verbose", tokens: expect.any(Number) },
 		]);
 	});
 

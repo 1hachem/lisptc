@@ -246,13 +246,13 @@ class TurnWire {
 		else this.stepEntries[held] = entry;
 	}
 
-	private recordSystemPrompt(text: string): boolean {
+	private recordSystemPrompt(text: string, tokens: number): boolean {
 		if (this.lastSystemPrompt() === text) return true;
 		this.wire.push(
 			entryMessage({
 				id: crypto.randomUUID(),
 				kind: systemPromptKind.name,
-				value: { text },
+				value: { text, tokens },
 			}),
 		);
 		return this.snapshotSoon();
@@ -309,7 +309,7 @@ class TurnWire {
 				this.recordEntry(event.entry);
 				return this.snapshotSoon();
 			case "system":
-				return this.recordSystemPrompt(event.prompt);
+				return this.recordSystemPrompt(event.prompt, event.tokens);
 			case "steered":
 				this.wire.push(
 					event.source === undefined

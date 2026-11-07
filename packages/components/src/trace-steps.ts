@@ -1,4 +1,7 @@
-import { systemPromptKind } from "@repo/journal-catalog/system";
+import {
+	type SystemPrompt,
+	systemPromptKind,
+} from "@repo/journal-catalog/system";
 import { view } from "@repo/shared/journal";
 import {
 	entriesOfMessage,
@@ -32,11 +35,17 @@ export interface TraceStep {
 
 export type TraceEntry =
 	| { kind: "message"; message: ChatMessage; at: number }
-	| { kind: "prompt"; message: ChatMessage; text: string; at: number }
+	| {
+			kind: "prompt";
+			message: ChatMessage;
+			text: string;
+			tokens?: number;
+			at: number;
+	  }
 	| { kind: "step"; step: TraceStep };
 
-function promptOf(message: ChatMessage): string | undefined {
-	return view(entriesOfMessage(message), systemPromptKind).at(-1)?.text;
+function promptOf(message: ChatMessage): SystemPrompt | undefined {
+	return view(entriesOfMessage(message), systemPromptKind).at(-1);
 }
 
 function sum(values: (number | undefined)[]): number | undefined {
@@ -90,10 +99,10 @@ export function traceEntries(messages: readonly ChatMessage[]): TraceEntry[] {
 		open = undefined;
 	};
 	let prompted: string | undefined;
-	const prompt = (message: ChatMessage, text: string, at: number) => {
-		if (text === prompted) return;
-		prompted = text;
-		const row: TraceEntry = { kind: "prompt", message, text, at };
+	const prompt = (message: ChatMessage, read: SystemPrompt, at: number) => {
+		if (read.text === prompted) return;
+		prompted = read.text;
+		const row: TraceEntry = { kind: "prompt", message, ...read, at };
 		const opening = entries.at(-1);
 		if (
 			open === undefined &&
@@ -113,9 +122,9 @@ export function traceEntries(messages: readonly ChatMessage[]): TraceEntry[] {
 		waiting = [];
 	};
 	for (const [at, message] of foldEntries(messages, tracePlacement).entries()) {
-		const text = promptOf(message);
-		if (text !== undefined) {
-			prompt(message, text, at);
+		const read = promptOf(message);
+		if (read !== undefined) {
+			prompt(message, read, at);
 		} else if (isEntryMessage(message)) {
 			waiting.push(message);
 		} else if (isUserMessage(message) || isSystemMessage(message)) {

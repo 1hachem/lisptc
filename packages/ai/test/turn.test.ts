@@ -565,8 +565,28 @@ describe("the agent turn", () => {
 			events.push(event);
 
 		expect(events.filter((e) => e.type === "system")).toEqual([
-			{ type: "system", prompt: "base\n\nyou are a pirate" },
+			{
+				type: "system",
+				prompt: "base\n\nyou are a pirate",
+				tokens: expect.any(Number),
+			},
 		]);
+	});
+
+	test("the turn counts the system prompt in tokens, fewer than its characters", async () => {
+		script = [[{ text: "three." }]];
+		const counted: number[] = [];
+		for (const system of ["be terse", "be terse ".repeat(50)])
+			for await (const event of runAgentTurn(ask, {
+				repl: testRepl(),
+				config: { system },
+			}))
+				if (event.type === "system") counted.push(event.tokens);
+
+		const [short, long] = counted;
+		expect(short).toBeGreaterThan(0);
+		expect(short).toBeLessThan("be terse".length);
+		expect(long).toBeGreaterThan(short ?? 0);
 	});
 
 	test("a hook can answer in place of the model", async () => {

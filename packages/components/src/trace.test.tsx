@@ -26,11 +26,11 @@ const ran = (content: string): ChatMessage => ({
 	content,
 });
 
-const prompted = (text: string): ChatMessage => ({
+const prompted = (text: string, tokens = 2): ChatMessage => ({
 	id: `m${++ids}`,
 	type: "entry",
 	content: "",
-	additional_kwargs: { kind: "system-prompt", value: { text } },
+	additional_kwargs: { kind: "system-prompt", value: { text, tokens } },
 });
 
 async function mounted(messages: ChatMessage[]) {
@@ -77,6 +77,12 @@ describe("the system prompt in a trace", () => {
 			trace.text().indexOf("hello"),
 		);
 		expect(trace.text()).not.toContain("be terse");
+	});
+
+	it("counts the prompt in tokens", async () => {
+		const trace = await mounted([said("hello"), prompted("be terse", 1234)]);
+
+		expect(trace.prompts()[0]?.textContent).toContain("1,234 tokens");
 	});
 
 	it("unfolds to the full prompt", async () => {

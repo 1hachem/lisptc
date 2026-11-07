@@ -117,7 +117,7 @@ const runtime = {
 						type: "entry" as const,
 						entry: {
 							kind: systemPromptKind.name,
-							value: { text: event.prompt },
+							value: { text: event.prompt, tokens: event.tokens },
 						},
 					};
 				else if (
