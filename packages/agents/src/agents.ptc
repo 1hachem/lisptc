@@ -20,4 +20,4 @@ defagent, agent-keep, agent-forget: only when user asks. They wait on user appro
 - agent-forget
 - defagent
 
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>"): agents/names, agents/named, agents/delegate, agents/saved, agents/take, agents/quietly.
+Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : agents/names, agents/named, agents/delegate, agents/saved, agents/take, agents/quietly.

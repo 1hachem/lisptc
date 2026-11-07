@@ -12,14 +12,14 @@ Named agent, kept chat across sends, order always:
 2. None fits? Spawn temporary one with :prompt. Nothing saved. :prompt is first
    task, run at once, not persona: say what to do and what to reply.
 3. Temporary one did job well, same job will come again? (agent-keep "scratch")
-   saves it. Else let it go.
+saves it. Else let it go.
 
-  (spawn "researcher" :repl :fresh)      ; prints "spawned researcher"; saved definition, new image, new chat; idle till send
-  (spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; temporary, runs prompt now; copy of your image and chat
-  (send :to "researcher" "find X" :max-steps 10) ; returns "researcher" at once
-  (agent-state "researcher")             ; last send: :idle :pending :held :done :failed :cancelled :lost
-  (agent-wait "researcher")              ; wait on last send, return reply
-  (agent-cancel "researcher")            ; stop it, its last send queued or running, and all under it
+(spawn "researcher" :repl :fresh) ; prints "spawned researcher"; saved definition, new image, new chat; idle till send
+(spawn "scratch" :prompt "..." :repl :fork :chat :fork) ; temporary, runs prompt now; copy of your image and chat
+(send :to "researcher" "find X" :max-steps 10) ; returns "researcher" at once
+(agent-state "researcher") ; last send: :idle :pending :held :done :failed :cancelled :lost
+(agent-wait "researcher") ; wait on last send, return reply
+(agent-cancel "researcher") ; stop it, its last send queued or running, and all under it
 
 agent-wait and agent-state see last send only. Earlier send's reply comes as
 system event. Need each reply? agent-wait before next send.
@@ -36,7 +36,7 @@ the ask.
 defagent and agent-keep save sub-agents/<name>.ptc; agent-forget deletes it.
 :prompt on saved name refused. Saved name spawns without :prompt.
 
-  (defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)
+(defagent "reader" :prompt "..." :permissions "(permission/deny \"fs/*\")" :budget 40)
 
 :roster names the agents it may spawn in turn. :budget caps its steps.
 agent-forget returns t, or nil if none was saved.
@@ -45,9 +45,9 @@ An agent already spawned from a deleted definition keeps running.
 (memory "agents/take" :when "the agent needs a value a sub-agent produced copied into this session, or wants to see what an agent exports")
 Sub-agent may export values. Reply then ends with exports: name, what it
 holds, shape. Want one? Copy it into your image by agent name, bind it yourself:
-  (setq rows (agent-take "scratch" 'prices))
-  (setq id (agent-take "delegate-1" 'id))
-Reply shows (agent-take "agent" 'name): put real agent name for "agent".
+(setq rows (agent-take "scratch" 'prices))
+(setq id (agent-take "delegate-1" 'id))
+Reply shows (agent-take "agent" 'name) : put real agent name for "agent".
 Value is copied as it stands then. Function taken keeps captured variables;
 globals it names resolve in your image.
 
@@ -58,5 +58,5 @@ Message and its result stay in chat; read them next turn.
 One-off job: (delegate "brief") spawns fresh temporary agent, sends brief,
 prints "delegated to delegate-1", returns "delegate-1" at once. agent-wait it, or reply comes as system event.
 Delegate replies result, evidence, what not checked.
-  (setq a (delegate "read A, reply path and line")) (setq b (delegate "read B"))
-  (list (agent-wait a) (agent-wait b))   ; parallel: delegate all first, wait after
+(setq a (delegate "read A, reply path and line")) (setq b (delegate "read B"))
+(list (agent-wait a) (agent-wait b)) ; parallel: delegate all first, wait after

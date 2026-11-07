@@ -12,4 +12,4 @@ Forms below write text. Use only for writing work: summarize, rewrite, pull fiel
 
 Writing call waits and can fail: worth try with fallback. write and converse return text; extract returns data. nil from answer means not in context, never a failed call. Promise refused: await first.
 
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>"): llm/write, llm/extract, llm/macros, llm/rewrites, llm/options.
+Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : llm/write, llm/extract, llm/macros, llm/rewrites, llm/options.

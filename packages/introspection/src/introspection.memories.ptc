@@ -5,7 +5,7 @@
 - (apropos "text") documented names whose name or doc contains text. Finds form
   by what it does, not what it is called.
 - (args 'name) keyword arguments as (:key "type" required "description")
-  lists, required t or nil.
+lists, required t or nil.
 - (arity f) (min max) for function or macro, max nil with &rest; nil if f not
   callable.
 - (signature 'name) · (docstring 'name) two halves of doc as strings, nil if

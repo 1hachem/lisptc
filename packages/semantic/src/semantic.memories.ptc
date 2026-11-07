@@ -6,16 +6,16 @@ Base, raw numbers for own threshold:
 - (%p x "is a refund request") gives probability of yes, 0..1.
 - (%p-each items "question") gives one probability per item, one call.
 - (%choose x '(:billing :technical :other)) gives option as written. Option =
-  keyword, string, or (option . "what it means"). :none value adds "none of
+  keyword, string, or (option . "what it means") . :none value adds "none of
   these", returns value when chosen. :min p returns :none value when best
   option less likely than p. :question "..." says what is picked.
 - (%score x "urgency") gives rating 0..4 on very low..very high. Own levels:
-  (%score x "urgency" '("can wait" "today" "right now")) gives 0..2. Compare
+(%score x "urgency" '("can wait" "today" "right now")) gives 0..2. Compare
   scores only on same levels.
 - (%score-each items "urgency" [levels]) gives one score per item, one call.
 
 (memory "semantic/predicates" :when "the agent must test by meaning whether two texts say the same, which is bigger by some quality, whether a value is a kind of thing, whether facts are enough to act, or whether a text mentions something; or an exact test just missed a match it should have caught")
-Predicates, t or nil, take :min p (default 0.5):
+Predicates, t or nil, take :min p (default 0.5) :
 
 - (%= "Hi there!" "Hello!") , (%/= a b) ; :context "politeness" compares only by that.
 - (%< "a cat" "a horse" :by "size") , %> %<= %>= ; numbers compare exact.
@@ -56,11 +56,11 @@ Meaning as numbers:
 - (%cluster xs) gives groups, list of lists, list order kept; :min similarity,
   default 0.47. Raise :min for tighter groups.
 - (%sort xs :near q) orders by meaning distance from q, closest first:
-  (head (%sort issues :near "billing problems") 5) = five closest.
-  (%min xs :near q) = closest, (%max xs :near q) = farthest.
+(head (%sort issues :near "billing problems") 5) = five closest.
+(%min xs :near q) = closest, (%max xs :near q) = farthest.
 - (%similarity-each x items) gives one similarity per item, one call.
 - (%outliers xs) gives elements nothing else in xs is close to; :min
   similarity, default 0.47.
 - (%choose x options :examples '((:billing "I was charged twice")
-  (:technical "app crashes"))) picks option with nearest example, no
+    (:technical "app crashes"))) picks option with nearest example, no
   probability call; :min = least similarity.

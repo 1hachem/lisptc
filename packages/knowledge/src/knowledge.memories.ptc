@@ -2,7 +2,7 @@
 
 (memory "knowledge/files" :when "the agent must list, read, write, delete or show the user a file they uploaded")
 - (knowledge/list) lists file names, like "report.md".
-- (knowledge/read "name"): .pdf gives page text as string; other text gives
+- (knowledge/read "name") : .pdf gives page text as string; other text gives
   string. Other binary (image) refused. nil when no file.
 - (knowledge/write "name" value) replaces file, old one to bin; user can open
   and download it. Other file than .ptc or .json takes string.
@@ -22,7 +22,7 @@ list becomes array; nil becomes null; :false :[] :{} become false [] {};
 other keyword becomes its name. Same key twice refused. Or takes JSON text
 string.
 Edit one entry:
-  (knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
+(knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
 Same for .json. Removing last entry leaves nil, written null; set :[] or :{}
 to keep it empty.
 
@@ -40,7 +40,7 @@ attachment moves to bin after a week.
   text; (:base64 "…" :type "image/png") stored as bytes, like image from tool.
   Returns stored name; gains number when name taken.
 - (attachments/fetch "https://…") downloads url into attachments;
-  (attachments/fetch url "name") names it. Returns stored name.
+(attachments/fetch url "name") names it. Returns stored name.
 - (attachments/delete "name") moves attachment to bin.
 - (attachments/attach "name") or (knowledge/attach "name") shows file under
   your reply; user clicks to open it. Use after attachments/write or

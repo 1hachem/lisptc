@@ -18,4 +18,4 @@ RULES
 - You are not told which servers exist or what they are called. Never invent a server or tool name — read it out of one of those results. acme, a, b are placeholders.
 - Names never known in advance: start from search-mcps and let each step tell you the next name.
 
-Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>"): mcp/load, mcp/search, mcp/local, mcp/oauth, mcp/timeout, mcp/result, mcp/example.
+Signatures, examples, rules: built-in memories, by trigger or (memory/recall "<key>") : mcp/load, mcp/search, mcp/local, mcp/oauth, mcp/timeout, mcp/result, mcp/example.

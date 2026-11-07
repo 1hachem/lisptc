@@ -2,4 +2,4 @@ FAILURES
 
 A failed call says how to fix it: follow that line, do not guess again. Suggestion is nearest match, not promise.
 
-Signatures, examples, rules: (memory/recall "diagnostics/failures"), also by trigger.
+Signatures, examples, rules: (memory/recall "diagnostics/failures") , also by trigger.

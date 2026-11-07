@@ -7,7 +7,7 @@
 write-1: 84 words
 
 - (converse messages) gives reply string, multi-turn. Message is
-  (message :system "...") or (message :user "...") , alist with "role" and
+(message :system "...") or (message :user "...") , alist with "role" and
   "content", so alist transcript is already valid. Bare string = user message.
 
 (converse (list (message :system "Answer in one sentence.") (message :user q)))
@@ -32,13 +32,13 @@ Shape is alist of (key . field) , written by (shape (name spec...) ...)
 : no quote, no dotted pairs. Field is:
   :string, :number, :integer, :boolean, :any; plain string = string field
   described by its text;
-  (:string "what it means") and same for other scalars;
-  (:enum "a" "b") ; (:list field) ; (:optional field) , only field answer may
+(:string "what it means") and same for other scalars;
+(:enum "a" "b") ; (:list field) ; (:optional field) , only field answer may
   omit; nested alist = nested object. Alist shape returns alist, (:list …)
-  returns list. :instructions "..." says what to pull out.
+returns list. :instructions "..." says what to pull out.
   Nested group = nested object; (:list …) and (:optional …) take groups too:
 (shape (items (:list (id :number) (title :string))))
-  is list of objects. Shape is literal, built at compile time: computed enum
+is list of objects. Shape is literal, built at compile time: computed enum
   needs hand-written alist.
 
 (memory "llm/macros" :when "the agent holds a long text or many records that must be summarized, or a question must be answered from a given text or data, or answer just returned nil")
@@ -70,7 +70,7 @@ options, one call each:
 - (invert x) swaps roles/direction: "I stand on giants." -> "Giants stand on me."
 - (negate x) says opposite: "I am happy." -> "I am not happy."
 - (blend x y) blends both into one text. (strip x y) takes y out of x:
-  (blend (strip "Hello my enemy" "enemy") "friend") -> "Hello my friend".
+(blend (strip "Hello my enemy" "enemy") "friend") -> "Hello my friend".
 - (open-with x y) works y in at start of x , (close-with x y) at end.
 - (conclude x y) states what follows from both. (either x y) states as
   alternatives. (one-of x y) states exactly one holds.

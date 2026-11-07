@@ -107,7 +107,7 @@ Symbols:
 (memory "lang/hash-vectors" :when "the agent is about to keep keyed data in a hash table or index into a mutable vector, or a hash or vector call just failed")
 Hash tables:
 - (make-hash-table) · (gethash key table [default]) · (puthash key value table)
-  · (remhash key table) · (clrhash table) · (hash-has-key key table) ·
+· (remhash key table) · (clrhash table) · (hash-has-key key table) ·
 (hash-table-count table) · (hash-table-keys table) ·
 (hash-table-values table) · (hash-table-alist table) · (hash-table-p x) .
   Keys by equal: "a", 2 and 2.0, (list 1 2) all work. Order is insertion.
@@ -124,7 +124,7 @@ Strings:
 - (char s i) one-char string at i, or nil · (concat s...) concatenate
   · (string-upcase s) · (string-downcase s) .
 - (string< a b) · (string> a b) order by code point · (string-equal a b)
-  ignores case · (string-pad-left s width [pad]) ·
+ignores case · (string-pad-left s width [pad]) ·
 (string-pad-right s width [pad]) · (number-to-string n digits) fixed digits:
 (number-to-string 3.14159 2) is "3.14".
 - Character = one-char string: (char-code c) · (code-char n) ·
@@ -140,12 +140,12 @@ is "3.0"; (string (truncate x)) gives bare integer.
 (memory "lang/json-read" :when "the agent holds JSON text or Lisp text in a string and is about to parse it, or a parse just failed")
 Parsing text into data:
 - (read s) parse FIRST Lisp expression in s, return as data, unevaluated:
-  (read "(+ 1 2)") gives the list (+ 1 2) , not 3. Trailing text ignored;
+(read "(+ 1 2)") gives the list (+ 1 2) , not 3. Trailing text ignored;
   no expression errors.
 - (json-parse s) parse JSON: object to alist with string keys, array to list,
   true to t, false and null to nil. Numbers arrive as floats: 7 reads 7.0; =
   still compares numerically.
-  (cdr (assoc "title" (json-parse s))) reads a field.
+(cdr (assoc "title" (json-parse s))) reads a field.
 - Different parsers, not aliases. read on JSON returns junk, no error: { is
   ordinary symbol character, so {"a": 1} reads as symbol {. json-parse for
   JSON, read for Lisp.
@@ -195,7 +195,7 @@ Map, filter, fold:
 (filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40) .
 - (reduce f list [initial]) fold left: f takes accumulator and element.
   No initial: first element starts; empty list gives nil.
-  (reduce + '(1 2 3)) is 6. List SECOND, initial last.
+(reduce + '(1 2 3)) is 6. List SECOND, initial last.
 - (identity x) return x.
 
 (memory "lang/prelude-sort" :when "the agent is about to sort, order, rank or reverse a list, or a sorted list came back unchanged")
@@ -245,7 +245,7 @@ Paths same as get-in.
   keyword, alist gets pair; nil record becomes plist for keyword key, else alist.
   Index replaces element, index = length appends:
 (set-in '(:theme (:accent "red")) "blue" :theme :accent) gives (:theme (:accent "blue")) .
-- (update-in record f key...) value at path becomes (f value); f gets nil when
+- (update-in record f key...) value at path becomes (f value) ; f gets nil when
   path missing:
 (update-in '(:n 1) (lambda (n) (+ n 1)) :n) gives (:n 2) .
 - (remove-in record key...) drop plist key, alist pair or list index; missing
@@ -269,7 +269,7 @@ Binding macros:
   recursive functions.
 
 (memory "lang/prelude-loops" :when "the agent is about to loop over a list, repeat something n times or loop while a condition holds, or leave a loop early")
-Loops, all support (break) and (return value):
+Loops, all support (break) and (return value) :
 - (while test body...) .
 - (dolist (name list [result]) body...) iterate elements.
 - (dotimes (name count [result]) body...) iterate 0..count-1.
@@ -278,7 +278,7 @@ Loops, all support (break) and (return value):
 Defining:
 - (defun name (args...) [doc] body...) define function; &rest x variadic.
 - &key after required args makes the rest optional and nameable:
-  (defun kpi (&key label value unit) ...) is called as
+(defun kpi (&key label value unit) ...) is called as
 (kpi "Revenue" 42000) or (kpi :label "Revenue" :value 42000 :unit "USD") .
   Filled left to right until first keyword; missing one is nil.
   &key and &rest cannot both appear.
@@ -299,7 +299,7 @@ String editing:
 (memory "lang/prelude-format" :when "the agent is about to build a sentence or message around values, or fill a text template")
 - (format template arg...) fill template, return string: ~a inserts next arg
   as string would, ~% newline, ~~ tilde; letter case-insensitive.
-  (format "The sum was ~a" n) writes a sentence around a value. Prints
+(format "The sum was ~a" n) writes a sentence around a value. Prints
   nothing: echo result.
 
 (memory "lang/places" :when "the agent is about to store into a variable, a car or cdr, a list index, a vector slot, a hash entry or a nested record, or increment a counter; or a setf just failed")

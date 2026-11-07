@@ -7,9 +7,9 @@
 playwright with that one tool.
 (permission/delete (permission/deny eval)) .
 - (permission/delete form) removes one form, written exactly as (permission/list)
-  shows. (permission/clear-all) removes all.
+shows. (permission/clear-all) removes all.
 - A config rule naming a form overrides it: after (permission/allow permission/deny)
-  a permission/deny applies at once. After (permission/deny permission/delete) no
+a permission/deny applies at once. After (permission/deny permission/delete) no
   form can be deleted.
 - Each change waits for user approval. Approved means applied and saved; do not rerun.
 
@@ -25,4 +25,4 @@ permission/clear-all.
   as before. Always allow saves (permission/allow name) to config; no more asks.
 
 Tool hidden by config, or left out of partly shown server, never loaded: not in
-(list-tools), not callable.
+(list-tools) , not callable.

@@ -36,14 +36,14 @@ a ... line says how much is left:
 Extracting, what each returns:
 - Exception to silence: a bare head or tail step prints in full.
 - (head x [n]) first n of x; (tail x [n]) last n. On a list, n ELEMENTS:
-  (head issues 4) is first four rows. On text, n words.
+(head issues 4) is first four rows. On text, n words.
   A slice written as a step of its own is PRINTED and gets no name: you asked
   to read it. Nested in another form it prints nothing, only the value:
-  (mapcar row (head issues 4)) , (setq top (head issues 4)) .
+(mapcar row (head issues 4)) , (setq top (head issues 4)) .
 - (grep x "pattern" :group n :max n :ignore-case t) what pattern matched, as a
   list, or nil. On a list, ELEMENTS whose printed form matches:
-  (grep issues "auth") is the issues about auth. On text, matched substrings:
-  (grep page "https?://[^ ]+") is the URLs in it.
+(grep issues "auth") is the issues about auth. On text, matched substrings:
+(grep page "https?://[^ ]+") is the URLs in it.
 - A discovery call prints every name and description, no shape.
 - (doc name) prints whole, free against echo budget. Look freely.
 - Prefer computing over reading: (length x) , mapcar, assoc and grep work on
