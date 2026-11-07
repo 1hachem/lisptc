@@ -6,6 +6,7 @@ import {
 	type CompletionItem,
 	CompletionItemKind,
 	type Diagnostic,
+	DiagnosticSeverity,
 	type Hover,
 	MarkupKind,
 	type Position,
@@ -13,7 +14,10 @@ import {
 	type TextEdit,
 } from "vscode-languageserver-types";
 import { stringArgAt } from "./arg-at.ts";
-import { callDiagnostics } from "./call-diagnostics.ts";
+import {
+	type Diagnostic as CallProblem,
+	callDiagnostics,
+} from "./call-diagnostics.ts";
 import { closerAt } from "./closer.ts";
 import {
 	enclosingCallHead,
@@ -105,6 +109,17 @@ function parameterDoc(arg: DocArg): string {
 	return arg.description === undefined ? kind : `${kind}: ${arg.description}`;
 }
 
+function editorDiagnostic(problem: CallProblem): Diagnostic {
+	return {
+		...problem,
+		severity:
+			problem.severity === "error"
+				? DiagnosticSeverity.Error
+				: DiagnosticSeverity.Warning,
+		source: "lisptc",
+	};
+}
+
 export function languageService(table: SymbolTable): LanguageService {
 	let symbolItems: CompletionItem[] | undefined;
 
@@ -158,7 +173,7 @@ export function languageService(table: SymbolTable): LanguageService {
 			const syntax = syntaxDiagnostics(document);
 			return syntax.length > 0
 				? syntax
-				: callDiagnostics(document.getText(), table);
+				: callDiagnostics(document.getText(), table).map(editorDiagnostic);
 		},
 
 		callAt,
