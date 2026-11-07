@@ -67,6 +67,7 @@ export type TurnEvent =
 			results: readonly string[];
 	  }
 	| { type: "entry"; entry: Entry }
+	| { type: "system"; prompt: string }
 	| { type: "rode"; text: string }
 	| {
 			type: "steered";
@@ -265,6 +266,7 @@ async function* openTurn(
 		config?.system ?? withInstructions(systemPromptFor(repl.interp), config),
 	);
 	yield* recorded(entries);
+	yield { type: "system", prompt: system };
 	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,

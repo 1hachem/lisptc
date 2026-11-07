@@ -1,4 +1,11 @@
-import { ENTRY_TYPE, type Entry, type Received } from "@repo/shared/journal";
+import { systemPromptKind } from "@repo/journal-catalog/system";
+import {
+	ENTRY_TYPE,
+	type Entry,
+	entriesIn,
+	type Received,
+	view,
+} from "@repo/shared/journal";
 import {
 	contentToText,
 	ENVELOPE_KEYS,
@@ -239,6 +246,22 @@ class TurnWire {
 		else this.stepEntries[held] = entry;
 	}
 
+	private recordSystemPrompt(text: string): boolean {
+		if (this.lastSystemPrompt() === text) return true;
+		this.wire.push(
+			entryMessage({
+				id: crypto.randomUUID(),
+				kind: systemPromptKind.name,
+				value: { text },
+			}),
+		);
+		return this.snapshotSoon();
+	}
+
+	private lastSystemPrompt(): string | undefined {
+		return view(entriesIn(this.wire), systemPromptKind).at(-1)?.text;
+	}
+
 	private unflushedOf(entry: Entry): number {
 		for (let at = this.wire.length - 1; at >= this.flushed; at--) {
 			const kwargs = this.wire[at].additional_kwargs;
@@ -285,6 +308,8 @@ class TurnWire {
 			case "entry":
 				this.recordEntry(event.entry);
 				return this.snapshotSoon();
+			case "system":
+				return this.recordSystemPrompt(event.prompt);
 			case "steered":
 				this.wire.push(
 					event.source === undefined

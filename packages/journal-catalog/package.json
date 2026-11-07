@@ -11,6 +11,7 @@
     "./asks": "./src/asks.ts",
     "./intent": "./src/intent.ts",
     "./memory": "./src/memory.ts",
+    "./system": "./src/system.ts",
     "./view": "./src/view.ts"
   },
   "scripts": {
