@@ -24,6 +24,32 @@ const extensions = () => [
 	proseExtension(proseHost),
 ];
 
+const recognizingExtensions = () => [
+	tracedSecretsExtension(),
+	promisesExtension(promisesHost),
+	mockedMcpExtension(),
+	compactionExtension(compactionHost),
+	memoryExtension({
+		...memoryHost,
+		store: new VolatileStore(),
+		recognize: () => new Map([["headline", 0.9]]),
+	}),
+	proseExtension(proseHost),
+];
+
+const failingRecognitionExtensions = () => [
+	tracedSecretsExtension(),
+	promisesExtension(promisesHost),
+	mockedMcpExtension(),
+	compactionExtension(compactionHost),
+	memoryExtension({
+		...memoryHost,
+		store: new VolatileStore(),
+		recognize: () => Promise.reject(new Error("timed out")),
+	}),
+	proseExtension(proseHost),
+];
+
 function entriesAt(result: RunResult, kind: string): number[] {
 	return result.transcript.flatMap((line, at) =>
 		line.role === "entry" && line.kind === kind ? [at] : [],
@@ -260,6 +286,62 @@ describe("a case runs against a scripted model", () => {
 		}
 	});
 
+	test("the memory system's scores and the memories it fired land before the step that read them", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions: recognizingExtensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "headline" "the headline is on the page" :when "the user wants the headline")`,
+				seed: [{ user: "open hyko.ai and tell me the headline" }],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		const [recognized] = entriesAt(result, "recognized");
+		expect(result.transcript[recognized]).toMatchObject({
+			value: {
+				message: "open hyko.ai and tell me the headline",
+				scores: { headline: 0.9 },
+				fired: [{ key: "headline", on: "when" }],
+			},
+			content: expect.stringContaining(
+				"fired headline: the headline is on the page",
+			),
+		});
+		expect(recognized).toBeLessThan(firstAssistant(result));
+		expect(entriesAt(result, "memory")).toEqual([]);
+	});
+
+	test("a failed recognition lands in the transcript with its error", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions: failingRecognitionExtensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "headline" "the headline is on the page" :when "the user wants the headline")`,
+				seed: [{ user: "open hyko.ai and tell me the headline" }],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			{ provider: "digitalocean", model: "stub" },
+		);
+
+		const [recognized] = entriesAt(result, "recognized");
+		expect(result.transcript[recognized]).toMatchObject({
+			value: { scores: {}, error: "timed out" },
+			content: "failed: timed out",
+		});
+		expect(recognized).toBeLessThan(firstAssistant(result));
+		expect(entriesAt(result, "memory")).toEqual([]);
+	});
+
 	test("a memory the halting step fires lands after the halting step", async () => {
 		turn = 0;
 		const result = await runCase(
@@ -366,6 +448,7 @@ describe("the gate scores a case instead of failing on any miss", () => {
 				name: `check-${index}`,
 				verdict,
 			})),
+			system: "",
 			transcript: [],
 		};
 	}

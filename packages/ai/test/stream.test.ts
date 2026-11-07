@@ -17,6 +17,7 @@ import {
 	riding,
 	streamChat,
 	testRepl,
+	unprompted,
 } from "./helpers.ts";
 
 const emitting = (text: string) =>
@@ -72,10 +73,13 @@ function records(text: string): { event: string; data: unknown }[] {
 	return text
 		.split("\n\n")
 		.filter((record) => record.startsWith("event: "))
-		.map((record) => ({
-			event: record.slice(7, record.indexOf("\n")),
-			data: JSON.parse(record.slice(record.indexOf("data: ") + 6)),
-		}));
+		.map((record) => {
+			const event = record.slice(7, record.indexOf("\n"));
+			const data = JSON.parse(record.slice(record.indexOf("data: ") + 6));
+			return event === "values"
+				? { event, data: { ...data, messages: unprompted(data.messages) } }
+				: { event, data };
+		});
 }
 
 async function finalMessages(response: Response): Promise<WireMessage[]> {
@@ -89,7 +93,7 @@ async function finalMessages(response: Response): Promise<WireMessage[]> {
 					messages: WireMessage[];
 				},
 		);
-	return values[values.length - 1].messages;
+	return unprompted(values[values.length - 1].messages);
 }
 
 describe("chat stream", () => {
@@ -101,6 +105,13 @@ describe("chat stream", () => {
 	}
 
 	async function recorded(
+		input: ChatInput,
+		options: Partial<ChatStreamOptions> = {},
+	): Promise<WireMessage[]> {
+		return unprompted(await everything(input, options));
+	}
+
+	async function everything(
 		input: ChatInput,
 		options: Partial<ChatStreamOptions> = {},
 	): Promise<WireMessage[]> {
@@ -125,6 +136,61 @@ describe("chat stream", () => {
 		turn = 0;
 		down = false;
 		sent.length = 0;
+	});
+
+	const prompts = (messages: WireMessage[]) =>
+		messages
+			.filter((m) => m.additional_kwargs?.kind === "system-prompt")
+			.map((m) => m.additional_kwargs?.value);
+
+	test("records the system prompt a conversation ran under, once while it stays the same", async () => {
+		const first = await everything(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+		turn = 0;
+		const second = await everything(
+			{ messages: [...first, { type: "human", content: "and 2 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+
+		expect(prompts(second)).toEqual([
+			{ text: "be terse", tokens: expect.any(Number) },
+		]);
+	});
+
+	test("records the system prompt again when it changes", async () => {
+		const first = await everything(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+		turn = 0;
+		const second = await everything(
+			{ messages: [...first, { type: "human", content: "and 2 + 2?" }] },
+			{ config: { system: "be verbose" } },
+		);
+
+		expect(prompts(second)).toEqual([
+			{ text: "be terse", tokens: expect.any(Number) },
+			{ text: "be verbose", tokens: expect.any(Number) },
+		]);
+	});
+
+	test("never hands a recorded system prompt back to the model as a message", async () => {
+		const first = await everything(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+		turn = 0;
+		sent.length = 0;
+		await everything(
+			{ messages: [...first, { type: "human", content: "and 2 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+
+		for (const messages of sent)
+			for (const message of messages)
+				expect(message.content).not.toContain("be terse");
 	});
 
 	test("a step's value it never echoed reaches no snapshot the person is sent", async () => {
@@ -246,7 +312,7 @@ describe("chat stream", () => {
 				{
 					inbox: async () => waiting.splice(0),
 					onTurn: (produced) => {
-						recorded.push(...produced);
+						recorded.push(...unprompted(produced));
 					},
 				},
 			),
@@ -317,7 +383,7 @@ describe("chat stream", () => {
 			},
 			{
 				onTurn: (messages) => {
-					recorded.push(messages);
+					recorded.push(unprompted(messages));
 				},
 			},
 		);
@@ -570,10 +636,10 @@ describe("chat stream", () => {
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
 			{
 				onStep: (produced) => {
-					steps.push(produced);
+					steps.push(unprompted(produced));
 				},
 				onTurn: (unrecorded) => {
-					rest = unrecorded;
+					rest = unprompted(unrecorded);
 				},
 			},
 		).text();
@@ -593,9 +659,10 @@ describe("chat stream", () => {
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
 			{
 				onStep: async (produced) => {
-					order.push(`start ${produced.length}`);
+					const made = unprompted(produced).length;
+					order.push(`start ${made}`);
 					await new Promise((resolve) => setTimeout(resolve, 5));
-					order.push(`end ${produced.length}`);
+					order.push(`end ${made}`);
 				},
 				onTurn: () => {
 					order.push("turn");
@@ -621,7 +688,7 @@ describe("chat stream", () => {
 					),
 				]),
 				onStep: (produced) => {
-					steps.push(produced);
+					steps.push(unprompted(produced));
 				},
 				onTurn: (_rest, _revised, failed) => {
 					failure = failed;

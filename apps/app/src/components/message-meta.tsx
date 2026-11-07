@@ -1,7 +1,7 @@
 import { Route01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import type { StepMeta } from "@repo/components";
 import { Fragment } from "react";
-import type { StepMeta } from "../lib/chat.tsx";
 import type { MetaField } from "../lib/meta-fields.ts";
 
 const META_FIELDS: Record<MetaField, boolean> = {

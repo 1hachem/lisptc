@@ -13,6 +13,7 @@ import type { AgentRepl, LiveEntries } from "@repo/repl/repl";
 import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
+import { countTokens } from "gpt-tokenizer";
 import { type AgentConfig, streamAgent } from "./agent.ts";
 import { evalMessage } from "./eval.ts";
 import type { Envelope } from "./mailbox.ts";
@@ -67,6 +68,7 @@ export type TurnEvent =
 			results: readonly string[];
 	  }
 	| { type: "entry"; entry: Entry }
+	| { type: "system"; prompt: string; tokens: number }
 	| { type: "rode"; text: string }
 	| {
 			type: "steered";
@@ -265,6 +267,7 @@ async function* openTurn(
 		config?.system ?? withInstructions(systemPromptFor(repl.interp), config),
 	);
 	yield* recorded(entries);
+	yield { type: "system", prompt: system, tokens: countTokens(system) };
 	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,

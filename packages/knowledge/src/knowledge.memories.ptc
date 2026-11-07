@@ -1,0 +1,68 @@
+(area "knowledge" :when "the work involves the user's files: uploaded files, attachments, links to fetch, data files or the bin")
+
+(memory "knowledge/files" :when "the agent must list, read, write, delete or show the user a file they uploaded")
+- (knowledge/list) lists file names, like "report.md".
+- (knowledge/read "name") : .pdf gives page text as string; other text gives
+  string. Other binary (image) refused. nil when no file.
+- (knowledge/write "name" value) replaces file, old one to bin; user can open
+  and download it. Other file than .ptc or .json takes string.
+- (knowledge/delete "name") moves file to bin.
+User approves knowledge/write and knowledge/delete. User sees same files in
+sidebar; every change shows there at once.
+
+(memory "knowledge/mentions" :when "a user message points at a file with @knowledge/ or @attachments/")
+User message can point at file: @knowledge/report.md or @attachments/spec.pdf;
+quoted when name has space: @"attachments/Q3 Sales.json". Read it with
+(knowledge/read "report.md") or (attachments/read "spec.pdf") , name without
+folder.
+
+(memory "knowledge/structured" :when "a .json or .ptc file must be read as data, written from data, or one entry of it changed")
+(knowledge/read) by extension: .ptc gives its one form as data, never run.
+.json gives JSON as data: object as alist, array as list, null as nil,
+false as :false, [] as :[], {} as :{}; array that would read back as object
+comes led by :[], number index skips it.
+(knowledge/write) takes data for .ptc, printed; function refused. .json takes
+data, written as JSON: plist or alist becomes object,
+keyword values too, (:status :done) gives {"status": "done"}; list led by
+:[] becomes array of rest, (:[] :red :green) gives ["red", "green"]; other
+list becomes array; nil becomes null; :false :[] :{} become false [] {};
+other keyword becomes its name. Same key twice refused. Or takes JSON text
+string.
+Edit one entry:
+(knowledge/write "notes.ptc" (set-in (knowledge/read "notes.ptc") "done" :status))
+Same for .json. Removing last entry leaves nil, written null; set :[] or :{}
+to keep it empty.
+
+(memory "knowledge/attachments" :when "a message carries an attached file, a file must be fetched from a link, kept, unkept, read or deleted, or handed to the user")
+Files user attached to message land in attachments, shown as attachments/ in
+sidebar; message then carries "user attached: attachments/spec.pdf". Unkept
+attachment moves to bin after a week.
+
+- (attachments/list) lists attachment names.
+- (attachments/read "name") reads attachment, same rules as knowledge/read.
+- (knowledge/keep "name") moves attachment into knowledge, kept for good. Keep
+  what user wants to reuse later; leave rest to expire.
+- (knowledge/unkeep "name") moves it back to attachments, expiring again.
+- (attachments/write "name" value) puts file in attachments. String stored as
+  text; (:base64 "…" :type "image/png") stored as bytes, like image from tool.
+  Returns stored name; gains number when name taken.
+- (attachments/fetch "https://…") downloads url into attachments;
+(attachments/fetch url "name") names it. Returns stored name.
+- (attachments/delete "name") moves attachment to bin.
+- (attachments/attach "name") or (knowledge/attach "name") shows file under
+  your reply; user clicks to open it. Use after attachments/write or
+  attachments/fetch to hand user the file. Errors when no such file.
+User approves knowledge/keep, knowledge/unkeep, attachments/fetch and
+attachments/delete.
+
+(memory "knowledge/bin" :when "a deleted file must come back, or the bin must be searched or cleared")
+Deleted knowledge and attachments land in bin, shown as bin/ in sidebar. Bin
+deletes them for good a month later. Bin file cannot be read; restore it first.
+
+- (bin/list) lists bin file names, newest first.
+- (bin/search "text") lists bin file names containing text, any case. Matches
+  name only, never content.
+- (bin/restore "name") moves file back to folder it came from. Returns
+  "knowledge/name" or "attachments/name"; name gains number when taken.
+- (bin/delete "name") deletes bin file for good.
+User approves bin/restore and bin/delete.

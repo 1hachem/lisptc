@@ -53,6 +53,7 @@ export const reportRowSchema = z.object({
 	errors: z.number(),
 	skips: z.number(),
 	checks: z.array(checkOutcomeSchema),
+	system: z.string().optional(),
 	transcript: z.array(transcriptLineSchema),
 	recap: z.string().optional(),
 	judge: z.string().optional(),

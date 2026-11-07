@@ -1,6 +1,6 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { restore, snapshot } from "@repo/interpreter/image";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { TAGS, widgetOf } from "@repo/ui-catalog";
@@ -788,11 +788,24 @@ describe("the widget form table", () => {
 		}
 	});
 
-	it("lists every constructor in the prompt", () => {
-		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
-		expect(prompt).not.toContain("{{widgets}}");
-		for (const tag of TAGS)
-			expect(prompt).toContain(WIDGET_FORMS[tag].signature);
+	it("names every widget constructor in ui-widgets", async () => {
+		const { interp } = fresh();
+		const names = TAGS.map((tag) => `"ui/${tag}"`).join(" ");
+		const { value } = await runAsync(interp, `(equal ui-widgets '(${names}))`);
+		expect(value).toBe(true);
+	});
+
+	it("keeps ui-widgets read-only", () => {
+		const { interp } = fresh();
+		expect(() => runSync(interp, "(setq ui-widgets nil)")).toThrow();
+	});
+
+	it("ships one memory per widget, carrying its signature", () => {
+		const { memories } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		for (const tag of TAGS) {
+			expect(memories).toContain(`(memory "ui/widget-${tag}" :when "`);
+			expect(memories).toContain(WIDGET_FORMS[tag].signature);
+		}
 	});
 });
 

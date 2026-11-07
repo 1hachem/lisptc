@@ -14,3 +14,19 @@ export const memoryKind = entryKind({
 	schema: firedMemory,
 	fold: every,
 });
+
+const recognized = z.object({
+	message: z.string(),
+	step: z.string().optional(),
+	scores: z.record(z.string(), z.number().min(0).max(1)),
+	fired: z.array(firedMemory).optional(),
+	error: z.string().optional(),
+});
+
+export type Recognized = z.infer<typeof recognized>;
+
+export const recognizedKind = entryKind({
+	name: "recognized",
+	schema: recognized,
+	fold: every,
+});

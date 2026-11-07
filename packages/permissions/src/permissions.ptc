@@ -1,30 +1,5 @@
 PERMISSIONS
 
 Config decides every call: allow, deny, or ask user.
-
-- (permission/list) gives config as forms.
-- (permission/check 'name) gives allow, deny or ask for name. MCP tool named
-  server/tool, as bound.
-
-Config forms are runnable: permission/default, permission/allow,
-permission/deny, permission/ask, permission/server, permission/deny-server,
-permission/hide-server. (permission/delete form) removes one form, written
-exactly as (permission/list) shows. (permission/clear-all) removes all.
-  Example: (permission/server playwright (only browser_navigate)) leaves
-  playwright with that one tool.
-  Example: (permission/delete (permission/deny eval)) .
-
-Each waits for user approval. Approved means applied and saved; do not rerun.
-Config rule naming the form overrides: after (permission/allow permission/deny)
-a permission/deny applies at once; after (permission/deny permission/delete) no
-form can be deleted. Change config only when user asks.
-
-Denied call fails with reason. Final: no retry, no reaching same effect another
-way. Say what you could not do.
-
-Ask call fails too; user sees request. Stop step. Say in one line why you
-wanted it, then wait. You get told the answer. Approved: rerun exactly as
-before. Always allow saves (permission/allow name) to config; no more asks.
-
-Tool hidden by config, or left out of partly shown server, never loaded: not in
-(list-tools), not callable.
+permission/list permission/check; config forms only when user asks.
+Denied call: final, no retry, no other route; say what you could not do. Ask call: stop, say why in one line, wait.

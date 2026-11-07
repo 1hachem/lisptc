@@ -11,6 +11,7 @@ const TRIGGER_COLORS: Record<string, string> = {
 	prose: "bg-purple",
 	recall: "bg-yellow",
 	start: "bg-orange",
+	when: "bg-primary",
 	step: "bg-fg",
 };
 
@@ -55,10 +56,12 @@ export function MessageMemories({
 	memories,
 	onOpen,
 	focused = false,
+	selected,
 }: {
 	memories: FiredMemory[];
 	onOpen?: () => void;
 	focused?: boolean;
+	selected?: ReadonlySet<string>;
 }) {
 	const [open, setOpen] = useState(focused);
 	useEffect(() => {
@@ -102,7 +105,13 @@ export function MessageMemories({
 						>
 							<Dot on={memory.on} />
 							<span className="min-w-0">
-								<span className="text-fg">{memory.key}</span>
+								<span
+									className={
+										selected?.has(memory.key) ? "text-green" : "text-fg"
+									}
+								>
+									{memory.key}
+								</span>
 								{memory.body ? ` — ${memory.body}` : null}
 							</span>
 						</div>

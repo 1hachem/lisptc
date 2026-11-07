@@ -106,23 +106,9 @@ function manifestIcons(conf: ConnConfig): Icon[] | undefined {
 	return conf.icon === undefined ? undefined : [{ src: conf.icon }];
 }
 
-export function machineNotice(
-	machine: UserMachine,
-	connected: boolean,
-): string {
-	const names = machine.servers().join(", ");
-	return connected
-		? `desktop app connected: local servers now loadable: ${names}`
-		: `desktop app disconnected: local servers gone: ${names}`;
-}
-
-function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
-	let known = false;
+function refreshMachine(hooks: SessionHooks, machine: UserMachine): void {
 	hooks.beginStep.use(function* (ctx, next) {
-		const now = yield* settled(machine.refresh());
-		if (now !== known && machine.servers().length > 0)
-			ctx.emit(machineNotice(machine, now));
-		known = now;
+		yield* settled(machine.refresh());
 		yield* next(ctx);
 	});
 }
@@ -317,6 +303,7 @@ export interface McpExtensionHost {
 	toolkit: ToolkitRegistry;
 	search: SearchEngine;
 	prompt: PromptSource;
+	memories: PromptSource;
 	clock: Clock;
 	policy?: McpPolicy;
 	machine?: UserMachine;
@@ -840,9 +827,10 @@ export const LOCAL_ASKS: readonly string[] = [`${LOCAL_GATE}*`];
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
+		memories: host.memories(),
 		session(hooks: SessionHooks): void {
 			answerAuthorization(hooks);
-			if (host.machine !== undefined) announceMachine(hooks, host.machine);
+			if (host.machine !== undefined) refreshMachine(hooks, host.machine);
 		},
 	});
 }

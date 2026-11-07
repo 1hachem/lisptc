@@ -77,6 +77,7 @@ describe("the loop and the journal", () => {
 				.filter((e) => e.type !== "delta")
 				.map((e) => (e.type === "entry" ? e.entry.kind : e.type)),
 		).toEqual([
+			"system",
 			"before-model",
 			"assistant",
 			"during-step",

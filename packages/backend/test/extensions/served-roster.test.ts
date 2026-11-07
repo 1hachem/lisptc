@@ -69,6 +69,13 @@ describe("the agent the app serves", () => {
 			expect(await ev(`(permission/check '${form})`)).toBe("allow");
 	});
 
+	it("ships every extension's built-in memories readable, under distinct keys, within their budget", async () => {
+		const ev = await served();
+		const listed = await ev("(memories)");
+		expect(listed).toContain('"mcp/local"');
+		expect(listed).toContain('"mcp/oauth"');
+	});
+
 	it("teaches the model the workspace, its knowledge and its preferences", async () => {
 		const interp = new Interp({
 			extensions: await workspaceExtensions(WORKSPACE, offline),

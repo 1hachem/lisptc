@@ -10,7 +10,7 @@ const SYSTEM = [
 	"You review a run of an automated eval of a coding agent.",
 	"The agent answers by writing programs in a Lisp dialect; the REPL evaluates them and feeds the output back.",
 	"You are given how the eval was set up, the conversation, and which assertions passed.",
-	"The conversation also holds what the harness recorded as it happened, in order: a [memory] line is a memory that fired into what the agent read, and a line named for any other kind is a fact the harness recorded at that point.",
+	"The conversation also holds what the harness recorded as it happened, in order: a [memory] line is a memory that fired into what the agent read, a [recognized] line is the score the memory system gave each memory's situation against the conversation, latest step weighed most (it fires at 0.7 or above), or the error that kept it from scoring, followed by a fired line for each memory that recognition put into what the agent read.",
 	"You report only what went wrong.",
 	"If the run went according to plan, reply with nothing at all: an empty response, no praise, no summary, no confirmation that it went well.",
 	"A run went according to plan when every assertion held, the agent answered the user, and it took no detour worth an engineer's attention.",

@@ -98,5 +98,8 @@ export function diagnosticsExtension(host: DiagnosticsHost): InterpExtension {
 			return { reported };
 		});
 	};
-	return Object.assign(extension, { prompt: host.prompt() });
+	return Object.assign(extension, {
+		prompt: host.prompt(),
+		memories: host.memories(),
+	});
 }

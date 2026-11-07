@@ -5,7 +5,7 @@ import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -22,7 +22,6 @@ import { describe, expect, it } from "vitest";
 import {
 	FORGET_BELOW,
 	HALF_LIFE_MS,
-	LINKED_FIRES_AT,
 	MAX_CASCADE_DEPTH,
 	MAX_RECALL_WORDS,
 	MemoryBank,
@@ -32,17 +31,17 @@ import {
 import {
 	FileMemoryStore,
 	memoryDirFor,
-	memoryHost,
 	scopedMemoryStore,
 } from "../src/memory-host.ts";
-import { VolatileStore } from "../src/ports.ts";
+import { LINKED_FIRES_AT, VolatileStore } from "../src/ports.ts";
+import { bareHost, MemoryInterp } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
 }
 
 interface Fixture {
-	interp: Interp;
+	interp: MemoryInterp;
 	bank: MemoryBank;
 	step(code: string): Promise<string>;
 }
@@ -51,8 +50,8 @@ function fixture(
 	bank: MemoryBank = new MemoryBank(new VolatileStore()),
 	extras: InterpExtension[] = [],
 ): Fixture {
-	const interp = new Interp({
-		extensions: [memoryExtension(memoryHost, { bank }), ...extras],
+	const interp = new MemoryInterp({
+		extensions: [memoryExtension(bareHost, { bank }), ...extras],
 	});
 	runSync(interp, prelude);
 	return {
@@ -69,7 +68,7 @@ function fixture(
 }
 
 async function opening(f: Fixture): Promise<string> {
-	const hooks = openSession([memoryExtension(memoryHost, { bank: f.bank })]);
+	const hooks = openSession([memoryExtension(bareHost, { bank: f.bank })]);
 	let emitted = "";
 	await drive(
 		hooks.beginStep.run(() => settled(undefined), {
@@ -149,7 +148,7 @@ describe("remembering and recalling", () => {
 	});
 
 	it("asks a human before forgetting everything", () => {
-		expect(memoryExtension(memoryHost).asks).toEqual(["memory/forget-all"]);
+		expect(memoryExtension(bareHost).asks).toEqual(["memory/forget-all"]);
 	});
 
 	it("keeps a form as a form, not as its value", async () => {
@@ -456,8 +455,8 @@ describe("triggers", () => {
 		const f = fixture(bank);
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
 
-		const quiet = new Interp({
-			extensions: [memoryExtension(memoryHost, { bank })],
+		const quiet = new MemoryInterp({
+			extensions: [memoryExtension(bareHost, { bank })],
 		});
 		runSync(quiet, prelude);
 
@@ -729,7 +728,9 @@ describe("the file store", () => {
 	it("round-trips a form body, which is what makes a recipe survive", () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const store = new FileMemoryStore(dir);
-		const interp = new Interp({ extensions: [memoryExtension(memoryHost)] });
+		const interp = new MemoryInterp({
+			extensions: [memoryExtension(bareHost)],
+		});
 		runSync(interp, prelude);
 		const body = runSync(interp, "(quote (defun double (x) (* x 2)))");
 		store.put({

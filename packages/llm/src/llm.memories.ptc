@@ -1,0 +1,93 @@
+(area "llm" :when "text must be written, rewritten, summarized, answered from or have fields pulled out of it by a language model")
+
+(memory "llm/write" :when "the agent is about to have text written: one prompt sent to a model, or several messages as one conversation; or a write or converse call just failed or came back empty")
+Writing call costs seconds and tokens: one or two per step, never in loop
+over long list. It waits and can fail: worth try with fallback. Promise
+refused: await first.
+
+- (write "prompt") waits, gives reply string.
+
+(write "Name three risks in this plan" :system "Be blunt." :max-tokens 200)
+write-1: 84 words
+
+- (converse messages) gives reply string, multi-turn. Message is
+(message :system "...") or (message :user "...") , alist with "role" and
+  "content", so alist transcript is already valid. Bare string = user message.
+
+(converse (list (message :system "Answer in one sentence.") (message :user q)))
+
+Text arguments: prompt, :system, :instructions, extract text, message
+content. Any value works: list or alist goes in printed. No (string …)
+needed.
+
+(memory "llm/extract" :when "the agent holds a text, page, comment or mail and must pull fields or structured data out of it, or an extract call just failed or returned the wrong shape")
+(extract text shape) gives data shape describes, as Lisp data. Answer is
+constrained to shape: no parsing, no prose to strip. Turns page, comment or
+mail into fields read with assoc.
+
+(extract page (shape (title "the page title")
+    (stars :integer)
+    (state (:enum "open" "closed"))
+    (links (:list :string))
+    (author (:optional (:string "who wrote it")))))
+extract-1: alist, keys "title" "stars" "state" "links"
+
+Shape is alist of (key . field) , written by (shape (name spec...) ...)
+: no quote, no dotted pairs. Field is:
+  :string, :number, :integer, :boolean, :any; plain string = string field
+  described by its text;
+(:string "what it means") and same for other scalars;
+(:enum "a" "b") ; (:list field) ; (:optional field) , only field answer may
+  omit; nested alist = nested object. Alist shape returns alist, (:list …)
+returns list. :instructions "..." says what to pull out.
+  Nested group = nested object; (:list …) and (:optional …) take groups too:
+(shape (items (:list (id :number) (title :string))))
+is list of objects. Shape is literal, built at compile time: computed enum
+  needs hand-written alist.
+
+(memory "llm/macros" :when "the agent holds a long text or many records that must be summarized, or a question must be answered from a given text or data, or answer just returned nil")
+Three macros over write carry prompt for you; (doc 'summarize) and expansion
+are all there is. Each takes write options plus :words, capping asked length
+and token budget.
+
+- (summarize value :words 60 [option...]) gives summary. Printed form goes in
+  prompt, so list of records works like page of text.
+- (summarize-each values :words 25 [option...]) gives summaries in order, one
+  sequential call per element: slice with (head x 5) first, never hundreds.
+- (answer question context :words 60 [option...]) answers from context
+  only. nil means not in context, never a failed call: branch on it, do not
+  echo it.
+
+(setq brief (summarize acme/list-issues-1 :words 40))
+brief: 39 words
+
+(echo brief)
+
+(setq owner (answer "who is assigned to ENG-12?" acme/list-issues-1))
+owner: "Nadia"
+
+(echo (if owner owner "the issues do not say who is assigned"))
+
+(memory "llm/rewrites" :when "the agent must turn a text into a new one: swap its roles, say its opposite, blend two texts, take part out, add at the start or end, or state what follows from two statements")
+Rewrites: new text from value. Any value works, printed. Each takes write
+options, one call each:
+
+- (invert x) swaps roles/direction: "I stand on giants." -> "Giants stand on me."
+- (negate x) says opposite: "I am happy." -> "I am not happy."
+- (blend x y) blends both into one text. (strip x y) takes y out of x:
+(blend (strip "Hello my enemy" "enemy") "friend") -> "Hello my friend".
+- (open-with x y) works y in at start of x , (close-with x y) at end.
+- (conclude x y) states what follows from both. (either x y) states as
+  alternatives. (one-of x y) states exactly one holds.
+
+(memory "llm/options" :when "a writing call needs a length cap, a temperature, a system line or a timeout, defaults must change for many calls, or a writing call just timed out")
+Options, all optional, every call: :system · :max-tokens · :temperature ·
+:reasoning-effort, :low, :medium or :high · :timeout ms, default 60000.
+Timed-out call raises.
+
+Global *writing-defaults* = keyword list every call starts from; call-site
+option wins. (with-writing (option...) body...) extends it for one block,
+restores after:
+
+(with-writing (:max-tokens 120)
+  (summarize-each (head pages-1 3)))

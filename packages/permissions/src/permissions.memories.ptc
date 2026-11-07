@@ -1,0 +1,28 @@
+(area "permissions" :when "what this session may call must change, or a call was just denied, is waiting for approval or is missing")
+
+(memory "permissions/config" :when "what this session may call must change: allow, deny or ask for a tool, hide a server's tools, or remove a rule")
+- (permission/list) gives config as forms.
+- Examples of config forms:
+(permission/server playwright (only browser_navigate)) leaves
+playwright with that one tool.
+(permission/delete (permission/deny eval)) .
+- (permission/delete form) removes one form, written exactly as (permission/list)
+shows. (permission/clear-all) removes all.
+- A config rule naming a form overrides it: after (permission/allow permission/deny)
+a permission/deny applies at once. After (permission/deny permission/delete) no
+  form can be deleted.
+- Each change waits for user approval. Approved means applied and saved; do not rerun.
+
+Config forms: permission/default, permission/allow, permission/deny, permission/ask,
+permission/server, permission/deny-server, permission/hide-server, permission/delete,
+permission/clear-all.
+
+(memory "permissions/calls" :when "a call was just denied or is waiting for approval, or a tool the agent expected is missing from the list")
+- (permission/check 'name) gives allow, deny or ask for name. MCP tool named
+  server/tool, as bound.
+- Denied call fails with reason.
+- Ask call: user sees request. You get told the answer. Approved: rerun exactly
+  as before. Always allow saves (permission/allow name) to config; no more asks.
+
+Tool hidden by config, or left out of partly shown server, never loaded: not in
+(list-tools) , not callable.

@@ -8,8 +8,9 @@ Turbo tag: `frontend`.
 
 One file per component, flat, with its tests beside it and `src/index.ts`
 re-exporting them. The components here are the presentational pieces two
-front-ends share: the text animations, the message feedback control and the
-recalled memories of a step. `src/feedback.ts` holds the shape feedback speaks
+front-ends share: the text animations, the message feedback control, the
+recalled memories of a step, and the trace the app and the eval viewer both
+draw a conversation with. `src/feedback.ts` holds the shape feedback speaks
 in, and a recalled memory is the shape `@repo/journal-catalog` records.
 
 ## Rules

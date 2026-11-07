@@ -421,6 +421,7 @@ export function permissionsExtension(
 		{
 			rules,
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use((ctx, next) =>
 					adopting(ctx.interp, () => next(ctx)),

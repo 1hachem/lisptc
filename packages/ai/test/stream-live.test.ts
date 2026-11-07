@@ -4,7 +4,7 @@ import type { InterpExtension, ModelDelta } from "@repo/interpreter/session";
 import { ENTRY_TYPE } from "@repo/shared/journal";
 import { describe, expect, test, vi } from "vitest";
 import type { WireMessage } from "../src/stream.ts";
-import { recording, streamChat, testRepl } from "./helpers.ts";
+import { recording, streamChat, testRepl, unprompted } from "./helpers.ts";
 
 const TURNS: ModelDelta[][] = [
 	[{ text: "(progress 1) (pause 250) (progress 2) (pause 250)" }],
@@ -62,7 +62,7 @@ function snapshots(text: string): WireMessage[][] {
 }
 
 const shape = (messages: WireMessage[]) =>
-	messages.map((m) =>
+	unprompted(messages).map((m) =>
 		m.type === ENTRY_TYPE ? `entry:${m.additional_kwargs?.value}` : m.type,
 	);
 

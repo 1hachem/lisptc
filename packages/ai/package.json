@@ -24,6 +24,7 @@
     "@repo/models": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
+    "gpt-tokenizer": "^4.1.0",
     "posthog-node": "^5.51.6"
   },
   "devDependencies": {

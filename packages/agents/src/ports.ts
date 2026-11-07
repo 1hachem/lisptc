@@ -7,7 +7,6 @@ export interface AgentDefinition {
 	readonly name: string;
 	readonly prompt: string;
 	readonly permissions?: string;
-	readonly roster?: readonly string[];
 	readonly budget?: number;
 }
 

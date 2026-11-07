@@ -1,0 +1,85 @@
+(area "compaction" :when "the agent works with a result the REPL bound to a name: a large, truncated or printed value it must find, filter, read or show")
+
+(memory "compaction/repl-names" :when "the agent needs a result it computed earlier, does not know what name the REPL bound it to, or is about to retype data the REPL printed")
+Variable is named after the function that produced it. It always holds the
+whole value. setq or defun reports under the name it bound. Never invent a
+name: the REPL always tells you the one it bound.
+
+(acme/list-issues :query "auth bug")
+acme/list-issues-1: list of 27 alists, keys "id" "identifier" "title" "state" "url"
+
+(+ 1 2)
++-1: 3
+
+(mapcar (lambda (i) (cdr (assoc "id" i))) acme/list-issues-1)
+
+(memory "compaction/echo-window" :when "a printed output came back truncated with a ... line, or the agent needs one part of a long value found")
+Echo windowing, what it prints:
+- (echo x :offset 0 :length n) print a window of x, counted in
+  whitespace-separated words. Closing ... line gives offset to continue from.
+- (echo x :match "re" :context 8 :max 10 :ignore-case t) print only regions
+  matching a regex. Each comes as @ and word offset, plus surrounding words,
+  match wrapped in double square brackets. Feed reported offset back as
+  :offset. Use this to READ a value; use grep to KEEP what matched.
+- When you know what you look for: (echo report-1 :match "pattern") .
+- One unbroken word, minified JSON say, is cut by character, and the ... line
+  points at a substring. Several echoes in one step share the budget. When it
+  runs out you are told how many words you were not shown.
+- Output ending in a ... line is not everything. Do not re-run, do not
+  answer from the fragment. Page on with the offset the ... line gives.
+
+Echo output is capped for you; user never sees echo. Past the cap, text stops and
+a ... line says how much is left:
+
+... 10 of 40 words shown, 30 below — read on with (echo report-1 :offset 10)
+
+(memory "compaction/extract" :when "a large result came back and the agent must pick out rows, matches or items: filter, search or count them")
+Extracting, what each returns:
+- Exception to silence: a bare head or tail step prints in full.
+- (head x [n]) first n of x; (tail x [n]) last n. On a list, n ELEMENTS:
+(head issues 4) is first four rows. On text, n words.
+  A slice written as a step of its own is PRINTED and gets no name: you asked
+  to read it. Nested in another form it prints nothing, only the value:
+(mapcar row (head issues 4)) , (setq top (head issues 4)) .
+- (grep x "pattern" :group n :max n :ignore-case t) what pattern matched, as a
+  list, or nil. On a list, ELEMENTS whose printed form matches:
+(grep issues "auth") is the issues about auth. On text, matched substrings:
+(grep page "https?://[^ ]+") is the URLs in it.
+- A discovery call prints every name and description, no shape. One call is
+  the whole step. Never echo one, never re-run the same search with different
+  words, never head it.
+- Prefer computing over reading: (length x) , mapcar, assoc and grep work on
+  the complete value. One extracting form beats paging through text.
+
+Example. A result named grep-1 holds the URLs of a page:
+
+(grep page-1 "https?://[^ ]+")
+grep-1: ("https://x.dev/a")
+
+(echo (car grep-1))
+https://x.dev/a
+
+Bare slice already answers "what is in there":
+
+(head acme/list-issues-1 2)
+((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
+  (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
+
+(memory "compaction/doc" :when "the agent is about to call a form whose keywords or arguments it is not sure of, or a call was just rejected")
+(doc 'name) prints a binding's full signature, whole, free against echo
+budget. Look freely. Read it before guessing a keyword. Call rejected: error
+names fix? Use it. Names none? Read (doc 'name) .
+
+(memory "compaction/render-rows" :when "the agent fetched rows of data and must read them, or show them as a table, list or summary")
+To read rows, keep whole list and echo a rendering of it:
+
+(defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
+row: function
+
+(echo (string-join (mapcar row (head acme/list-issues-1 4)) "\n"))
+| ENG-12 | Auth token refresh fails |
+| ENG-31 | OAuth callback drops the state param |
+
+Both wrong. Never do either:
+(echo "https://x.dev/a") the URL typed from a printout
+(echo "| ENG-12 | Auth token refresh fails |") the rows typed out by hand

@@ -6,6 +6,7 @@ import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { note, output } from "@repo/interpreter/topics";
+import { systemPromptKind } from "@repo/journal-catalog/system";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import type { Repls } from "../src/repl-store.ts";
@@ -197,5 +198,13 @@ export function printing(text: string): InterpExtension {
 			output.emit(ctx.interp.channels, { user: text, model: text });
 			return next(ctx);
 		}),
+	);
+}
+
+export function unprompted<
+	T extends { additional_kwargs?: Record<string, unknown> },
+>(messages: readonly T[]): T[] {
+	return messages.filter(
+		(m) => m.additional_kwargs?.kind !== systemPromptKind.name,
 	);
 }

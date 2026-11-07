@@ -1,0 +1,123 @@
+(area "ui" :when "the agent is about to show the user something: a table, form, buttons, chart, view or panel, or a view the user clicked just came back")
+
+(memory "ui/reactive" :when "a view needs a dropdown, toggle or filter that updates it at once, without asking the agent again")
+Reactive controls: :on-change on ui/select or ui/checkbox. One-argument
+function, run when user picks or ticks. No submit, no model turn. Gets same
+alist as form handler, answers by rendering:
+
+(defun panel (window)
+  (ui/stack
+    (ui/select '("7" "30" "90") :name "d" :value window
+      :on-change (lambda (values) (ui/render (panel (cdr (assoc "d" values))))))
+    (ui/table (issues-since window))))
+(ui/render (panel "7"))
+
+Text fields have no :on-change on purpose: each keystroke would round-trip,
+redrawing the field being typed in. Put ui/input in ui/form, let submit
+carry it.
+
+Button INSIDE a form gets the same alist, if its action takes one argument.
+
+(memory "ui/actions" :when "a button in a view must keep working after a redraw, or an old view's controls must be dropped, or a click just reached a stale view")
+Actions close over their environment. REPL persistent, so
+(setq counter (+ counter 1)) in a handler sticks; a later step reads it like
+any global. They die with the REPL: clearing conversation drops every action.
+
+Action may be a quoted call to a global function instead: '(refresh-dashboard)
+or '(set-filter "open") . Args passed as written, not evaluated. Field alist
+appended when the function takes one more argument. Function looked up by name
+on click, so redefine it to change what click does. Never dropped past 500
+handlers, kept across REPL restart. Prefer it for long-lived views:
+
+(defun set-filter (f) (ui/render (panel f)))
+(ui/button "open only" '(set-filter "open"))
+
+(ui/forget view) drops actions behind view's controls; view shows expired,
+clicks run nothing. Use on a view you replaced or closed. Returns count
+dropped.
+
+(memory "ui/send" :when "a view needs a control that hands a request back to the agent along with what the user entered")
+(ui/send text...) arguments join as echo joins them. The result joins
+conversation as user message, so you take the next turn and answer normally:
+
+(ui/form (lambda (values) (ui/send "search the issues for" (cdr (assoc "q" values))))
+  (ui/input :name "q" :label "search")
+  :submit "ask")
+
+Send for judgement, handle in Lisp for work. Prose request, or a decision or
+step with no code written, needs a turn. Filtering, paging, recomputing, calling
+a loaded tool is free. Handler may render AND send: render what user sees while
+you think, then send. Several sends in one handler join into ONE message: one
+click, one thing. Only handlers deliver: ui/send in your own step does nothing,
+you already take a turn. Write a request, "search the issues for auth", not a
+note, "user clicked search".
+
+(memory "ui/panels" :when "a file or view must open beside the chat, or a tab must be shown, moved, focused or closed")
+Panel beside chat: tabs in splits, up to 3 across, 3 down. Folder is
+"attachments" or "knowledge". :split is "here" (focused split, default) ,
+"right" or "down" (new split beside focused one) .
+- (ui/open-file folder name [:split "right" ]) opens file preview in tab.
+  List folder first: unknown name opens tab saying so. Open file gets focus,
+  no second tab. Returns tab id.
+- (ui/open-view title view [:split "down" ]) widget in tab, not under message.
+  Controls run in this REPL as usual. Same title replaces that tab. Returns
+  tab id.
+- (ui/close tab) · (ui/focus tab) by id open returned. ui/close gives t if tab
+  was open, nil if not.
+- (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:page :title
+  title :shown t :focused t) . User opens, closes, moves tabs too: read it
+  before closing or focusing by id from earlier step.
+- (ui/file-link text folder name) widget; click opens file in tab. List
+  files user can open:
+
+(ui/render (ui/stack (ui/file-link "Q3 report" "knowledge" "q3.pdf")
+    (ui/file-link "photo" "attachments" "cat.png")))
+
+Open for user when they ask to see file; link when offering several.
+
+(memory "ui/build" :when "the agent is about to build a visual view, dashboard, chart or interactive page")
+Build ui view and test it without rendering. ui/render only once it works.
+
+(memory "ui/basics" :when "the agent is about to show a table, form or buttons in chat, or any view the user can click or type into")
+Example panel, a form whose action takes the alist, and a button whose action takes none:
+
+(defun panel ()
+  (ui/stack
+    (ui/heading "Open issues")
+    (ui/table (head issues-1 10))
+    (ui/form (lambda (values) (ui/render (results (cdr (assoc "q" values)))))
+      (ui/input :name "q" :label "filter" :placeholder "auth")
+      :submit "search")))
+(ui/render (panel))
+
+**Actions** are ordinary Lisp functions. Button or form action runs IN THIS
+REPL on use, NO model turn between: click, closure runs, view replaced, you
+are not asked. So every branch you anticipate is free.
+- Button action takes no argument: (lambda () (ui/render (panel))) . Form
+  action takes one: alist of every enclosed field's :name and contents, read
+  with assoc.
+- Action answers via ui/render, replacing view in place; rendering nothing
+  leaves view as is.
+- Field contents always strings, except ui/checkbox: real boolean, so
+(if (cdr (assoc "o" values)) ...) works. (read s) turns string into number.
+  "" and "false" are both TRUE, hence boolean tick box.
+- Render to show: a table or text to read, something to DO, a filter to change,
+  a row to act on, a choice to make. Long data: write a file and open it beside
+  chat. Recall memory ui/panels for how.
+- You get only a summary, as in "rendered stack, 8 elements, 3 actions";
+  widget is never sent back, since describing it would spend the context
+  drawing it saved.
+
+(memory "ui/showing" :when "the agent is about to show the user something, or is tempted to reply with a talking form")
+Echo or print comes back to you alone. What else reaches user besides final
+prose is set by each extension's section of reference below: what it shows
+user, and how. User cannot reply mid-loop: "user" between steps is REPL handing
+back result, so no question you ask gets answered. Showing user what they asked
+for is real work. Talking is not. NEVER emit form only to chat or keep loop
+alive. `(identity "Ready for instructions.") `, `(identity "Waiting for your command.") `
+and the like are worst failure mode: compute nothing, each buys another step of
+talking to yourself until step cap. Every form must compute, inspect, define,
+render or call a tool.
+Unrendered widget shows nothing. Put what user should read inside a widget,
+never in an echo. End with short prose: point at what you rendered, do not
+repeat it, e.g. "the 27 open issues are in the table above".

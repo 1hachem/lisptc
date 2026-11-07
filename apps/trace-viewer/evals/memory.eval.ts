@@ -1,8 +1,10 @@
+import { memorySystem } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
+import { jev } from "@repo/models/providers";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -89,5 +91,59 @@ evalCase("writes the correction down the moment a guess fails", {
 
 (defcheck answers-with-the-heading
   (eventually (answered (matches "Build AI workflows"))))
+`,
+});
+
+const EVAL_RECOGNITION_TIMEOUT_MS = 30_000;
+
+const recognized = () => [
+	promisesExtension(promisesHost),
+	mockedMcpExtension(),
+	compactionExtension(compactionHost),
+	proseExtension(proseHost),
+	memoryExtension({
+		...memoryHost,
+		store: new VolatileStore(),
+		recognize: memorySystem(jev, EVAL_RECOGNITION_TIMEOUT_MS),
+	}),
+];
+
+evalCase(
+	"loads the know-how for the user's own machine the moment they ask for it",
+	{
+		min: 1,
+		max: 5,
+		extensions: recognized,
+		mocks: { servers: { playwright } },
+		seed: [
+			{
+				user: "use the browser on my own computer to open hyko.ai and read me the main heading",
+			},
+		],
+		checks: `
+(defcheck checks-the-desktop-it-was-only-told-about-by-the-memory
+  (eventually (called "desktop-connected-p")))
+
+(defcheck needs-no-recall-to-get-there
+  (never (called "memory/recall")))
+
+(defcheck tells-the-user-the-desktop-app-is-needed
+  (eventually (answered (matches "[Dd]esktop"))))
+`,
+	},
+);
+
+evalCase("loads nothing about the user's machine for an unrelated question", {
+	min: 1,
+	max: 3,
+	extensions: recognized,
+	mocks: { servers: { playwright } },
+	seed: [{ user: "what is 17 times 23?" }],
+	checks: `
+(defcheck stays-off-the-desktop
+  (never (called "desktop-connected-p")))
+
+(defcheck answers-the-sum
+  (eventually (answered (matches "391"))))
 `,
 });

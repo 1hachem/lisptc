@@ -3,7 +3,7 @@ import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { toLlmMessages } from "../src/repl.ts";
 import type { WireMessage } from "../src/stream.ts";
-import { streamChat, testRepl } from "./helpers.ts";
+import { streamChat, testRepl, unprompted } from "./helpers.ts";
 
 const seen: ChatMessage[][] = [];
 
@@ -58,7 +58,7 @@ describe("a turn started by a system event", () => {
 			content: `<system-event source="permissions/decide">${NOTE}</system-event>`,
 		});
 		expect(seen[0].some((m) => m.role === "system")).toBe(false);
-		expect(recorded.map((m) => m.type)).toEqual(["ai"]);
+		expect(unprompted(recorded).map((m) => m.type)).toEqual(["ai"]);
 	});
 
 	test("echoes the event on the wire as a system message carrying its source", async () => {

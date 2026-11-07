@@ -61,6 +61,7 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 		{
 			asks: [...KNOWLEDGE_ASKS, ...ATTACHMENT_ASKS, ...BIN_ASKS],
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session: attachSession,
 		},
 	);

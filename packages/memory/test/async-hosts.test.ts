@@ -1,11 +1,11 @@
 import { driveAsync, driveSync, settled } from "@repo/interpreter/drive";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { MemoryBank, memoryExtension } from "../src/memory.ts";
-import { memoryHost } from "../src/memory-host.ts";
 import { type Memory, type MemoryStore, VolatileStore } from "../src/ports.ts";
+import { bareHost, MemoryInterp } from "./helpers.ts";
 
 class PromisedStore implements MemoryStore {
 	private readonly inner = new VolatileStore();
@@ -33,11 +33,11 @@ class PromisedStore implements MemoryStore {
 	}
 }
 
-function interpWith(store: MemoryStore): Interp {
-	const interp = new Interp({
+function interpWith(store: MemoryStore): MemoryInterp {
+	const interp = new MemoryInterp({
 		extensions: [
 			memoryExtension(
-				{ ...memoryHost, store, prompt: () => "" },
+				{ ...bareHost, store, prompt: () => "" },
 				{
 					bank: new MemoryBank(store),
 				},

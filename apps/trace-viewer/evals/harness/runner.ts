@@ -16,6 +16,7 @@ import type {
 } from "@repo/evals/runner";
 import { createEvalSuite, runCase as runEvalCase } from "@repo/evals/runner";
 import type { Target } from "@repo/evals/targets";
+import { systemPromptKind } from "@repo/journal-catalog/system";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { ExtensionsFor } from "./harness.ts";
 import { tracedRepl } from "./harness.ts";
@@ -111,7 +112,15 @@ const runtime = {
 					system: options.system,
 				},
 			})) {
-				if (
+				if (event.type === "system")
+					yield {
+						type: "entry" as const,
+						entry: {
+							kind: systemPromptKind.name,
+							value: { text: event.prompt, tokens: event.tokens },
+						},
+					};
+				else if (
 					event.type === "assistant" ||
 					event.type === "entry" ||
 					event.type === "result" ||

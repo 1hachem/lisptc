@@ -1,6 +1,6 @@
 import { agentsExtension, subAgentExtension } from "@repo/agents-extension";
 import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
-import type { Threads } from "@repo/ai";
+import { LOOP_MEMORIES, memorySystem, type Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -20,6 +20,7 @@ import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
+import { jev } from "@repo/models/providers";
 import { permissionsExtension } from "@repo/permissions-extension";
 import { permissionsHostFor } from "@repo/permissions-extension/host";
 import { preferencesExtension } from "@repo/preferences-extension";
@@ -90,19 +91,23 @@ export interface ThreadScope {
 	readonly chatId?: Id<"chats">;
 	readonly supervisor?: Supervisor;
 	readonly bounds?: readonly string[];
-	readonly roster?: readonly string[];
 	readonly subAgent?: boolean;
 	readonly desktop?: Desktop;
+}
+
+function loopMemories(): InterpExtension {
+	return Object.assign(() => undefined, { memories: LOOP_MEMORIES });
 }
 
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
+	{ chatId, supervisor, bounds, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
+		recognize: memorySystem(jev),
 	});
 	const workspace = workspaceExtension(
 		workspaceHostFor({
@@ -124,7 +129,6 @@ export async function workspaceExtensions(
 		agentsHostFor({
 			folder: new ConvexSourceFolder(connect),
 			workspace: workspaceId,
-			...(roster === undefined ? {} : { roster }),
 			...(supervisor === undefined || chatId === undefined
 				? {}
 				: { threads: new SupervisedAgents(supervisor, chatId) }),
@@ -166,6 +170,7 @@ export async function workspaceExtensions(
 		? [agents, workspace, preferences, ui]
 		: [exports];
 	return [
+		loopMemories(),
 		permissions,
 		secretsExtension({
 			...secretsHost,

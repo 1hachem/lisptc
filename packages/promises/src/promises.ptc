@@ -1,26 +1,5 @@
 PROMISES
 
-Promise = work still running. Host runtime's own promises, so JavaScript
-semantics: settles once, keeps result, awaiting twice gives same answer,
-familiar combinators.
-- (await promise [timeout-ms]) wait, return value, re-raise error. Settled
-  promise returns at once.
-- (promise-all promises) one promise for every value, in order; rejects when
-  any does.
-- (promise-all-settled promises) one promise for each outcome,
-(:fulfilled value) or (:rejected "message") ; never rejects, so one failure
-  keeps siblings. Use when loading several servers.
-- (promise-any promises) first to succeed · (promise-race promises)
-first to settle either way.
-- (promise-state promise) :pending, :fulfilled or :rejected, no wait.
-- (promises) list what still runs · (cancel promise) abort work behind one.
-
-GOTCHAS
-
-- Hash-and-angle-brackets printout of promise cannot be read back: typing one
-  is always an error. Awaiting it is the common case; (await load-mcp-1) is
-  what it meant.
-
-RULES
-
-- A PROMISE IS A LIVE VALUE, AND AN UNAWAITED LOAD IS DONE. Promise-returning call installs its result itself on settle. Step reporting load-mcp-1: a promise, still running … is COMPLETE: carry on, use what it loaded later. Await only to use value in same step; wrap the single call: (await (load-mcp "acme")) . Never write a #<…> form — #<promise>, #<secret:KEY> — back into code: (await #<promise>) is an error. Refer to promise by name REPL reported ((await load-mcp-1)) or one you bound.
+Promise = work still running.
+await promise-all promise-all-settled promise-any promise-race promise-state promises cancel
+Unawaited load is done: carry on. Never write a #<…> form back into code.

@@ -1,9 +1,9 @@
+import type { ChatMessage } from "@repo/components";
 import { describe, expect, test, vi } from "vitest";
 
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: () => {} }));
 vi.mock("../src/lib/api.ts", () => ({ apiHeaders: async () => ({}) }));
 
-import type { ChatMessage } from "../src/lib/chat.tsx";
 import {
 	applyWatched,
 	readSse,

@@ -20,10 +20,7 @@ const LOCAL: StdioConnConfig = {
 };
 
 function session(online: { value: boolean }) {
-	const machine = cachedMachine(
-		async () => online.value,
-		() => ["local-git"],
-	);
+	const machine = cachedMachine(async () => online.value);
 	const extension = mcpExtension({
 		...mcpHost,
 		toolkit: desktopToolkit(
@@ -69,9 +66,8 @@ describe("the user's machine", () => {
 	});
 
 	it("counts a presence it cannot read as disconnected", async () => {
-		const machine = cachedMachine(
-			() => Promise.reject(new Error("convex down")),
-			() => [],
+		const machine = cachedMachine(() =>
+			Promise.reject(new Error("convex down")),
 		);
 		expect(await machine.refresh()).toBe(false);
 		expect(machine.connected()).toBe(false);
@@ -96,21 +92,11 @@ describe("the user's machine", () => {
 		expect(listed()).toMatch(/"remote" "" nil :unloaded\)/);
 	});
 
-	it("tells the session when the desktop connects and disconnects", async () => {
+	it("tells the session nothing when the desktop connects or disconnects", async () => {
 		const online = { value: true };
 		const { step } = session(online);
-		expect(await step()).toBe(
-			"desktop app connected: local servers now loadable: local-git",
-		);
 		expect(await step()).toBe("");
 		online.value = false;
-		expect(await step()).toBe(
-			"desktop app disconnected: local servers gone: local-git",
-		);
 		expect(await step()).toBe("");
-	});
-
-	it("says nothing at the start when no desktop is connected", async () => {
-		expect(await session({ value: false }).step()).toBe("");
 	});
 });

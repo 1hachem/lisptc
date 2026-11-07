@@ -23,6 +23,20 @@ to hold under both drivers.
 
 A new trigger is a trigger, never a branch in what dispatches them.
 
+**The store is the only source of truth for remembered memories.** Built-ins
+come from the shipped `.memories.ptc` text, merged in when read, and are never
+copied.
+
+**The session's bookkeeping lives in the Lisp image**, as interpreter state,
+never in a field of the bank: what was heard, what fired, what is loaded. The
+image also holds the one cache the root rule allows: the remembered memories,
+read from the store once. Every listing, recognition and event trigger answers
+from it, and every remember, revise, reinforce or forget empties it.
+
+**Recognition reads its candidates through a form in the REPL**, never from the
+store. Built-in and remembered :when memories are one list there, treated
+alike.
+
 A consumer takes the bank from the seam and never imports this package.
 
 ## Tests

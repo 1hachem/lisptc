@@ -42,6 +42,7 @@ export function secretsExtension(host: SecretsHost): SecretsExtension {
 		{
 			store: host.store,
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.fill(secretsSlot, host.store);
 			},

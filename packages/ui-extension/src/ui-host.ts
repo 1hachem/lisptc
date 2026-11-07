@@ -4,6 +4,7 @@ import type { UiHost } from "./ui.ts";
 import { MemoryViewStore, type ViewStore } from "./view-store.ts";
 
 const uiPrompt = filePrompt(new URL("./ui.ptc", import.meta.url));
+const uiMemories = filePrompt(new URL("./ui.memories.ptc", import.meta.url));
 
 export function uiHostFor(options: {
 	panel: PanelStore;
@@ -11,6 +12,7 @@ export function uiHostFor(options: {
 }): UiHost {
 	return {
 		prompt: uiPrompt,
+		memories: uiMemories,
 		panel: options.panel,
 		views: options.views ?? new MemoryViewStore(),
 	};

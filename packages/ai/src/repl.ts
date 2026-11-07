@@ -27,6 +27,7 @@ export function snapshotConversation(
 		"assistant-messages": transcript
 			.filter((e) => e.role === "assistant")
 			.map((e) => e.content),
+		"steps-taken": transcript.filter((e) => e.role === "assistant").length,
 	};
 }
 

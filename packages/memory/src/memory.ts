@@ -12,8 +12,10 @@ import {
 import {
 	arrayToList,
 	Cell,
+	LispKeyword,
 	type List,
 	listToArray,
+	newLispKeyword,
 	newSym,
 	Sym,
 } from "@repo/interpreter/objects";
@@ -25,24 +27,43 @@ import {
 	type SessionHooks,
 	slot,
 } from "@repo/interpreter/session";
-import { type FiredMemory, memoryKind } from "@repo/journal-catalog/memory";
+import {
+	type FiredMemory,
+	memoryKind,
+	recognizedKind,
+} from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
+import type { ChatMessage } from "@repo/shared/messages";
 import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
+	type Area,
+	type AreaGate,
+	authoredTrigger,
+	type Cue,
 	combinatorIn,
+	formToMemory,
 	INITIAL_SCORE,
+	LINKED_FIRES_AT,
 	type Memory,
 	type MemoryHost,
 	type MemoryStore,
-	parseTrigger,
+	memoryToForm,
+	type Recognize,
+	readAreas,
+	readBuiltins,
+	recognizeNothing,
+	type Situation,
+	TRIGGER_KINDS,
 	type Trigger,
 	type TriggerKind,
+	type Turn,
 	triggerToForm,
 	VolatileStore,
+	WHEN_FIRES_AT,
 } from "./ports.ts";
 
 export const REINFORCEMENT = 0.5;
@@ -50,8 +71,9 @@ export const HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
 export const FORGET_BELOW = 0.05;
 export const MAX_CASCADE_DEPTH = 3;
 export const MAX_RECALL_WORDS = 200;
-export const LINKED_FIRES_AT = 2;
 export const DEFAULT_RECALL_LIMIT = 5;
+export const MAX_BUILTIN_WORDS = 300;
+export const RECALLED_RESTS_STEPS = 100;
 
 function matches(pattern: string, text: string): boolean {
 	try {
@@ -63,6 +85,10 @@ function matches(pattern: string, text: string): boolean {
 
 function bodyText(body: unknown): string {
 	return typeof body === "string" ? body : str(body);
+}
+
+function wordCount(text: string): number {
+	return text.split(/\s+/).filter((w) => w !== "").length;
 }
 
 function unreadable(body: unknown): boolean {
@@ -119,6 +145,94 @@ function someSubform(form: unknown, test: (s: unknown) => boolean): boolean {
 	return false;
 }
 
+function conversationOf(interp: Interp): Turn[] {
+	const said = interp.getGlobal(newSym("conversation"));
+	if (!(said instanceof Cell)) return [];
+	return listToArray(said).flatMap((turn) => {
+		const fields = new Map<string, unknown>();
+		for (let at: unknown = turn; at instanceof Cell; at = at.cdr)
+			if (at.car instanceof Cell && typeof at.car.car === "string")
+				fields.set(at.car.car, at.car.cdr);
+		const role = fields.get("role");
+		const content = fields.get("content");
+		return typeof role === "string" && typeof content === "string"
+			? [{ role, content }]
+			: [];
+	});
+}
+
+const GIST_CHARS = 240;
+
+function gistOf(memory: Memory): string {
+	const gist = bodyText(memory.body).replace(/\s+/g, " ").trim();
+	return gist.length > GIST_CHARS ? `${gist.slice(0, GIST_CHARS)}…` : gist;
+}
+
+const LIST = "memory/list";
+const AREAS = "memory/areas";
+
+function entryOf(memory: Memory): unknown {
+	return arrayToList([
+		new Cell("key", memory.key),
+		new Cell("hook", memory.on?.kind ?? null),
+		new Cell("pattern", memory.on?.pattern ?? null),
+		new Cell("unless", memory.on?.unless ?? null),
+		new Cell("gist", gistOf(memory)),
+	]);
+}
+
+function cueFromEntry(entry: unknown): Cue {
+	const field = (name: string): unknown =>
+		(
+			listToArray(entry as List).find(
+				(pair) => pair instanceof Cell && pair.car === name,
+			) as Cell | undefined
+		)?.cdr;
+	const unless = field("unless");
+	const key = field("key") as string;
+	const slash = key.indexOf("/");
+	return {
+		key,
+		...(slash === -1 ? {} : { area: key.slice(0, slash) }),
+		situation: field("pattern") as string,
+		...(typeof unless === "string" ? { unless } : {}),
+		gist: field("gist") as string,
+	};
+}
+
+function hookOf(value: unknown): TriggerKind | undefined {
+	if (value === undefined) return undefined;
+	const name =
+		value instanceof LispKeyword
+			? value.name
+			: typeof value === "string"
+				? value.replace(/^:/, "")
+				: undefined;
+	if (name === undefined || !TRIGGER_KINDS.includes(name as TriggerKind))
+		throw new EvalException(
+			`a hook is one of :${TRIGGER_KINDS.join(" :")}`,
+			value,
+		);
+	return name as TriggerKind;
+}
+
+function stepsTaken(interp: Interp): number {
+	const taken = interp.getGlobal(newSym("steps-taken"));
+	return typeof taken === "bigint" || typeof taken === "number"
+		? Number(taken)
+		: 0;
+}
+
+function latestStep(turns: readonly Turn[]): string | undefined {
+	let at = turns.length - 1;
+	while (at >= 0 && turns[at]?.role !== "assistant") at--;
+	if (at === -1) return undefined;
+	return turns
+		.slice(at)
+		.map((turn) => turn.content)
+		.join("\n\n");
+}
+
 function userMessages(interp: Interp): string[] {
 	const said = interp.getGlobal(newSym("user-messages"));
 	if (!(said instanceof Cell)) return [];
@@ -129,9 +243,12 @@ interface MemoryEvent {
 	kind: TriggerKind;
 	text?: string;
 	form?: unknown;
+	recognized?: ReadonlyMap<string, number>;
 }
 
-function fires(trigger: Trigger, event: MemoryEvent): boolean {
+function fires(key: string, trigger: Trigger, event: MemoryEvent): boolean {
+	if (event.recognized !== undefined)
+		return (event.recognized.get(key) ?? 0) >= WHEN_FIRES_AT;
 	if (trigger.pattern === undefined) return true;
 	if (event.form !== undefined)
 		return evalPattern(trigger.pattern, (p) =>
@@ -146,6 +263,42 @@ const countCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
 	fromLisp: (x) => Number(x),
 };
+
+const recalledCodec: StateCodec<ReadonlyMap<string, number>> = {
+	toLisp: (recalled) =>
+		arrayToList([...recalled].map(([key, at]) => new Cell(key, BigInt(at)))),
+	fromLisp: (list) =>
+		new Map(
+			listToArray(list as List).map((pair) => [
+				(pair as Cell).car as string,
+				Number((pair as Cell).cdr),
+			]),
+		),
+};
+
+const keysCodec: StateCodec<readonly string[]> = {
+	toLisp: (keys) => arrayToList([...keys]),
+	fromLisp: (list) => listToArray(list as List) as string[],
+};
+
+const runtimeCodec: StateCodec<readonly Memory[] | undefined> = {
+	toLisp: (memories) =>
+		memories === undefined
+			? null
+			: new Cell("read", arrayToList(memories.map(memoryToForm))),
+	fromLisp: (read) =>
+		read instanceof Cell
+			? listToArray(read.cdr as List).flatMap(
+					(form) => formToMemory(form) ?? [],
+				)
+			: undefined,
+};
+
+function carriesLine(message: ChatMessage, key: string): boolean {
+	return message.content
+		.split("\n")
+		.some((line) => line.startsWith(`${key}: `));
+}
 
 interface Step {
 	readonly fired: readonly string[];
@@ -209,6 +362,15 @@ export class MemoryBank {
 	private depth = 0;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
+	private loaded: State<readonly string[]> = detachedState([]);
+	private recalled: State<ReadonlyMap<string, number>> = detachedState(
+		new Map(),
+	);
+	private builtinSource: () => readonly string[] = () => [];
+	private firing: FiredMemory[] | undefined;
+	private builtinTable: ReadonlyMap<string, Memory> | undefined;
+	private runtime: State<readonly Memory[] | undefined> =
+		detachedState(undefined);
 
 	private get heard(): number {
 		return this.heardState?.get() ?? 0;
@@ -231,6 +393,99 @@ export class MemoryBank {
 			QUIET,
 			"What the memory bank has fired, opened and surfaced in the current step, and the recall words it has shown and held back.",
 		);
+		this.loaded = interp.state(
+			"memory/loaded",
+			keysCodec,
+			[],
+			"The built-in memories whose text is still in the conversation, so they do not load twice.",
+		);
+		this.recalled = interp.state(
+			"memory/recalled",
+			recalledCodec,
+			new Map(),
+			`The step each memory last fired at, by any trigger or recall. Recognition leaves a memory out until ${RECALLED_RESTS_STEPS} steps have passed since.`,
+		);
+		this.runtime = interp.state(
+			"memory/runtime",
+			runtimeCodec,
+			undefined,
+			'Nil until the store is read, then ("read" . memories) with the remembered memories as (memory ...) forms, read from the store once and answered from here after. Every write, update or forget made in this session empties it, so the next read goes back to the store. Built-ins are never copied here.',
+		);
+	}
+
+	gates(): AreaGate[] {
+		const gates = new Map<string, AreaGate>();
+		for (const source of this.builtinSource())
+			for (const gate of readAreas(source)) {
+				if (gates.has(gate.name))
+					throw new EvalException("two areas share this name", gate.name);
+				gates.set(gate.name, gate);
+			}
+		return [...gates.values()];
+	}
+
+	readBuiltinsFrom(source: () => readonly string[]): void {
+		this.builtinSource = source;
+		this.builtinTable = undefined;
+	}
+
+	builtins(): ReadonlyMap<string, Memory> {
+		if (this.builtinTable !== undefined) return this.builtinTable;
+		const table = new Map<string, Memory>();
+		for (const source of this.builtinSource())
+			for (const memory of readBuiltins(source)) {
+				if (table.has(memory.key))
+					throw new EvalException(
+						"two built-in memories share this key",
+						memory.key,
+					);
+				if (wordCount(bodyText(memory.body)) > MAX_BUILTIN_WORDS)
+					throw new EvalException(
+						`a built-in memory body holds at most ${MAX_BUILTIN_WORDS} words; split it and link the parts`,
+						memory.key,
+					);
+				table.set(memory.key, memory);
+			}
+		this.builtinTable = table;
+		return table;
+	}
+
+	isBuiltin(memory: Memory): boolean {
+		return this.builtins().has(memory.key);
+	}
+
+	keepLoaded(messages: readonly ChatMessage[]): void {
+		const loaded = this.loaded.get();
+		if (loaded.length === 0) return;
+		this.loaded.set(
+			loaded.filter((key) => messages.some((m) => carriesLine(m, key))),
+		);
+	}
+
+	*lookup(key: string): Eval<Memory | undefined> {
+		return this.builtins().get(key) ?? (yield* settled(this.store.get(key)));
+	}
+
+	*everything(): Eval<Memory[]> {
+		const known = this.runtime.get();
+		if (known === undefined) return yield* this.reload();
+		return [...this.builtins().values(), ...known];
+	}
+
+	private *reload(): Eval<Memory[]> {
+		const stored = yield* settled(this.store.all());
+		this.runtime.set(stored);
+		return [...this.builtins().values(), ...stored];
+	}
+
+	*listed(hook?: TriggerKind): Eval<Memory[]> {
+		return (yield* this.everything()).filter(
+			(memory) => hook === undefined || memory.on?.kind === hook,
+		);
+	}
+
+	private stale(): void {
+		this.runtime.set(undefined);
 	}
 
 	private change(next: Partial<Step>): void {
@@ -241,6 +496,7 @@ export class MemoryBank {
 		readonly store: MemoryStore = new VolatileStore(),
 		readonly clock: Clock = systemClock,
 		readonly search: SearchEngine = memorySearchEngine,
+		readonly recognize: Recognize = recognizeNothing,
 	) {}
 
 	private now(): number {
@@ -257,6 +513,7 @@ export class MemoryBank {
 	}
 
 	strength(memory: Memory): number {
+		if (this.isBuiltin(memory)) return memory.score;
 		const elapsed = Math.max(0, this.now() - memory.lastUsed);
 		return memory.score * 2 ** (-elapsed / HALF_LIFE_MS);
 	}
@@ -267,14 +524,21 @@ export class MemoryBank {
 
 	*hear(interp: Interp): Eval<FiredMemory[]> {
 		const said = userMessages(interp);
-		if (said.length === this.heard) return [];
-		this.heard = said.length;
 		const last = said[said.length - 1];
+		const fresh = said.length !== this.heard;
+		if (fresh) this.heard = said.length;
 		if (last === undefined || last === "") return [];
 		this.change({ stepping: true });
 		yield* this.sweep();
 		const before = this.step.get().surfaced.length;
-		yield* this.dispatch({ kind: "user", text: last }, interp);
+		if (fresh) yield* this.dispatch({ kind: "user", text: last }, interp);
+		const conversation = conversationOf(interp);
+		const step = fresh ? undefined : latestStep(conversation);
+		yield* this.recognizeSituation(
+			{ conversation },
+			step === undefined ? { message: last } : { message: last, step },
+			interp,
+		);
 		this.change({ stepping: false });
 		this.drain();
 		return this.step.get().surfaced.slice(before);
@@ -290,6 +554,77 @@ export class MemoryBank {
 		return [...surfaced];
 	}
 
+	private *askRepl(
+		interp: Interp,
+		step: string | undefined,
+	): Eval<{ cues: Cue[]; areas: Area[] }> {
+		this.change({ stepping: false });
+		try {
+			const listed = yield* interp.evalGen(
+				arrayToList([newSym(LIST), newLispKeyword("when")]),
+				null,
+			);
+			const gated = yield* interp.evalGen(
+				arrayToList([newSym(AREAS), newLispKeyword("when")]),
+				null,
+			);
+			return {
+				cues: listToArray(listed as List).map(cueFromEntry),
+				areas: listToArray(gated as List).map((entry) => {
+					const [name, situation] = listToArray(entry as List) as string[];
+					return {
+						name: name as string,
+						situation: situation as string,
+						open: step?.includes(`(${name}/`) ?? false,
+					};
+				}),
+			};
+		} finally {
+			this.change({ stepping: true });
+		}
+	}
+
+	private *recognizeSituation(
+		situation: Situation,
+		seen: { message: string; step?: string },
+		interp: Interp,
+	): Eval<void> {
+		const spent = [
+			...this.loaded.get(),
+			...[...this.recalled.get().keys()].filter((key) =>
+				this.resting(key, interp),
+			),
+		];
+		const repl = yield* this.askRepl(interp, seen.step);
+		const cues = repl.cues.filter((cue) => !spent.includes(cue.key));
+		if (cues.length === 0) return;
+		let scores: ReadonlyMap<string, number> = new Map();
+		let error: string | undefined;
+		try {
+			scores = yield* settled(this.recognize(situation, cues, repl.areas));
+		} catch (ex) {
+			error = ex instanceof Error ? ex.message : String(ex);
+		}
+		if (scores.size === 0 && error === undefined) return;
+		const fired: FiredMemory[] = [];
+		this.firing = fired;
+		try {
+			if (scores.size > 0)
+				yield* this.dispatch(
+					{ kind: "when", text: seen.message, recognized: scores },
+					interp,
+				);
+		} finally {
+			this.firing = undefined;
+		}
+		record(this.channels, recognizedKind, {
+			...seen,
+			scores: Object.fromEntries(scores),
+			...(fired.length === 0 ? {} : { fired }),
+			...(error === undefined ? {} : { error }),
+		});
+	}
+
 	*beginStep(code: string, interp: Interp): Eval<string> {
 		this.change({ stepping: true });
 		yield* this.sweep();
@@ -298,6 +633,11 @@ export class MemoryBank {
 		if (prose !== "")
 			yield* this.dispatch({ kind: "prose", text: prose }, interp);
 		return this.drain();
+	}
+
+	private resting(key: string, interp: Interp): boolean {
+		const at = this.recalled.get().get(key);
+		return at !== undefined && stepsTaken(interp) - at < RECALLED_RESTS_STEPS;
 	}
 
 	*endStep(): Eval<string> {
@@ -330,11 +670,18 @@ export class MemoryBank {
 
 	*remember(memory: Memory): Eval<void> {
 		yield* settled(this.store.put(memory));
+		this.stale();
+	}
+
+	*forget(key: string): Eval<boolean> {
+		const dropped = yield* settled(this.store.delete(key));
+		this.stale();
+		return dropped;
 	}
 
 	*recall(interp: Interp, query: string, limit: number): Eval<Memory[]> {
 		yield* this.sweep();
-		const all = yield* settled(this.store.all());
+		const all = yield* this.everything();
 		const documents = all.map((m) => ({
 			id: m.key,
 			name: m.key,
@@ -355,18 +702,25 @@ export class MemoryBank {
 		const { fired, open } = this.step.get();
 		if (fired.includes(memory.key)) return;
 		if (this.depth >= MAX_CASCADE_DEPTH) return;
+		const builtin = this.isBuiltin(memory);
+		const loaded = this.loaded.get();
+		if (builtin && loaded.includes(memory.key)) return;
 		this.change({
 			fired: [...fired, memory.key],
-			open: [...open, memory.key],
+			open: builtin ? open : [...open, memory.key],
 		});
-		yield* this.reinforce(memory);
-		this.surface(memory);
+		this.recalled.set(
+			new Map([...this.recalled.get(), [memory.key, stepsTaken(interp)]]),
+		);
+		if (builtin) this.loaded.set([...loaded, memory.key]);
+		else yield* this.reinforce(memory);
+		this.surface(memory, builtin);
 		this.depth++;
 		try {
 			yield* this.dispatch({ kind: "recall", text: memory.key }, interp);
 			for (const [key, weight] of memory.links) {
 				if (weight < LINKED_FIRES_AT) continue;
-				const linked = yield* settled(this.store.get(key));
+				const linked = yield* this.lookup(key);
 				if (linked !== undefined) yield* this.fire(linked, interp);
 			}
 		} finally {
@@ -378,7 +732,7 @@ export class MemoryBank {
 		memory.score = this.strength(memory) + REINFORCEMENT;
 		memory.used += 1;
 		memory.lastUsed = this.now();
-		yield* settled(this.store.put(memory));
+		yield* this.remember(memory);
 	}
 
 	private *wireTogether(): Eval<void> {
@@ -390,35 +744,34 @@ export class MemoryBank {
 			for (const other of keys)
 				if (other !== key)
 					memory.links.set(other, (memory.links.get(other) ?? 0) + 1);
-			yield* settled(this.store.put(memory));
+			yield* this.remember(memory);
 		}
 	}
 
 	private *sweep(): Eval<void> {
-		const all = yield* settled(this.store.all());
-		for (const memory of all)
-			if (this.strength(memory) < FORGET_BELOW)
-				yield* settled(this.store.delete(memory.key));
+		for (const memory of yield* this.everything())
+			if (!this.isBuiltin(memory) && this.strength(memory) < FORGET_BELOW)
+				yield* this.forget(memory.key);
 	}
 
 	private *dispatch(event: MemoryEvent, interp: Interp): Eval<void> {
 		if (!this.step.get().stepping) return;
-		const all = yield* settled(this.store.all());
-		for (const memory of all) {
+		for (const memory of yield* this.everything()) {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
-			if (!fires(on, event)) continue;
+			if (!fires(memory.key, on, event)) continue;
+			if (event.kind === "when" && this.resting(memory.key, interp)) continue;
 			yield* this.fire(memory, interp);
 		}
 	}
 
-	private surface(memory: Memory): void {
+	private surface(memory: Memory, builtin: boolean): void {
 		const key = memory.key;
 		const body = bodyText(memory.body);
 		const line = `${key}: ${body}\n`;
-		const words = line.split(/\s+/).filter((w) => w !== "").length;
+		const words = builtin ? 0 : wordCount(line);
 		const step = this.step.get();
-		if (step.spent >= MAX_RECALL_WORDS) {
+		if (!builtin && step.spent >= MAX_RECALL_WORDS) {
 			this.change({ dropped: step.dropped + words });
 			return;
 		}
@@ -431,7 +784,8 @@ export class MemoryBank {
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
-		record(this.channels, memoryKind, surfaced);
+		if (this.firing !== undefined) this.firing.push(surfaced);
+		else record(this.channels, memoryKind, surfaced);
 	}
 }
 
@@ -457,7 +811,7 @@ const FORGET_ALL = "memory/forget-all";
 function heardText(memories: FiredMemory[]): string {
 	return [
 		"<memories>",
-		"these fired on what the user just said. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).",
+		"these fired on what the user said and what just happened. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).",
 		...memories.map((m) => `${m.key}: ${m.body}`),
 		"</memories>",
 	].join("\n");
@@ -492,6 +846,10 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 				ctx.emit((await driveAsync(bank.endStep())).value);
 			}
 		});
+		hooks.context.use((interp, messages, next) => {
+			bank.keepLoaded(messages);
+			return next(interp, messages);
+		});
 	};
 }
 
@@ -500,11 +858,15 @@ export function memoryExtension(
 	options: MemoryOptions = {},
 ): MemoryExtension {
 	const bank =
-		options.bank ?? new MemoryBank(host.store, host.clock, host.search);
+		options.bank ??
+		new MemoryBank(host.store, host.clock, host.search, host.recognize);
 	return Object.assign((interp: Interp): void => registerMemory(interp, bank), {
 		bank,
 		asks: [FORGET_ALL],
 		prompt: host.prompt(),
+		memories: host
+			.memories()
+			.replaceAll("{{rest-steps}}", String(RECALLED_RESTS_STEPS)),
 		session: memorySession(bank),
 	});
 }
@@ -520,7 +882,21 @@ const REMEMBER_ARGS = [
 		type: "form",
 		required: false,
 		description:
-			"a trigger (kind pattern) firing this memory by itself: call, result, error, step, prose, user or recall; or (start), which loads it once, on the user's first message",
+			"a trigger (kind pattern) firing this memory by itself on an exact event: call, result, error, step, prose, user or recall; or (start), which loads it once, on the user's first message",
+	},
+	{
+		name: "when",
+		type: "string",
+		required: false,
+		description:
+			"the situation that needs this memory, in words, recognized before every step against what the user said and what the agent just did and got back: a request, an action, an error, a result",
+	},
+	{
+		name: "unless",
+		type: "string",
+		required: false,
+		description:
+			"beside :when, a look-alike situation that must not fire this memory, in words",
 	},
 	{
 		name: "links",
@@ -548,9 +924,31 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 	]);
 }
 
+function refuseBuiltin(bank: MemoryBank, key: string): void {
+	if (bank.builtins().has(key))
+		throw new EvalException(
+			"this key names a built-in memory, which is read-only",
+			key,
+			false,
+		);
+}
+
+function areaOf(key: string): string {
+	const slash = key.indexOf("/");
+	return slash === -1 ? key : key.slice(0, slash);
+}
+
+function situationOf(memory: Memory): unknown {
+	if (memory.on === undefined) return null;
+	return memory.on.kind === "when"
+		? memory.on.pattern
+		: triggerToForm(memory.on);
+}
+
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.channels);
+	bank.readBuiltinsFrom(() => interp.builtinMemories());
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
 		yield* bank.onCall(i, form);
@@ -567,11 +965,16 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	interp.defGen(
 		"memory/remember",
 		-1,
-		'(remember key body [:on (kind "pattern")] [:links (key...)])',
-		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:on` the memory fires by itself whenever that event happens; `:on (start)` loads it once, on the user's first message, so it is the place for your role and your goal. Returns the key.",
+		'(remember key body [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links (key...)])',
+		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:when` it fires by itself once the situation it describes arises: the user's request, what you are doing, an error or a result you just got. `:unless` names a look-alike situation that must not fire it. With `:on` it fires on an exact event; `:on (start)` loads it once, on the user's first message, so it is the place for your role and your goal. Returns the key.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
-			const { values, options } = splitKeywordArgs(rest, ["on", "links"]);
+			const { values, options } = splitKeywordArgs(rest, [
+				"on",
+				"when",
+				"unless",
+				"links",
+			]);
 			const args = listToArray(values);
 			const key = args[0];
 			if (typeof key !== "string")
@@ -582,7 +985,8 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 					"a memory body must be prose or a form that reads back; this one holds a live value",
 					body,
 				);
-			const opts = plistOptions(options, ["on", "links"]);
+			refuseBuiltin(bank, key);
+			const opts = plistOptions(options, ["on", "when", "unless", "links"]);
 			const links = new Map<string, number>();
 			for (const linked of listToArray((opts.get("links") ?? null) as List))
 				if (typeof linked === "string") links.set(linked, LINKED_FIRES_AT);
@@ -590,7 +994,11 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			yield* bank.remember({
 				key,
 				body,
-				on: parseTrigger(opts.get("on")),
+				on: authoredTrigger(
+					opts.get("on"),
+					opts.get("when"),
+					opts.get("unless"),
+				),
 				links,
 				score: existing?.score ?? INITIAL_SCORE,
 				used: existing?.used ?? 0,
@@ -628,7 +1036,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"List every memory as (key score trigger), strongest first. Reading the list strengthens nothing.",
 		z.tuple([]),
 		function* (): Eval {
-			const all = yield* settled(bank.store.all());
+			const all = yield* bank.everything();
 			return arrayToList(
 				all
 					.sort((a, b) => bank.strength(b) - bank.strength(a))
@@ -644,13 +1052,74 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	);
 
 	interp.defGen(
+		LIST,
+		-1,
+		"(list [hook])",
+		"List every memory, built-in or remembered, as an alist of key, hook, pattern, unless and gist. With a hook such as :when or :call, only the memories that fire on it. Recognition asks (list :when) before every step.",
+		z.tuple([zList]),
+		function* ([rest]): Eval {
+			const hook = hookOf(listToArray(rest)[0]);
+			return arrayToList((yield* bank.listed(hook)).map(entryOf));
+		},
+	);
+
+	interp.def(
+		"memory/builtins",
+		-1,
+		"(builtins [area])",
+		'List the built-in memories each extension ships, as (key situation): the :when situation that fires it, or its :on trigger. With an area, such as "mcp", only the keys under it. Recall one by key to read its body.',
+		z.tuple([zList]),
+		([rest]) => {
+			const [area] = listToArray(rest);
+			if (area !== undefined && typeof area !== "string")
+				throw new EvalException(
+					'an area is a string, the part of a key before its slash: "mcp"',
+					area,
+				);
+			const prefix = area?.replace(/\/$/, "");
+			return arrayToList(
+				[...bank.builtins().values()]
+					.filter(
+						(memory) => prefix === undefined || areaOf(memory.key) === prefix,
+					)
+					.map((memory) => arrayToList([memory.key, situationOf(memory)])),
+			);
+		},
+	);
+
+	interp.def(
+		AREAS,
+		-1,
+		"(areas [:when])",
+		"List the areas the built-in memories are filed under, as (area count), in the order the extensions ship them. Pass one to memory/builtins to list its keys. With :when, the areas that declare a gate, as (area situation): recognition opens an area when its situation holds, or when the last step called one of its forms, and only then weighs its memories.",
+		z.tuple([zList]),
+		([rest]) => {
+			const [hook] = listToArray(rest);
+			if (hook !== undefined) {
+				if (hookOf(hook) !== "when")
+					throw new EvalException("areas are gated by :when only", hook);
+				return arrayToList(
+					bank.gates().map((gate) => arrayToList([gate.name, gate.situation])),
+				);
+			}
+			const counts = new Map<string, number>();
+			for (const key of bank.builtins().keys())
+				counts.set(areaOf(key), (counts.get(areaOf(key)) ?? 0) + 1);
+			return arrayToList(
+				[...counts].map(([area, count]) => arrayToList([area, BigInt(count)])),
+			);
+		},
+	);
+
+	interp.defGen(
 		"memory/forget",
 		1,
 		"(forget key)",
 		"Drop a memory for good; returns t if there was one. Memories also fade on their own: unused, one loses half its strength in a week, and below a floor it is swept away.",
 		z.tuple([zString]),
 		function* ([key]): Eval {
-			return (yield* settled(bank.store.delete(key))) || null;
+			refuseBuiltin(bank, key);
+			return (yield* bank.forget(key)) || null;
 		},
 	);
 
@@ -661,8 +1130,10 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Drop every memory for good; returns how many there were. Only when the user asks for a clean slate.",
 		z.tuple([]),
 		function* (): Eval {
-			const all = yield* settled(bank.store.all());
-			for (const memory of all) yield* settled(bank.store.delete(memory.key));
+			const all = (yield* bank.everything()).filter(
+				(memory) => !bank.isBuiltin(memory),
+			);
+			for (const memory of all) yield* bank.forget(memory.key);
 			return quotient(all.length, 1);
 		},
 	);
@@ -674,6 +1145,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Replace the body of a memory that fired this step. Retrieval opens a memory for revision and the step closes it again, so revising one you have not recalled is an error: recall it first, then correct what it says.",
 		z.tuple([zString, z.unknown()]),
 		function* ([key, body]): Eval {
+			refuseBuiltin(bank, key);
 			const memory = yield* settled(bank.store.get(key));
 			if (memory === undefined)
 				throw new EvalException("unknown memory", key, false);
@@ -701,7 +1173,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Evaluate a memory whose body is a form, and return what it produced. This is how a remembered recipe runs: a memory holding a `defun` installs that function when you replay it. A memory holding prose has nothing to run.",
 		z.tuple([zString]),
 		function* ([key]): Eval {
-			const memory = yield* settled(bank.store.get(key));
+			const memory = yield* bank.lookup(key);
 			if (memory === undefined)
 				throw new EvalException("unknown memory", key, false);
 			if (typeof memory.body === "string")
