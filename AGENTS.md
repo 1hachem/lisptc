@@ -313,9 +313,8 @@ filled by the code that loads it, the way the UI extension fills its widget
 list. A test checks that no placeholder is left. A package that ships a new `.ptc` is
 added to what `apps/app` ships, by the rule in `apps/app/AGENTS.md`.
 
-A memory generated from a catalog the code already holds, one per entry, is the
-exception: the catalog is its single source, so its text is built from the
-entry's own signature and docs rather than copied into a `.ptc` file.
+The one exception is a memory whose source of truth is already code, one per
+entry of a catalog: it is generated, never copied into a `.ptc` file.
 
 A built-in memory is for what only some turns need. One that fires on every
 first message, a bare greeting included, is paid for twice: once as recognition,
