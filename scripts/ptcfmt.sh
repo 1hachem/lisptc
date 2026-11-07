@@ -3,9 +3,9 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
-ptcfmt() {
-  if command -v ptcfmt >/dev/null 2>&1; then
-    command ptcfmt "$@"
+format() {
+  if type -P ptcfmt >/dev/null 2>&1; then
+    ptcfmt "$@"
   else
     nix run --no-warn-dirty "$root#ptcfmt" -- "$@"
   fi
@@ -32,7 +32,7 @@ if [ "${#files[@]}" -eq 0 ]; then
 fi
 
 if [ "$mode" = "--write" ]; then
-  ptcfmt "${files[@]}"
+  format "${files[@]}"
   exit 0
 fi
 
@@ -44,7 +44,7 @@ for file in "${files[@]}"; do
   cp "$file" "$copy.ptc"
   copies+=("$copy.ptc")
 done
-ptcfmt "${copies[@]}"
+format "${copies[@]}"
 
 unformatted=()
 for i in "${!files[@]}"; do
