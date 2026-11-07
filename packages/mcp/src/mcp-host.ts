@@ -55,9 +55,7 @@ function desktopParts(
 ): Pick<McpExtensionHost, "toolkit" | "machine"> {
 	const bundled = bundledToolkit();
 	const bridged = bridgedEntries(bundled, localToolkit());
-	const machine = cachedMachine(presence, () =>
-		[...bridged.own, ...bridged.variants].map((conf) => conf.name),
-	);
+	const machine = cachedMachine(presence);
 	return {
 		toolkit: desktopToolkit(bundled, bridged, () => machine.connected()),
 		machine,

@@ -141,7 +141,6 @@ export interface McpHost {
 export interface UserMachine {
 	refresh(): Promise<boolean>;
 	connected(): boolean;
-	servers(): readonly string[];
 }
 
 export interface ToolkitRegistry {

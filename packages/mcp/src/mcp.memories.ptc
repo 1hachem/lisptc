@@ -18,8 +18,6 @@ app not open.
 (load-mcp "acme" :local t :quiet t) . Only listed flags; others error.
 - Toolkit server with own command: (load-mcp "acme" :local t) runs that
   command, not container.
-- Notice says when it changes: "desktop app connected: local servers now
-  loadable: …" or "desktop app disconnected: local servers gone: …" .
 - Local load asks user as call local/<name> , e.g. local/local-files ,
   unless config allows it: (permission/allow local/local-files) or
 (permission/allow local/*) .
