@@ -12,6 +12,7 @@ Shapes, refreshed before every step:
 - `conversation`: full ordered transcript. List of messages; each an alist with keys `"role"` and `"content"`, both strings.
 - `user-messages`: user's message strings, oldest first.
 - `assistant-messages`: your own prior message strings.
+- `steps-taken`: how many steps this conversation has taken.
 Find a message, cut the exact piece, pass it on:
 (car (filter (lambda (m) (string-contains? m "https://")) user-messages))
 (cdr (assoc "content" (car conversation)))

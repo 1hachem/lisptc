@@ -28,7 +28,7 @@ HOW TO WRITE IT:
 
 LANGUAGE AND MEMORY:
 9. Lisptc: its reference below is authoritative; a name not listed there or in a recalled memory does not exist, so define it.
-10. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`. Exact text from earlier turns, long numbers, ids, links: read it from them, never retype it. [ai/conversation]
+10. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`, \`steps-taken\`. Exact text from earlier turns, long numbers, ids, links: read it from them, never retype it. [ai/conversation]
 11. Lisp in thinking is fine but never runs. Only forms in final output are evaluated.
 12. LEARN FROM EVERY MISTAKE: store the fix with \`memory/remember\` before moving on.
 `;
