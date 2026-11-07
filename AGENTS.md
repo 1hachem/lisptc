@@ -415,8 +415,10 @@ Root scripts delegate to Turbo:
 ```bash
 pnpm test                    # turbo run test (vitest run in each package)
 pnpm typecheck               # turbo run typecheck (tsc --noEmit per package)
-pnpm lint                    # biome ci (lint + format check) — matches CI, run at root
-pnpm format                  # biome check --write (auto-fix)
+pnpm lint                    # biome ci (lint + format check), then the ptcfmt check of every .ptc — matches CI, run at root
+pnpm format                  # biome check --write (auto-fix), then ptcfmt on every .ptc
+pnpm check:ptc               # fails on a .ptc file ptcfmt would reformat
+pnpm format:ptc              # format every .ptc in place; a commit formats only the staged ones
 pnpm knip                    # dead-code / unused-dependency check (part of CI), run at root
 pnpm fallow                  # changed-code risk and dead code audit (part of CI), run at root
 pnpm boundaries              # package layering + import rules (part of CI), run at root
