@@ -1,3 +1,4 @@
+export { ConfirmDialog } from "./confirm-dialog.tsx";
 export type { Review, Thumb } from "./feedback.ts";
 export { quip, surveyResponse } from "./feedback.ts";
 export type { TreeCheck } from "./file-tree.tsx";
