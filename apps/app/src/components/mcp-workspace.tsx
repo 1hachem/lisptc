@@ -18,7 +18,7 @@ import { linkTo, useShown } from "./panel-link.tsx";
 import { Field } from "./read-only.tsx";
 import { type FolderState, Listing } from "./tree-listing.tsx";
 
-export function mcpPage(server: string): PanelContent {
+function mcpPage(server: string): PanelContent {
 	return { kind: "page", page: "mcp", id: server, title: `mcp/${server}` };
 }
 

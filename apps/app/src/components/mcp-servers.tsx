@@ -12,7 +12,7 @@ export type McpServerChip = FunctionReturnType<
 
 export type McpPhase = McpServerChip["phase"];
 
-export const PHASE_DOT: Record<McpPhase, string> = {
+const PHASE_DOT: Record<McpPhase, string> = {
 	starting: "bg-yellow animate-pulse",
 	ready: "bg-green",
 	sleeping: "bg-dim",
