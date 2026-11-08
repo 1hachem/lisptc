@@ -71,9 +71,15 @@ describe("the agent the app serves", () => {
 
 	it("ships every extension's built-in memories readable, under distinct keys, within their budget", async () => {
 		const ev = await served();
-		const listed = await ev("(memories)");
-		expect(listed).toContain('"mcp/local"');
-		expect(listed).toContain('"mcp/oauth"');
+		const keys = (
+			await ev("(mapcar (lambda (entry) (car entry)) (memory/builtins))")
+		)
+			.slice(1, -1)
+			.split(" ")
+			.map((key) => JSON.parse(key) as string);
+		expect(keys).toEqual(expect.arrayContaining(["mcp/local", "mcp/oauth"]));
+		expect(new Set(keys).size).toBe(keys.length);
+		expect(await ev("(length (memory/areas :when))")).not.toBe("0");
 	});
 
 	it("teaches the model the workspace, its knowledge and its preferences", async () => {
