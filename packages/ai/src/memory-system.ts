@@ -129,7 +129,7 @@ export function memorySystem(
 		const signal = AbortSignal.timeout(timeoutMs);
 		const state = { platform: PLATFORM, ...latestOf(situation.conversation) };
 		const gates = new Map(areas.map((area) => [area.name, area]));
-		const judged = await Promise.all(
+		const settled = await Promise.allSettled(
 			[...grouped(cues, areas)].map(async ([name, members]) => {
 				const area = gates.get(name);
 				const gate = area !== undefined && !area.open;
@@ -180,6 +180,11 @@ export function memorySystem(
 				return opened ? scored : new Map(members.map((cue) => [cue.key, 0]));
 			}),
 		);
+		const judged = settled.flatMap((area) =>
+			area.status === "fulfilled" ? [area.value] : [],
+		);
+		const failed = settled.find((area) => area.status === "rejected");
+		if (judged.length === 0 && failed !== undefined) throw failed.reason;
 		return new Map(judged.flatMap((scores) => [...scores]));
 	};
 }

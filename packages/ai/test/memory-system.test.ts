@@ -236,7 +236,25 @@ describe("recognizing which memories the conversation calls for", () => {
 		});
 	});
 
-	it("fails when the model leaves an area unanswered", async () => {
+	it("fires what the answered areas pick when another area fails", async () => {
+		const { model } = systemOne(choosing({ [LOCAL.key]: 1 }));
+		const flaky: SystemOneModel = {
+			...model,
+			judge: (req, signal) =>
+				BILLING.key in choices(req)
+					? Promise.reject(new Error("area down"))
+					: model.judge(req, signal),
+		};
+		const scores = await memorySystem(flaky)(
+			{ conversation: CONVERSATION },
+			[LOCAL, BILLING],
+			[{ ...BROWSER, open: true }],
+		);
+		expect(scores.get(LOCAL.key)).toBe(1);
+		expect(scores.has(BILLING.key)).toBe(false);
+	});
+
+	it("fails when the model leaves every area unanswered", async () => {
 		const model: SystemOneModel = {
 			provider: "fake",
 			model: "fake/jev",
