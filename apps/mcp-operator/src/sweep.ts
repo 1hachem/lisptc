@@ -1,14 +1,13 @@
 import type { Cluster, Located } from "./cluster.ts";
 import type { StatusSink } from "./status-sink.ts";
 import {
+	claimOwner,
 	EMPTY_SINCE,
 	RELEASED_AT,
 	RETENTION,
 	SERVER_LABEL,
-	SERVER_NAME,
 	STATE_LABEL,
 	STATE_PATH,
-	WORKSPACE_ID,
 } from "./workload.ts";
 
 export const NAMESPACE_IDLE_SECONDS = 1800;
@@ -42,8 +41,7 @@ async function expiredClaims(
 	for (const claim of claims.filter((each) => expired(each, deps.now))) {
 		await deps.cluster.deleteClaim(claim.namespace, claim.name);
 		await deps.sink.observeState({
-			workspace: claim.annotations[WORKSPACE_ID] ?? "",
-			server: claim.annotations[SERVER_NAME] ?? "",
+			...claimOwner(claim.annotations),
 			name: claim.labels[STATE_LABEL] ?? "",
 			path: claim.annotations[STATE_PATH] ?? "",
 			size: "",

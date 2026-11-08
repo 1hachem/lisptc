@@ -474,10 +474,21 @@ function connConfigFromArgs(
 	const conf = isLocal(opts)
 		? lookupLocal(predefined, local, name)
 		: lookupPredefined(predefined, name);
-	return withFlags(conf, opts);
+	return dedicated(withFlags(conf, opts), opts);
 }
 
-const LOAD_KEYS = new Set(["name", "local"]);
+const LOAD_KEYS = new Set(["name", "local", "dedicated"]);
+
+function dedicated(conf: ConnConfig, opts: Plist): ConnConfig {
+	if (!opts.has("dedicated") || opts.get("dedicated") === null) return conf;
+	if (!("image" in conf))
+		throw new EvalException(
+			`${conf.name} runs no container of its own, so it cannot be :dedicated`,
+			conf.name,
+			false,
+		);
+	return { ...conf, tenancy: "dedicated" };
+}
 
 function flagsOf(conf: ConnConfig): Record<string, string[]> {
 	return "flags" in conf && conf.flags !== undefined ? conf.flags : {};
@@ -608,6 +619,13 @@ const LOAD_MCP_OPTIONS: DocArg[] = [
 		required: false,
 		description:
 			"Run a toolkit server marked :also-local on the user's machine, through their desktop app.",
+	},
+	{
+		name: "dedicated",
+		type: "boolean",
+		required: false,
+		description:
+			"Run a server of this chat's own instead of the workspace's shared one.",
 	},
 	{
 		name: "url",

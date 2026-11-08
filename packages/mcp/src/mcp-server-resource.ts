@@ -67,6 +67,7 @@ export interface AppSlot {
 export interface McpServerSpec {
 	workspace: string;
 	server: string;
+	instance?: string;
 	mcp: McpSlot;
 	app?: AppSlot;
 	restarts: number;
@@ -146,12 +147,20 @@ function shortHash(...parts: string[]): string {
 		.slice(0, 8);
 }
 
-export function serverName(workspace: string, server: string): string {
+export function serverName(
+	workspace: string,
+	server: string,
+	instance?: string,
+): string {
 	const base = dnsLabel(
 		`mcp-${dnsLabel(server, 24)}-${dnsLabel(workspace, 24)}`,
 		NAME_MAX - 9,
 	);
-	return `${base}-${shortHash(workspace, server)}`;
+	const hashed =
+		instance === undefined
+			? [workspace, server]
+			: [workspace, server, instance];
+	return `${base}-${shortHash(...hashed)}`;
 }
 
 export function claimName(server: string, state: string): string {
@@ -227,6 +236,7 @@ export function specFor(
 	launch: Launch,
 	workspace: string,
 	now: number,
+	instance?: string,
 ): McpServerSpec {
 	const mcp: McpSlot = {
 		image: launch.image,
@@ -242,6 +252,7 @@ export function specFor(
 	return {
 		workspace,
 		server: conf.name,
+		...(instance === undefined ? {} : { instance }),
 		mcp,
 		...(app ? { app } : {}),
 		restarts: 0,

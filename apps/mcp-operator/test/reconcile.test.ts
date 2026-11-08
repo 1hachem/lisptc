@@ -1,7 +1,8 @@
-import { claimName } from "@repo/mcp-extension/kubernetes";
+import { claimName, serverName } from "@repo/mcp-extension/kubernetes";
 import { describe, expect, it } from "vitest";
 import { FINALIZER, reconcile } from "../src/reconcile.ts";
 import {
+	INSTANCE,
 	RECLAIM,
 	RELEASED_AT,
 	SHM_LIMIT,
@@ -414,6 +415,25 @@ describe("the state a pair keeps", () => {
 });
 
 describe("the table it keeps in step", () => {
+	it("keeps a chat's own instance apart in every row and on its claim", async () => {
+		const own = server();
+		own.metadata.name = serverName("ws1", own.spec.server, "chat-a");
+		own.spec.instance = "chat-a";
+		const w = world(own);
+
+		await reconcile(w.target, w.deps(1000));
+		w.fake.bindAll();
+		w.fake.runPods();
+		await reconcile(w.target, w.deps(1001));
+
+		expect(w.sink.servers.map((row) => row.instance)).toEqual(
+			w.sink.servers.map(() => "chat-a"),
+		);
+		expect(w.sink.servers.length).toBeGreaterThan(0);
+		expect(w.sink.state.every((row) => row.instance === "chat-a")).toBe(true);
+		expect(profileClaim(w).metadata?.annotations?.[INSTANCE]).toBe("chat-a");
+	});
+
 	it("sends a new reason even when the phase stays the same", async () => {
 		const w = world();
 		await reconcile(w.target, w.deps(1000));

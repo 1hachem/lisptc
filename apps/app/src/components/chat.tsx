@@ -39,7 +39,7 @@ export function Chat() {
 						</>
 					) : null}
 				</div>
-				<McpServers />
+				<McpServers chatId={chatId} />
 				<ChatComposer question={question} />
 			</div>
 		</div>

@@ -113,6 +113,11 @@ export async function workspaceExtensions(
 	connect: Connect,
 	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
+	const containers = containerHost(
+		workspaceId,
+		reportsOf(workspaceId, connect),
+		chatId,
+	);
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
@@ -188,15 +193,10 @@ export async function workspaceExtensions(
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
 				...(desktop === undefined
-					? {
-							host: containerHost(workspaceId, reportsOf(workspaceId, connect)),
-						}
+					? { host: containers }
 					: {
 							desktop: async () => desktop.connected(),
-							host: new BridgedHost(
-								desktop,
-								containerHost(workspaceId, reportsOf(workspaceId, connect)),
-							),
+							host: new BridgedHost(desktop, containers),
 						}),
 			}),
 			policy: permissions.rules,

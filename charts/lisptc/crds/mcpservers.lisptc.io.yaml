@@ -35,6 +35,7 @@ spec:
               properties:
                 workspace: { type: string, minLength: 1 }
                 server: { type: string, minLength: 1 }
+                instance: { type: string, minLength: 1 }
                 restarts: { type: integer, minimum: 0 }
                 lastUsed: { type: integer, minimum: 0 }
                 idleSeconds: { type: integer, minimum: 1 }

@@ -18,6 +18,7 @@ import {
 	type State,
 	workloadHash,
 } from "@repo/mcp-extension/kubernetes";
+import type { RowOwner } from "./status-sink.ts";
 
 export const MANAGED_BY = "app.kubernetes.io/managed-by";
 export const MANAGER = "lisptc-mcp";
@@ -29,7 +30,8 @@ export const RECLAIM = "lisptc.io/reclaim";
 export const RETENTION = "lisptc.io/retention";
 export const RELEASED_AT = "lisptc.io/released-at";
 export const WORKSPACE_ID = "lisptc.io/workspace-id";
-export const SERVER_NAME = "lisptc.io/server-name";
+const SERVER_NAME = "lisptc.io/server-name";
+export const INSTANCE = "lisptc.io/instance";
 export const STATE_PATH = "lisptc.io/state-path";
 export const EMPTY_SINCE = "lisptc.io/empty-since";
 export const SHM_LIMIT = "1Gi";
@@ -303,6 +305,7 @@ export function claimFor(
 				...claimTerms(state),
 				[WORKSPACE_ID]: server.spec.workspace,
 				[SERVER_NAME]: server.spec.server,
+				...(server.spec.instance ? { [INSTANCE]: server.spec.instance } : {}),
 				[STATE_PATH]: state.path,
 			},
 		},
@@ -394,4 +397,22 @@ export function prepullFor(
 	return [...new Set(images)]
 		.sort()
 		.map((image) => prepullOne(image, pullSecret));
+}
+
+export function ownerOf(server: McpServer): RowOwner {
+	const { workspace, server: name, instance } = server.spec;
+	return {
+		workspace,
+		server: name,
+		...(instance ? { instance } : {}),
+	};
+}
+
+export function claimOwner(annotations: Record<string, string>): RowOwner {
+	const instance = annotations[INSTANCE];
+	return {
+		workspace: annotations[WORKSPACE_ID] ?? "",
+		server: annotations[SERVER_NAME] ?? "",
+		...(instance ? { instance } : {}),
+	};
 }

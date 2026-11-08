@@ -126,6 +126,15 @@ describe("naming in the cluster", () => {
 		);
 		expect(claimName("srv", "profile")).not.toBe(claimName("srv", "cache"));
 	});
+
+	it("gives each instance of a server its own name", () => {
+		expect(serverName("ws1", "playwright", "chat-a")).not.toBe(
+			serverName("ws1", "playwright"),
+		);
+		expect(serverName("ws1", "playwright", "chat-a")).not.toBe(
+			serverName("ws1", "playwright", "chat-b"),
+		);
+	});
 });
 
 describe("what rolls the pod", () => {

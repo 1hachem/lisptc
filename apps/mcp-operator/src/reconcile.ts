@@ -19,6 +19,7 @@ import {
 	ingressPolicy,
 	namespaceFor,
 	namespaceManifest,
+	ownerOf,
 	podFor,
 	RECLAIM,
 	RELEASED_AT,
@@ -122,8 +123,7 @@ class Run {
 			(next.phase !== this.before.phase || next.reason !== this.before.reason)
 		)
 			await this.deps.sink.observeServer({
-				workspace: this.server.spec.workspace,
-				server: this.server.spec.server,
+				...ownerOf(this.server),
 				phase: ROW_PHASE[next.phase],
 				...(next.reason ? { reason: next.reason } : {}),
 			});
@@ -146,8 +146,7 @@ class Run {
 			)
 				continue;
 			await this.deps.sink.observeState({
-				workspace: this.server.spec.workspace,
-				server: this.server.spec.server,
+				...ownerOf(this.server),
 				name: entry.name,
 				path: entry.path,
 				size: now.size,
@@ -165,8 +164,7 @@ class Run {
 			[RELEASED_AT]: String(now),
 		});
 		await sink.observeState({
-			workspace: this.server.spec.workspace,
-			server: this.server.spec.server,
+			...ownerOf(this.server),
 			name: claim.metadata?.labels?.[STATE_LABEL] ?? "",
 			path: notes[STATE_PATH] ?? "",
 			size: requested(claim) ?? "",
@@ -185,8 +183,7 @@ class Run {
 			if (annotations(claim)[RECLAIM] === "Delete") {
 				await cluster.deleteClaim(this.namespace, claim.metadata?.name ?? "");
 				await sink.observeState({
-					workspace: this.server.spec.workspace,
-					server: this.server.spec.server,
+					...ownerOf(this.server),
 					name: claim.metadata?.labels?.[STATE_LABEL] ?? "",
 					path: annotations(claim)[STATE_PATH] ?? "",
 					size: requested(claim) ?? "",
@@ -199,8 +196,7 @@ class Run {
 			(this.server.metadata.finalizers ?? []).filter((f) => f !== FINALIZER),
 		);
 		await sink.observeServer({
-			workspace: this.server.spec.workspace,
-			server: this.server.spec.server,
+			...ownerOf(this.server),
 			phase: "gone",
 		});
 		return {};

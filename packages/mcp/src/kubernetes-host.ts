@@ -46,6 +46,7 @@ export interface ServerStore {
 
 export interface KubernetesHostOptions {
 	scope: string;
+	chat?: string;
 	namespace: string;
 	store?: ServerStore;
 	fallback?: McpHost;
@@ -343,7 +344,8 @@ export class KubernetesHost implements McpHost {
 			throw new Error(
 				`${conf.name}: sets env, which a server on the cluster cannot take.`,
 			);
-		const name = serverName(scope, conf.name);
+		const instance = this.instanceOf(conf);
+		const name = serverName(scope, conf.name, instance);
 		const wanted = specFor(
 			conf,
 			"internal" in conf && conf.internal
@@ -351,6 +353,7 @@ export class KubernetesHost implements McpHost {
 				: launch,
 			scope,
 			this.clock(),
+			instance,
 		);
 
 		const live = await this.store.get(name);
@@ -377,6 +380,11 @@ export class KubernetesHost implements McpHost {
 		this.follow(followed);
 		const headers = "headers" in conf ? conf.headers : undefined;
 		return headers ? { url, headers } : { url };
+	}
+
+	private instanceOf(conf: ConnConfig): string | undefined {
+		if (!("tenancy" in conf) || conf.tenancy !== "dedicated") return undefined;
+		return this.options.chat;
 	}
 
 	private async answering(
