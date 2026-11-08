@@ -19,30 +19,40 @@ const PHASE_DOT: Record<McpPhase, string> = {
 	failed: "bg-red",
 };
 
+export type McpMountRow = FunctionReturnType<
+	typeof api.mcpServers.mounts
+>[number];
+
 export interface WorkspaceMcpServer {
 	server: string;
 	phase?: McpPhase;
 	reason?: string;
 	mounted: boolean;
+	icon?: string;
+	login: boolean;
 }
 
 export function workspaceServers(
 	servers: readonly McpServerChip[],
-	mounted: readonly string[],
+	mounts: readonly Pick<McpMountRow, "server" | "icon" | "login">[],
 ): WorkspaceMcpServer[] {
 	const shared = new Map(
 		servers
 			.filter(({ instance }) => instance === undefined)
 			.map((row) => [row.server, row]),
 	);
-	const names = [...new Set([...mounted, ...shared.keys()])].sort();
+	const mounted = new Map(mounts.map((mount) => [mount.server, mount]));
+	const names = [...new Set([...mounted.keys(), ...shared.keys()])].sort();
 	return names.map((server) => {
 		const row = shared.get(server);
+		const mount = mounted.get(server);
 		return {
 			server,
 			...(row === undefined ? {} : { phase: row.phase }),
 			...(row?.reason === undefined ? {} : { reason: row.reason }),
-			mounted: mounted.includes(server),
+			mounted: mount !== undefined,
+			...(mount?.icon === undefined ? {} : { icon: mount.icon }),
+			login: mount?.login === true,
 		};
 	});
 }
@@ -57,10 +67,7 @@ export function useWorkspaceMcpServers(
 		convexQuery(api.mcpServers.mounts, { workspaceId }),
 	);
 	if (status === undefined || mounts === undefined) return undefined;
-	return workspaceServers(
-		status.servers,
-		mounts.map(({ server }) => server),
-	);
+	return workspaceServers(status.servers, mounts);
 }
 
 export function PhaseDot({ phase }: { phase: McpPhase | undefined }) {

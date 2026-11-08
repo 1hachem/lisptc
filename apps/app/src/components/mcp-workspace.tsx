@@ -1,6 +1,8 @@
+import { McpServerIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import type { McpAction, McpActionResult } from "@repo/backend/mcp-actions";
-import { TreeFile, TreeFolder } from "@repo/components";
+import { ConfirmDialog, TreeFile, TreeFolder } from "@repo/components";
 import { Button } from "@repo/ui";
 import { useState } from "react";
 import { postMcpAction } from "../lib/mcp-action.ts";
@@ -20,6 +22,19 @@ import { type FolderState, Listing } from "./tree-listing.tsx";
 
 function mcpPage(server: string): PanelContent {
 	return { kind: "page", page: "mcp", id: server, title: `mcp/${server}` };
+}
+
+function McpLogo({ icon }: { icon: string | undefined }) {
+	if (icon === undefined)
+		return <HugeiconsIcon className="size-icon-sm" icon={McpServerIcon} />;
+	return (
+		<img
+			src={icon}
+			alt=""
+			referrerPolicy="no-referrer"
+			className="size-icon-sm flex-none rounded-xs object-contain"
+		/>
+	);
 }
 
 function phaseText(entry: WorkspaceMcpServer): string {
@@ -75,6 +90,7 @@ function McpFile({
 	return (
 		<TreeFile
 			name={entry.server}
+			glyph={<McpLogo icon={entry.icon} />}
 			depth={1}
 			selected={shown(page)}
 			onDragStart={dragsAs(page)}
@@ -157,30 +173,38 @@ function McpActions({
 	busy: McpAction | null;
 	run: (action: McpAction) => Promise<void>;
 }) {
+	const [confirming, setConfirming] = useState(false);
 	const running = entry?.phase === "starting" || entry?.phase === "ready";
-	const remove = () => {
-		if (window.confirm(`delete ${server} and everything it holds?`))
-			void run("remove");
-	};
 	return (
 		<div className="flex items-center gap-1.5">
+			<ConfirmDialog
+				open={confirming}
+				onOpenChange={setConfirming}
+				title={`Delete ${server}?`}
+				description="Its pod and everything it holds go with it. Loading it again starts fresh."
+				confirm="delete"
+				destructive
+				onConfirm={() => void run("remove")}
+			/>
 			<ActionButton
 				action="start"
 				busy={busy}
 				disabled={running}
 				onRun={() => void run("start")}
 			/>
-			<ActionButton
-				action="login"
-				busy={busy}
-				disabled={false}
-				onRun={() => void run("login")}
-			/>
+			{entry?.login && (
+				<ActionButton
+					action="login"
+					busy={busy}
+					disabled={false}
+					onRun={() => void run("login")}
+				/>
+			)}
 			<ActionButton
 				action="remove"
 				busy={busy}
 				disabled={entry === undefined}
-				onRun={remove}
+				onRun={() => setConfirming(true)}
 			/>
 		</div>
 	);
@@ -199,6 +223,12 @@ function McpServerDetail({
 		return <div className="text-dim">no mcp server named {server}</div>;
 	return (
 		<div className="flex flex-col gap-4">
+			<Field label="server">
+				<span className="flex items-center gap-2">
+					<McpLogo icon={entry.icon} />
+					<span>{entry.server}</span>
+				</span>
+			</Field>
 			<Field label="status">
 				<span className="flex items-center gap-2">
 					<PhaseDot phase={entry.phase} />

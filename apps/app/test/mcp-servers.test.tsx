@@ -108,12 +108,30 @@ describe("the workspace's MCP servers", () => {
 						observedAt: 1,
 					},
 				],
-				["sheets", "fs"],
+				[
+					{
+						server: "sheets",
+						icon: "https://example.com/sheets.png",
+						login: true,
+					},
+					{ server: "fs" },
+				],
 			),
 		).toEqual([
-			{ server: "fs", phase: "ready", mounted: true },
-			{ server: "ocr", phase: "failed", reason: "CrashLoop", mounted: false },
-			{ server: "sheets", mounted: true },
+			{ server: "fs", phase: "ready", mounted: true, login: false },
+			{
+				server: "ocr",
+				phase: "failed",
+				reason: "CrashLoop",
+				mounted: false,
+				login: false,
+			},
+			{
+				server: "sheets",
+				mounted: true,
+				icon: "https://example.com/sheets.png",
+				login: true,
+			},
 		]);
 	});
 });

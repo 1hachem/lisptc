@@ -48,6 +48,7 @@ export type SidebarSides = Readonly<
 export const RIGHT_BY_DEFAULT: readonly SidebarEntry[] = [
 	"memories",
 	"permissions",
+	"mcp",
 	"sub-agents",
 	"triggers",
 	"tasks",
