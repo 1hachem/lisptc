@@ -44,12 +44,14 @@ import {
 	type Area,
 	type AreaGate,
 	areaFrom,
+	areaOf,
 	authoredTrigger,
 	builtinFrom,
 	type Cue,
 	combinatorIn,
 	formToMemory,
 	INITIAL_SCORE,
+	INTERNAL,
 	LINKED_FIRES_AT,
 	type Memory,
 	type MemoryHost,
@@ -209,10 +211,10 @@ function cueFromEntry(entry: unknown): Cue {
 		)?.cdr;
 	const unless = field("unless");
 	const key = field("key") as string;
-	const slash = key.indexOf("/");
+	const area = areaOf(key);
 	return {
 		key,
-		...(slash === -1 ? {} : { area: key.slice(0, slash) }),
+		...(area === undefined ? {} : { area }),
 		situation: field("pattern") as string,
 		...(typeof unless === "string" ? { unless } : {}),
 		gist: field("gist") as string,
@@ -957,18 +959,17 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 	]);
 }
 
-function refuseBuiltin(bank: MemoryBank, key: string): void {
-	if (bank.builtins().has(key))
+function refuseInternal(key: string): void {
+	if (key.startsWith(INTERNAL))
 		throw new EvalException(
-			"this key names a built-in memory, which is read-only",
+			`keys under ${INTERNAL} are built-in memories, which are read-only; remember yours under another key`,
 			key,
 			false,
 		);
 }
 
-function areaOf(key: string): string {
-	const slash = key.indexOf("/");
-	return slash === -1 ? key : key.slice(0, slash);
+function areaFor(key: string): string {
+	return areaOf(key) ?? key;
 }
 
 function situationOf(memory: Memory): unknown {
@@ -1029,7 +1030,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 					"a memory body must be prose or a form that reads back; this one holds a live value",
 					body,
 				);
-			refuseBuiltin(bank, key);
+			refuseInternal(key);
 			const opts = plistOptions(options, ["on", "when", "unless", "links"]);
 			const links = new Map<string, number>();
 			for (const linked of listToArray((opts.get("links") ?? null) as List))
@@ -1124,7 +1125,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			return arrayToList(
 				[...bank.builtins().values()]
 					.filter(
-						(memory) => prefix === undefined || areaOf(memory.key) === prefix,
+						(memory) => prefix === undefined || areaFor(memory.key) === prefix,
 					)
 					.map((memory) => arrayToList([memory.key, situationOf(memory)])),
 			);
@@ -1148,7 +1149,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			}
 			const counts = new Map<string, number>();
 			for (const key of bank.builtins().keys())
-				counts.set(areaOf(key), (counts.get(areaOf(key)) ?? 0) + 1);
+				counts.set(areaFor(key), (counts.get(areaFor(key)) ?? 0) + 1);
 			return arrayToList(
 				[...counts].map(([area, count]) => arrayToList([area, BigInt(count)])),
 			);
@@ -1162,7 +1163,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Drop a memory for good; returns t if there was one. Memories also fade on their own: unused, one loses half its strength in a week, and below a floor it is swept away.",
 		z.tuple([zString]),
 		function* ([key]): Eval {
-			refuseBuiltin(bank, key);
+			refuseInternal(key);
 			return (yield* bank.forget(key)) || null;
 		},
 	);
@@ -1189,7 +1190,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Replace the body of a memory that fired this step. Retrieval opens a memory for revision and the step closes it again, so revising one you have not recalled is an error: recall it first, then correct what it says.",
 		z.tuple([zString, z.unknown()]),
 		function* ([key, body]): Eval {
-			refuseBuiltin(bank, key);
+			refuseInternal(key);
 			const memory = yield* settled(bank.store.get(key));
 			if (memory === undefined)
 				throw new EvalException("unknown memory", key, false);

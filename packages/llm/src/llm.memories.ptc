@@ -1,6 +1,6 @@
 (area "llm" :when "text must be written, rewritten, summarized, answered from or have fields pulled out of it by a language model")
 
-(memory "llm/write" :when "the agent is about to have text written: one prompt sent to a model, or several messages as one conversation; or a write or converse call just failed or came back empty"
+(memory "internal/llm/write" :when "the agent is about to have text written: one prompt sent to a model, or several messages as one conversation; or a write or converse call just failed or came back empty"
   "Writing call costs seconds and tokens: one or two per step, never in loop
 over long list. It waits and can fail: worth try with fallback. Promise
 refused: await first.
@@ -20,7 +20,7 @@ Text arguments: prompt, :system, :instructions, extract text, message
 content. Any value works: list or alist goes in printed. No (string …)
 needed.")
 
-(memory "llm/extract" :when "the agent holds a text, page, comment or mail and must pull fields or structured data out of it, or an extract call just failed or returned the wrong shape"
+(memory "internal/llm/extract" :when "the agent holds a text, page, comment or mail and must pull fields or structured data out of it, or an extract call just failed or returned the wrong shape"
   "(extract text shape) gives data shape describes, as Lisp data. Answer is
 constrained to shape: no parsing, no prose to strip. Turns page, comment or
 mail into fields read with assoc.
@@ -45,7 +45,7 @@ returns list. :instructions \"...\" says what to pull out.
 is list of objects. Shape is literal, built at compile time: computed enum
   needs hand-written alist.")
 
-(memory "llm/macros" :when "the agent holds a long text or many records that must be summarized, or a question must be answered from a given text or data, or answer just returned nil"
+(memory "internal/llm/macros" :when "the agent holds a long text or many records that must be summarized, or a question must be answered from a given text or data, or answer just returned nil"
   "Three macros over write carry prompt for you; (doc 'summarize) and expansion
 are all there is. Each takes write options plus :words, capping asked length
 and token budget.
@@ -68,7 +68,7 @@ owner: \"Nadia\"
 
 (echo (if owner owner \"the issues do not say who is assigned\"))")
 
-(memory "llm/rewrites" :when "the agent must turn a text into a new one: swap its roles, say its opposite, blend two texts, take part out, add at the start or end, or state what follows from two statements"
+(memory "internal/llm/rewrites" :when "the agent must turn a text into a new one: swap its roles, say its opposite, blend two texts, take part out, add at the start or end, or state what follows from two statements"
   "Rewrites: new text from value. Any value works, printed. Each takes write
 options, one call each:
 
@@ -80,7 +80,7 @@ options, one call each:
 - (conclude x y) states what follows from both. (either x y) states as
   alternatives. (one-of x y) states exactly one holds.")
 
-(memory "llm/options" :when "a writing call needs a length cap, a temperature, a system line or a timeout, defaults must change for many calls, or a writing call just timed out"
+(memory "internal/llm/options" :when "a writing call needs a length cap, a temperature, a system line or a timeout, defaults must change for many calls, or a writing call just timed out"
   "Options, all optional, every call: :system · :max-tokens · :temperature ·
 :reasoning-effort, :low, :medium or :high · :timeout ms, default 60000.
 Timed-out call raises.

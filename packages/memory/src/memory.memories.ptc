@@ -1,6 +1,6 @@
 (area "memory" :when "the agent is about to remember, recall, revise or forget something, or a step just failed and the fix is now known")
 
-(memory "memory/triggers" :when "the agent is about to remember something that should come back on its own when a situation, a command, an error, a result or certain words show up" :links ("memory/call-triggers")
+(memory "internal/memory/triggers" :when "the agent is about to remember something that should come back on its own when a situation, a command, an error, a result or certain words show up" :links ("internal/memory/call-triggers")
   "Two ways to fire by itself.
 
 :when \"situation\" is the usual one: one string describing the situation that
@@ -37,7 +37,7 @@ One trigger per memory: :when or :on, not both. Memory with neither never
 arrives by itself. It waits for a recall naming it. Unguessable key later
 means lost.")
 
-(memory "memory/call-triggers" :when "the agent is writing a memory that must fire on one particular call, such as one tool or one server, and not on every call"
+(memory "internal/memory/call-triggers" :when "the agent is writing a memory that must fire on one particular call, such as one tool or one server, and not on every call"
   "For call the pattern is A FORM, written like the call, matched structurally:
 
 (call (load-mcp \"acme\")) only that server, not every load
@@ -73,7 +73,7 @@ not only the name.
 Triggers watch code you write into the REPL. A form evaluated inside a replay or a function body is not a
 step and fires nothing.")
 
-(memory "memory/fading" :when "the agent cannot find something it remembered, or the user asks why it forgot or how long a memory lasts"
+(memory "internal/memory/fading" :when "the agent cannot find something it remembered, or the user asks why it forgot or how long a memory lasts"
   "STRENGTH AND FORGETTING
 
 Every memory has a score. Recall strengthens it. Unused, it fades, half its
@@ -82,7 +82,7 @@ memory/forget exists for what is wrong, not for what is merely old.
 
 Built-in memories never fade.")
 
-(memory "memory/revising" :when "a memory that just fired or was recalled turned out wrong or vague, or the user says the agent got something wrong and wants it fixed for next time"
+(memory "internal/memory/revising" :when "a memory that just fired or was recalled turned out wrong or vague, or the user says the agent got something wrong and wants it fixed for next time"
   "THE WINDOW
 
 Memory recalled or fired is open: until step end you can revise its body.
@@ -95,7 +95,7 @@ while looking at it:
 Built-in wrong? Remember the correction under a new key, with a trigger that
 will repeat.")
 
-(memory "memory/bodies" :when "the agent is about to save a recipe, a function or a reusable procedure, or remember just refused a live value"
+(memory "internal/memory/bodies" :when "the agent is about to save a recipe, a function or a reusable procedure, or remember just refused a live value"
   "GOTCHAS
 
 - Body must be prose or a readable form. Closure, promise or secret is a live
@@ -106,7 +106,7 @@ will repeat.")
 - Replaying a defun installs that function. Remembered recipe becomes running
   one.")
 
-(memory "memory/writing" :when "the agent is about to save, change or forget a memory, or the user asks what built-in memories exist"
+(memory "internal/memory/writing" :when "the agent is about to save, change or forget a memory, or the user asks what built-in memories exist"
   "Memory = key + body. Body is prose or code, one slot: here they are the same material.
 
 - Prose body is something to know. Quoted form body is a recipe to run later.
@@ -127,33 +127,33 @@ after text leaves. Need one now? Recall by key or words.
 - (memory/builtins \"mcp\") gives (key situation) for every built-in in that
   area; (memory/builtins) lists all. Recall a key to read its body.")
 
-(memory "memory/rules" :when "a guess just failed and the fix is now known, or the agent is deciding what is worth remembering"
-  "- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description: memory/hooks.
+(memory "internal/memory/rules" :when "a guess just failed and the fix is now known, or the agent is deciding what is worth remembering"
+  "- GIVE IT THE TRIGGER THAT WILL REPEAT, not a topic description: internal/memory/hooks.
 - Remember the correction, not the transcript. \"browser_navigate, not navigate\"
   is worth keeping; the whole tool listing is not.
 - Do not remember what the REPL can tell you: doc output, discovery results,
   anything recomputable.")
 
-(memory "memory/recalling" :when "the agent is about to guess a name, a fact or a procedure it may have learned before, or must see which built-in memories an extension ships, or the user asks what it remembers"
+(memory "internal/memory/recalling" :when "the agent is about to guess a name, a fact or a procedure it may have learned before, or must see which built-in memories an extension ships, or the user asks what it remembers"
   "- (memory/recall query) retrieves by key or body text, strongest first. Query
   is words, not a pattern: every meaningful word must land in the one memory.
   Spelling forgiven, prefix counts. Found memories load into your context:
   recalling IS reading. No echo after it.
 - (memories) every memory as key, score and trigger, strongest first.
-- Built-ins by area: memory/writing.
+- Built-ins by area: internal/memory/writing.
 - (memory/remember key body) stores one.
 - (memory/forget key) drops one for good. (memory/revise key body) corrects
-  one inside its window: memory/revising.")
+  one inside its window: internal/memory/revising.")
 
-(memory "memory/learning" :when "a step just failed and the agent worked out what works, or it found a solution worth keeping for later"
+(memory "internal/memory/learning" :when "a step just failed and the agent worked out what works, or it found a solution worth keeping for later"
   "Memory is for what you found out the hard way. Step failed, you worked out what works: rejected call, wrong name, backwards argument order. Store the fix with `memory/remember` before moving on, while the right answer is on screen. That moment is the only one you get. The solution is either kind of memory. A DECLARATIVE one is prose, what you now know: \"the tool is acme/get_widget, not acme/get\". A PROCEDURAL one is a quoted form, the thing that worked, a call or a `defun` you replay later: `(memory/remember \"widget-id\" '(defun widget-id (w) (cdr (assoc \"id\" w)))) `. Same slot, both kinds.
 SPEND THE REVISE WINDOW. Memory arrived vague, half-right, or missing the argument that mattered? Sharpen it with `(memory/revise key body) ` on the spot, while you see both what it said and what was true. Recall, use, revise: each use leaves the memory more useful than it was.")
 
-(memory "memory/hooks" :when "the agent is about to give a memory a trigger, :when or :on, so a lesson fires before the mistake"
+(memory "internal/memory/hooks" :when "the agent is about to give a memory a trigger, :when or :on, so a lesson fires before the mistake"
   "HOOK IT TO WHAT PRECEDES THE ERROR, and NEVER TO THE CALL THAT FAILED. Hooking the failing form is the one trigger guaranteed to be useless: `:on '(call (acme/get _)) ` on a name that does not exist fires only while you are making the mistake a second time, too late to stop it, and if the next wrong guess is spelled differently it never fires at all. Before you write a trigger, check it against the step you just lost: would this have reached me BEFORE I wrote the bad form? If it only fires as the mistake happens, it is the wrong trigger.
 HOOK THE LAST THING THAT WORKED ON THE WAY IN, the gate you always pass through before the moment of choice. After loading a server you name its tools, so what you learn about those names belongs on the load: `:on '(call (load-mcp \"acme\")) `, which puts the correction in front of you while the server is still coming up and before you can name a single tool. Ask what you will be doing just before you need this again, and hook THAT. Keep `:on '(error \"...\") ` for a failure with no such gate, where the error text is the earliest warning that exists. A memory you have to remember to look for will not be there when you need it.
 A `:when` describes that moment in words: `:when \"the agent is about to name a tool of the acme server\"`, never `:when \"acme/get failed\"`.")
 
-(memory "memory/links" :when "the agent is about to make one memory load others along with it, or asks why a memory arrived together with another"
+(memory "internal/memory/links" :when "the agent is about to make one memory load others along with it, or asks why a memory arrived together with another"
   ":links (\"key\" ...) loads listed memories along with this one: (memory \"browser/local\" :when \"agent is about to automate a web browser\" :links (\"browser/flags\")) .
 Memories firing in same step get wired together too.")

@@ -77,7 +77,9 @@ describe("the agent the app serves", () => {
 			.slice(1, -1)
 			.split(" ")
 			.map((key) => JSON.parse(key) as string);
-		expect(keys).toEqual(expect.arrayContaining(["mcp/local", "mcp/oauth"]));
+		expect(keys).toEqual(
+			expect.arrayContaining(["internal/mcp/local", "internal/mcp/oauth"]),
+		);
 		expect(new Set(keys).size).toBe(keys.length);
 		expect(await ev("(length (memory/areas :when))")).not.toBe("0");
 	});

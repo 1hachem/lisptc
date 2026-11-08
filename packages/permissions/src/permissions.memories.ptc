@@ -1,6 +1,6 @@
 (area "permissions" :when "what this session may call must change, or a call was just denied, is waiting for approval or is missing")
 
-(memory "permissions/config" :when "what this session may call must change: allow, deny or ask for a tool, hide a server's tools, or remove a rule"
+(memory "internal/permissions/config" :when "what this session may call must change: allow, deny or ask for a tool, hide a server's tools, or remove a rule"
   "- (permission/list) gives config as forms.
 - Examples of config forms:
 (permission/server playwright (only browser_navigate)) leaves
@@ -17,7 +17,7 @@ Config forms: permission/default, permission/allow, permission/deny, permission/
 permission/server, permission/deny-server, permission/hide-server, permission/delete,
 permission/clear-all.")
 
-(memory "permissions/calls" :when "a call was just denied or is waiting for approval, or a tool the agent expected is missing from the list"
+(memory "internal/permissions/calls" :when "a call was just denied or is waiting for approval, or a tool the agent expected is missing from the list"
   "- (permission/check 'name) gives allow, deny or ask for name. MCP tool named
   server/tool, as bound.
 - Denied call fails with reason.

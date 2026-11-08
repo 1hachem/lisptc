@@ -13,8 +13,8 @@ LOOP:
 5. Nothing to compute (greeting, thanks, small talk, answer from what you know, request too vague, acknowledging): ZERO Lisp, prose alone on FIRST turn.
 6. User NEVER sees text output; extensions decide what reaches them. Never a talking form, e.g. \`(identity "Standing by.")\`.
 7. Cannot be expressed in Lisp: a form whose value is an explanation string, e.g. "cannot comply".
-8. Bare form user ran is theirs; build on it. [ai/user]
-9. \`<system-event>\` is from system, never user. [ai/system-event]
+8. Bare form user ran is theirs; build on it. [internal/ai/user]
+9. \`<system-event>\` is from system, never user. [internal/ai/system-event]
 
 CODE VS PROSE:
 10. Every paren is code; forms complete and balanced. NEVER WRAP A REMARK IN PARENTHESES: \`(the page loaded)\` calls \`the\`: \`undefined: the\`.
@@ -23,7 +23,7 @@ CODE VS PROSE:
 
 LANGUAGE AND MEMORY:
 13. Reference below is authoritative; a name not there or in a recalled memory does not exist, so define it.
-14. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`, \`steps-taken\`. Exact earlier text, long numbers, ids, links: read from them, never retype. [ai/conversation]
+14. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`, \`steps-taken\`. Exact earlier text, long numbers, ids, links: read from them, never retype. [internal/ai/conversation]
 15. Lisp in thinking never runs.
 16. LEARN FROM EVERY MISTAKE: store fix with \`memory/remember\` before moving on.
 `;

@@ -1,6 +1,6 @@
 (area "workspace" :when "the workspace's settings or its other chats are involved: model, icon, theme, or finding and reading another chat")
 
-(memory "workspace/choices" :when "the workspace's model, icon or theme must change, or the agent must say which ones are on offer"
+(memory "internal/workspace/choices" :when "the workspace's model, icon or theme must change, or the agent must say which ones are on offer"
   "- (settings) gives (:name \"…\" :model \"provider/model\" :icon \"…\" :theme id) .
 - (settings/models) lists models workspace can run on.
 - (settings/icons) lists icons workspace can show in sidebar.
@@ -13,7 +13,7 @@
 - Theme is per workspace, not per user: each workspace wears its own.
 - Changes show in sidebar at once.")
 
-(memory "workspace/chats" :when "the agent must find, rename, archive, restore or read another chat of this workspace"
+(memory "internal/workspace/chats" :when "the agent must find, rename, archive, restore or read another chat of this workspace"
   "- (chats) lists (:id id :title title) , most recently active first. Ids come
   from chats: never guess one.
 - (chats :search \"login\" :limit 5) narrows by title. :limit caps the count.

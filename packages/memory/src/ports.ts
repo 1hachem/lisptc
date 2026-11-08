@@ -14,6 +14,13 @@ import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 import type { SearchEngine } from "@repo/shared/search";
 
 export const INITIAL_SCORE = 1;
+export const INTERNAL = "internal/";
+
+export function areaOf(key: string): string | undefined {
+	const rest = key.startsWith(INTERNAL) ? key.slice(INTERNAL.length) : key;
+	const slash = rest.indexOf("/");
+	return slash === -1 ? undefined : rest.slice(0, slash);
+}
 export const LINKED_FIRES_AT = 2;
 export const WHEN_FIRES_AT = 0.7;
 
@@ -277,6 +284,11 @@ export function builtinFrom(declared: unknown): Memory {
 			declared,
 		);
 	const key = declared.car;
+	if (!key.startsWith(INTERNAL) || areaOf(key) === undefined)
+		throw new EvalException(
+			`a built-in memory key is in the internal namespace, under its area: write "${INTERNAL}area/name"`,
+			key,
+		);
 	const options: unknown[] = [];
 	const values: unknown[] = [];
 	let at: unknown = declared.cdr;

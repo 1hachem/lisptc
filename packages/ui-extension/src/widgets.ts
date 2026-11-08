@@ -380,6 +380,6 @@ export function widgetMemories(): string {
 			widget.doc,
 			`Example: ${widget.example}`,
 		].join("\n");
-		return `(memory "ui/widget-${tag}" :when ${str(widget.when)}\n  "${body.replace(/[\\"]/g, "\\$&")}")`;
+		return `(memory "internal/ui/widget-${tag}" :when ${str(widget.when)}\n  "${body.replace(/[\\"]/g, "\\$&")}")`;
 	}).join("\n\n");
 }

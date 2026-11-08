@@ -1,6 +1,6 @@
 (area "compaction" :when "the agent works with a result the REPL bound to a name: a large, truncated or printed value it must find, filter, read or show")
 
-(memory "compaction/repl-names" :when "the agent needs a result it computed earlier, does not know what name the REPL bound it to, or is about to retype data the REPL printed"
+(memory "internal/compaction/repl-names" :when "the agent needs a result it computed earlier, does not know what name the REPL bound it to, or is about to retype data the REPL printed"
   "Variable is named after the function that produced it. It always holds the
 whole value. setq or defun reports under the name it bound. Never invent a
 name: the REPL always tells you the one it bound.
@@ -13,7 +13,7 @@ acme/list-issues-1: list of 27 alists, keys \"id\" \"identifier\" \"title\" \"st
 
 (mapcar (lambda (i) (cdr (assoc \"id\" i))) acme/list-issues-1)")
 
-(memory "compaction/echo-window" :when "a printed output came back truncated with a ... line, or the agent needs one part of a long value found"
+(memory "internal/compaction/echo-window" :when "a printed output came back truncated with a ... line, or the agent needs one part of a long value found"
   "Echo windowing, what it prints:
 - (echo x :offset 0 :length n) print a window of x, counted in
   whitespace-separated words. Closing ... line gives offset to continue from.
@@ -33,7 +33,7 @@ a ... line says how much is left:
 
 ... 10 of 40 words shown, 30 below — read on with (echo report-1 :offset 10)")
 
-(memory "compaction/extract" :when "a large result came back and the agent must pick out rows, matches or items: filter, search or count them"
+(memory "internal/compaction/extract" :when "a large result came back and the agent must pick out rows, matches or items: filter, search or count them"
   "Extracting, what each returns:
 - Exception to silence: a bare head or tail step prints in full.
 - (head x [n]) first n of x; (tail x [n]) last n. On a list, n ELEMENTS:
@@ -65,12 +65,12 @@ Bare slice already answers \"what is in there\":
 (((\"id\" . \"a1f\") (\"identifier\" . \"ENG-12\") (\"title\" . \"Auth token refresh fails\"))
   ((\"id\" . \"c3d\") (\"identifier\" . \"ENG-31\") (\"title\" . \"OAuth callback drops the state param\")))")
 
-(memory "compaction/doc" :when "the agent is about to call a form whose keywords or arguments it is not sure of, or a call was just rejected"
+(memory "internal/compaction/doc" :when "the agent is about to call a form whose keywords or arguments it is not sure of, or a call was just rejected"
   "(doc 'name) prints a binding's full signature, whole, free against echo
 budget. Look freely. Read it before guessing a keyword. Call rejected: error
 names fix? Use it. Names none? Read (doc 'name) .")
 
-(memory "compaction/render-rows" :when "the agent fetched rows of data and must read them, or show them as a table, list or summary"
+(memory "internal/compaction/render-rows" :when "the agent fetched rows of data and must read them, or show them as a table, list or summary"
   "To read rows, keep whole list and echo a rendering of it:
 
 (defun row (i) (concat \"| \" (cdr (assoc \"identifier\" i)) \" | \" (cdr (assoc \"title\" i)) \" |\"))

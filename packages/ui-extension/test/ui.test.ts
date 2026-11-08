@@ -817,7 +817,7 @@ describe("the widget form table", () => {
 			),
 		);
 		for (const tag of TAGS)
-			expect(bodies.get(`ui/widget-${tag}`)).toContain(
+			expect(bodies.get(`internal/ui/widget-${tag}`)).toContain(
 				WIDGET_FORMS[tag].signature,
 			);
 	});

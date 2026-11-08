@@ -47,13 +47,13 @@ function carrying(memories: string): Installable {
 }
 
 const BROWSER = `
-(memory "browser/local" :when "user wants to automate a web browser" :links ("browser/flags")
+(memory "internal/browser/local" :when "user wants to automate a web browser" :links ("internal/browser/flags")
   "load it with (load-mcp \\"playwright\\" :local t)")
 
-(memory "browser/flags"
+(memory "internal/browser/flags"
   "pass :quiet t only when the row lists it")
 
-(memory "deploy/notes" :on (user "^deploy")
+(memory "internal/deploy/notes" :on (user "^deploy")
   "deploys go through task deploy")
 `;
 
@@ -178,13 +178,16 @@ describe("built-in memories", () => {
 		);
 		bank.declareIn(interp);
 		expect([...bank.builtins().keys()]).toEqual(
-			expect.arrayContaining(["memory/triggers", "memory/call-triggers"]),
+			expect.arrayContaining([
+				"internal/memory/triggers",
+				"internal/memory/call-triggers",
+			]),
 		);
 	});
 
 	it("fire on their own trigger, out of any store", async () => {
 		const f = fixture();
-		expect(await f.hear("deploy the app")).toEqual(["deploy/notes"]);
+		expect(await f.hear("deploy the app")).toEqual(["internal/deploy/notes"]);
 		expect(f.bank.store.all()).toEqual([]);
 	});
 
@@ -192,9 +195,11 @@ describe("built-in memories", () => {
 		const f = fixture();
 		await ev(f, '(memory/remember "mine" "a note of my own")');
 		const listed = await ev(f, "(memories)");
-		expect(listed).toContain('"browser/flags"');
+		expect(listed).toContain('"internal/browser/flags"');
 		expect(listed).toContain('"mine"');
-		expect(await ev(f, `(memory/recall "quiet")`)).toContain("browser/flags");
+		expect(await ev(f, `(memory/recall "quiet")`)).toContain(
+			"internal/browser/flags",
+		);
 	});
 
 	it("are listed on their own, with the situation or trigger that fires each", async () => {
@@ -202,10 +207,10 @@ describe("built-in memories", () => {
 		await ev(f, '(memory/remember "mine" "a note of my own")');
 		const listed = await ev(f, "(memory/builtins)");
 		expect(listed).toContain(
-			'("browser/local" "user wants to automate a web browser")',
+			'("internal/browser/local" "user wants to automate a web browser")',
 		);
-		expect(listed).toContain('("browser/flags" nil)');
-		expect(listed).toContain('("deploy/notes" (user "^deploy"))');
+		expect(listed).toContain('("internal/browser/flags" nil)');
+		expect(listed).toContain('("internal/deploy/notes" (user "^deploy"))');
 		expect(listed).not.toContain('"mine"');
 	});
 
@@ -213,7 +218,7 @@ describe("built-in memories", () => {
 		const f = fixture();
 		expect(
 			await ev(f, '(mapcar (lambda (r) (car r)) (memory/builtins "browser"))'),
-		).toBe('("browser/local" "browser/flags")');
+		).toBe('("internal/browser/local" "internal/browser/flags")');
 		expect(await ev(f, '(memory/builtins "nowhere")')).toBe("nil");
 		expect(await ev(f, "(memory/areas)")).toBe('(("browser" 2) ("deploy" 1))');
 	});
@@ -221,13 +226,13 @@ describe("built-in memories", () => {
 	it("are read-only", async () => {
 		const f = fixture();
 		for (const code of [
-			'(memory/remember "deploy/notes" "mine now")',
-			'(memory/forget "deploy/notes")',
-			'(memory/revise "deploy/notes" "mine now")',
+			'(memory/remember "internal/deploy/notes" "mine now")',
+			'(memory/forget "internal/deploy/notes")',
+			'(memory/revise "internal/deploy/notes" "mine now")',
 		])
-			await expect(ev(f, code)).rejects.toThrow(/built-in memory/);
+			await expect(ev(f, code)).rejects.toThrow(/built-in memories/);
 		await ev(f, "(memory/forget-all)");
-		expect(f.bank.builtins().has("deploy/notes")).toBe(true);
+		expect(f.bank.builtins().has("internal/deploy/notes")).toBe(true);
 	});
 
 	it("never fade", async () => {
@@ -235,7 +240,7 @@ describe("built-in memories", () => {
 		const f = fixture({ clock: { now: () => ms.now } });
 		ms.now = 52 * HALF_LIFE_MS;
 		await f.hear("deploy it");
-		const notes = f.bank.builtins().get("deploy/notes");
+		const notes = f.bank.builtins().get("internal/deploy/notes");
 		expect(notes && f.bank.strength(notes)).toBe(1);
 	});
 
@@ -244,59 +249,76 @@ describe("built-in memories", () => {
 			" ",
 		);
 		const f = fixture({
-			memories: `(memory "long" :on (user "go") "${long}")`,
+			memories: `(memory "internal/t/long" :on (user "go") "${long}")`,
 		});
 		await ev(f, `(memory/remember "mine" "short" :on '(user "go"))`);
-		expect((await f.hear("go")).sort()).toEqual(["long", "mine"]);
+		expect((await f.hear("go")).sort()).toEqual(["internal/t/long", "mine"]);
 	});
 
 	it("refuse a body past the built-in budget", () => {
 		const long = Array.from({ length: MAX_BUILTIN_WORDS + 1 }, () => "w").join(
 			" ",
 		);
-		const f = fixture({ memories: `(memory "long" "${long}")` });
+		const f = fixture({ memories: `(memory "internal/t/long" "${long}")` });
 		expect(() => f.bank.builtins()).toThrow(/at most/);
 	});
 
 	it("refuse two built-ins under one key", () => {
 		const f = fixture({
-			memories: '(memory "a" "one")\n(memory "a" "two")',
+			memories: '(memory "internal/t/a" "one")\n(memory "internal/t/a" "two")',
 		});
 		expect(() => f.bank.builtins()).toThrow(/share this key/);
 	});
 
 	it("keep a body over several lines, as written", () => {
 		const f = fixture({
-			memories: '(memory "a"\n  "first line\n  (load-mcp \\"x\\")")\n',
+			memories:
+				'(memory "internal/t/a"\n  "first line\n  (load-mcp \\"x\\")")\n',
 		});
-		expect(f.bank.builtins().get("a")?.body).toBe(
+		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
 			'first line\n  (load-mcp "x")',
 		);
 	});
 
+	it("refuse a key outside the internal namespace", () => {
+		const f = fixture({ memories: '(memory "mcp/local" "one")' });
+		expect(() => f.bank.builtins()).toThrow(/internal namespace/);
+	});
+
+	it("keep the internal namespace from the agent's own memories", async () => {
+		const f = fixture();
+		await expect(
+			ev(f, '(memory/remember "internal/mine/note" "a note of my own")'),
+		).rejects.toThrow(/built-in memories/);
+	});
+
 	it("refuse a body that is not a string", () => {
-		const f = fixture({ memories: '(memory "a" one)' });
+		const f = fixture({ memories: '(memory "internal/t/a" one)' });
 		expect(() => f.bank.builtins()).toThrow(/needs a body string/);
 	});
 
 	it("refuse a memory with no body", () => {
-		const f = fixture({ memories: '(memory "a")\n\n(memory "b" "two")' });
+		const f = fixture({
+			memories: '(memory "internal/t/a")\n\n(memory "internal/t/b" "two")',
+		});
 		expect(() => f.bank.builtins()).toThrow(/needs a body/);
 	});
 
 	it("refuse a :when with no situation", () => {
-		const f = fixture({ memories: '(memory "a" :when "" "one")' });
+		const f = fixture({ memories: '(memory "internal/t/a" :when "" "one")' });
 		expect(() => f.bank.builtins()).toThrow(/describing the situation/);
 	});
 
 	it("refuse a situation written as an :on trigger", () => {
-		const f = fixture({ memories: '(memory "a" :on (when "x") "one")' });
+		const f = fixture({
+			memories: '(memory "internal/t/a" :on (when "x") "one")',
+		});
 		expect(() => f.bank.builtins()).toThrow(/written with :when/);
 	});
 
 	it("refuse a memory with both :when and :on", () => {
 		const f = fixture({
-			memories: '(memory "a" :when "x" :on (user "y") "one")',
+			memories: '(memory "internal/t/a" :when "x" :on (user "y") "one")',
 		});
 		expect(() => f.bank.builtins()).toThrow(/not both/);
 	});
@@ -309,8 +331,8 @@ describe("the when trigger", () => {
 		const { recognize } = recognizing({ [ASK]: WHEN_FIRES_AT });
 		const f = fixture({ recognize });
 		expect(await f.hear("open my browser and fill the form")).toEqual([
-			"browser/local",
-			"browser/flags",
+			"internal/browser/local",
+			"internal/browser/flags",
 		]);
 	});
 
@@ -325,7 +347,10 @@ describe("the when trigger", () => {
 		const f = fixture({ recognize });
 		await f.hear("open my browser");
 		expect(view(f.entries(), recognizedKind)).toEqual([
-			{ message: "open my browser", scores: { "browser/local": 0.42 } },
+			{
+				message: "open my browser",
+				scores: { "internal/browser/local": 0.42 },
+			},
 		]);
 	});
 
@@ -335,7 +360,7 @@ describe("the when trigger", () => {
 		await f.hear("open my browser");
 		expect(cues[0]).toEqual([
 			{
-				key: "browser/local",
+				key: "internal/browser/local",
 				area: "browser",
 				situation: ASK,
 				gist: 'load it with (load-mcp "playwright" :local t)',
@@ -371,10 +396,10 @@ describe("the when trigger", () => {
 		const f = fixture({ recognize });
 		await f.hear("open my browser and fill the form");
 		const [recognized] = view(f.entries(), recognizedKind);
-		expect(recognized?.scores).toEqual({ "browser/local": 0.9 });
+		expect(recognized?.scores).toEqual({ "internal/browser/local": 0.9 });
 		expect(recognized?.fired?.map((m) => m.key)).toEqual([
-			"browser/local",
-			"browser/flags",
+			"internal/browser/local",
+			"internal/browser/flags",
 		]);
 		expect(recognized?.fired?.[0]?.body).toContain("load-mcp");
 	});
@@ -397,7 +422,7 @@ describe("the when trigger", () => {
 		const f = fixture();
 		await f.hear("deploy the app");
 		expect(view(f.entries(), memoryKind).map((m) => m.key)).toEqual([
-			"deploy/notes",
+			"internal/deploy/notes",
 		]);
 	});
 
@@ -412,7 +437,7 @@ describe("the when trigger", () => {
 		await f.hear("hello");
 		expect(calls).toHaveLength(1);
 		expect(new Set(cues[0]?.map((cue) => cue.key))).toEqual(
-			new Set(["mine", "other", "browser/local"]),
+			new Set(["mine", "other", "internal/browser/local"]),
 		);
 	});
 
@@ -425,20 +450,20 @@ describe("the when trigger", () => {
 				f,
 				`(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list :when))`,
 			),
-		).toBe('("browser/local" "mine")');
+		).toBe('("internal/browser/local" "mine")');
 		expect(
 			await ev(
 				f,
 				`(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list :user))`,
 			),
-		).toBe('("deploy/notes" "exact")');
+		).toBe('("internal/deploy/notes" "exact")');
 		expect(await ev(f, "(length (memory/list))")).toBe("5");
 	});
 
 	it("answers listings from the session's copy until the session writes a memory", async () => {
 		const f = fixture();
 		const keys = `(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list :when))`;
-		expect(await ev(f, keys)).toBe('("browser/local")');
+		expect(await ev(f, keys)).toBe('("internal/browser/local")');
 		await f.bank.store.put({
 			key: "elsewhere",
 			body: "x",
@@ -448,9 +473,11 @@ describe("the when trigger", () => {
 			used: 0,
 			lastUsed: 0,
 		});
-		expect(await ev(f, keys)).toBe('("browser/local")');
+		expect(await ev(f, keys)).toBe('("internal/browser/local")');
 		await ev(f, `(memory/remember "mine" "y" :when "${ASK}")`);
-		expect(await ev(f, keys)).toBe('("browser/local" "elsewhere" "mine")');
+		expect(await ev(f, keys)).toBe(
+			'("internal/browser/local" "elsewhere" "mine")',
+		);
 	});
 
 	it("ships its memories with the rest length filled in", () => {
@@ -500,7 +527,7 @@ describe("the when trigger", () => {
 		const f = fixture({
 			recognize: () => Promise.reject(new Error("timed out")),
 		});
-		expect(await f.hear("deploy now")).toEqual(["deploy/notes"]);
+		expect(await f.hear("deploy now")).toEqual(["internal/deploy/notes"]);
 		expect(view(f.entries(), recognizedKind)).toEqual([
 			{ message: "deploy now", scores: {}, error: "timed out" },
 		]);
@@ -532,8 +559,8 @@ describe("the when trigger", () => {
 		const f = fixture({ recognize });
 		expect(await f.hear("get me the price")).toEqual([]);
 		expect(await f.step('(fetch "https://shop")', "needs javascript")).toEqual([
-			"browser/local",
-			"browser/flags",
+			"internal/browser/local",
+			"internal/browser/flags",
 		]);
 	});
 
@@ -558,8 +585,8 @@ describe("the when trigger", () => {
 	it("fires a built-in when memory once per user message, however many steps follow", async () => {
 		const { recognize } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
-		expect(await f.hear("open my browser")).toContain("browser/local");
-		f.context([feedback("browser/local", "browser/flags")]);
+		expect(await f.hear("open my browser")).toContain("internal/browser/local");
+		f.context([feedback("internal/browser/local", "internal/browser/flags")]);
 		expect(await f.step("(open)", "opened")).toEqual([]);
 		f.context([]);
 		expect(await f.step("(click)", "clicked")).toEqual([]);
@@ -584,8 +611,8 @@ describe("a loaded built-in", () => {
 	it("loads once while its text is still in the conversation", async () => {
 		const { recognize, calls } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
-		expect(await f.hear("open my browser")).toContain("browser/local");
-		f.context([feedback("browser/local", "browser/flags")]);
+		expect(await f.hear("open my browser")).toContain("internal/browser/local");
+		f.context([feedback("internal/browser/local", "internal/browser/flags")]);
 		expect(await f.hear("now click the button")).toEqual([]);
 		expect(calls).toHaveLength(1);
 	});
@@ -598,6 +625,8 @@ describe("a loaded built-in", () => {
 		expect(await f.hear("open the browser again")).toEqual([]);
 		for (let step = 1; step < RECALLED_RESTS_STEPS; step++)
 			await f.step("(open)", "opened");
-		expect(await f.step("(open)", "opened")).toContain("browser/local");
+		expect(await f.step("(open)", "opened")).toContain(
+			"internal/browser/local",
+		);
 	});
 });

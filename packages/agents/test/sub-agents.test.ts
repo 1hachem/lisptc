@@ -667,7 +667,8 @@ describe("the sub-agent extension", () => {
 		expect(str(interp.getGlobal(newSym("areas")))).toBe('("sub-agent")');
 		const keys = listToArray(interp.getGlobal(newSym("keys")) as List);
 		expect(keys.length).toBeGreaterThan(0);
-		for (const key of keys) expect(String(key)).toMatch(/^sub-agent\//);
+		for (const key of keys)
+			expect(String(key)).toMatch(/^internal\/sub-agent\//);
 	});
 });
 

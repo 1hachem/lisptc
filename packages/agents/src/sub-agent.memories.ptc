@@ -1,12 +1,12 @@
 (area "sub-agent" :when "the agent runs as a sub-agent: reading its parent's messages, handing values back to its parent, or finishing its job")
 
-(memory "sub-agent/parent" :when "a message from the parent arrives, or the sub-agent lacks something only its parent or the user can give"
+(memory "internal/sub-agent/parent" :when "a message from the parent arrives, or the sub-agent lacks something only its parent or the user can give"
   "Parent message comes as <system-event source=\"agent:parent\">. It is new instruction from parent: act on it.
 No form sends to parent mid-job. Parent sees only final answer, not your steps.
 Missing input? Do what you can, then say in final answer what is missing and why.
 Forms waiting on approval ask user in parent's chat.")
 
-(memory "sub-agent/export" :when "the sub-agent has a result its parent will compute on: a list, a table, a plist, a number, a function"
+(memory "internal/sub-agent/export" :when "the sub-agent has a result its parent will compute on: a list, a table, a plist, a number, a function"
   "Result is data parent computes on? Bind it, export it, not paste it:
 (setq prices (list (list :sku \"a\" :price 2.5)))
 (agents/export 'prices \"list of plists (:sku string :price number): price per SKU\")
@@ -14,7 +14,7 @@ Name is quoted symbol, bound before export. Description states shape: list or pl
 Export same name again: description replaced.
 Parent copies one with agent-take, value as it stands then.")
 
-(memory "sub-agent/answer" :when "the sub-agent is about to finish its job and write its final answer"
+(memory "internal/sub-agent/answer" :when "the sub-agent is about to finish its job and write its final answer"
   "Final answer: result first, then evidence (forms run, values seen, paths) , then what not checked.
 Exports get listed under answer by themselves: name, description, (agent-take \"agent\" 'name) to copy each.
 Refer to export by name. Never paste data exported already.")
