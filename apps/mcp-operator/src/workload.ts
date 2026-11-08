@@ -19,7 +19,7 @@ import type { RowOwner } from "./status-sink.ts";
 
 export const MANAGED_BY = "app.kubernetes.io/managed-by";
 export const MANAGER = "lisptc-mcp";
-const WORKSPACE_LABEL = "lisptc.io/workspace";
+export const WORKSPACE_LABEL = "lisptc.io/workspace";
 export const SERVER_LABEL = "lisptc.io/mcp-server";
 export const SPEC_HASH = "lisptc.io/spec-hash";
 export const EMPTY_SINCE = "lisptc.io/empty-since";

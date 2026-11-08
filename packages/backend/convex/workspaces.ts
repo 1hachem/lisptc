@@ -156,6 +156,21 @@ export const remove = mutation({
 	},
 });
 
+export const existing = internalQuery({
+	args: { ids: v.array(v.string()) },
+	returns: v.array(v.string()),
+	handler: async (ctx, { ids }) => {
+		if (ids.length > 256) throw new ConvexError({ code: "TOO_MANY" });
+		const found: string[] = [];
+		for (const id of ids) {
+			const normalized = ctx.db.normalizeId("workspaces", id);
+			if (normalized !== null && (await ctx.db.get(normalized)) !== null)
+				found.push(id);
+		}
+		return found;
+	},
+});
+
 export const owner = internalQuery({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.id("users"),

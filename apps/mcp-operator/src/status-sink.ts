@@ -19,3 +19,7 @@ export interface StatusSink {
 	observeServer(row: ServerRow): Promise<void>;
 	reconcile(snapshot: Snapshot): Promise<void>;
 }
+
+export interface Workspaces {
+	existing(ids: readonly string[]): Promise<ReadonlySet<string>>;
+}
