@@ -63,6 +63,12 @@ export class BridgedHost implements McpHost {
 		await this.desktop.close(name);
 	}
 
+	async remove(conf: ConnConfig): Promise<void> {
+		if (localServer(conf) === undefined || !this.opened.delete(conf.name))
+			return this.fallback.remove(conf);
+		await this.desktop.close(conf.name);
+	}
+
 	async stopAll(): Promise<void> {
 		const names = [...this.opened];
 		this.opened.clear();

@@ -4,6 +4,7 @@ import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import {
 	internalMutation,
+	internalQuery,
 	type MutationCtx,
 	mutation,
 	query,
@@ -152,6 +153,16 @@ export const remove = mutation({
 			name,
 			slug: slugify(name),
 		});
+	},
+});
+
+export const owner = internalQuery({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.id("users"),
+	handler: async (ctx, { workspaceId }) => {
+		const found = await ctx.db.get(workspaceId);
+		if (found === null) throw new ConvexError({ code: "NOT_FOUND" });
+		return found.ownerId;
 	},
 });
 

@@ -24,6 +24,7 @@
     "./oauth-callback": "./src/oauth-callback.ts",
     "./server-client": "./src/server-client.ts",
     "./thread-host": "./src/thread-host.ts",
+    "./mcp-actions": "./src/mcp-actions.ts",
     "./desktop-bridge": "./src/desktop-bridge.ts"
   },
   "scripts": {

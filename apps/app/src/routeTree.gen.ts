@@ -25,6 +25,7 @@ import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ApiChatSteerRouteImport } from './routes/api.chat.steer'
 import { Route as ApiChatStopRouteImport } from './routes/api.chat.stop'
 import { Route as ApiChatWatchRouteImport } from './routes/api.chat.watch'
+import { Route as ApiMcpActionRouteImport } from './routes/api.mcp.action'
 import { Route as ApiOauthCallbackRouteImport } from './routes/api.oauth.callback'
 import { Route as AppWorkspaceIdIndexRouteImport } from './routes/app/$workspaceId/index'
 import { Route as AppWorkspaceIdSplatRouteImport } from './routes/app/$workspaceId/$'
@@ -109,6 +110,11 @@ const ApiChatWatchRoute = ApiChatWatchRouteImport.update({
   path: '/watch',
   getParentRoute: () => ApiChatRoute,
 } as any)
+const ApiMcpActionRoute = ApiMcpActionRouteImport.update({
+  id: '/api/mcp/action',
+  path: '/api/mcp/action',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiOauthCallbackRoute = ApiOauthCallbackRouteImport.update({
   id: '/api/oauth/callback',
   path: '/api/oauth/callback',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
+  '/api/mcp/action': typeof ApiMcpActionRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/app/$workspaceId/$': typeof AppWorkspaceIdSplatRoute
   '/app/$workspaceId/': typeof AppWorkspaceIdIndexRoute
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
+  '/api/mcp/action': typeof ApiMcpActionRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/app/$workspaceId/$': typeof AppWorkspaceIdSplatRoute
   '/app/$workspaceId': typeof AppWorkspaceIdIndexRoute
@@ -183,6 +191,7 @@ export interface FileRoutesById {
   '/api/chat/steer': typeof ApiChatSteerRoute
   '/api/chat/stop': typeof ApiChatStopRoute
   '/api/chat/watch': typeof ApiChatWatchRoute
+  '/api/mcp/action': typeof ApiMcpActionRoute
   '/api/oauth/callback': typeof ApiOauthCallbackRoute
   '/app/$workspaceId/$': typeof AppWorkspaceIdSplatRoute
   '/app/$workspaceId/': typeof AppWorkspaceIdIndexRoute
@@ -206,6 +215,7 @@ export interface FileRouteTypes {
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
+    | '/api/mcp/action'
     | '/api/oauth/callback'
     | '/app/$workspaceId/$'
     | '/app/$workspaceId/'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
+    | '/api/mcp/action'
     | '/api/oauth/callback'
     | '/app/$workspaceId/$'
     | '/app/$workspaceId'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/api/chat/steer'
     | '/api/chat/stop'
     | '/api/chat/watch'
+    | '/api/mcp/action'
     | '/api/oauth/callback'
     | '/app/$workspaceId/$'
     | '/app/$workspaceId/'
@@ -263,6 +275,7 @@ export interface RootRouteChildren {
   ApiSymbolsRoute: typeof ApiSymbolsRoute
   ApiUiActionRoute: typeof ApiUiActionRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
+  ApiMcpActionRoute: typeof ApiMcpActionRoute
   ApiOauthCallbackRoute: typeof ApiOauthCallbackRoute
 }
 
@@ -380,6 +393,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatWatchRouteImport
       parentRoute: typeof ApiChatRoute
     }
+    '/api/mcp/action': {
+      id: '/api/mcp/action'
+      path: '/api/mcp/action'
+      fullPath: '/api/mcp/action'
+      preLoaderRoute: typeof ApiMcpActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/oauth/callback': {
       id: '/api/oauth/callback'
       path: '/api/oauth/callback'
@@ -456,6 +476,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSymbolsRoute: ApiSymbolsRoute,
   ApiUiActionRoute: ApiUiActionRoute,
   OauthCallbackRoute: OauthCallbackRoute,
+  ApiMcpActionRoute: ApiMcpActionRoute,
   ApiOauthCallbackRoute: ApiOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport

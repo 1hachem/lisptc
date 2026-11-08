@@ -210,6 +210,7 @@ describe("the bridge is the account's, not the window's", () => {
 	const cluster: McpHost = {
 		ensure: async () => undefined,
 		stop: async () => {},
+		remove: async () => {},
 		stopAll: async () => {},
 		status: () => "unknown",
 		logs: () => "",
