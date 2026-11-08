@@ -8,7 +8,6 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import { localStateArgs } from "./local-host.ts";
 import {
 	type CallbackServer,
 	issuerClient,
@@ -44,11 +43,7 @@ function sdkTransport(inner: McpTransport): Transport {
 	return outer;
 }
 
-function stdioTransport(
-	conf: ConnConfig,
-	stateHome: string | undefined,
-	scope: string | undefined,
-): StdioClientTransport {
+function stdioTransport(conf: ConnConfig): StdioClientTransport {
 	const command = "command" in conf ? conf.command : undefined;
 	if (command === undefined)
 		throw new Error(
@@ -56,9 +51,7 @@ function stdioTransport(
 		);
 	return new StdioClientTransport({
 		command,
-		args: stateHome
-			? localStateArgs(conf, stateHome, scope)
-			: (conf.args ?? []),
+		args: conf.args ?? [],
 		env: {
 			// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
 			...(process.env as Record<string, string>),
@@ -74,7 +67,6 @@ export interface McpClientPorts {
 	callbackPort: number;
 	clients?: OAuthClients;
 	scope?: string;
-	stateHome?: string;
 }
 
 function oauthScope(conf: OAuthConnConfig): string | undefined {
@@ -220,7 +212,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		conf: ConnConfig,
 		handle: ServerHandle | undefined,
 	): Transport {
-		if (!handle) return stdioTransport(conf, ports.stateHome, ports.scope);
+		if (!handle) return stdioTransport(conf);
 		if ("transport" in handle) return sdkTransport(handle.transport());
 		return new StreamableHTTPClientTransport(new URL(handle.url), {
 			requestInit: handle.headers ? { headers: handle.headers } : undefined,
@@ -309,6 +301,15 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			clients.delete(serverId);
 			await entry.client.close().catch(() => {});
 			await ports.host.stop(entry.name);
+		},
+
+		async remove(conf: ConnConfig): Promise<void> {
+			for (const [serverId, entry] of clients)
+				if (entry.name === conf.name) {
+					clients.delete(serverId);
+					await entry.client.close().catch(() => {});
+				}
+			await ports.host.remove(conf);
 		},
 
 		async asleep(serverId: string): Promise<boolean> {

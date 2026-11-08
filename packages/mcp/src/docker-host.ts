@@ -2,12 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { LocalProcessHost } from "./local-host.ts";
-import {
-	dnsLabel,
-	type Launch,
-	type State,
-	stateEntries,
-} from "./mcp-server-resource.ts";
+import type { Launch } from "./mcp-server-resource.ts";
 import type {
 	ConnConfig,
 	McpHost,
@@ -29,7 +24,6 @@ const MCP_PATH = "/mcp";
 
 const HOST_LABEL = "lisptc.mcp.host";
 const SERVER_LABEL = "lisptc.mcp.server";
-export const STATE_LABEL = "lisptc.mcp.state";
 
 interface Container {
 	id: string;
@@ -100,7 +94,6 @@ export class DockerHost implements McpHost {
 
 	constructor(
 		private readonly fallback: McpHost = new LocalProcessHost(),
-		private readonly scope = "local",
 		private readonly report: ServerReporter = () => {},
 	) {}
 
@@ -116,12 +109,23 @@ export class DockerHost implements McpHost {
 	}
 
 	async stop(name: string): Promise<void> {
-		const container = this.containers.get(name);
-		if (!container) return await this.fallback.stop(name);
-		this.containers.delete(name);
-		if (container.appId) await this.remove(container.appId);
-		await this.remove(container.id);
+		if (!(await this.drop(name))) return await this.fallback.stop(name);
 		this.report({ server: name, phase: "sleeping" });
+	}
+
+	async remove(conf: ConnConfig): Promise<void> {
+		if (launchFor(conf) === undefined) return await this.fallback.remove(conf);
+		await this.drop(conf.name);
+		this.report({ server: conf.name, phase: "gone" });
+	}
+
+	private async drop(name: string): Promise<boolean> {
+		const container = this.containers.get(name);
+		if (!container) return false;
+		this.containers.delete(name);
+		if (container.appId) await this.discard(container.appId);
+		await this.discard(container.id);
+		return true;
 	}
 
 	async stopAll(): Promise<void> {
@@ -155,13 +159,6 @@ export class DockerHost implements McpHost {
 			"--label",
 			`${SERVER_LABEL}=${conf.name}`,
 		];
-	}
-
-	private mounts(conf: ConnConfig, states: State[]): string[] {
-		return states.flatMap((state) => [
-			"--mount",
-			`type=volume,src=${volumeName(this.scope, conf.name, state.name)},dst=${state.path},volume-label=${STATE_LABEL}=${dnsLabel(this.scope)}`,
-		]);
 	}
 
 	private envFlags(conf: ConnConfig): string[] {
@@ -215,10 +212,6 @@ export class DockerHost implements McpHost {
 			"--publish",
 			`127.0.0.1::${launch.exposed}`,
 			...exposed.flatMap((port) => ["--publish", `127.0.0.1::${port.port}`]),
-			...this.mounts(
-				conf,
-				stateEntries("state" in conf ? conf.state : undefined),
-			),
 			...this.envFlags(conf),
 			launch.image,
 			...launch.args,
@@ -243,7 +236,6 @@ export class DockerHost implements McpHost {
 					"--ipc",
 					`container:${id}`,
 					...this.labels(conf),
-					...this.mounts(conf, stateEntries(app.state)),
 					...this.envFlags(conf),
 					app.image,
 					...(app.args ?? []),
@@ -257,8 +249,8 @@ export class DockerHost implements McpHost {
 			return container.handle;
 		} catch (ex) {
 			this.containers.delete(conf.name);
-			if (container.appId) await this.remove(container.appId);
-			await this.remove(id);
+			if (container.appId) await this.discard(container.appId);
+			await this.discard(id);
 			throw ex;
 		}
 	}
@@ -326,7 +318,7 @@ export class DockerHost implements McpHost {
 		tail.unref();
 	}
 
-	private async remove(id: string): Promise<void> {
+	private async discard(id: string): Promise<void> {
 		await exec("docker", ["stop", id]).catch(() => {});
 		await exec("docker", ["rm", "--force", "--volumes", id]).catch(() => {});
 	}
@@ -340,7 +332,7 @@ export class DockerHost implements McpHost {
 			`label=${HOST_LABEL}=${this.instance}`,
 		]).catch(() => undefined);
 		const ids = found?.stdout.trim().split("\n").filter(Boolean) ?? [];
-		for (const id of ids) await this.remove(id);
+		for (const id of ids) await this.discard(id);
 	}
 
 	private async docker(name: string, args: string[]): Promise<string> {
@@ -357,8 +349,4 @@ export class DockerHost implements McpHost {
 			);
 		}
 	}
-}
-
-export function volumeName(scope: string, server: string, state: string) {
-	return `lisptc-${dnsLabel(scope, 24)}-${dnsLabel(server, 24)}-${state}`;
 }

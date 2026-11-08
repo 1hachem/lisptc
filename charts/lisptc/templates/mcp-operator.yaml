@@ -54,9 +54,6 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get, create, update]
-  - apiGroups: [""]
-    resources: [persistentvolumeclaims]
-    verbs: [get, list, create, patch, delete]
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
     verbs: [get, create]
@@ -115,10 +112,6 @@ spec:
               value: {{ .Values.imagePullSecret | quote }}
             - name: LISPTC_MCP_IMAGE_TAG
               value: {{ include "lisptc.imageTag" (list . .Values.app.image.tag) | quote }}
-            {{- with .Values.mcp.storageClass }}
-            - name: LISPTC_MCP_STORAGE_CLASS
-              value: {{ . | quote }}
-            {{- end }}
             - name: CONVEX_URL
               value: {{ printf "http://convex-backend.%s.svc.cluster.local:3210" .Release.Namespace | quote }}
             - name: CONVEX_ADMIN_KEY

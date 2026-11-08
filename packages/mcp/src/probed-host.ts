@@ -45,6 +45,10 @@ export class ProbedHost implements McpHost {
 		await (await this.settled())?.stop(name);
 	}
 
+	async remove(conf: ConnConfig): Promise<void> {
+		await (await this.resolve()).remove(conf);
+	}
+
 	async stopAll(): Promise<void> {
 		await (await this.settled())?.stopAll();
 	}

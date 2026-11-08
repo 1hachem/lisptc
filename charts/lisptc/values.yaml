@@ -31,7 +31,6 @@ postgres:
 
 mcp:
   namespacePrefix: lisptc-ws-
-  storageClass: ""
 
 mcpOperator:
   image:

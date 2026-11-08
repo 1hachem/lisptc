@@ -17,7 +17,7 @@ function specSchema() {
 describe("the McpServer CRD", () => {
 	const validate = new Ajv({ strict: false }).compile(specSchema());
 
-	it("accepts the spec the host writes for a pair with state", () => {
+	it("accepts the spec the host writes for a pair", () => {
 		const valid = validate(server().spec);
 		expect(validate.errors ?? []).toEqual([]);
 		expect(valid).toBe(true);
@@ -43,14 +43,6 @@ describe("the McpServer CRD", () => {
 	it("rejects a secret that is not a valid name", () => {
 		const spec = structuredClone(server().spec);
 		spec.mcp.secret = "Not A Name";
-		expect(validate(spec)).toBe(false);
-	});
-
-	it("rejects a state path that is not absolute", () => {
-		const spec = structuredClone(server().spec);
-		const state = spec.app?.state[0];
-		if (!state) throw new Error("no state");
-		state.path = "data";
 		expect(validate(spec)).toBe(false);
 	});
 });

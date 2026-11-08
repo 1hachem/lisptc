@@ -83,9 +83,6 @@ const controller = new Controller({
 					},
 				}
 			: {}),
-		...(env.LISPTC_MCP_STORAGE_CLASS
-			? { storageClass: env.LISPTC_MCP_STORAGE_CLASS }
-			: {}),
 	},
 	lookup: (name) => servers.get(name, release),
 	all: () => [...servers.list(release)],

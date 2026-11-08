@@ -11,7 +11,6 @@ import {
 	type V1DaemonSet,
 	type V1Namespace,
 	type V1NetworkPolicy,
-	type V1PersistentVolumeClaim,
 	type V1Pod,
 	type V1Secret,
 	type V1Service,
@@ -48,18 +47,6 @@ export interface Cluster {
 	ensureService(namespace: string, service: V1Service): Promise<void>;
 	removePod(namespace: string, name: string): Promise<void>;
 	remove(namespace: string, name: string): Promise<void>;
-	claims(
-		namespace: string,
-		selector: string,
-	): Promise<V1PersistentVolumeClaim[]>;
-	createClaim(namespace: string, claim: V1PersistentVolumeClaim): Promise<void>;
-	annotateClaim(
-		namespace: string,
-		name: string,
-		annotations: Record<string, string | null>,
-	): Promise<void>;
-	resizeClaim(namespace: string, name: string, size: string): Promise<void>;
-	deleteClaim(namespace: string, name: string): Promise<void>;
 	logs(namespace: string, pod: string, container: string): Promise<string>;
 	lastEvent(namespace: string, pod: string): Promise<string | undefined>;
 	ensureDaemonSet(namespace: string, daemonSet: V1DaemonSet): Promise<void>;
@@ -69,7 +56,6 @@ export interface Cluster {
 	reachable(url: string): Promise<boolean>;
 	origin(namespace: string, service: string, port: number): string;
 	managedPods(): Promise<Located[]>;
-	managedClaims(): Promise<Located[]>;
 	managedNamespaces(): Promise<Located[]>;
 	annotateNamespace(
 		name: string,
@@ -181,42 +167,6 @@ export function clientCluster(config: KubeConfig): Cluster {
 				this.removePod(namespace, name),
 			]);
 		},
-		async claims(namespace, labelSelector) {
-			try {
-				const list = await core.listNamespacedPersistentVolumeClaim({
-					namespace,
-					labelSelector,
-				});
-				return list.items;
-			} catch (ex) {
-				if (isStatus(ex, 404)) return [];
-				throw ex;
-			}
-		},
-		async createClaim(namespace, body) {
-			await core.createNamespacedPersistentVolumeClaim({ namespace, body });
-		},
-		async annotateClaim(namespace, name, annotations) {
-			await core.patchNamespacedPersistentVolumeClaim(
-				{ namespace, name, body: { metadata: { annotations } } },
-				merge,
-			);
-		},
-		async resizeClaim(namespace, name, storage) {
-			await core.patchNamespacedPersistentVolumeClaim(
-				{
-					namespace,
-					name,
-					body: { spec: { resources: { requests: { storage } } } },
-				},
-				merge,
-			);
-		},
-		async deleteClaim(namespace, name) {
-			await tolerating(404, () =>
-				core.deleteNamespacedPersistentVolumeClaim({ namespace, name }),
-			);
-		},
 		async logs(namespace, name, container) {
 			try {
 				return await core.readNamespacedPodLog({
@@ -297,12 +247,6 @@ export function clientCluster(config: KubeConfig): Cluster {
 		},
 		async managedPods() {
 			const list = await core.listPodForAllNamespaces({
-				labelSelector: MANAGED,
-			});
-			return list.items.map(located);
-		},
-		async managedClaims() {
-			const list = await core.listPersistentVolumeClaimForAllNamespaces({
 				labelSelector: MANAGED,
 			});
 			return list.items.map(located);

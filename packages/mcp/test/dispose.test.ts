@@ -20,6 +20,7 @@ function hangingClient(): { client: McpClient; aborts: () => number } {
 			connect: (_conf, watch) => hang(watch?.signal),
 			callTool: (_call, signal) => hang(signal),
 			disconnect: () => Promise.resolve(),
+			remove: () => Promise.resolve(),
 			asleep: () => Promise.resolve(false),
 			login: () => Promise.resolve({ authUrl: null }),
 			logout: () => Promise.resolve(),

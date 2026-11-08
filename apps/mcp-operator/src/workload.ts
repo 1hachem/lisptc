@@ -4,18 +4,15 @@ import type {
 	V1DaemonSet,
 	V1Namespace,
 	V1NetworkPolicy,
-	V1PersistentVolumeClaim,
 	V1Pod,
 	V1Service,
 } from "@kubernetes/client-node";
 import {
-	claimName,
 	dnsLabel,
 	type McpServer,
 	type McpServerSpec,
 	type ResourceRequirements,
 	retagged,
-	type State,
 	workloadHash,
 } from "@repo/mcp-extension/kubernetes";
 import type { RowOwner } from "./status-sink.ts";
@@ -24,18 +21,9 @@ export const MANAGED_BY = "app.kubernetes.io/managed-by";
 export const MANAGER = "lisptc-mcp";
 const WORKSPACE_LABEL = "lisptc.io/workspace";
 export const SERVER_LABEL = "lisptc.io/mcp-server";
-export const STATE_LABEL = "lisptc.io/state";
 export const SPEC_HASH = "lisptc.io/spec-hash";
-export const RECLAIM = "lisptc.io/reclaim";
-export const RETENTION = "lisptc.io/retention";
-export const RELEASED_AT = "lisptc.io/released-at";
-export const WORKSPACE_ID = "lisptc.io/workspace-id";
-const SERVER_NAME = "lisptc.io/server-name";
-export const INSTANCE = "lisptc.io/instance";
-export const STATE_PATH = "lisptc.io/state-path";
 export const EMPTY_SINCE = "lisptc.io/empty-since";
 export const SHM_LIMIT = "1Gi";
-export const STATE_GROUP = 1001;
 
 const MCP_CONTAINER = "mcp";
 const APP_CONTAINER = "app";
@@ -80,7 +68,6 @@ export function rolledOut(
 export interface WorkloadPlacement {
 	namespace: string;
 	pullSecret?: string;
-	storageClass?: string;
 }
 
 export function namespaceFor(prefix: string, workspace: string): string {
@@ -174,19 +161,7 @@ export function selectorFor(name: string): string {
 	return `${MANAGED_BY}=${MANAGER},${SERVER_LABEL}=${name}`;
 }
 
-function volumeName(state: State): string {
-	return `state-${state.name}`;
-}
-
-function mounts(states: State[]) {
-	return [
-		{ name: "shm", mountPath: "/dev/shm" },
-		...states.map((state) => ({
-			name: volumeName(state),
-			mountPath: state.path,
-		})),
-	];
-}
+const MOUNTS = [{ name: "shm", mountPath: "/dev/shm" }];
 
 function hardened(
 	name: string,
@@ -203,10 +178,6 @@ function hardened(
 	};
 }
 
-export function statesOf(server: McpServer): State[] {
-	return [...server.spec.mcp.state, ...(server.spec.app?.state ?? [])];
-}
-
 export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 	const name = server.metadata.name;
 	const { mcp, app } = server.spec;
@@ -215,7 +186,7 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 			...hardened(MCP_CONTAINER, mcp.image, mcp.args, mcp.resources),
 			ports: [{ name: MCP_CONTAINER, containerPort: mcp.port }],
 			readinessProbe: { tcpSocket: { port: mcp.port }, periodSeconds: 2 },
-			volumeMounts: mounts(mcp.state),
+			volumeMounts: MOUNTS,
 			...(mcp.secret ? { envFrom: [{ secretRef: { name: mcp.secret } }] } : {}),
 		},
 	];
@@ -234,7 +205,7 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 						},
 					}
 				: {}),
-			volumeMounts: mounts(app.state),
+			volumeMounts: MOUNTS,
 		});
 	return {
 		metadata: {
@@ -245,17 +216,12 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 			restartPolicy: "Never",
 			automountServiceAccountToken: false,
 			enableServiceLinks: false,
-			securityContext: { fsGroup: STATE_GROUP },
 			...(placement.pullSecret
 				? { imagePullSecrets: [{ name: placement.pullSecret }] }
 				: {}),
 			containers,
 			volumes: [
 				{ name: "shm", emptyDir: { medium: "Memory", sizeLimit: SHM_LIMIT } },
-				...statesOf(server).map((state) => ({
-					name: volumeName(state),
-					persistentVolumeClaim: { claimName: claimName(name, state.name) },
-				})),
 			],
 		},
 	};
@@ -281,40 +247,6 @@ export function serviceFor(server: McpServer): V1Service {
 					targetPort: port.port,
 				})),
 			],
-		},
-	};
-}
-
-export function claimTerms(state: State): Record<string, string> {
-	return {
-		[RECLAIM]: state.reclaim,
-		[RETENTION]: String(state.retentionSeconds),
-	};
-}
-
-export function claimFor(
-	server: McpServer,
-	state: State,
-	placement: WorkloadPlacement,
-): V1PersistentVolumeClaim {
-	return {
-		metadata: {
-			name: claimName(server.metadata.name, state.name),
-			labels: { ...ownLabels(server), [STATE_LABEL]: state.name },
-			annotations: {
-				...claimTerms(state),
-				[WORKSPACE_ID]: server.spec.workspace,
-				[SERVER_NAME]: server.spec.server,
-				...(server.spec.instance ? { [INSTANCE]: server.spec.instance } : {}),
-				[STATE_PATH]: state.path,
-			},
-		},
-		spec: {
-			accessModes: ["ReadWriteOnce"],
-			resources: { requests: { storage: state.size } },
-			...(placement.storageClass
-				? { storageClassName: placement.storageClass }
-				: {}),
 		},
 	};
 }
@@ -404,15 +336,6 @@ export function ownerOf(server: McpServer): RowOwner {
 	return {
 		workspace,
 		server: name,
-		...(instance ? { instance } : {}),
-	};
-}
-
-export function claimOwner(annotations: Record<string, string>): RowOwner {
-	const instance = annotations[INSTANCE];
-	return {
-		workspace: annotations[WORKSPACE_ID] ?? "",
-		server: annotations[SERVER_NAME] ?? "",
 		...(instance ? { instance } : {}),
 	};
 }

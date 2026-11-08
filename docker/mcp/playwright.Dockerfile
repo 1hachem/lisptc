@@ -15,4 +15,4 @@ RUN mkdir -p /home/pwuser/profile
 
 EXPOSE 8931
 
-CMD ["sh", "-c", "rm -f /home/pwuser/profile/Singleton* && exec playwright-mcp --browser chromium --headless --no-sandbox --user-data-dir /home/pwuser/profile --shared-browser-context --host 0.0.0.0 --port 8931 --allowed-hosts '*'"]
+CMD ["playwright-mcp", "--browser", "chromium", "--headless", "--no-sandbox", "--user-data-dir", "/home/pwuser/profile", "--shared-browser-context", "--host", "0.0.0.0", "--port", "8931", "--allowed-hosts", "*"]

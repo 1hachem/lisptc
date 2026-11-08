@@ -1169,6 +1169,47 @@ export function registerMcp(
 	);
 
 	interp.def(
+		"remove-mcp",
+		1,
+		'(remove-mcp "server")',
+		'Remove an MCP server for good: unload it, drop it from the workspace and delete what runs it, so nothing of it is left. (load-mcp "server") starts it fresh.',
+		z.tuple([zName]),
+		([name]) => {
+			const entry = entryOf(servers, name);
+			const conf =
+				entry === undefined
+					? shown().get(name)
+					: connConfigFromArgs(entry.args, shown(), toolkit.local, commands);
+			if (conf === undefined)
+				throw new EvalException("unknown MCP server", name, false);
+			return Promise.resolve(registry.unmount(name))
+				.then(() => {
+					const loadedEntry = entryOf(servers, name);
+					if (loadedEntry === undefined) return;
+					for (const sym of toolSyms(loadedEntry)) interp.undefineGlobal(sym);
+					servers.set(servers.get().filter((e) => e.name !== name));
+				})
+				.then(() =>
+					withTimeout(client.remove(conf), CALL_TIMEOUT_MS, "remove-mcp"),
+				)
+				.then(() => newLispKeyword("removed"));
+		},
+		[
+			{
+				name: "server",
+				type: "string",
+				required: true,
+				description: "An MCP server of the toolkit, loaded or not.",
+				values: () =>
+					[...shown().values()].map((conf) => ({
+						value: conf.name,
+						description: conf.description,
+					})),
+			},
+		],
+	);
+
+	interp.def(
 		"mcp-authorize",
 		-1,
 		'(mcp-authorize "server" "code")',
@@ -1203,16 +1244,18 @@ export function registerMcp(
 	interp.def(
 		"login",
 		-1,
-		'(login "server")',
-		'Log in to an OAuth MCP server: return :logged-in if already authenticated, otherwise ask the user to authorize it and end the turn. After they authorize, (load-mcp "server") connects.',
+		'(login "server" [:url t])',
+		'Log in to an OAuth MCP server: return :logged-in if already authenticated, otherwise ask the user to authorize it and end the turn. With :url t, return the authorization link as a string instead of asking. After they authorize, (load-mcp "server") connects.',
 		z.tuple([zList]),
 		([rest]) => {
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(shown(), name);
+			const asLink = wantsLink(args.slice(1));
 			return withTimeout(client.login(conf), CALL_TIMEOUT_MS, "login").then(
 				({ authUrl }) => {
 					if (authUrl === null) return newLispKeyword("logged-in");
+					if (asLink) return authUrl;
 					throw holdForAuthorization(
 						interp,
 						new AuthorizationRequired(name, authUrl, false),
@@ -1521,6 +1564,16 @@ function oauthServer(
 	if (!conf || !("url" in conf || ("image" in conf && conf.oauth)))
 		throw new EvalException("unknown OAuth MCP server", name, false);
 	return conf;
+}
+
+function wantsLink(options: unknown[]): boolean {
+	for (let i = 0; i < options.length; i += 2) {
+		const key = options[i];
+		if (!(key instanceof LispKeyword) || key.name !== "url")
+			throw new EvalException("login takes only :url", key ?? null, false);
+		if (options[i + 1] !== null && options[i + 1] !== undefined) return true;
+	}
+	return false;
 }
 
 function asName(x: unknown): string {

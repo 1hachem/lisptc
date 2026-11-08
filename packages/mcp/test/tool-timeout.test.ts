@@ -30,6 +30,7 @@ function stallingClient(): { client: McpClient; calls: ToolCall[] } {
 				return new Promise(() => {});
 			},
 			disconnect: () => Promise.resolve(),
+			remove: () => Promise.resolve(),
 			login: () => Promise.resolve({ authUrl: null }),
 			logout: () => Promise.resolve(),
 			authorize: () => Promise.resolve(),

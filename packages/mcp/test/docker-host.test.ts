@@ -154,7 +154,7 @@ describe("what the docker host reports about the containers it runs", () => {
 	function reporting(lives: number) {
 		process.env.STUB_DOCKER_LIVES = String(lives);
 		const reports: ServerReport[] = [];
-		const host = new DockerHost(recordingHost(), "ws", (r) => reports.push(r));
+		const host = new DockerHost(recordingHost(), (r) => reports.push(r));
 		return { host, reports };
 	}
 
@@ -169,6 +169,16 @@ describe("what the docker host reports about the containers it runs", () => {
 			{ server: "playwright", phase: "ready" },
 			{ server: "playwright", phase: "sleeping" },
 		]);
+	});
+
+	it("reports a removed server gone, so its row goes", async () => {
+		const { host, reports } = reporting(30);
+
+		await host.ensure(playwright);
+		await host.remove(playwright);
+
+		expect(reports.at(-1)).toEqual({ server: "playwright", phase: "gone" });
+		expect(host.status("playwright")).toBe("unknown");
 	});
 
 	it("reports a server failed when its container cannot be run", async () => {

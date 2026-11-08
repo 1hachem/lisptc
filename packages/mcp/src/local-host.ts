@@ -1,7 +1,4 @@
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { stateEntries } from "./mcp-server-resource.ts";
 import type {
 	ConnConfig,
 	McpHost,
@@ -21,21 +18,6 @@ interface LocalServer {
 function whyItDied(server: LocalServer): string {
 	const tail = server.stderr.trim().split("\n").slice(-6).join("\n");
 	return tail ? `\n${tail}` : "";
-}
-
-export function localStateArgs(
-	conf: ConnConfig,
-	stateHome: string,
-	scope?: string,
-): string[] {
-	const args = conf.args ?? [];
-	if (!("image" in conf)) return args;
-	const states = stateEntries(conf.state);
-	return states.reduce((rewritten, state) => {
-		const dir = join(stateHome, scope ?? "", conf.name, state.name);
-		mkdirSync(dir, { recursive: true });
-		return rewritten.map((arg) => arg.replaceAll(state.path, dir));
-	}, args);
 }
 
 export class LocalProcessHost implements McpHost {
@@ -92,6 +74,10 @@ export class LocalProcessHost implements McpHost {
 			server.child.kill("SIGTERM");
 		}
 		this.started.delete(name);
+	}
+
+	async remove(conf: ConnConfig): Promise<void> {
+		await this.stop(conf.name);
 	}
 
 	async stopAll(): Promise<void> {

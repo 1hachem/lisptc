@@ -67,6 +67,10 @@ is WRONG, an arity error. For one server: load it, then
   lists only those servers. Unloaded name is error.
 - (unload-mcp "name") , (login "name") , (logout "name") ,
 (mcp-authorize "name" "code") , (mcp-shutdown) .
+- (remove-mcp "name") gives :removed. Unloads server, drops it from
+  workspace, deletes what runs it: nothing kept. Next (load-mcp "name")
+  starts fresh. Only when user asks to remove or delete it; to free it for
+  now, unload-mcp.
 - Load is per workspace, not per chat: server loaded in one chat is bound in
   every chat; unload-mcp and mcp-shutdown remove it from all. Server loaded
   elsewhere, or stopped while unused, shows :dormant : tools defined, first
@@ -74,6 +78,8 @@ is WRONG, an arity error. For one server: load it, then
 - login/logout only for :oauth t servers:
   - (login "name") gives :logged-in if authenticated. Else, like load needing
     login, asks user to authorize, ends turn; you are told when they answer.
+  - (login "name" :url t) gives authorization link as string, no ask, turn
+    goes on. Only when user wants link itself.
   - User authorized: run (await (load-mcp "name")) , carry on with original
     request; redirect captured for you. Only when they hand back bare code,
     run (mcp-authorize "name" "<code>") before that load. Never ask for code

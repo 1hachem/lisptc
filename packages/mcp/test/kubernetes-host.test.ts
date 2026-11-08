@@ -14,7 +14,7 @@ const browser: ContainerConnConfig = {
 	image: "playwright-mcp",
 	port: 8931,
 	headers: { authorization: "Bearer x" },
-	app: { image: "chromium-vnc", state: "/data/profile" },
+	app: { image: "chromium-vnc" },
 };
 
 const remote = {
@@ -36,6 +36,7 @@ const ready: Operator = (server) => ({
 function fakeStore(operator: Operator = ready) {
 	const servers = new Map<string, McpServer>();
 	const patches: Partial<McpServer["spec"]>[] = [];
+	const removed: string[] = [];
 	let uid = 0;
 	const store: ServerStore = {
 		async get(name) {
@@ -61,8 +62,12 @@ function fakeStore(operator: Operator = ready) {
 			server.metadata.generation = (server.metadata.generation ?? 0) + 1;
 			return structuredClone(server);
 		},
+		async remove(name) {
+			removed.push(name);
+			servers.delete(name);
+		},
 	};
-	return { store, servers, patches };
+	return { store, servers, patches, removed };
 }
 
 function host(
@@ -115,9 +120,7 @@ describe("the kubernetes host", () => {
 			headers: { authorization: "Bearer x" },
 		});
 		const server = fake.servers.get(NAME);
-		expect(server?.spec.app?.state).toMatchObject([
-			{ name: "profile", path: "/data/profile" },
-		]);
+		expect(server?.spec.app?.image).toBe("chromium-vnc");
 		expect(server?.spec.lastUsed).toBe(1000);
 	});
 
@@ -211,6 +214,48 @@ describe("the kubernetes host", () => {
 		expect(fake.servers.get(NAME)?.spec.instance).toBeUndefined();
 	});
 
+	it("deletes the server it was asked to remove", async () => {
+		const fake = fakeStore();
+		const kube = host(fake.store);
+		await kube.ensure(browser);
+
+		await kube.remove(browser);
+
+		expect(fake.removed).toEqual([NAME]);
+		expect(fake.servers.has(NAME)).toBe(false);
+		expect(kube.status("playwright")).toBe("unknown");
+	});
+
+	it("deletes a server it never started, by the name it would have", async () => {
+		const fake = fakeStore();
+
+		await host(fake.store).remove(browser);
+
+		expect(fake.removed).toEqual([NAME]);
+	});
+
+	it("deletes only this chat's own instance of a dedicated server", async () => {
+		const fake = fakeStore();
+		const own = { ...browser, tenancy: "dedicated" } as const;
+		await chatHost(fake.store, "chat-a").ensure(own);
+		await host(fake.store).ensure(browser);
+
+		await chatHost(fake.store, "chat-a").remove(own);
+
+		expect(fake.removed).toEqual([serverName("ws1", "playwright", "chat-a")]);
+		expect(fake.servers.has(NAME)).toBe(true);
+	});
+
+	it("hands a server without a container to its fallback to remove", async () => {
+		const fake = fakeStore();
+		const fallback = recordingHost();
+
+		await host(fake.store, fallback).remove(remote);
+
+		expect(fallback.removed).toEqual(["remote"]);
+		expect(fake.removed).toEqual([]);
+	});
+
 	it("runs a dedicated server once per chat, apart from the shared one", async () => {
 		const fake = fakeStore();
 		const own = { ...browser, tenancy: "dedicated" } as const;
@@ -232,24 +277,7 @@ describe("the kubernetes host", () => {
 		).toMatchObject({ server: "playwright", instance: "chat-b" });
 	});
 
-	it("keeps a resize and a reset made on the live server", async () => {
-		const fake = fakeStore();
-		await host(fake.store).ensure(browser);
-		const live = fake.servers.get(NAME);
-		const state = live?.spec.app?.state[0];
-		if (!state) throw new Error("no state");
-		state.size = "5Gi";
-		state.reset = 2;
-
-		await host(fake.store).ensure(browser);
-
-		expect(fake.servers.get(NAME)?.spec.app?.state[0]).toMatchObject({
-			size: "5Gi",
-			reset: 2,
-		});
-	});
-
-	it("raises restarts on a failed server, and never deletes it", async () => {
+	it("raises restarts on a failed server instead of recreating it", async () => {
 		let failNext = 0;
 		const fake = fakeStore((server) => {
 			if (failNext === 0) return ready(server);

@@ -29,7 +29,6 @@ describe("the MCP servers the operator mirrors", () => {
 				},
 				{ workspaceId, server: "github", phase: "sleeping" },
 			],
-			state: [],
 		});
 
 		const { servers } = await alice.as.query(api.mcpServers.list, {
@@ -65,6 +64,28 @@ describe("the MCP servers a docker host reports", () => {
 		expect(servers[0]?.phase).toBe("failed");
 		expect(servers[0]?.reason).toHaveLength(MAX_MCP_REASON_LENGTH);
 		expect(servers[0]?.reason?.endsWith("its container exited.")).toBe(true);
+	});
+
+	it("drops the row of a server its host reports gone", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.mcpServers.report, {
+			workspaceId,
+			server: "fs",
+			phase: "ready",
+		});
+
+		await alice.as.mutation(api.mcpServers.report, {
+			workspaceId,
+			server: "fs",
+			phase: "gone",
+		});
+
+		const { servers } = await alice.as.query(api.mcpServers.list, {
+			workspaceId,
+		});
+		expect(servers).toEqual([]);
 	});
 
 	it("refuses a report into someone else's workspace", async () => {
@@ -146,7 +167,7 @@ describe("the MCP servers a workspace has loaded", () => {
 			tools: "[]",
 		});
 
-		await t.mutation(internal.mcpServers.reconcile, { servers: [], state: [] });
+		await t.mutation(internal.mcpServers.reconcile, { servers: [] });
 
 		expect(
 			await alice.as.query(api.mcpServers.mounts, { workspaceId }),

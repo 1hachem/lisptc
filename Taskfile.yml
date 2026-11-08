@@ -33,19 +33,10 @@ tasks:
       - LISPTC_DESKTOP_URL={{.URL}} pnpm --filter @lisptc/desktop dev
 
   mcp:reap:
-    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown), and the volumes they kept their state on
-    cmds:
-      - |
-        ids=$(docker ps -aq --filter label=lisptc.mcp.host)
-        if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
-      - task: mcp:reap:state
-
-  mcp:reap:state:
-    desc: delete the volumes MCP servers keep their state on, for one workspace or (WORKSPACE unset) all of them
+    desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
     cmd: |
-      filter="label=lisptc.mcp.state{{if .WORKSPACE}}={{.WORKSPACE}}{{end}}"
-      volumes=$(docker volume ls -q --filter "$filter")
-      if [ -z "$volumes" ]; then echo "no MCP state volumes"; else docker volume rm $volumes; fi
+      ids=$(docker ps -aq --filter label=lisptc.mcp.host)
+      if [ -z "$ids" ]; then echo "no orphaned MCP containers"; else docker rm -f $ids; fi
 
   registry:
     desc: start the local image registry tilt pushes to and k3s pulls from

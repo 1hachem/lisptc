@@ -1,7 +1,6 @@
 import type {
 	V1DaemonSet,
 	V1Namespace,
-	V1PersistentVolumeClaim,
 	V1Pod,
 	V1Service,
 } from "@kubernetes/client-node";
@@ -17,12 +16,7 @@ import {
 import type { ContainerConnConfig } from "@repo/mcp-extension/ports";
 import type { Cluster, Located, Servers } from "../src/cluster.ts";
 import type { Deps } from "../src/reconcile.ts";
-import type {
-	ServerRow,
-	Snapshot,
-	StateRow,
-	StatusSink,
-} from "../src/status-sink.ts";
+import type { ServerRow, Snapshot, StatusSink } from "../src/status-sink.ts";
 
 export const RELEASE = "lisptc";
 export const PREFIX = "lisptc-ws-";
@@ -40,7 +34,6 @@ export const browser: ContainerConnConfig = {
 			{ name: "view", port: 6080 },
 		],
 		expose: ["view"],
-		state: "/data/profile",
 	},
 };
 
@@ -72,9 +65,7 @@ export function fakeCluster() {
 	const copied: string[] = [];
 	const pods = new Map<string, V1Pod>();
 	const services = new Map<string, V1Service>();
-	const claims = new Map<string, V1PersistentVolumeClaim>();
 	const removed: string[] = [];
-	const resizeRefusal = { message: undefined as string | undefined };
 	const daemonSets = new Map<string, V1DaemonSet>();
 	let answering = true;
 	let logs = "";
@@ -139,33 +130,6 @@ export function fakeCluster() {
 			services.delete(key(namespace, name));
 			removed.push(`all ${name}`);
 		},
-		async claims(namespace, selector) {
-			return matching(claims, namespace, selector);
-		},
-		async createClaim(namespace, claim) {
-			const k = key(namespace, claim.metadata?.name ?? "");
-			if (claims.has(k)) throw new Error(`claim ${k} already exists`);
-			claims.set(k, claim);
-		},
-		async annotateClaim(namespace, name, annotations) {
-			const claim = claims.get(key(namespace, name));
-			if (!claim?.metadata) throw new Error(`no claim ${name}`);
-			const next = { ...claim.metadata.annotations };
-			for (const [k, value] of Object.entries(annotations))
-				if (value === null) delete next[k];
-				else next[k] = value;
-			claim.metadata.annotations = next;
-		},
-		async resizeClaim(namespace, name, size) {
-			if (resizeRefusal.message) throw new Error(resizeRefusal.message);
-			const claim = claims.get(key(namespace, name));
-			if (!claim?.spec) throw new Error(`no claim ${name}`);
-			claim.spec.resources = { requests: { storage: size } };
-		},
-		async deleteClaim(namespace, name) {
-			claims.delete(key(namespace, name));
-			removed.push(`claim ${name}`);
-		},
 		async logs() {
 			return logs;
 		},
@@ -195,9 +159,6 @@ export function fakeCluster() {
 		},
 		async managedPods() {
 			return locate(pods);
-		},
-		async managedClaims() {
-			return locate(claims);
 		},
 		async managedNamespaces() {
 			return [...namespaces.values()].map((ns) => ({
@@ -229,27 +190,16 @@ export function fakeCluster() {
 		copied,
 		pods,
 		services,
-		claims,
 		removed,
 		daemonSets,
 		setEvent(value: string | undefined) {
 			event = value;
-		},
-		refuseResize(message: string) {
-			resizeRefusal.message = message;
 		},
 		setAnswering(value: boolean) {
 			answering = value;
 		},
 		setLogs(value: string) {
 			logs = value;
-		},
-		bindAll() {
-			for (const claim of claims.values())
-				claim.status = {
-					phase: "Bound",
-					capacity: { storage: claim.spec?.resources?.requests?.storage ?? "" },
-				};
 		},
 		runPods(ready = true) {
 			for (const pod of pods.values())
@@ -288,20 +238,16 @@ function recordingServers(target: McpServer) {
 
 export function recordingSink() {
 	const servers: ServerRow[] = [];
-	const state: StateRow[] = [];
 	const snapshots: Snapshot[] = [];
 	const sink: StatusSink = {
 		async observeServer(row) {
 			servers.push(row);
 		},
-		async observeState(row) {
-			state.push(row);
-		},
 		async reconcile(snapshot) {
 			snapshots.push(snapshot);
 		},
 	};
-	return { sink, servers, state, snapshots };
+	return { sink, servers, snapshots };
 }
 
 export function world(target: McpServer = server()) {

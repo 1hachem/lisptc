@@ -10,7 +10,6 @@ export const mcpOperatorEnv = createEnv({
 			.default("lisptc-ws-"),
 		LISPTC_MCP_PULL_SECRET: z.string().optional(),
 		LISPTC_MCP_IMAGE_TAG: z.string().optional(),
-		LISPTC_MCP_STORAGE_CLASS: z.string().optional(),
 		CONVEX_URL: z.url(),
 		CONVEX_ADMIN_KEY: z.string().min(1),
 	},

@@ -22,9 +22,8 @@ by `charts/lisptc/crds`. A test fails when they disagree.
 
 ## Rules
 
-**A claim is never deleted to recover from anything.** A failure recreates the
-pod, idling sleeps it, and only a `Delete` reclaim, a raised `reset`, or a
-retention that has run out drops data.
+**A pod keeps nothing.** A failure recreates it, idling sleeps it, and deleting
+the `McpServer` takes its pod and service with it. No volume outlives a pod.
 
 **One operator per release, and it touches only its own prefix.** Every sweep
 filters on the namespace prefix it was given, because previews share the cluster.
@@ -35,9 +34,9 @@ cannot finish yet it returns as a requeue, never as a wait inside the call.
 What the cluster lets this do is granted in `charts/lisptc/templates/mcp-operator.yaml`,
 so a new kind of object needs a rule there too.
 
-**The app declares, and only this acts.** The app writes an `McpServer`'s spec
-and reads its status, and its role in `charts/lisptc/templates/mcp-rbac.yaml`
-grants nothing more. Something new the app needs from the cluster is a spec
+**The app declares, and only this acts.** The app writes an `McpServer`'s spec,
+deletes one a user removes, and reads its status, and its role in
+`charts/lisptc/templates/mcp-rbac.yaml` grants nothing more. Something new the app needs from the cluster is a spec
 field this reconciles, never a wider grant to the app.
 
 **A server on the cluster takes no env from the app.** Nothing carries a value
@@ -45,13 +44,10 @@ from the app into a pod. A server that needs a credential names a Secret in the
 release namespace, and this copies it into the workspace namespace and hands it
 over whole. The app never writes one.
 
-**A state volume is written by the user the image runs as.** The pod's group is
-what lets it, so an image that runs as another user needs its group matched.
-
 **Production runs the bundle and nothing beside it.** A dependency the bundle
 leaves out does not exist there.
 
 ## Tests
 
 Tests hand the reconcile a fake cluster from `test/helpers.ts`, never a real
-one. A behaviour in the claim lifecycle gets a case in `test/reconcile.test.ts`.
+one. A behaviour of the reconcile gets a case in `test/reconcile.test.ts`.

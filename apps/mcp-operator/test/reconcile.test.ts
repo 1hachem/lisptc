@@ -1,35 +1,19 @@
-import { claimName, serverName } from "@repo/mcp-extension/kubernetes";
+import { serverName } from "@repo/mcp-extension/kubernetes";
 import { describe, expect, it } from "vitest";
 import { FINALIZER, reconcile } from "../src/reconcile.ts";
-import {
-	INSTANCE,
-	RECLAIM,
-	RELEASED_AT,
-	SHM_LIMIT,
-	SPEC_HASH,
-	STATE_GROUP,
-} from "../src/workload.ts";
-import { browser, NAMESPACE, RELEASE, server, world } from "./helpers.ts";
+import { SHM_LIMIT, SPEC_HASH } from "../src/workload.ts";
+import { NAMESPACE, RELEASE, server, world } from "./helpers.ts";
 
 async function readyWorld() {
 	const w = world();
 	await reconcile(w.target, w.deps(1000));
-	w.fake.bindAll();
 	w.fake.runPods();
 	await reconcile(w.target, w.deps(1001));
 	return w;
 }
 
-function profileClaim(w: ReturnType<typeof world>) {
-	const claim = w.fake.claims.get(
-		`${NAMESPACE}/${claimName(w.target.metadata.name, "profile")}`,
-	);
-	if (!claim) throw new Error("no profile claim");
-	return claim;
-}
-
 describe("a new server", () => {
-	it("prepares its namespace and starts the pair on its own claim", async () => {
+	it("prepares its namespace and starts the pair", async () => {
 		const w = world();
 
 		const outcome = await reconcile(w.target, w.deps(1000));
@@ -52,14 +36,11 @@ describe("a new server", () => {
 		]);
 		expect(containers[1]?.volumeMounts).toEqual([
 			{ name: "shm", mountPath: "/dev/shm" },
-			{ name: "state-profile", mountPath: "/data/profile" },
 		]);
-		expect(pod?.spec?.volumes).toContainEqual({
-			name: "shm",
-			emptyDir: { medium: "Memory", sizeLimit: SHM_LIMIT },
-		});
+		expect(pod?.spec?.volumes).toEqual([
+			{ name: "shm", emptyDir: { medium: "Memory", sizeLimit: SHM_LIMIT } },
+		]);
 		expect(pod?.spec?.restartPolicy).toBe("Never");
-		expect(pod?.spec?.securityContext?.fsGroup).toBe(STATE_GROUP);
 		expect(pod?.spec?.imagePullSecrets).toEqual([{ name: "ghcr-pull" }]);
 
 		const service = w.fake.services.get(
@@ -67,7 +48,6 @@ describe("a new server", () => {
 		);
 		expect(service?.spec?.ports?.map((p) => p.name)).toEqual(["mcp", "view"]);
 
-		expect(profileClaim(w).spec?.resources?.requests?.storage).toBe("1Gi");
 		expect(containers.every((c) => c.envFrom === undefined)).toBe(true);
 	});
 
@@ -93,20 +73,18 @@ describe("a new server", () => {
 		]);
 	});
 
-	it("runs one container and no claim when it has no app", async () => {
+	it("runs one container when it has no app", async () => {
 		const w = world(server({ name: "fs", image: "fs-mcp", port: 8000 }));
 
 		await reconcile(w.target, w.deps(1000));
 
 		const pod = w.fake.pods.get(`${NAMESPACE}/${w.target.metadata.name}`);
 		expect(pod?.spec?.containers.map((c) => c.name)).toEqual(["mcp"]);
-		expect(w.fake.claims.size).toBe(0);
 	});
 
 	it("is Ready only once both containers are ready and the mcp answers", async () => {
 		const w = world();
 		await reconcile(w.target, w.deps(1000));
-		w.fake.bindAll();
 		w.fake.runPods();
 		w.fake.setAnswering(false);
 
@@ -120,10 +98,6 @@ describe("a new server", () => {
 		expect(w.target.status?.endpoints).toEqual({
 			mcp: `http://${w.target.metadata.name}.${NAMESPACE}:8931/mcp`,
 			view: `http://${w.target.metadata.name}.${NAMESPACE}:6080`,
-		});
-		expect(w.target.status?.state?.profile).toMatchObject({
-			phase: "Bound",
-			lastAttached: 1002,
 		});
 		expect(outcome.requeueAt).toBe(1600);
 		expect(w.sink.servers).toMatchObject([
@@ -139,7 +113,6 @@ describe("a new server", () => {
 	it("says it is fetching the image while its containers are being created", async () => {
 		const w = world();
 		await reconcile(w.target, w.deps(1000));
-		w.fake.bindAll();
 		for (const pod of w.fake.pods.values())
 			pod.status = {
 				phase: "Pending",
@@ -169,7 +142,6 @@ describe("a new server", () => {
 	it("says which node it waits for when the pod cannot be placed", async () => {
 		const w = world();
 		await reconcile(w.target, w.deps(1000));
-		w.fake.bindAll();
 		for (const pod of w.fake.pods.values())
 			pod.status = {
 				phase: "Pending",
@@ -271,158 +243,53 @@ describe("rolling the pod", () => {
 		expect(w.fake.pods.has(name)).toBe(true);
 	});
 
-	it("brings a failed pair back on the same claim when restarts is raised", async () => {
+	it("brings a failed pair back on a new pod when restarts is raised", async () => {
 		const w = await readyWorld();
-		const claim = profileClaim(w);
 
 		w.target.spec.restarts = 1;
 		await reconcile(w.target, w.deps(1100));
 		await reconcile(w.target, w.deps(1101));
 
-		expect(profileClaim(w)).toBe(claim);
 		expect(w.fake.removed).toContain(`pod ${w.target.metadata.name}`);
-		expect(w.fake.removed).not.toContain(
-			`claim ${claimName(w.target.metadata.name, "profile")}`,
-		);
+		expect(w.fake.pods.size).toBe(1);
 	});
 });
 
-describe("the state a pair keeps", () => {
-	it("sleeps when idle, keeping its claim, and wakes on it", async () => {
+describe("sleeping and deleting", () => {
+	it("sleeps when idle and wakes on a fresh pod", async () => {
 		const w = await readyWorld();
-		const claim = profileClaim(w);
 
 		await reconcile(w.target, w.deps(1600));
 
 		expect(w.target.status?.phase).toBe("Sleeping");
 		expect(w.fake.pods.size).toBe(0);
-		expect(profileClaim(w)).toBe(claim);
-		expect(w.target.status?.state?.profile?.lastAttached).toBe(1600);
 
 		w.target.spec.lastUsed = 2000;
 		await reconcile(w.target, w.deps(2000));
 		expect(w.fake.pods.size).toBe(1);
-		expect(profileClaim(w)).toBe(claim);
 	});
 
-	it("patches the claim when its size is raised", async () => {
+	it("takes its pod and service with it when the server is deleted", async () => {
 		const w = await readyWorld();
-		const state = w.target.spec.app?.state[0];
-		if (!state) throw new Error("no state");
-		state.size = "5Gi";
-
-		await reconcile(w.target, w.deps(1100));
-
-		expect(profileClaim(w).spec?.resources?.requests?.storage).toBe("5Gi");
-		expect(w.target.status?.state?.profile?.phase).toBe("Resizing");
-	});
-
-	it("reports a resize the storage class refuses and leaves the data", async () => {
-		const w = await readyWorld();
-		const state = w.target.spec.app?.state[0];
-		if (!state) throw new Error("no state");
-		state.size = "5Gi";
-		w.fake.refuseResize("only dynamically provisioned pvc can be resized");
-
-		await reconcile(w.target, w.deps(1100));
-
-		expect(w.target.status?.state?.profile?.reason).toMatch(
-			/cannot resize to 5Gi/,
-		);
-		expect(profileClaim(w).spec?.resources?.requests?.storage).toBe("1Gi");
-	});
-
-	it("starts over on an empty claim when reset is raised", async () => {
-		const w = await readyWorld();
-		const before = profileClaim(w);
-		const state = w.target.spec.app?.state[0];
-		if (!state) throw new Error("no state");
-		state.reset = 1;
-
-		await reconcile(w.target, w.deps(1100));
-		expect(w.fake.claims.size).toBe(0);
-		expect(w.fake.pods.size).toBe(0);
-
-		await reconcile(w.target, w.deps(1101));
-		expect(profileClaim(w)).not.toBe(before);
-		expect(w.target.status?.state?.profile?.observedReset).toBe(1);
-
-		await reconcile(w.target, w.deps(1102));
-		expect(w.fake.claims.size).toBe(1);
-	});
-
-	it("releases the claim of an entry dropped from the spec", async () => {
-		const w = await readyWorld();
-		const app = w.target.spec.app;
-		if (!app) throw new Error("no app");
-		app.state = [];
-
-		await reconcile(w.target, w.deps(1100));
-
-		expect(profileClaim(w).metadata?.annotations?.[RELEASED_AT]).toBe("1100");
-		expect(w.sink.state.at(-1)).toMatchObject({
-			name: "profile",
-			phase: "released",
-			releasedAt: 1100,
-		});
-	});
-
-	it("keeps a Retain claim when the server is deleted, and reattaches it", async () => {
-		const w = await readyWorld();
-		const claim = profileClaim(w);
 		w.target.metadata.deletionTimestamp = "2026-10-11T00:00:00Z";
 
 		await reconcile(w.target, w.deps(1100));
 
 		expect(w.target.metadata.finalizers).toEqual([]);
 		expect(w.fake.pods.size).toBe(0);
-		expect(claim.metadata?.annotations?.[RELEASED_AT]).toBe("1100");
+		expect(w.fake.services.size).toBe(0);
 		expect(w.sink.servers.at(-1)?.phase).toBe("gone");
-
-		const again = world(server(browser, 1200));
-		again.fake.claims.set(
-			`${NAMESPACE}/${claim.metadata?.name}`,
-			structuredClone(claim),
-		);
-		await reconcile(again.target, again.deps(1200));
-		expect(profileClaim(again).metadata?.annotations?.[RELEASED_AT]).toBe(
-			undefined,
-		);
-	});
-
-	it("deletes a Delete claim with its server", async () => {
-		const w = world(
-			server({
-				...browser,
-				app: {
-					image: "chromium-vnc",
-					state: { path: "/data/profile", reclaim: "Delete" },
-				},
-			}),
-		);
-		await reconcile(w.target, w.deps(1000));
-		expect(profileClaim(w).metadata?.annotations?.[RECLAIM]).toBe("Delete");
-		w.target.metadata.deletionTimestamp = "2026-10-11T00:00:00Z";
-
-		await reconcile(w.target, w.deps(1100));
-
-		expect(w.fake.claims.size).toBe(0);
-		expect(w.sink.state.at(-1)).toMatchObject({
-			name: "profile",
-			phase: "gone",
-		});
 	});
 });
 
 describe("the table it keeps in step", () => {
-	it("keeps a chat's own instance apart in every row and on its claim", async () => {
+	it("keeps a chat's own instance apart in every row", async () => {
 		const own = server();
 		own.metadata.name = serverName("ws1", own.spec.server, "chat-a");
 		own.spec.instance = "chat-a";
 		const w = world(own);
 
 		await reconcile(w.target, w.deps(1000));
-		w.fake.bindAll();
 		w.fake.runPods();
 		await reconcile(w.target, w.deps(1001));
 
@@ -430,8 +297,6 @@ describe("the table it keeps in step", () => {
 			w.sink.servers.map(() => "chat-a"),
 		);
 		expect(w.sink.servers.length).toBeGreaterThan(0);
-		expect(w.sink.state.every((row) => row.instance === "chat-a")).toBe(true);
-		expect(profileClaim(w).metadata?.annotations?.[INSTANCE]).toBe("chat-a");
 	});
 
 	it("sends a new reason even when the phase stays the same", async () => {

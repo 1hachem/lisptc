@@ -17,7 +17,7 @@ export const mcpCluster: Check = {
 	rule: [
 		"The MCP host imports a Kubernetes client beyond the custom-objects one.",
 		"It only writes McpServer resources and waits on their status;",
-		"apps/mcp-operator alone creates the pods, services, volumes and",
+		"apps/mcp-operator alone creates the pods, services and",
 		"namespaces that run them, so nothing here applies them imperatively.",
 	],
 	fix: [

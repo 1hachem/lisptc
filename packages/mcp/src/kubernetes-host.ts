@@ -15,7 +15,6 @@ import {
 	type McpServerStatus,
 	PLURAL,
 	retagged,
-	type State,
 	serverName,
 	specFor,
 	VERSION,
@@ -42,6 +41,7 @@ export interface ServerStore {
 	get(name: string): Promise<McpServer | undefined>;
 	create(server: McpServer): Promise<McpServer>;
 	patchSpec(name: string, spec: Partial<McpServerSpec>): Promise<McpServer>;
+	remove(name: string): Promise<void>;
 }
 
 export interface KubernetesHostOptions {
@@ -99,13 +99,6 @@ function isStatus(ex: unknown, code: number): boolean {
 	return ex instanceof ApiException && ex.code === code;
 }
 
-function keepManual(wanted: State[], live: State[] | undefined): State[] {
-	return wanted.map((state) => {
-		const kept = live?.find((entry) => entry.name === state.name);
-		return kept ? { ...state, size: kept.size, reset: kept.reset } : state;
-	});
-}
-
 export function respecced(
 	live: McpServerSpec,
 	wanted: McpServerSpec,
@@ -113,15 +106,6 @@ export function respecced(
 ): McpServerSpec {
 	return {
 		...wanted,
-		mcp: { ...wanted.mcp, state: keepManual(wanted.mcp.state, live.mcp.state) },
-		...(wanted.app
-			? {
-					app: {
-						...wanted.app,
-						state: keepManual(wanted.app.state, live.app?.state),
-					},
-				}
-			: {}),
 		restarts: live.restarts + (failed ? 1 : 0),
 		idleSeconds: live.idleSeconds,
 	};
@@ -164,6 +148,13 @@ export function clientStore(
 				{ ...target, name, body: { spec } },
 				merge,
 			)) as McpServer;
+		},
+		async remove(name) {
+			try {
+				await custom.deleteNamespacedCustomObject({ ...target, name });
+			} catch (ex) {
+				if (!isStatus(ex, 404)) throw ex;
+			}
 		},
 	};
 }
@@ -275,6 +266,17 @@ export class KubernetesHost implements McpHost {
 		if (!followed) return await this.fallback.stop(name);
 		this.unfollow(followed);
 		await this.store.patchSpec(followed.name, { lastUsed: 0 });
+	}
+
+	async remove(conf: ConnConfig): Promise<void> {
+		if (launchFor(conf) === undefined) return await this.fallback.remove(conf);
+		await this.starting.get(conf.name)?.run.catch(() => {});
+		const followed = this.followed.get(conf.name);
+		if (followed) this.unfollow(followed);
+		this.followed.delete(conf.name);
+		await this.store.remove(
+			serverName(this.options.scope, conf.name, this.instanceOf(conf)),
+		);
 	}
 
 	async stopAll(): Promise<void> {

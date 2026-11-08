@@ -48,13 +48,6 @@ export const mcpServerPhase = v.union(
 	v.literal("failed"),
 );
 
-export const mcpStatePhase = v.union(
-	v.literal("bound"),
-	v.literal("pending"),
-	v.literal("resizing"),
-	v.literal("released"),
-);
-
 export const modelChoice = v.union(...CATALOGUED_CHOICES.map(pair));
 
 export const workspaceIcon = v.union(
@@ -376,26 +369,6 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_server", ["workspaceId", "server"]),
-
-	mcpState: defineTable({
-		workspaceId: v.id("workspaces"),
-		server: v.string(),
-		instance: v.optional(v.string()),
-		name: v.string(),
-		path: v.string(),
-		size: v.string(),
-		phase: mcpStatePhase,
-		lastAttached: v.optional(v.number()),
-		releasedAt: v.optional(v.number()),
-		observedAt: v.number(),
-	})
-		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_server_instance_name", [
-			"workspaceId",
-			"server",
-			"instance",
-			"name",
-		]),
 
 	sources: defineTable({
 		workspaceId: v.id("workspaces"),

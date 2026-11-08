@@ -23,7 +23,6 @@
     "image": "ghcr.io/1hachem/lisptc-mcp-playwright:main",
     "internal": true,
     "port": 8931,
-    "state": "/home/pwuser/profile",
     "command": "npx",
     "args": [
       "-y",
@@ -41,7 +40,7 @@
   },
   {
     "name": "fs",
-    "description": "Read, write, and list files in this workspace's own directory, kept across restarts.",
+    "description": "Read, write, and list files in a scratch directory of the server's own, emptied when it stops.",
     "keywords": [
       "file",
       "files",
@@ -58,8 +57,7 @@
     ],
     "image": "ghcr.io/1hachem/lisptc-mcp-fs:main",
     "internal": true,
-    "port": 8000,
-    "state": "/home/lisptc/files"
+    "port": 8000
   },
   {
     "name": "sheets",

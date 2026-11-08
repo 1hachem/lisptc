@@ -1,5 +1,3 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { mcpEnv } from "@repo/env/mcp";
 import { oauthEnv } from "@repo/env/oauth";
 import { systemClock } from "@repo/shared/host";
@@ -56,11 +54,6 @@ export function localMcpClient(options: McpHostOptions): McpClient {
 		callbackPort: oauthEnv.LISPTC_OAUTH_CALLBACK_PORT,
 		clients: oauthClients(),
 		scope: options.scope,
-		stateHome: join(
-			mcpEnv.XDG_DATA_HOME ?? join(homedir(), ".local", "share"),
-			"lisptc",
-			"mcp",
-		),
 	});
 }
 
@@ -102,7 +95,7 @@ export function containerHost(
 	const docker: HostCandidate = {
 		name: "docker",
 		available: dockerAnswers,
-		create: () => new DockerHost(new LocalProcessHost(), scope, report),
+		create: () => new DockerHost(new LocalProcessHost(), report),
 	};
 	const tried = {
 		kubernetes: [kubernetes, docker],

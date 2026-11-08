@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { launchFor } from "../src/docker-host.ts";
 import {
-	claimName,
-	DEFAULT_RETENTION_SECONDS,
 	NAME_MAX,
 	serverName,
 	specFor,
-	stateEntries,
 	workloadHash,
 } from "../src/mcp-server-resource.ts";
 import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
@@ -23,7 +20,6 @@ const browser: ContainerConnConfig = {
 			{ name: "view", port: 6080 },
 		],
 		expose: ["view"],
-		state: "/data/profile",
 	},
 };
 
@@ -33,55 +29,18 @@ function spec(conf: ContainerConnConfig | StdioConnConfig) {
 	return specFor(conf, launch, "ws1", 1000);
 }
 
-describe("the state a container keeps", () => {
-	it("reads a bare path as a 1Gi claim named after its last segment", () => {
-		expect(stateEntries("/data/profile")).toEqual([
-			{
-				name: "profile",
-				path: "/data/profile",
-				size: "1Gi",
-				reclaim: "Retain",
-				retentionSeconds: DEFAULT_RETENTION_SECONDS,
-				reset: 0,
-			},
-		]);
-	});
-
-	it("takes a name, size and reclaim policy from the object form", () => {
-		expect(
-			stateEntries([
-				"/var/lib/odoo",
-				{ name: "db", path: "/pg", size: "5Gi", reclaim: "Delete" },
-			]).map(({ name, size, reclaim }) => ({ name, size, reclaim })),
-		).toEqual([
-			{ name: "odoo", size: "1Gi", reclaim: "Retain" },
-			{ name: "db", size: "5Gi", reclaim: "Delete" },
-		]);
-	});
-
-	it("refuses a path that is not absolute", () => {
-		expect(() => stateEntries("data/profile")).toThrow(/not absolute/);
-	});
-
-	it("refuses the root, which names no volume", () => {
-		expect(() => stateEntries("/")).toThrow(/names no volume/);
-	});
-});
-
 describe("the spec a server is created from", () => {
-	it("pairs the mcp with the app it drives, keeping state on the app", () => {
+	it("pairs the mcp with the app it drives", () => {
 		const made = spec(browser);
 
 		expect(made.mcp).toMatchObject({
 			image: "playwright-mcp",
 			port: 8931,
 			path: "/mcp",
-			state: [],
 		});
 		expect(made.app).toMatchObject({
 			image: "chromium-vnc",
 			expose: ["view"],
-			state: [{ name: "profile", path: "/data/profile" }],
 		});
 		expect(made).toMatchObject({
 			workspace: "ws1",
@@ -102,12 +61,6 @@ describe("the spec a server is created from", () => {
 			spec({ ...browser, app: { image: "x", expose: ["view"] } }),
 		).toThrow(/no port by that name/);
 	});
-
-	it("refuses two state entries with one name across the pair", () => {
-		expect(() =>
-			spec({ ...browser, state: { name: "profile", path: "/out" } }),
-		).toThrow(/both named "profile"/);
-	});
 });
 
 describe("naming in the cluster", () => {
@@ -124,7 +77,6 @@ describe("naming in the cluster", () => {
 		expect(serverName("ws1", `${prefix}-one`)).not.toBe(
 			serverName("ws1", `${prefix}-two`),
 		);
-		expect(claimName("srv", "profile")).not.toBe(claimName("srv", "cache"));
 	});
 
 	it("gives each instance of a server its own name", () => {
@@ -138,26 +90,19 @@ describe("naming in the cluster", () => {
 });
 
 describe("what rolls the pod", () => {
-	it("ignores a heartbeat, a resize and a reset", () => {
+	it("ignores a heartbeat", () => {
 		const made = spec(browser);
-		const app = made.app;
-		if (!app) throw new Error("no app");
-		const touched = {
-			...made,
-			lastUsed: 9999,
-			app: {
-				...app,
-				state: app.state.map((s) => ({ ...s, size: "5Gi", reset: 3 })),
-			},
-		};
-		expect(workloadHash(touched)).toBe(workloadHash(made));
+		expect(workloadHash({ ...made, lastUsed: 9999 })).toBe(workloadHash(made));
 	});
 
-	it("follows a restart and a new mount", () => {
+	it("follows a restart and a new image", () => {
 		const made = spec(browser);
 		expect(workloadHash({ ...made, restarts: 1 })).not.toBe(workloadHash(made));
-		expect(workloadHash(spec({ ...browser, state: "/tmp/output" }))).not.toBe(
-			workloadHash(made),
-		);
+		expect(
+			workloadHash({
+				...made,
+				mcp: { ...made.mcp, image: "playwright-mcp:2" },
+			}),
+		).not.toBe(workloadHash(made));
 	});
 });

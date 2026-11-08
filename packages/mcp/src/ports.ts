@@ -66,18 +66,6 @@ export type HttpConnConfig = ConnMeta & {
 	env?: Record<string, string>;
 };
 
-export type Reclaim = "Retain" | "Delete";
-
-export interface StateEntry {
-	name?: string;
-	path: string;
-	size?: string;
-	reclaim?: Reclaim;
-	retentionSeconds?: number;
-}
-
-export type StateSpec = string | StateEntry | (string | StateEntry)[];
-
 export interface NamedPort {
 	name: string;
 	port: number;
@@ -89,7 +77,6 @@ export interface AppContainer {
 	ports?: NamedPort[];
 	expose?: string[];
 	resources?: Resources;
-	state?: StateSpec;
 }
 
 export interface SecretRef {
@@ -114,7 +101,6 @@ export type ContainerConnConfig = ConnMeta & {
 	oauth?: IssuerOAuth;
 	scopes?: string[];
 	resources?: Resources;
-	state?: StateSpec;
 	app?: AppContainer;
 	flags?: Record<string, string[]>;
 };
@@ -150,6 +136,7 @@ export interface McpClient {
 	connect(conf: ConnConfig, watch?: StartWatch): Promise<ConnectResult>;
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
+	remove(conf: ConnConfig): Promise<void>;
 	asleep(serverId: string): Promise<boolean>;
 	login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }>;
 	logout(conf: OAuthConnConfig): Promise<void>;
@@ -193,7 +180,7 @@ export type ServerHandle = AddressHandle | TransportHandle;
 
 export type ServerState = "running" | "stopped" | "unknown";
 
-export type ServerPhase = "starting" | "ready" | "sleeping" | "failed";
+export type ServerPhase = "starting" | "ready" | "sleeping" | "failed" | "gone";
 
 export interface ServerReport {
 	server: string;
@@ -214,6 +201,7 @@ export interface McpHost {
 		watch?: StartWatch,
 	): Promise<ServerHandle | undefined>;
 	stop(name: string): Promise<void>;
+	remove(conf: ConnConfig): Promise<void>;
 	stopAll(): Promise<void>;
 	status(name: string): ServerState;
 	logs(name: string): string;

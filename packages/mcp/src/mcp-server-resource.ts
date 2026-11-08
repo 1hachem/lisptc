@@ -3,10 +3,7 @@ import type {
 	AppContainer,
 	ConnConfig,
 	NamedPort,
-	Reclaim,
 	Resources,
-	StateEntry,
-	StateSpec,
 } from "./ports.ts";
 
 export interface Launch {
@@ -22,23 +19,12 @@ export const KIND = "McpServer";
 export const PLURAL = "mcpservers";
 
 export const NAME_MAX = 63;
-export const DEFAULT_STATE_SIZE = "1Gi";
-export const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 export const DEFAULT_IDLE_SECONDS = 600;
 
 export const DEFAULT_RESOURCES = {
 	requests: { cpu: "100m", memory: "256Mi" },
 	limits: { cpu: "2", memory: "2Gi" },
 } as const;
-
-export interface State {
-	name: string;
-	path: string;
-	size: string;
-	reclaim: Reclaim;
-	retentionSeconds: number;
-	reset: number;
-}
 
 export interface ResourceRequirements {
 	requests: Record<string, string>;
@@ -51,7 +37,6 @@ export interface McpSlot {
 	port: number;
 	path: string;
 	resources: ResourceRequirements;
-	state: State[];
 	secret?: string;
 }
 
@@ -61,7 +46,6 @@ export interface AppSlot {
 	ports: NamedPort[];
 	expose: string[];
 	resources: ResourceRequirements;
-	state: State[];
 }
 
 export interface McpServerSpec {
@@ -76,17 +60,6 @@ export interface McpServerSpec {
 }
 
 export type ServerPhase = "Starting" | "Ready" | "Sleeping" | "Failed";
-export type ClaimPhase = "Bound" | "Pending" | "Resizing" | "Released";
-
-export interface ClaimStatus {
-	claim: string;
-	phase: ClaimPhase;
-	size: string;
-	lastAttached?: number;
-	observedReset: number;
-	reason?: string;
-}
-
 export interface Condition {
 	type: string;
 	status: "True" | "False" | "Unknown";
@@ -99,7 +72,6 @@ export interface McpServerStatus {
 	phase?: ServerPhase;
 	reason?: string;
 	endpoints?: Record<string, string>;
-	state?: Record<string, ClaimStatus>;
 	logTail?: string;
 	observedGeneration?: number;
 	conditions?: Condition[];
@@ -163,43 +135,11 @@ export function serverName(
 	return `${base}-${shortHash(...hashed)}`;
 }
 
-export function claimName(server: string, state: string): string {
-	const base = dnsLabel(`${server}-${dnsLabel(state, 20)}`, NAME_MAX - 9);
-	return `${base}-${shortHash(server, state)}`;
-}
-
 export function resourcesFor(asked?: Resources): ResourceRequirements {
 	return {
 		requests: { ...DEFAULT_RESOURCES.requests, ...asked?.requests },
 		limits: { ...DEFAULT_RESOURCES.limits, ...asked?.limits },
 	};
-}
-
-function stateEntry(entry: string | StateEntry): State {
-	const asked = typeof entry === "string" ? { path: entry } : entry;
-	if (!asked.path.startsWith("/"))
-		throw new Error(`state path "${asked.path}" is not absolute.`);
-	const name = dnsLabel(
-		asked.name ?? asked.path.split("/").filter(Boolean).at(-1) ?? "",
-		20,
-	);
-	if (!name)
-		throw new Error(
-			`state path "${asked.path}" names no volume; give it a name.`,
-		);
-	return {
-		name,
-		path: asked.path,
-		size: asked.size ?? DEFAULT_STATE_SIZE,
-		reclaim: asked.reclaim ?? "Retain",
-		retentionSeconds: asked.retentionSeconds ?? DEFAULT_RETENTION_SECONDS,
-		reset: 0,
-	};
-}
-
-export function stateEntries(spec: StateSpec | undefined): State[] {
-	if (spec === undefined) return [];
-	return (Array.isArray(spec) ? spec : [spec]).map(stateEntry);
 }
 
 function appSlot(app: AppContainer): AppSlot {
@@ -216,19 +156,7 @@ function appSlot(app: AppContainer): AppSlot {
 		ports,
 		expose,
 		resources: resourcesFor(app.resources),
-		state: stateEntries(app.state),
 	};
-}
-
-function uniqueStateNames(server: string, slots: State[][]): void {
-	const seen = new Set<string>();
-	for (const state of slots.flat()) {
-		if (seen.has(state.name))
-			throw new Error(
-				`${server}: two state entries are both named "${state.name}".`,
-			);
-		seen.add(state.name);
-	}
 }
 
 export function specFor(
@@ -244,11 +172,9 @@ export function specFor(
 		port: Number(launch.exposed),
 		path: launch.path,
 		resources: resourcesFor("resources" in conf ? conf.resources : undefined),
-		state: stateEntries("state" in conf ? conf.state : undefined),
 		...("secret" in conf && conf.secret ? { secret: conf.secret.name } : {}),
 	};
 	const app = "app" in conf && conf.app ? appSlot(conf.app) : undefined;
-	uniqueStateNames(conf.name, [mcp.state, app?.state ?? []]);
 	return {
 		workspace,
 		server: conf.name,
@@ -262,13 +188,11 @@ export function specFor(
 }
 
 export function workloadHash(spec: McpServerSpec): string {
-	const states = (slot: { state: State[] } | undefined) =>
-		slot?.state.map(({ name, path }) => ({ name, path })) ?? [];
 	return createHash("sha256")
 		.update(
 			JSON.stringify({
-				mcp: { ...spec.mcp, state: states(spec.mcp) },
-				app: spec.app ? { ...spec.app, state: states(spec.app) } : null,
+				mcp: spec.mcp,
+				app: spec.app ?? null,
 				restarts: spec.restarts,
 			}),
 		)
