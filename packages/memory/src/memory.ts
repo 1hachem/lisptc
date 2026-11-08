@@ -6,6 +6,7 @@ import { record } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
+	runUnhooked,
 	type State,
 	type StateCodec,
 } from "@repo/interpreter/lisp";
@@ -42,7 +43,9 @@ import { memorySearchEngine } from "./memory-search.ts";
 import {
 	type Area,
 	type AreaGate,
+	areaFrom,
 	authoredTrigger,
+	builtinFrom,
 	type Cue,
 	combinatorIn,
 	formToMemory,
@@ -53,8 +56,6 @@ import {
 	type MemoryStore,
 	memoryToForm,
 	type Recognize,
-	readAreas,
-	readBuiltins,
 	recognizeNothing,
 	type Situation,
 	TRIGGER_KINDS,
@@ -169,6 +170,24 @@ function gistOf(memory: Memory): string {
 }
 
 const LIST = "memory/list";
+const DECLARED_MEMORIES = "*memories*";
+const DECLARED_AREAS = "*areas*";
+
+const DECLARE = `
+(setq memory
+  (macro (key &rest declared)
+    (list 'setq '${DECLARED_MEMORIES}
+          (list 'cons (list 'quote (cons key declared)) '${DECLARED_MEMORIES}))))
+(setq area
+  (macro (name &rest declared)
+    (list 'setq '${DECLARED_AREAS}
+          (list 'cons (list 'quote (cons name declared)) '${DECLARED_AREAS}))))
+`;
+
+function declaredIn(interp: Interp, name: string): unknown[] {
+	const declared = interp.getGlobal(newSym(name));
+	return declared instanceof Cell ? listToArray(declared).reverse() : [];
+}
 const AREAS = "memory/areas";
 
 function entryOf(memory: Memory): unknown {
@@ -366,9 +385,11 @@ export class MemoryBank {
 	private recalled: State<ReadonlyMap<string, number>> = detachedState(
 		new Map(),
 	);
-	private builtinSource: () => readonly string[] = () => [];
+	private declaredIn: Interp | undefined;
 	private firing: FiredMemory[] | undefined;
-	private builtinTable: ReadonlyMap<string, Memory> | undefined;
+	private declarations:
+		| { memories: ReadonlyMap<string, Memory>; areas: readonly AreaGate[] }
+		| undefined;
 	private runtime: State<readonly Memory[] | undefined> =
 		detachedState(undefined);
 
@@ -413,41 +434,53 @@ export class MemoryBank {
 		);
 	}
 
-	gates(): AreaGate[] {
-		const gates = new Map<string, AreaGate>();
-		for (const source of this.builtinSource())
-			for (const gate of readAreas(source)) {
-				if (gates.has(gate.name))
-					throw new EvalException("two areas share this name", gate.name);
-				gates.set(gate.name, gate);
-			}
-		return [...gates.values()];
+	gates(): readonly AreaGate[] {
+		return this.declared().areas;
 	}
 
-	readBuiltinsFrom(source: () => readonly string[]): void {
-		this.builtinSource = source;
-		this.builtinTable = undefined;
+	declareIn(interp: Interp): void {
+		this.declaredIn = interp;
+		this.declarations = undefined;
 	}
 
 	builtins(): ReadonlyMap<string, Memory> {
-		if (this.builtinTable !== undefined) return this.builtinTable;
-		const table = new Map<string, Memory>();
-		for (const source of this.builtinSource())
-			for (const memory of readBuiltins(source)) {
-				if (table.has(memory.key))
-					throw new EvalException(
-						"two built-in memories share this key",
-						memory.key,
-					);
-				if (wordCount(bodyText(memory.body)) > MAX_BUILTIN_WORDS)
-					throw new EvalException(
-						`a built-in memory body holds at most ${MAX_BUILTIN_WORDS} words; split it and link the parts`,
-						memory.key,
-					);
-				table.set(memory.key, memory);
-			}
-		this.builtinTable = table;
-		return table;
+		return this.declared().memories;
+	}
+
+	private declared(): {
+		memories: ReadonlyMap<string, Memory>;
+		areas: readonly AreaGate[];
+	} {
+		if (this.declarations !== undefined) return this.declarations;
+		const interp = this.declaredIn;
+		if (interp === undefined) return { memories: new Map(), areas: [] };
+		interp.defineGlobal(newSym(DECLARED_MEMORIES), null);
+		interp.defineGlobal(newSym(DECLARED_AREAS), null);
+		for (const source of interp.builtinMemories()) runUnhooked(interp, source);
+		const memories = new Map<string, Memory>();
+		for (const declared of declaredIn(interp, DECLARED_MEMORIES)) {
+			const memory = builtinFrom(declared);
+			if (memories.has(memory.key))
+				throw new EvalException(
+					"two built-in memories share this key",
+					memory.key,
+				);
+			if (wordCount(bodyText(memory.body)) > MAX_BUILTIN_WORDS)
+				throw new EvalException(
+					`a built-in memory body holds at most ${MAX_BUILTIN_WORDS} words; split it and link the parts`,
+					memory.key,
+				);
+			memories.set(memory.key, memory);
+		}
+		const areas = new Map<string, AreaGate>();
+		for (const declared of declaredIn(interp, DECLARED_AREAS)) {
+			const gate = areaFrom(declared);
+			if (areas.has(gate.name))
+				throw new EvalException("two areas share this name", gate.name);
+			areas.set(gate.name, gate);
+		}
+		this.declarations = { memories, areas: [...areas.values()] };
+		return this.declarations;
 	}
 
 	isBuiltin(memory: Memory): boolean {
@@ -948,7 +981,8 @@ function situationOf(memory: Memory): unknown {
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.channels);
-	bank.readBuiltinsFrom(() => interp.builtinMemories());
+	runUnhooked(interp, DECLARE);
+	bank.declareIn(interp);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
 		yield* bank.onCall(i, form);

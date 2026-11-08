@@ -375,11 +375,11 @@ export const WIDGET_NAMES = TAGS.map((tag) => `ui/${tag}`);
 export function widgetMemories(): string {
 	return TAGS.map((tag) => {
 		const widget = WIDGET_FORMS[tag];
-		return [
-			`(memory "ui/widget-${tag}" :when "${widget.when}")`,
+		const body = [
 			`${widget.signature} ${widget.brief}`,
 			widget.doc,
 			`Example: ${widget.example}`,
 		].join("\n");
+		return `(memory "ui/widget-${tag}" :when ${str(widget.when)}\n  "${body.replace(/[\\"]/g, "\\$&")}")`;
 	}).join("\n\n");
 }

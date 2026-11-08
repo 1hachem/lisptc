@@ -10,7 +10,6 @@ import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { type List, listToArray, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { Reader } from "@repo/interpreter/reader";
 import { newSessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import { activityKind } from "@repo/journal-catalog/activity";
@@ -656,20 +655,17 @@ function subAgent() {
 
 describe("the sub-agent extension", () => {
 	test("ships memories under the sub-agent area, every key in it", () => {
-		const memories = subAgentExtension(subAgentHost()).memories ?? "";
-		const read = (line: string) => {
-			const reader = new Reader();
-			reader.push(line);
-			return listToArray(reader.read() as List);
-		};
-		const lines = memories.split("\n");
-		expect(read(lines[0] ?? "").slice(0, 2)).toEqual([
-			newSym("area"),
-			"sub-agent",
-		]);
-		const keys = lines
-			.filter((line) => line.startsWith("(memory "))
-			.map((line) => read(line)[1]);
+		const interp = new Interp();
+		runSync(
+			interp,
+			`(setq areas nil)
+(setq keys nil)
+(setq area (macro (name &rest _) (list 'setq 'areas (list 'cons name 'areas))))
+(setq memory (macro (key &rest _) (list 'setq 'keys (list 'cons key 'keys))))`,
+		);
+		runSync(interp, subAgentExtension(subAgentHost()).memories ?? "");
+		expect(str(interp.getGlobal(newSym("areas")))).toBe('("sub-agent")');
+		const keys = listToArray(interp.getGlobal(newSym("keys")) as List);
 		expect(keys.length).toBeGreaterThan(0);
 		for (const key of keys) expect(String(key)).toMatch(/^sub-agent\//);
 	});

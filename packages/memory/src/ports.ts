@@ -2,6 +2,7 @@ import { EvalException } from "@repo/interpreter/errors";
 import {
 	arrayToList,
 	Cell,
+	LispKeyword,
 	type List,
 	listToArray,
 	newLispKeyword,
@@ -9,7 +10,6 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
-import { Reader } from "@repo/interpreter/reader";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 import type { SearchEngine } from "@repo/shared/search";
 
@@ -251,58 +251,53 @@ export function formToMemory(form: unknown): Memory | undefined {
 	};
 }
 
-const BUILTIN_HEADER = /^\(memory\s/;
-const AREA_HEADER = /^\(area\s/;
-
 export interface AreaGate {
 	readonly name: string;
 	readonly situation: string;
 }
 
-function areaHeader(line: string): AreaGate {
-	const reader = new Reader();
-	reader.push(line);
-	const form = reader.read();
-	const rest = form instanceof Cell ? form.cdr : null;
-	const name = rest instanceof Cell ? rest.car : undefined;
+export function areaFrom(declared: unknown): AreaGate {
+	const name = declared instanceof Cell ? declared.car : undefined;
 	const situation =
-		rest instanceof Cell
-			? plistOptions(rest.cdr as List, ["when"]).get("when")
+		declared instanceof Cell
+			? plistOptions(declared.cdr as List, ["when"]).get("when")
 			: undefined;
 	if (typeof name !== "string" || typeof situation !== "string")
 		throw new EvalException(
-			'an area opens a memories file with one line, (area "name" :when "situation"): the work its memories are for',
-			line,
+			'an area is declared as (area "name" :when "situation"): the work its memories are for',
+			declared,
 		);
 	return { name, situation };
 }
 
-export function readAreas(source: string): AreaGate[] {
-	return source
-		.split("\n")
-		.filter((line) => AREA_HEADER.test(line))
-		.map(areaHeader);
-}
-
-function builtinHeader(line: string, body: string): Memory {
-	const reader = new Reader();
-	reader.push(line);
-	const form = reader.read();
-	if (
-		!(form instanceof Cell) ||
-		!(form.car instanceof Sym) ||
-		form.car.name !== "memory"
-	)
+export function builtinFrom(declared: unknown): Memory {
+	if (!(declared instanceof Cell) || typeof declared.car !== "string")
 		throw new EvalException(
-			'a built-in memory opens with a header line, (memory "key" :when "situation" :unless "situation" :links ("key"...)) or (memory "key" :on (kind "pattern")), and its body is the text below it',
-			line,
+			'a built-in memory is declared as (memory "key" :when "situation" [:unless "situation"] [:links ("key"...)] "body"), or with :on (kind "pattern") in place of :when',
+			declared,
 		);
-	const rest = form.cdr;
-	if (!(rest instanceof Cell) || typeof rest.car !== "string")
-		throw new EvalException("a built-in memory needs a string key", line);
-	if (body === "")
-		throw new EvalException("a built-in memory needs a body", rest.car);
-	const opts = plistOptions(rest.cdr as List, [
+	const key = declared.car;
+	const options: unknown[] = [];
+	const values: unknown[] = [];
+	let at: unknown = declared.cdr;
+	while (at instanceof Cell) {
+		if (at.car instanceof LispKeyword && at.cdr instanceof Cell) {
+			options.push(at.car, at.cdr.car);
+			at = at.cdr.cdr;
+		} else {
+			values.push(at.car);
+			at = at.cdr;
+		}
+	}
+	const [body, ...extra] = values;
+	if (typeof body !== "string" || body.trim() === "")
+		throw new EvalException("a built-in memory needs a body string", key);
+	if (extra.length > 0)
+		throw new EvalException(
+			"a built-in memory has one body string, after its options",
+			key,
+		);
+	const opts = plistOptions(arrayToList(options) as List, [
 		"on",
 		"when",
 		"unless",
@@ -315,39 +310,14 @@ function builtinHeader(line: string, body: string): Memory {
 		links.set(linked, LINKED_FIRES_AT);
 	}
 	return {
-		key: rest.car,
-		body,
+		key,
+		body: body.trim(),
 		on: authoredTrigger(opts.get("on"), opts.get("when"), opts.get("unless")),
 		links,
 		score: INITIAL_SCORE,
 		used: 0,
 		lastUsed: 0,
 	};
-}
-
-export function readBuiltins(source: string): Memory[] {
-	const memories: Memory[] = [];
-	let header: string | undefined;
-	let body: string[] = [];
-	const close = (): void => {
-		if (header !== undefined)
-			memories.push(builtinHeader(header, body.join("\n").trim()));
-	};
-	for (const line of source.split("\n")) {
-		if (AREA_HEADER.test(line)) continue;
-		if (BUILTIN_HEADER.test(line)) {
-			close();
-			header = line;
-			body = [];
-		} else if (header !== undefined) body.push(line);
-		else if (line.trim() !== "")
-			throw new EvalException(
-				"text before the first (memory ...) header belongs to no memory",
-				line,
-			);
-	}
-	close();
-	return memories;
 }
 
 export interface Turn {

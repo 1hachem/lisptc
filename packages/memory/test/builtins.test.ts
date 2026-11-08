@@ -47,14 +47,14 @@ function carrying(memories: string): Installable {
 }
 
 const BROWSER = `
-(memory "browser/local" :when "user wants to automate a web browser" :links ("browser/flags"))
-load it with (load-mcp "playwright" :local t)
+(memory "browser/local" :when "user wants to automate a web browser" :links ("browser/flags")
+  "load it with (load-mcp \\"playwright\\" :local t)")
 
-(memory "browser/flags")
-pass :quiet t only when the row lists it
+(memory "browser/flags"
+  "pass :quiet t only when the row lists it")
 
-(memory "deploy/notes" :on (user "^deploy"))
-deploys go through task deploy
+(memory "deploy/notes" :on (user "^deploy")
+  "deploys go through task deploy")
 `;
 
 interface Recognized {
@@ -176,7 +176,7 @@ describe("built-in memories", () => {
 			memoryHost.search,
 			recognizeNothing,
 		);
-		bank.readBuiltinsFrom(() => interp.builtinMemories());
+		bank.declareIn(interp);
 		expect([...bank.builtins().keys()]).toEqual(
 			expect.arrayContaining(["memory/triggers", "memory/call-triggers"]),
 		);
@@ -244,7 +244,7 @@ describe("built-in memories", () => {
 			" ",
 		);
 		const f = fixture({
-			memories: `(memory "long" :on (user "go"))\n${long}`,
+			memories: `(memory "long" :on (user "go") "${long}")`,
 		});
 		await ev(f, `(memory/remember "mine" "short" :on '(user "go"))`);
 		expect((await f.hear("go")).sort()).toEqual(["long", "mine"]);
@@ -254,49 +254,49 @@ describe("built-in memories", () => {
 		const long = Array.from({ length: MAX_BUILTIN_WORDS + 1 }, () => "w").join(
 			" ",
 		);
-		const f = fixture({ memories: `(memory "long")\n${long}` });
+		const f = fixture({ memories: `(memory "long" "${long}")` });
 		expect(() => f.bank.builtins()).toThrow(/at most/);
 	});
 
 	it("refuse two built-ins under one key", () => {
 		const f = fixture({
-			memories: '(memory "a")\none\n(memory "a")\ntwo',
+			memories: '(memory "a" "one")\n(memory "a" "two")',
 		});
 		expect(() => f.bank.builtins()).toThrow(/share this key/);
 	});
 
 	it("keep a body over several lines, as written", () => {
 		const f = fixture({
-			memories: '(memory "a")\nfirst line\n  (load-mcp "x")\n',
+			memories: '(memory "a"\n  "first line\n  (load-mcp \\"x\\")")\n',
 		});
 		expect(f.bank.builtins().get("a")?.body).toBe(
 			'first line\n  (load-mcp "x")',
 		);
 	});
 
-	it("refuse text that sits above every header", () => {
-		const f = fixture({ memories: 'stray\n(memory "a")\none' });
-		expect(() => f.bank.builtins()).toThrow(/belongs to no memory/);
+	it("refuse a body that is not a string", () => {
+		const f = fixture({ memories: '(memory "a" one)' });
+		expect(() => f.bank.builtins()).toThrow(/needs a body string/);
 	});
 
-	it("refuse a header with no body", () => {
-		const f = fixture({ memories: '(memory "a")\n\n(memory "b")\ntwo' });
+	it("refuse a memory with no body", () => {
+		const f = fixture({ memories: '(memory "a")\n\n(memory "b" "two")' });
 		expect(() => f.bank.builtins()).toThrow(/needs a body/);
 	});
 
 	it("refuse a :when with no situation", () => {
-		const f = fixture({ memories: '(memory "a" :when "")\none' });
+		const f = fixture({ memories: '(memory "a" :when "" "one")' });
 		expect(() => f.bank.builtins()).toThrow(/describing the situation/);
 	});
 
 	it("refuse a situation written as an :on trigger", () => {
-		const f = fixture({ memories: '(memory "a" :on (when "x"))\none' });
+		const f = fixture({ memories: '(memory "a" :on (when "x") "one")' });
 		expect(() => f.bank.builtins()).toThrow(/written with :when/);
 	});
 
-	it("refuse a header with both :when and :on", () => {
+	it("refuse a memory with both :when and :on", () => {
 		const f = fixture({
-			memories: '(memory "a" :when "x" :on (user "y"))\none',
+			memories: '(memory "a" :when "x" :on (user "y") "one")',
 		});
 		expect(() => f.bank.builtins()).toThrow(/not both/);
 	});

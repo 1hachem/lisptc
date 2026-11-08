@@ -1,6 +1,7 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { type List, listToArray, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { TAGS, widgetOf } from "@repo/ui-catalog";
@@ -802,10 +803,23 @@ describe("the widget form table", () => {
 
 	it("ships one memory per widget, carrying its signature", () => {
 		const { memories } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
-		for (const tag of TAGS) {
-			expect(memories).toContain(`(memory "ui/widget-${tag}" :when "`);
-			expect(memories).toContain(WIDGET_FORMS[tag].signature);
-		}
+		const { interp } = fresh();
+		runSync(
+			interp,
+			`(setq shipped nil)
+(defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
+(defmacro area (name &rest declared) nil)`,
+		);
+		runSync(interp, memories ?? "");
+		const bodies = new Map(
+			listToArray(interp.getGlobal(newSym("shipped")) as List).map(
+				(entry) => listToArray(entry as List) as [string, string],
+			),
+		);
+		for (const tag of TAGS)
+			expect(bodies.get(`ui/widget-${tag}`)).toContain(
+				WIDGET_FORMS[tag].signature,
+			);
 	});
 });
 

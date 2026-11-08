@@ -7,14 +7,30 @@ import {
 	type Interp,
 	runAsync,
 	runSync,
+	runUnhooked,
 } from "../src/lisp.ts";
-import { Cell, Keyword, newSym } from "../src/objects.ts";
+import { Cell, Keyword, listToArray, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
 import { LispPromise } from "../src/promise.ts";
 import { LANGUAGE_MEMORIES, LANGUAGE_REFERENCE } from "../src/source.ts";
 import { ev, freshInterp } from "./helpers.ts";
 
-const LANGUAGE_TEXT = `${LANGUAGE_REFERENCE}\n${LANGUAGE_MEMORIES}`;
+function memoryBodies(source: string): string {
+	const interp = freshInterp();
+	runSync(
+		interp,
+		`(setq bodies nil)
+(defmacro memory (key &rest declared) \`(setq bodies (cons ,(car (last declared)) bodies)))
+(defmacro area (name &rest declared) nil)`,
+	);
+	runSync(interp, source);
+	const bodies = interp.getGlobal(newSym("bodies"));
+	return (bodies instanceof Cell ? listToArray(bodies) : [])
+		.reverse()
+		.join("\n");
+}
+
+const LANGUAGE_TEXT = `${LANGUAGE_REFERENCE}\n${memoryBodies(LANGUAGE_MEMORIES)}`;
 
 describe("arityOf", () => {
 	it("reads the arity of a builtin", () => {
@@ -302,5 +318,21 @@ describe("runAsync", () => {
 	it("resolves to the value of the last form", async () => {
 		const { value } = await runAsync(freshInterp(), "(+ 1 2) (list 3 4)");
 		expect(str(value)).toBe("(3 4)");
+	});
+});
+
+describe("runUnhooked", () => {
+	it("evaluates every form, across lines, without the session chains", () => {
+		const interp = freshInterp();
+		const seen: unknown[] = [];
+		interp.hooks.evalForm.use(function* (i, form, next) {
+			seen.push(form);
+			return yield* next(i, form);
+		});
+		interp.hooks.readSource.use(() => "");
+		expect(str(runUnhooked(interp, '(setq a "one\ntwo")\n(list a)'))).toBe(
+			'("one\\ntwo")',
+		);
+		expect(seen).toEqual([]);
 	});
 });

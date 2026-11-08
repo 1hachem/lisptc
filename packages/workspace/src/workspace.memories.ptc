@@ -1,28 +1,28 @@
 (area "workspace" :when "the workspace's settings or its other chats are involved: model, icon, theme, or finding and reading another chat")
 
-(memory "workspace/choices" :when "the workspace's model, icon or theme must change, or the agent must say which ones are on offer")
-- (settings) gives (:name "…" :model "provider/model" :icon "…" :theme id) .
+(memory "workspace/choices" :when "the workspace's model, icon or theme must change, or the agent must say which ones are on offer"
+  "- (settings) gives (:name \"…\" :model \"provider/model\" :icon \"…\" :theme id) .
 - (settings/models) lists models workspace can run on.
 - (settings/icons) lists icons workspace can show in sidebar.
 - (settings/themes) gives alist of (id . name) of themes app can wear.
-- (settings/set :model "provider/model") or (settings/set :name "…") changes them. User approves first. New model answers from next turn.
+- (settings/set :model \"provider/model\") or (settings/set :name \"…\") changes them. User approves first. New model answers from next turn.
 - Model, icon and theme must be one of those lists. Unlisted one errors.
-- (settings/set :icon "rocket") or (settings/set :theme "gruvbox-light") changes them.
-- (settings/set :theme "dark") flips current theme to its dark twin. No dark
+- (settings/set :icon \"rocket\") or (settings/set :theme \"gruvbox-light\") changes them.
+- (settings/set :theme \"dark\") flips current theme to its dark twin. No dark
   twin: default dark theme.
 - Theme is per workspace, not per user: each workspace wears its own.
-- Changes show in sidebar at once.
+- Changes show in sidebar at once.")
 
-(memory "workspace/chats" :when "the agent must find, rename, archive, restore or read another chat of this workspace")
-- (chats) lists (:id id :title title) , most recently active first. Ids come
+(memory "workspace/chats" :when "the agent must find, rename, archive, restore or read another chat of this workspace"
+  "- (chats) lists (:id id :title title) , most recently active first. Ids come
   from chats: never guess one.
-- (chats :search "login" :limit 5) narrows by title. :limit caps the count.
-- (chat/title "Debug login redirect") titles current chat.
-- (chat/rename id "…") retitles another chat.
+- (chats :search \"login\" :limit 5) narrows by title. :limit caps the count.
+- (chat/title \"Debug login redirect\") titles current chat.
+- (chat/rename id \"…\") retitles another chat.
 - (chat/archive id) takes chat out of sidebar. Cannot archive the chat you are
   in.
 - (chats :archived t) lists archived chats, latest archived first.
 (chat/unarchive id) puts one back in sidebar.
 - (chat/read id :last 10) gives another chat's last messages as (role . text) .
 User approves chat/archive and chat/read: chat/read brings whole other
-conversation into this one.
+conversation into this one.")

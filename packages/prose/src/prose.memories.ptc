@@ -1,10 +1,10 @@
 (area "prose" :when "the turn may be about to end, or a note says part of the last reply was skipped or run as code")
 
-(memory "prose/skipped" :when "a note says part of the last reply was skipped, ignored or run as code, or the user asks why")
-Skipped forms and asides:
-- Prose reads come back as "skipped … note" with the next user message, not at the time. No apology, no explaining the skip, no restating the previous answer. User asked something new: answer only that.
+(memory "prose/skipped" :when "a note says part of the last reply was skipped, ignored or run as code, or the user asks why"
+  "Skipped forms and asides:
+- Prose reads come back as \"skipped … note\" with the next user message, not at the time. No apology, no explaining the skip, no restating the previous answer. User asked something new: answer only that.
 - A note alone arrives with the next user message. Act silently: do not repeat that shape.
-- Outside the agent loop, a form-less program is a no-op. REPL and driver behaviour, not core language.
+- Outside the agent loop, a form-less program is a no-op. REPL and driver behaviour, not core language.")
 
-(memory "prose/final" :when "the task looks done and the agent is about to end the turn, or work keeps running toward the step cap")
-- Prose around a form is ignored. Prose with no form is the final answer to user, e.g. "the sum is 3".
+(memory "prose/final" :when "the task looks done and the agent is about to end the turn, or work keeps running toward the step cap"
+  "- Prose around a form is ignored. Prose with no form is the final answer to user, e.g. \"the sum is 3\".")
