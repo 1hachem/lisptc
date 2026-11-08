@@ -255,6 +255,13 @@ notifies a live REPL.
 The shape of the pattern, the rule about ports that may have to wait, and where
 a shared port lives are in `packages/interpreter/AGENTS.md`.
 
+**No extension interprets code on its own.** Lisp text is read and evaluated
+by the interpreter, never by an extension that runs the reader over it to pick
+out forms or data. Text that declares something is evaluated, and its forms put
+the data where the extension reads it, in a global or through a form the
+extension defines. An extension that needs to read code defines a form or a
+macro for it.
+
 ## The session seam
 
 Host ports keep an extension from reaching the world. The seam keeps the world
@@ -305,9 +312,9 @@ extension's, and the loop keeps only what is about the loop. A memory about
 another surface written in the loop's file is moved to that extension's file.
 
 **A built-in memory lives in a `.memories.ptc` file, never in a TypeScript or
-JavaScript string.** The editor opens a `.ptc` file as lisptc, so the forms a
-memory carries get the language server's completion, hover and errors. In a
-template string they get none, and a broken example ships unseen. A value the
+JavaScript string.** The file is lisptc, evaluated by the interpreter: each
+`(memory ...)` and `(area ...)` form declares its data, so a malformed one fails
+when the file loads, and the editor checks it as it is written. A value the
 text needs from code, like a cap, is a {{name}} placeholder in the .ptc file,
 filled by the code that loads it, the way the UI extension fills its widget
 list. A test checks that no placeholder is left. A package that ships a new `.ptc` is
