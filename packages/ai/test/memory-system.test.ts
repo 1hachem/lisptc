@@ -158,17 +158,17 @@ describe("recognizing which memories the conversation calls for", () => {
 		expect(Math.max(...recognized.values())).toBeLessThan(0.7);
 	});
 
-	it("fires every memory as likely as the best one, so two needed at once both fire", async () => {
+	it("scores each memory by its own probability, so an area split between memories fires none", async () => {
 		const { model } = systemOne(
 			choosing({ "browser/local": 0.45, "browser/flags": 0.45, none: 0.1 }),
 		);
 		const recognized = await memorySystem(model)(
 			{ conversation: CONVERSATION },
 			[LOCAL, FLAGS],
-			[BROWSER],
+			[{ ...BROWSER, open: true }],
 		);
-		expect(recognized.get("browser/local")).toBe(1);
-		expect(recognized.get("browser/flags")).toBe(1);
+		expect(recognized.get("browser/local")).toBe(0.45);
+		expect(recognized.get("browser/flags")).toBe(0.45);
 	});
 
 	it("weighs an area's memories only when its gate opens", async () => {

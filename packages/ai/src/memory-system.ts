@@ -112,12 +112,8 @@ function picks(
 ): Map<string, number> {
 	if (verdict.type !== "choice")
 		throw new Error(`${model} did not pick among the memories of "${name}"`);
-	const top = Math.max(...Object.values(verdict.probabilities));
 	return new Map(
-		members.map((cue) => [
-			cue.key,
-			top === 0 ? 0 : (verdict.probabilities[cue.key] ?? 0) / top,
-		]),
+		members.map((cue) => [cue.key, verdict.probabilities[cue.key] ?? 0]),
 	);
 }
 
