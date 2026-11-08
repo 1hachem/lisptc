@@ -155,7 +155,10 @@ describe("the system channel", () => {
 		).toContain(NOTE);
 		const userLines = [
 			...host.querySelectorAll('[data-trace-message="you"]'),
-		].map((line) => line.textContent);
-		expect(userLines).toEqual(["›write a"]);
+		].map((line) => [
+			line.textContent,
+			line.querySelector("svg")?.getAttribute("aria-label"),
+		]);
+		expect(userLines).toEqual([["write a", "you"]]);
 	});
 });

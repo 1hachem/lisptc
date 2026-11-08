@@ -50,7 +50,7 @@ function Login() {
 		}
 	};
 
-	if (!isLoading && isAuthenticated) return <Navigate to="/" replace />;
+	if (!isLoading && isAuthenticated) return <Navigate to="/app" replace />;
 
 	return (
 		<div className="flex h-full items-center justify-center bg-bg font-mono text-[13px] text-fg">
@@ -109,7 +109,7 @@ function Login() {
 						onClick={() =>
 							void authClient.signIn.social({
 								provider: "github",
-								callbackURL: window.location.origin,
+								callbackURL: `${window.location.origin}/app`,
 							})
 						}
 						className="flex-1 bg-bg2 px-2.5 py-1 text-dim hover:text-fg"
@@ -122,7 +122,7 @@ function Login() {
 						onClick={() =>
 							void authClient.signIn.social({
 								provider: "google",
-								callbackURL: window.location.origin,
+								callbackURL: `${window.location.origin}/app`,
 							})
 						}
 						className="flex-1 bg-bg2 px-2.5 py-1 text-dim hover:text-fg"

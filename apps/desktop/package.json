@@ -58,7 +58,8 @@
       {
         "provider": "github",
         "owner": "1hachem",
-        "repo": "lisptc"
+        "repo": "lisptc",
+        "releaseType": "release"
       }
     ],
     "directories": {
@@ -104,6 +105,7 @@
         "AppImage"
       ],
       "artifactName": "salsal.${ext}",
+      "executableName": "salsal",
       "category": "Development"
     }
   }

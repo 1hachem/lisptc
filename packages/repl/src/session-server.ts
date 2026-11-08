@@ -5,8 +5,8 @@ import { createConnection, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replEnv } from "@repo/env/repl";
-import type { Ask } from "@repo/interpreter/asks";
 import type { InterpExtension } from "@repo/interpreter/session";
+import type { Ask } from "@repo/journal-catalog/asks";
 import { type SymbolEntry, symbolsOf } from "@repo/language-service";
 import { openAsks } from "./asks.ts";
 import { MemoryRepl } from "./repl.ts";
@@ -65,7 +65,7 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 			return repl.eval(req.code ?? "");
 		case "step": {
 			const out = await repl.evalOutput(req.code ?? "");
-			return { output: out.user, asks: openAsks(out.annotations) };
+			return { output: out.user, asks: openAsks(out.entries) };
 		}
 		case "answer":
 			return (await repl.invokeUi(req.action ?? "", req.values ?? {})).user;

@@ -50,14 +50,60 @@ tasks:
       volumes=$(docker volume ls -q --filter "$filter")
       if [ -z "$volumes" ]; then echo "no MCP state volumes"; else docker volume rm $volumes; fi
 
+  registry:
+    desc: start the local image registry tilt pushes to and k3s pulls from
+    cmd: |
+      docker start lisptc-registry >/dev/null 2>&1 \
+        || docker run -d --restart unless-stopped -p 127.0.0.1:5000:5000 --name lisptc-registry registry:2 >/dev/null
+
+  up:
+    desc: run the whole stack on the local k3s cluster under tilt, in the lisptc-dev namespace, with live reload
+    aliases:
+      - dev
+    deps: [registry, cluster:_reachable]
+    cmds:
+      - defer: setsid -w tilt down
+      - tilt up --stream {{.CLI_ARGS}}
+
+  up:convex:
+    desc: bring up postgres and the convex backend on the local cluster, seed and deploy the functions, and wait until they are done
+    deps: [registry, cluster:_reachable]
+    cmd: |
+      if tilt get session >/dev/null 2>&1; then
+        tilt wait --for=condition=Ready --timeout=10m uiresource/convex-deploy
+      else
+        tilt ci convex-deploy
+      fi
+
+  up:prod-local:
+    desc: build the production images and run them on the local cluster under tilt, against the dev secrets
+    aliases:
+      - up:prod
+      - prod
+    deps: [registry, cluster:_reachable]
+    cmds:
+      - defer: setsid -w tilt down
+      - task: _infisical-run
+        vars:
+          ENV: dev
+          PATHS: "/db /convex /auth /api /web /ai /analytics"
+          CMD: 'WEB_BUILD_VARS=\"\$(env | grep ^VITE_)\" tilt up --stream --watch=false {{.CLI_ARGS}} -- --prod'
+
+  down:
+    desc: stop the stack on the local cluster (pass -- -v to drop its data)
+    deps: [cluster:_reachable]
+    cmds:
+      - tilt down
+      - '{{if eq .CLI_ARGS "-v"}}kubectl delete namespace lisptc-dev --ignore-not-found{{else}}true{{end}}'
+
   convex:push:
     desc: push the convex functions and schema to the local dev deployment, once (production releases through the cluster's convex-deploy Job)
     cmds:
       - task: _infisical-run
         vars:
           ENV: dev
-          PATHS: "/convex /auth"
-          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend exec convex dev --once"
+          PATHS: "/convex"
+          CMD: "./scripts/with-convex.sh pnpm --filter @repo/backend exec convex dev --once"
 
   convex:generate:
     desc: regenerate convex/_generated against the local deployment, without pushing
@@ -67,7 +113,7 @@ tasks:
         vars:
           ENV: '{{.ENV | default "dev"}}'
           PATHS: "/convex /auth"
-          CMD: "pnpm --filter @repo/backend exec convex codegen --typecheck disable"
+          CMD: "./scripts/with-convex.sh pnpm --filter @repo/backend exec convex codegen --typecheck disable"
 
   convex:dev:
     desc: watch convex/ and push the functions to the local dev deployment on every save
@@ -75,8 +121,8 @@ tasks:
       - task: _infisical-run
         vars:
           ENV: dev
-          PATHS: "/convex /auth"
-          CMD: "pnpm --silent --filter @repo/backend run env:seed && pnpm --filter @repo/backend dev"
+          PATHS: "/convex"
+          CMD: "./scripts/with-convex.sh pnpm --filter @repo/backend dev"
 
   r2:
     desc: sync .r2 with the bucket (pull, push or sync; raw captures stay local)

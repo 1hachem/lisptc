@@ -1,3 +1,4 @@
+import { asksKind } from "@repo/journal-catalog/asks";
 import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -9,6 +10,7 @@ import { MemoryPermissionsStore } from "@repo/permissions-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { MemoryRepl } from "@repo/repl/repl";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { mockMcpClient, mockToolkit } from "./helpers.ts";
 
@@ -101,9 +103,7 @@ describe("permissions over a loaded MCP server", () => {
 		await repl.eval(LOAD);
 		const asked = await repl.evalOutput("(permission/server fx (hide echo))");
 		expect(asked.held).toBe(true);
-		const { open: requests } = asked.annotations.output.asks as {
-			open: { id: string; title: string }[];
-		};
+		const requests = view(asked.entries, asksKind).open ?? [];
 		expect(requests.map((r) => r.title)).toEqual([
 			"(permission/server fx (hide echo))",
 		]);
@@ -154,9 +154,7 @@ describe("permissions over a loaded MCP server", () => {
 		const asked = await repl.evalOutput('(fx/send_mail :message "hello")');
 		expect(asked.failed).toBe(false);
 		expect(asked.held).toBe(true);
-		const { open: requests } = asked.annotations.output.asks as {
-			open: { id: string; title: string }[];
-		};
+		const requests = view(asked.entries, asksKind).open ?? [];
 		expect(requests.map((r) => r.title)).toEqual(["fx/send_mail"]);
 		expect(client.calls).toEqual([]);
 
@@ -197,9 +195,7 @@ describe("permissions over a loaded MCP server", () => {
 			'(echo (await (load-mcp :name "fx" :command "node" :local t)))',
 		);
 		expect(asked.held).toBe(true);
-		const { open: requests } = asked.annotations.output.asks as {
-			open: { id: string; title: string }[];
-		};
+		const requests = view(asked.entries, asksKind).open ?? [];
 		expect(requests.map((r) => r.title)).toEqual(["local/fx"]);
 
 		const decided = await repl.invokeUi("permissions/decide", {

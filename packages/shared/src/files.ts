@@ -47,7 +47,7 @@ export function sanitizeFileName(raw: string): string | null {
 	return isFileName(fitted) ? fitted : null;
 }
 
-export const ATTACHMENTS_ANNOTATION = "attachments";
+export const ATTACHMENTS_KIND = "attachments";
 
 const attachedFile = z.object({
 	folder: z.enum(STORE_FOLDERS),

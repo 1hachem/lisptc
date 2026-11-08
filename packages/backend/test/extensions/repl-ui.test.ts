@@ -1,8 +1,10 @@
 import { Compactor } from "@repo/compaction-extension";
+import { viewKind } from "@repo/journal-catalog/view";
 import type { EvalOutput } from "@repo/repl/repl";
-import type { PanelOp } from "@repo/ui-extension";
+import { view } from "@repo/shared/journal";
+import { MemoryViewStore, type PanelOp } from "@repo/ui-extension";
 import { describe, expect, it } from "vitest";
-import { memoryRepl, modelFacing } from "./helpers.ts";
+import { agentRepl, memoryRepl, modelFacing } from "./helpers.ts";
 
 const PANEL = `
 (setq n 0)
@@ -16,34 +18,41 @@ const PANEL = `
 (ui/render (panel))
 `;
 
-const view = (out: EvalOutput): unknown => out.annotations.output.ui;
+const shownView = (out: EvalOutput): unknown => view(out.entries, viewKind);
 
-const label = (out: EvalOutput): unknown =>
-	(view(out) as { children: { props: { text: string } }[] } | undefined)
-		?.children[0]?.props.text;
-
-const buttonAction = (out: EvalOutput): string =>
-	(view(out) as { children: { props: { action: string } }[] } | undefined)
-		?.children[1]?.props.action ?? "";
+function stored() {
+	const views = new MemoryViewStore();
+	const r = memoryRepl(modelFacing(undefined, undefined, undefined, views));
+	const node = (out: EvalOutput): unknown => {
+		const ref = shownView(out) as { viewId: string } | undefined;
+		return ref === undefined ? undefined : views.views.get(ref.viewId);
+	};
+	const label = (out: EvalOutput): unknown =>
+		(node(out) as { children: { props: { text: string } }[] } | undefined)
+			?.children[0]?.props.text;
+	const buttonAction = (out: EvalOutput): string =>
+		(node(out) as { children: { props: { action: string } }[] } | undefined)
+			?.children[1]?.props.action ?? "";
+	return { r, views, node, label, buttonAction };
+}
 
 describe("a step that renders", () => {
 	it("hands the view back beside the output", async () => {
 		const out = await memoryRepl().evalOutput(PANEL);
 		const { model } = out;
-		expect(view(out)).toBeDefined();
+		expect(shownView(out)).toBeDefined();
 		expect(model).toContain("rendered stack");
 		expect(model).not.toContain("ui/button");
 	});
 
 	it("reports no view for a step that rendered none", async () => {
-		expect(view(await memoryRepl().evalOutput("(+ 1 2)"))).toBeUndefined();
+		expect(shownView(await memoryRepl().evalOutput("(+ 1 2)"))).toBeUndefined();
 	});
 
 	it("renders a widget handed to echo instead of printing it", async () => {
-		const out = await memoryRepl().evalOutput(
-			`(echo (ui/table '((("id" . 1)))))`,
-		);
-		expect(view(out)).toMatchObject({ tag: "table" });
+		const { r, node } = stored();
+		const out = await r.evalOutput(`(echo (ui/table '((("id" . 1)))))`);
+		expect(node(out)).toMatchObject({ tag: "table" });
 		expect(out.model).toContain("rendered table");
 		expect(out.model).not.toContain("#<ui:");
 	});
@@ -87,7 +96,7 @@ describe("a step that opens panel tabs", () => {
 			},
 			{ op: "close", tab: "file:knowledge/q3.pdf" },
 		]);
-		expect(out.annotations.output).not.toHaveProperty("panel");
+		expect(out.entries.map((entry) => entry.kind)).not.toContain("panel");
 	});
 
 	it("fails the step when the panel port refuses an op", async () => {
@@ -104,17 +113,60 @@ describe("a step that opens panel tabs", () => {
 	});
 });
 
+describe("a view whose handlers are gone", () => {
+	it("is marked expired, and a click on it fails nothing", async () => {
+		const views = new MemoryViewStore();
+		const r = memoryRepl(modelFacing(undefined, undefined, undefined, views));
+		await r.evalOutput(
+			'(setq view (ui/button "go" (lambda () 1))) (ui/render view)',
+		);
+		await r.evalOutput("(ui/forget view)");
+		expect([...views.expired]).toEqual(["v1"]);
+		const out = await r.invokeUi("a1", {});
+		expect(out.failed).toBe(false);
+	});
+});
+
+describe("a view while its step runs", () => {
+	it("reaches the caller live as a reference, never as the tree", async () => {
+		const pushed: unknown[] = [];
+		const slow = {
+			put: () => new Promise<void>((resolve) => setTimeout(resolve, 300)),
+			expire: () => undefined,
+		};
+		const r = agentRepl(modelFacing(undefined, undefined, undefined, slow));
+		await r.evalOutput(
+			'(ui/render (ui/text "a")) (ui/render (ui/text "b"))',
+			undefined,
+			(entry) => {
+				if (entry.kind === viewKind.name) pushed.push(entry.value);
+			},
+		);
+		expect(pushed.length).toBeGreaterThan(0);
+		for (const ui of pushed) expect(ui).toEqual({ viewId: "v1" });
+	});
+});
+
 describe("driving the view", () => {
-	it("runs a click in the same session and answers with the new view", async () => {
-		const r = memoryRepl();
-		expect(label(await r.evalOutput(PANEL))).toBe("count 0");
+	it("runs a click in the same session and renders back into the clicked view", async () => {
+		const { r, label, buttonAction } = stored();
+		const first = await r.evalOutput(PANEL);
+		expect(label(first)).toBe("count 0");
 		const clicked = await r.invokeUi("a1");
+		expect(shownView(clicked)).toEqual(shownView(first));
 		expect(label(clicked)).toBe("count 1");
 		expect(label(await r.invokeUi(buttonAction(clicked)))).toBe("count 2");
 	});
 
+	it("gives each step that renders a view of its own", async () => {
+		const { r } = stored();
+		const one = await r.evalOutput('(ui/render (ui/text "a"))');
+		const two = await r.evalOutput('(ui/render (ui/text "b"))');
+		expect(shownView(one)).not.toEqual(shownView(two));
+	});
+
 	it("passes a submitted form's fields to its handler", async () => {
-		const r = memoryRepl();
+		const { r, label } = stored();
 		await r.evalOutput(PANEL);
 		expect(label(await r.invokeUi("a2", { to: "42" }))).toBe("count 42");
 	});
@@ -139,7 +191,7 @@ describe("driving the view", () => {
 		expect(out.model).toMatch(/no-such-fn/);
 		expect(out.user).toMatch(/no-such-fn/);
 		expect(out.failure).toMatch(/no-such-fn/);
-		expect(view(out)).toBeUndefined();
+		expect(shownView(out)).toBeUndefined();
 	});
 
 	it("reports an unknown action instead of silently doing nothing", async () => {
@@ -165,7 +217,7 @@ describe("handing a turn back to the agent", () => {
 		`);
 		const out = await r.invokeUi("a1", { q: "auth" });
 		expect(out.message).toBe("find auth");
-		expect(view(out)).toBeDefined();
+		expect(shownView(out)).toBeDefined();
 	});
 
 	it("reports no message for a click that only rendered", async () => {

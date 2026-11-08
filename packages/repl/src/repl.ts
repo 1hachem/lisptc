@@ -21,6 +21,7 @@ import {
 	noOpinion,
 } from "@repo/interpreter/hooks";
 import { type Image, restore, snapshot } from "@repo/interpreter/image";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	EndOfFile,
@@ -34,20 +35,18 @@ import {
 	type AgentEnd,
 	type AgentStep,
 	type AgentTurn,
-	type Annotations,
 	type Bounded,
 	type InterpExtension,
 	type ModelDelta,
 	type ModelRequest,
-	noAnnotations,
 	openSession,
 	type SessionHooks,
-	type StepAnnotations,
 	type StepContext,
 	type StepVerdict,
 	type TurnContext,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
+import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
 import type { Checkpoint, ImageStore } from "./image-store.ts";
@@ -66,52 +65,19 @@ export interface ReplOptions {
 	images?: ImageStore;
 }
 
-export type LiveAnnotations = (output: Annotations) => void;
+export type LiveEntries = (entry: Entry) => void;
 
-const LIVE_THROTTLE_MS = 150;
-
-function liveWatch(
-	buffer: ChannelBuffer,
-	annotate: (frozen: ChannelBuffer) => StepAnnotations,
-	live: LiveAnnotations,
-): { transport: ChannelTransport; stop(): void } {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	let stopped = false;
-	let pushed = JSON.stringify({});
-	const push = () => {
-		timer = undefined;
-		if (stopped) return;
-		const frozen = bufferTransport();
-		for (const envelope of buffer.envelopes) frozen.send(envelope);
-		let output: Annotations;
-		try {
-			output = annotate(frozen).output;
-		} catch {
-			return;
-		}
-		const seen = JSON.stringify(output);
-		if (seen === pushed) return;
-		pushed = seen;
-		live(output);
-	};
+function liveEntries(live: LiveEntries): ChannelTransport {
 	return {
-		transport: {
-			send(envelope) {
-				if (!stopped && timer === undefined && envelope.to.includes("user"))
-					timer = setTimeout(push, LIVE_THROTTLE_MS);
-				return !stopped;
-			},
-		},
-		stop() {
-			stopped = true;
-			if (timer !== undefined) clearTimeout(timer);
-			timer = undefined;
+		send(envelope) {
+			if (envelope.topic === journal.name) live(envelope.payload as Entry);
+			return true;
 		},
 	};
 }
 
 export interface EvalOutput extends Bounded {
-	annotations: StepAnnotations;
+	entries: readonly Entry[];
 	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
@@ -214,7 +180,7 @@ function render(result: StepResult): EvalOutput {
 	return {
 		model: result.model + notes,
 		user: result.user + notes,
-		annotations: result.annotations,
+		entries: result.entries,
 		effects: result.effects,
 		emitted: result.emitted,
 		failed: result.failed,
@@ -348,7 +314,7 @@ export class MemoryRepl implements InMemoryRepl {
 	async evalOutput(
 		code: string,
 		origin?: string,
-		live?: LiveAnnotations,
+		live?: LiveEntries,
 	): Promise<EvalOutput> {
 		return render(await this.evaluate(code, origin, live));
 	}
@@ -356,7 +322,7 @@ export class MemoryRepl implements InMemoryRepl {
 	protected evaluate(
 		code: string,
 		origin?: string,
-		live?: LiveAnnotations,
+		live?: LiveEntries,
 	): Promise<StepResult> {
 		return this.serialize(
 			code,
@@ -393,7 +359,7 @@ export class MemoryRepl implements InMemoryRepl {
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
 		origin?: string,
-		live?: LiveAnnotations,
+		live?: LiveEntries,
 	): Promise<StepResult> {
 		return this.enqueue(() =>
 			this.runStep(code, body, live).then((result) =>
@@ -438,7 +404,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private async runStep(
 		code: string,
 		body: (ctx: StepContext) => Promise<void>,
-		live?: LiveAnnotations,
+		live?: LiveEntries,
 	): Promise<StepResult> {
 		let emitted = "";
 		const interp = this.currentInterp;
@@ -452,15 +418,13 @@ export class MemoryRepl implements InMemoryRepl {
 		const { channels } = interp;
 		channels.step = this.calls + 1;
 		const buffer = bufferTransport();
-		for (const envelope of this.takeBetweenSteps(channels))
+		const watching = live === undefined ? undefined : liveEntries(live);
+		for (const envelope of this.takeBetweenSteps(channels)) {
 			buffer.send(envelope);
+			watching?.send(envelope);
+		}
 		const detach = channels.pipe(buffer);
-		const watch =
-			live === undefined
-				? undefined
-				: liveWatch(buffer, (frozen) => this.annotations(frozen), live);
-		const unwatch =
-			watch === undefined ? () => {} : channels.pipe(watch.transport);
+		const unwatch = watching === undefined ? () => {} : channels.pipe(watching);
 		const { recorder, results } = recordTopLevel(buffer);
 		this.recorder = recorder;
 		let thrown: unknown;
@@ -477,7 +441,6 @@ export class MemoryRepl implements InMemoryRepl {
 				}
 			}
 		} finally {
-			watch?.stop();
 			unwatch();
 			this.recorder = undefined;
 			detach();
@@ -497,7 +460,7 @@ export class MemoryRepl implements InMemoryRepl {
 			model: carried ? error.model : bounded.model + error.model + holding,
 			user: bounded.user + carriedError.user + error.user,
 			emitted,
-			annotations: this.annotations(buffer),
+			entries: buffer.collect(journal),
 			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
 			failure: carriedError.user + error.user,
@@ -510,10 +473,6 @@ export class MemoryRepl implements InMemoryRepl {
 			results,
 			skipped,
 		};
-	}
-
-	protected annotations(buffer: ChannelBuffer): StepAnnotations {
-		return this.hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
 	}
 
 	private errorOf(
@@ -599,7 +558,7 @@ export class AgentRepl extends MemoryRepl {
 	override async evalOutput(
 		code: string,
 		origin?: string,
-		live?: LiveAnnotations,
+		live?: LiveEntries,
 	): Promise<EvalOutput> {
 		const result = await this.evaluate(code, origin, live);
 		if (result.held) return ending(render(result));
@@ -608,7 +567,7 @@ export class AgentRepl extends MemoryRepl {
 		return {
 			model: result.model,
 			user: result.user,
-			annotations: result.annotations,
+			entries: result.entries,
 			effects: [...result.effects, END],
 			emitted: result.emitted,
 			failed: result.failed,
@@ -638,20 +597,20 @@ export class AgentRepl extends MemoryRepl {
 
 	async turnStart(
 		around?: Middleware<[TurnContext], Eval<void>>,
-	): Promise<{ emitted: string; annotations: StepAnnotations }> {
+	): Promise<{ emitted: string; entries: readonly Entry[] }> {
 		const chain = outermost(this.hooks.turnStart, around);
-		const { emitted, annotations } = await this.emitting((ctx) =>
+		const { emitted, entries } = await this.emitting((ctx) =>
 			chain.run(() => settled(undefined), ctx),
 		);
-		return { emitted, annotations };
+		return { emitted, entries };
 	}
 
 	received(
-		received: Annotations,
-		around?: Middleware<[TurnContext, Annotations], Eval<void>>,
+		received: Received,
+		around?: Middleware<[TurnContext, Received], Eval<void>>,
 	): Promise<{
 		emitted: string;
-		annotations: StepAnnotations;
+		entries: readonly Entry[];
 	}> {
 		const chain = outermost(this.hooks.received, around);
 		return this.emitting((ctx) =>
@@ -661,16 +620,16 @@ export class AgentRepl extends MemoryRepl {
 
 	async system(
 		prompt: string,
-	): Promise<{ prompt: string; annotations: StepAnnotations }> {
-		const { value, annotations } = await this.emitting(() =>
+	): Promise<{ prompt: string; entries: readonly Entry[] }> {
+		const { value, entries } = await this.emitting(() =>
 			this.hooks.system.run((_i, p) => settled(p), this.interp, prompt),
 		);
-		return { prompt: value, annotations };
+		return { prompt: value, entries };
 	}
 
 	beginStep(): Promise<{
 		emitted: string;
-		annotations: StepAnnotations;
+		entries: readonly Entry[];
 	}> {
 		return this.emitting((ctx) =>
 			this.hooks.beginStep.run(() => settled(undefined), ctx),
@@ -709,14 +668,14 @@ export class AgentRepl extends MemoryRepl {
 	async beforeSettle(more: boolean): Promise<{
 		more: boolean;
 		emitted: string;
-		annotations: StepAnnotations;
+		entries: readonly Entry[];
 	}> {
 		const { beforeSettle } = this.hooks;
 		let decided = more;
-		const { emitted, annotations } = await this.emitting(function* (ctx) {
+		const { emitted, entries } = await this.emitting(function* (ctx) {
 			decided = yield* beforeSettle.run((_c, m) => settled(m), ctx, more);
 		});
-		return { more: decided, emitted, annotations };
+		return { more: decided, emitted, entries };
 	}
 
 	answer(code: string): string {
@@ -733,7 +692,7 @@ export class AgentRepl extends MemoryRepl {
 
 	private async emitting<T>(
 		run: (ctx: TurnContext) => Eval<T>,
-	): Promise<{ value: T; emitted: string; annotations: StepAnnotations }> {
+	): Promise<{ value: T; emitted: string; entries: readonly Entry[] }> {
 		let emitted = "";
 		const { channels } = this.interp;
 		const buffer = bufferTransport();
@@ -755,7 +714,7 @@ export class AgentRepl extends MemoryRepl {
 		return {
 			value,
 			emitted,
-			annotations: this.annotations(buffer),
+			entries: buffer.collect(journal),
 		};
 	}
 

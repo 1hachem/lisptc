@@ -18,8 +18,6 @@ convex:
   backend:
     image: ghcr.io/convex/convex-backend:latest
     storage: 5Gi
-  dashboard:
-    image: ghcr.io/convex/convex-dashboard:2cbcf8179207eb4521360e6d81ebee5e7abbfa07
   hostnames:
     cloud: lisptc-convex
   secrets: [lisptc-db, lisptc-convex]
@@ -48,38 +46,52 @@ preview:
   sha: ""
   progressDeadlineSeconds: 120
   tailnetSecret: lisptc-tailnet
-  infisical:
-    hostAPI: https://app.infisical.com/api
-    projectSlug: listptc-nz-qj
-    envSlug: prod
-    resyncInterval: "1m"
-    credentials:
-      secretName: lisptc-infisical-cred
-      secretNamespace: infisical
-  synced:
-    - { name: db, path: /db, secretName: lisptc-db }
-    - name: db-init
-      path: /db
-      secretName: lisptc-db-init
-      template:
-        includeAllSecrets: false
-        data:
-          role.sql: 'DO $do$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = $n${{ .POSTGRES_USER.Value }}$n$) THEN ALTER ROLE "{{ .POSTGRES_USER.Value }}" LOGIN PASSWORD $pw${{ .POSTGRES_PASSWORD.Value }}$pw$; ELSE CREATE ROLE "{{ .POSTGRES_USER.Value }}" LOGIN PASSWORD $pw${{ .POSTGRES_PASSWORD.Value }}$pw$; END IF; END $do$'
-          database.sql: 'CREATE DATABASE "{{ .POSTGRES_DB.Value }}" OWNER "{{ .POSTGRES_USER.Value }}"'
-    - { name: convex-deploy, path: /convex-deploy, secretName: lisptc-convex-deploy }
-    - { name: convex, path: /convex, secretName: lisptc-convex }
-    - { name: api, path: /api, secretName: lisptc-api }
-    - { name: ai, path: /ai, secretName: lisptc-ai }
-    - { name: analytics, path: /analytics, secretName: lisptc-analytics }
-    - { name: web, path: /web, secretName: lisptc-web }
-    - { name: tailnet, path: /tailnet, secretName: lisptc-tailnet }
-    - { name: mcp-google, path: /mcps/google, secretName: lisptc-mcp-google }
-    - { name: mcp-ocr, path: /mcps/mistral, secretName: lisptc-mcp-ocr }
-    - name: ghcr
-      path: /ghcr
-      secretName: ghcr-pull
-      secretType: kubernetes.io/dockerconfigjson
-      template:
-        includeAllSecrets: false
-        data:
-          .dockerconfigjson: '{"auths":{"ghcr.io":{"username":"{{ .GHCR_USERNAME.Value }}","password":"{{ .GHCR_TOKEN.Value }}","auth":"{{ printf "%s:%s" .GHCR_USERNAME.Value .GHCR_TOKEN.Value | encodeBase64 }}"}}}'
+
+dev:
+  enabled: false
+  node: ""
+  watch: false
+
+infisical:
+  hostAPI: https://app.infisical.com/api
+  projectSlug: listptc-nz-qj
+  envSlug: prod
+  resyncInterval: "1m"
+  credentials:
+    secretName: lisptc-infisical-cred
+    secretNamespace: infisical
+
+synced:
+  - { name: db, path: /db, secretName: lisptc-db }
+  - name: db-init
+    path: /db
+    secretName: lisptc-db-init
+    template:
+      includeAllSecrets: false
+      data:
+        role.sql: 'DO $do$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = $n${{ .POSTGRES_USER.Value }}$n$) THEN ALTER ROLE "{{ .POSTGRES_USER.Value }}" LOGIN PASSWORD $pw${{ .POSTGRES_PASSWORD.Value }}$pw$; ELSE CREATE ROLE "{{ .POSTGRES_USER.Value }}" LOGIN PASSWORD $pw${{ .POSTGRES_PASSWORD.Value }}$pw$; END IF; END $do$'
+        database.sql: 'CREATE DATABASE "{{ .POSTGRES_DB.Value }}" OWNER "{{ .POSTGRES_USER.Value }}"'
+  - name: convex-deploy
+    path: /convex-deploy
+    secretName: lisptc-convex-deploy
+    template:
+      includeAllSecrets: false
+      data:
+        deployment.env: '{{ range $name, $secret := . }}{{ $name }}=''{{ $secret.Value }}''{{ "\n" }}{{ end }}'
+  - { name: convex, path: /convex, secretName: lisptc-convex }
+  - { name: api, path: /api, secretName: lisptc-api }
+  - { name: ai, path: /ai, secretName: lisptc-ai }
+  - { name: analytics, path: /analytics, secretName: lisptc-analytics }
+  - { name: web, path: /web, secretName: lisptc-web }
+  - { name: tailnet, path: /tailnet, secretName: lisptc-tailnet, modes: [preview] }
+  - { name: mcp-google, path: /mcps/google, secretName: lisptc-mcp-google }
+  - { name: mcp-ocr, path: /mcps/mistral, secretName: lisptc-mcp-ocr }
+  - name: ghcr
+    path: /ghcr
+    secretName: ghcr-pull
+    secretType: kubernetes.io/dockerconfigjson
+    modes: [prod, preview]
+    template:
+      includeAllSecrets: false
+      data:
+        .dockerconfigjson: '{"auths":{"ghcr.io":{"username":"{{ .GHCR_USERNAME.Value }}","password":"{{ .GHCR_TOKEN.Value }}","auth":"{{ printf "%s:%s" .GHCR_USERNAME.Value .GHCR_TOKEN.Value | encodeBase64 }}"}}}'

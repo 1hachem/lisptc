@@ -71,7 +71,7 @@ jobs:
         run: pnpm fallow --base ${{ github.event.pull_request.base.sha || 'origin/main' }}
 
       - name: Test with coverage
-        run: pnpm test:coverage --concurrency=2
+        run: pnpm test:coverage
 
       - name: Merge coverage
         if: ${{ !cancelled() }}

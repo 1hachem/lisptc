@@ -1,7 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { mutation, type QueryCtx, query } from "./_generated/server.js";
-import { requireUserOrThread } from "./lib/auth.js";
+import {
+	internalMutation,
+	mutation,
+	type QueryCtx,
+	query,
+} from "./_generated/server.js";
+import { requireWorkspace } from "./lib/auth.js";
 import { withDefaults } from "./lib/preferenceDefaults.js";
 import { MAX_PREFERENCES_BYTES } from "./limits.js";
 
@@ -13,6 +18,7 @@ const preferences = v.object({
 	metadata: v.optional(v.record(v.string(), v.boolean())),
 	input: v.optional(v.record(v.string(), v.boolean())),
 	sidebar: v.optional(v.array(v.string())),
+	sidebarRight: v.optional(v.array(v.string())),
 	hidden: v.optional(v.array(v.string())),
 	statusBar: v.optional(v.array(v.string())),
 	statusBarHidden: v.optional(v.array(v.string())),
@@ -24,35 +30,40 @@ const preferences = v.object({
 
 function stripped(row: Doc<"preferences"> | null) {
 	if (row === null) return {};
-	const { _id, _creationTime, userId, ...stored } = row;
+	const { _id, _creationTime, userId, workspaceId, ...stored } = row;
 	return stored;
 }
 
-export async function preferencesOf(ctx: QueryCtx, userId: Id<"users">) {
-	const row = await ctx.db
+async function workspaceRow(ctx: QueryCtx, workspaceId: Id<"workspaces">) {
+	return await ctx.db
 		.query("preferences")
-		.withIndex("by_user", (q) => q.eq("userId", userId))
+		.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 		.unique();
-	return withDefaults(stripped(row));
+}
+
+export async function preferencesOf(
+	ctx: QueryCtx,
+	workspaceId: Id<"workspaces">,
+) {
+	return withDefaults(stripped(await workspaceRow(ctx, workspaceId)));
 }
 
 export const get = query({
-	args: {},
+	args: { workspaceId: v.id("workspaces") },
 	returns: preferences,
-	handler: async (ctx) =>
-		await preferencesOf(ctx, (await requireUserOrThread(ctx))._id),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		return await preferencesOf(ctx, workspaceId);
+	},
 });
 
 export const put = mutation({
-	args: { preferences },
+	args: { workspaceId: v.id("workspaces"), preferences },
 	returns: v.null(),
-	handler: async (ctx, { preferences }) => {
-		const user = await requireUserOrThread(ctx);
-		const existing = await ctx.db
-			.query("preferences")
-			.withIndex("by_user", (q) => q.eq("userId", user._id))
-			.unique();
-		const fields = { ...stripped(existing), ...preferences, userId: user._id };
+	handler: async (ctx, { workspaceId, preferences }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const existing = await workspaceRow(ctx, workspaceId);
+		const fields = { ...stripped(existing), ...preferences, workspaceId };
 		if (encoder.encode(JSON.stringify(fields)).length > MAX_PREFERENCES_BYTES) {
 			throw new ConvexError({ code: "PREFERENCES_TOO_LARGE" });
 		}
@@ -61,6 +72,16 @@ export const put = mutation({
 			return null;
 		}
 		await ctx.db.insert("preferences", fields);
+		return null;
+	},
+});
+
+export const purge = internalMutation({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId }) => {
+		const row = await workspaceRow(ctx, workspaceId);
+		if (row !== null) await ctx.db.delete(row._id);
 		return null;
 	},
 });

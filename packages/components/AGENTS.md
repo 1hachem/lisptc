@@ -9,8 +9,8 @@ Turbo tag: `frontend`.
 One file per component, flat, with its tests beside it and `src/index.ts`
 re-exporting them. The components here are the presentational pieces two
 front-ends share: the text animations, the message feedback control and the
-recalled memories of a step, with `src/feedback.ts` and `src/memories.ts`
-holding the shapes each of those speaks in.
+recalled memories of a step. `src/feedback.ts` holds the shape feedback speaks
+in, and a recalled memory is the shape `@repo/journal-catalog` records.
 
 ## Rules
 
@@ -29,8 +29,9 @@ Tailwind's roomy default heights and icon sizes, nor an arbitrary pixel size.
 `packages/ui/AGENTS.md` holds the scale.
 
 `@repo/ui` is the only workspace dependency besides `@repo/shared`, whose pure
-split layout the split view draws. Adding another one is a sign the component
-belongs in the app instead.
+split layout the split view draws, and `@repo/journal-catalog`, whose shapes
+the components draw. Adding another one is a sign the component belongs in the
+app instead.
 
 ## Tests
 

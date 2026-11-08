@@ -1,11 +1,12 @@
 import type { AgentRepl } from "@repo/repl/repl";
+import type { Entry } from "@repo/shared/journal";
 import type { Repls } from "./repl-store.ts";
 
-export interface UiActionResult extends Record<string, unknown> {
+export interface UiActionResult {
 	output: string;
 	error: boolean;
 	message?: string;
-	annotations?: Record<string, unknown>;
+	entries: readonly Entry[];
 }
 
 export async function runUiAction<Id extends string>(
@@ -23,21 +24,21 @@ export async function uiActionOn(
 	values: Record<string, unknown>,
 ): Promise<UiActionResult> {
 	try {
-		const { user, annotations, message, failed } = await repl.invokeUi(
+		const { user, entries, message, failed } = await repl.invokeUi(
 			action,
 			values,
 		);
 		return {
-			...annotations.output,
 			output: user,
 			error: failed,
 			message,
-			annotations: annotations.output,
+			entries,
 		};
 	} catch (ex) {
 		return {
 			output: ex instanceof Error ? ex.message : String(ex),
 			error: true,
+			entries: [],
 		};
 	}
 }

@@ -18,7 +18,7 @@ export const extensionBlind: Check = {
 		"with and name none of them.",
 	],
 	fix: [
-		"Take what the step reports through its annotations, ask the REPL, or",
+		"Take what the step records through the journal, ask the REPL, or",
 		"move the contract out of the extension module.",
 	],
 	run: (tree) =>

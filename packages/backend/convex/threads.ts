@@ -7,9 +7,9 @@ import {
 } from "./_generated/server.js";
 import { lineageOf, settleChat, spawnUnder, startChat } from "./chats.js";
 import {
-	annotateIn,
 	appendTo,
 	incomingMessages,
+	reviseIn,
 	transcriptMessages,
 	transcriptOf,
 } from "./messages.js";
@@ -42,7 +42,7 @@ export const record = internalQuery({
 		const chat = await threadChat(ctx, chatId);
 		const workspace = await ctx.db.get(chat.workspaceId);
 		if (workspace === null) throw new ConvexError({ code: "NOT_FOUND" });
-		const preferences = await preferencesOf(ctx, workspace.ownerId);
+		const preferences = await preferencesOf(ctx, chat.workspaceId);
 		return {
 			workspaceId: chat.workspaceId,
 			ownerId: workspace.ownerId,
@@ -74,7 +74,7 @@ export const append = internalMutation({
 		await appendTo(ctx, await threadChat(ctx, chatId), messages),
 });
 
-export const annotate = internalMutation({
+export const revise = internalMutation({
 	args: {
 		chatId: v.id("chats"),
 		id: v.string(),
@@ -82,7 +82,7 @@ export const annotate = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { chatId, id, kwargs }) => {
-		await annotateIn(ctx, await threadChat(ctx, chatId), id, kwargs);
+		await reviseIn(ctx, await threadChat(ctx, chatId), id, kwargs);
 		return null;
 	},
 });

@@ -22,9 +22,7 @@ describe("a case that lists its own extensions", () => {
 
 		expect(await repl.eval("(list-toolkit)")).toContain("playwright");
 		expect(await repl.eval('(secret "REPL_X")')).toContain("undefined: secret");
-		expect(await repl.eval('(llm/complete "hi")')).toContain(
-			"undefined: llm/complete",
-		);
+		expect(await repl.eval('(write "hi")')).toContain("undefined: write");
 	});
 
 	test("is prompted with those sections alone", () => {
@@ -35,7 +33,7 @@ describe("a case that lists its own extensions", () => {
 
 		expect(prompt).toMatch(/EXTRACT, THEN ECHO/);
 		expect(prompt).not.toMatch(/MCP SERVERS/);
-		expect(prompt).not.toMatch(/LANGUAGE MODELS/);
+		expect(prompt).not.toMatch(/^WRITING$/m);
 	});
 
 	test("records the calls of the mock it was handed", async () => {

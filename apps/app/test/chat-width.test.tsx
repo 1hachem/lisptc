@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "@repo/backend/api";
+import type { Id } from "@repo/backend/dataModel";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -73,6 +76,15 @@ const offline = new QueryClient({
 	defaultOptions: { queries: { enabled: false } },
 });
 
+function storeView(viewId: string, node: unknown): { viewId: string } {
+	offline.setQueryData(
+		convexQuery(api.views.get, { chatId: "c1" as Id<"chats">, viewId })
+			.queryKey,
+		{ node, rev: 1, expired: false },
+	);
+	return { viewId };
+}
+
 async function mount() {
 	const host = document.createElement("div");
 	document.body.append(host);
@@ -126,47 +138,70 @@ const WIDE: ChatMessage[] = [
 		id: "t1",
 		type: "tool",
 		content: "",
-		additional_kwargs: {
-			intent: {
-				doing: long,
-				todos: [{ label: long, done: false }],
-				progress: { done: 1, total: 2, label: long },
-				log: [{ text: long, startedAt: 0, state: "running" }],
+		entries: [
+			{
+				id: "intent",
+				kind: "intent",
+				value: {
+					doing: long,
+					todos: [{ label: long, done: false }],
+					progress: { done: 1, total: 2, label: long },
+					log: [{ text: long, startedAt: 0, state: "running" }],
+				},
 			},
-			activity: [
-				{ id: "z", kind: "mcp", label: long, detail: long, state: "started" },
-			],
-			ui: {
-				tag: "stack",
-				props: {},
-				children: [
-					{ tag: "text", props: { text: long }, children: [] },
-					{ tag: "markdown", props: { text: MARKDOWN }, children: [] },
-					{
-						tag: "table",
-						props: { columns: [long, "b"], rows: [{ [long]: long, b: long }] },
-						children: [],
-					},
-				],
+			{
+				id: "activity",
+				kind: "activity",
+				value: {
+					id: "z",
+					kind: "mcp",
+					label: long,
+					detail: long,
+					state: "started",
+				},
 			},
-			asks: {
-				open: [
-					{
-						id: "k1",
-						title: long,
-						detail: long,
-						prompt: long,
-						choices: [
-							{
-								label: long,
-								accepts: true,
-								answer: { action: "x", values: {} },
+			{
+				id: "ui",
+				kind: "ui",
+				value: storeView("wide", {
+					tag: "stack",
+					props: {},
+					children: [
+						{ tag: "text", props: { text: long }, children: [] },
+						{ tag: "markdown", props: { text: MARKDOWN }, children: [] },
+						{
+							tag: "table",
+							props: {
+								columns: [long, "b"],
+								rows: [{ [long]: long, b: long }],
 							},
-						],
-					},
-				],
+							children: [],
+						},
+					],
+				}),
 			},
-		},
+			{
+				id: "asks",
+				kind: "asks",
+				value: {
+					open: [
+						{
+							id: "k1",
+							title: long,
+							detail: long,
+							prompt: long,
+							choices: [
+								{
+									label: long,
+									accepts: true,
+									answer: { action: "x", values: {} },
+								},
+							],
+						},
+					],
+				},
+			},
+		],
 	},
 	{
 		id: "a2",
@@ -212,9 +247,16 @@ describe("the chat's width", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					ui: { tag: "table", props: { columns, rows: [row] }, children: [] },
-				},
+				entries: [
+					{
+						kind: "ui",
+						value: storeView("table", {
+							tag: "table",
+							props: { columns, rows: [row] },
+							children: [],
+						}),
+					},
+				],
 			},
 		];
 		session.isLoading = false;

@@ -29,7 +29,6 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "env:seed": "sh scripts/seed-env.sh",
     "migrate": "convex run migrations:runAll",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -48,6 +47,7 @@
     "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/knowledge-extension": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",
@@ -58,6 +58,7 @@
     "@repo/prose-extension": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/secrets-extension": "workspace:*",
+    "@repo/semantic-extension": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/ui": "workspace:*",
     "@repo/ui-extension": "workspace:*",

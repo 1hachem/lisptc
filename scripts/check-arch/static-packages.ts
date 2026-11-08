@@ -22,17 +22,18 @@ function manifestsTagged(tag: string): string[] {
 export const staticPackages: Check = {
 	name: "static packages",
 	rule: [
-		"A package tagged static is data. It depends on a foundation package",
-		"at most, and builds on no workspace package outside the foundation.",
+		"A package tagged static is data. It depends on zod or a foundation",
+		"package at most, and builds on no workspace package outside the foundation.",
 	],
 	fix: ["Drop the dependency, or move the code that needs it out of the data."],
 	run: () => {
-		const foundation = new Set(
-			manifestsTagged("foundation").map(
+		const foundation = new Set([
+			"zod",
+			...manifestsTagged("foundation").map(
 				(manifest) =>
 					(JSON.parse(readFileSync(manifest, "utf8")) as { name: string }).name,
 			),
-		);
+		]);
 		return manifestsTagged("static").flatMap((file) => {
 			const manifest = JSON.parse(readFileSync(file, "utf8")) as Manifest;
 			const forbidden: [Field, (name: string) => boolean][] = [

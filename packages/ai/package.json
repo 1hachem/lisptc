@@ -18,15 +18,16 @@
   },
   "dependencies": {
     "@langchain/core": "^1.2.9",
-    "@langchain/openai": "^1.5.10",
     "@posthog/ai": "^8.9.3",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/models": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
     "posthog-node": "^5.51.6"
   },
   "devDependencies": {
+    "@repo/journal-catalog": "workspace:*",
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.7",

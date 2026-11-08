@@ -1,9 +1,14 @@
-import { type Activity, activityKey } from "@repo/interpreter/annotations";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import type { LispPromise } from "@repo/interpreter/promise";
-import { noAnnotations, openSession } from "@repo/interpreter/session";
+import { openSession } from "@repo/interpreter/session";
+import {
+	type ActivityEntry,
+	activityKind,
+} from "@repo/journal-catalog/activity";
+import { every, view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -86,10 +91,10 @@ async function activityOf(
 	code: string,
 	icons?: Icon[],
 ): Promise<{
-	activity: Activity | undefined;
+	activity: ActivityEntry[];
 	reported: unknown[];
 }> {
-	const { interp, hooks } = await session(icons);
+	const { interp } = await session(icons);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
 	try {
@@ -97,12 +102,14 @@ async function activityOf(
 	} finally {
 		detach();
 	}
-	const into = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
 	return {
-		activity: activityKey.schema.safeParse(into.output[activityKey.name]).data,
+		activity: view(buffer.collect(journal), activityKind),
 		reported: buffer.envelopes
-			.filter((e) => e.topic === "mcp-activity")
-			.map((e) => [e.to, (e.payload as { state: string }).state]),
+			.filter((e) => e.topic === journal.name)
+			.map((e) => [
+				e.to,
+				(e.payload as { value: { state: string } }).value.state,
+			]),
 	};
 }
 
@@ -112,8 +119,8 @@ describe("a tool call from lisp", () => {
 			'(acme/web_search :query "hyko")',
 		);
 		expect(reported).toEqual([
-			[["user"], "started"],
-			[["user"], "done"],
+			[["harness"], "started"],
+			[["harness"], "done"],
 		]);
 		expect(activity).toEqual([
 			{
@@ -169,7 +176,6 @@ describe("loading a server", () => {
 		});
 		const interp = new Interp({ extensions: [extension] });
 		runSync(interp, prelude);
-		const hooks = openSession([extension]);
 		const buffer = bufferTransport();
 		const detach = interp.channels.pipe(buffer);
 		try {
@@ -180,17 +186,11 @@ describe("loading a server", () => {
 		} finally {
 			detach();
 		}
-		const into = hooks.annotate.run(
-			(_b, into) => into,
-			buffer,
-			noAnnotations(),
-		);
+		const entries = buffer.collect(journal);
 		expect(
-			buffer.envelopes
-				.filter((e) => e.topic === "mcp-activity")
-				.map((e) => (e.payload as { state: string }).state),
+			view(entries, { ...activityKind, fold: every }).map((a) => a.state),
 		).toEqual(["started", "done"]);
-		expect(activityKey.schema.parse(into.output[activityKey.name])).toEqual([
+		expect(view(entries, activityKind)).toEqual([
 			{
 				kind: "mcp",
 				icon: [{ src: "https://acme.example/logo.svg" }],

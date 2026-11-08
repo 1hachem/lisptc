@@ -3,7 +3,6 @@ import { apiHeaders } from "./api.ts";
 export interface UiActionResponse {
 	output?: string;
 	error?: boolean;
-	ui?: unknown;
 	message?: string;
 	event?: unknown;
 }

@@ -43,6 +43,7 @@ export async function dropWorkspace(
 	await ctx.scheduler.runAfter(0, internal.readmes.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.files.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.layouts.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.preferences.purge, { workspaceId });
 }
 
 export const list = query({
@@ -166,6 +167,9 @@ export const purge = internalMutation({
 			await ctx.db.delete(chat._id);
 			await dropRepl(ctx, chat);
 			await ctx.scheduler.runAfter(0, internal.messages.purge, {
+				chatId: chat._id,
+			});
+			await ctx.scheduler.runAfter(0, internal.views.purge, {
 				chatId: chat._id,
 			});
 		}

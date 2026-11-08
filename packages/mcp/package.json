@@ -30,6 +30,7 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/toolkit": "workspace:*",
     "minisearch": "^7.2.0",

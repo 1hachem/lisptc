@@ -32,9 +32,9 @@ describe("panel paths", () => {
 			"bin/old.md",
 		],
 		[{ kind: "page", page: "readme", title: "README.md" }, "readme"],
-		[{ kind: "page", page: "settings", title: "settings.ptc" }, "settings"],
+		[{ kind: "page", page: "settings", title: "settings" }, "settings"],
 		[
-			{ kind: "page", page: "preferences", title: "preferences.ptc" },
+			{ kind: "page", page: "preferences", title: "preferences" },
 			"preferences",
 		],
 		[{ kind: "page", page: "account", title: "account" }, "account"],
@@ -51,7 +51,7 @@ describe("panel paths", () => {
 
 	it("has no path for a drawn view", () => {
 		expect(
-			panelPath({ kind: "view", title: "chart", node: {} }),
+			panelPath({ kind: "view", title: "chart", viewId: "view:chart" }),
 		).toBeUndefined();
 	});
 

@@ -65,7 +65,7 @@ beforeAll(async () => {
 	process.env.OPENROUTER_BASE_URL = "http://openrouter.test/v1";
 	llmExtension = (await import("../src/llm.ts")).llmExtension;
 	llmHost = (await import("../src/llm-host.ts")).llmHost;
-	await import("@langchain/openai");
+	await import("@repo/models/providers");
 });
 
 afterEach(() => {
@@ -84,12 +84,12 @@ describe("the langchain client against a stubbed fetch", () => {
 		const interp = clientInterp();
 		const reply = await runAsync(
 			interp,
-			'(llm/complete "hi" :provider :openrouter :max-tokens 32)',
+			'(write "hi" :provider :openrouter :max-tokens 32)',
 		);
 		expect(str(reply.value)).toBe('"{\\"words\\":[\\"one\\",\\"two\\"]}"');
 		expect(seen.at(-1)?.url).toBe("http://openrouter.test/v1/chat/completions");
 		expect(seen.at(-1)?.body).toMatchObject({
-			model: "google/gemma-4-31b-it",
+			model: "anthropic/claude-haiku-5.5",
 			stream: false,
 			max_tokens: 32,
 			messages: [{ role: "user", content: "hi" }],
@@ -101,7 +101,7 @@ describe("the langchain client against a stubbed fetch", () => {
 		const interp = clientInterp();
 		const value = await runAsync(
 			interp,
-			'(llm/extract "one and two" (list (cons "words" (list :list :string))) :provider :openrouter)',
+			'(extract "one and two" (list (cons "words" (list :list :string))) :provider :openrouter)',
 		);
 		expect(str(value.value)).toBe('(("words" "one" "two"))');
 		expect(seen.at(-1)?.body.response_format).toEqual({
@@ -123,7 +123,7 @@ describe("the langchain client against a stubbed fetch", () => {
 		const interp = clientInterp();
 		const before = seen.length;
 		await expect(
-			runAsync(interp, '(llm/complete "hi" :provider :nowhere)'),
+			runAsync(interp, '(write "hi" :provider :nowhere)'),
 		).rejects.toThrow(/unknown provider "nowhere"/);
 		expect(seen.length).toBe(before);
 	});
@@ -132,10 +132,7 @@ describe("the langchain client against a stubbed fetch", () => {
 		stubFetch(neverAnswers);
 		const interp = clientInterp();
 		await expect(
-			runAsync(
-				interp,
-				'(llm/complete "hi" :provider :openrouter :timeout 100)',
-			),
-		).rejects.toThrow(/llm timed out/);
+			runAsync(interp, '(write "hi" :provider :openrouter :timeout 100)'),
+		).rejects.toThrow(/write timed out/);
 	});
 });

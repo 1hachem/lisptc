@@ -41,10 +41,24 @@
       "recommended": true,
       "correctness": {
         "noUndeclaredDependencies": "error",
-        "noUnusedImports": { "level": "warn", "fix": "safe" }
+        "noUnusedImports": {
+          "level": "warn",
+          "fix": "safe"
+        }
       },
       "style": {
-        "noProcessEnv": "error"
+        "noProcessEnv": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "@dnd-kit/core": {
+                "importNames": ["DragOverlay"],
+                "message": "The page runs under CSS zoom, and a bare DragOverlay trails behind the cursor under it. Wrap the overlay in CursorDragOverlay from packages/components/src/cursor-drag-overlay.tsx."
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -123,6 +137,16 @@
         "rules": {
           "style": {
             "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/components/src/cursor-drag-overlay.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
           }
         }
       }

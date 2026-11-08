@@ -27,7 +27,12 @@ It builds no interpreter and names no extension. What a symbol means arrives in
 the table its caller read off a live `Interp`.
 
 The tokens come from `@repo/shared/lisp-tokens`. **Do not write a second
-tokenizer.**
+tokenizer.** A checker that disagrees with the reader reports errors that are
+not real.
+
+The tokenizer and the call checks are exported on their own, so a caller that
+is not an editor checks a call the same way the editor does. **Only
+`src/service.ts` speaks the editor protocol.**
 
 ## Tests
 

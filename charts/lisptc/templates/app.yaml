@@ -32,8 +32,23 @@ spec:
         app: app
     spec:
       serviceAccountName: {{ .Values.app.serviceAccount }}
+      {{- with .Values.imagePullSecret }}
       imagePullSecrets:
-        - name: {{ .Values.imagePullSecret }}
+        - name: {{ . }}
+      {{- end }}
+      {{- if .Values.dev.enabled }}
+      {{- with .Values.dev.node }}
+      nodeSelector:
+        kubernetes.io/hostname: {{ . }}
+      {{- end }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      volumes:
+        - name: docker
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+      {{- end }}
       containers:
         - name: app
           image: "{{ .Values.app.image.repository }}:{{ include "lisptc.imageTag" (list . .Values.app.image.tag) }}"
@@ -55,20 +70,39 @@ spec:
               value: {{ include "lisptc.imageTag" (list . .Values.app.image.tag) | quote }}
             {{- include "lisptc.previewEnv" (list . (dict
                 "APP_URL" (include "lisptc.appHostname" .))) | nindent 12 }}
-            {{- include "lisptc.previewConvexEnv" . | nindent 12 }}
+            {{- include "lisptc.clusterConvexEnv" . | nindent 12 }}
             {{- if .Values.preview.enabled }}
             - name: LISPTC_OAUTH_REDIRECT_URL
               value: {{ printf "%s/oauth/callback" (include "lisptc.url" (include "lisptc.appHostname" .)) | quote }}
             {{- end }}
+          {{- if .Values.dev.enabled }}
+          volumeMounts:
+            - name: docker
+              mountPath: /var/run/docker.sock
+          {{- end }}
           livenessProbe:
             httpGet:
+              {{- if .Values.dev.enabled }}
+              host: 127.0.0.1
+              {{- end }}
               path: /live
               port: {{ .Values.app.port }}
             initialDelaySeconds: 30
             periodSeconds: 20
+            {{- if .Values.dev.enabled }}
+            timeoutSeconds: 10
+            failureThreshold: 6
+            {{- else }}
             failureThreshold: 3
+            {{- end }}
           readinessProbe:
             httpGet:
+              {{- if .Values.dev.enabled }}
+              host: 127.0.0.1
+              {{- end }}
               path: /health
               port: {{ .Values.app.port }}
             periodSeconds: 10
+            {{- if .Values.dev.enabled }}
+            timeoutSeconds: 10
+            {{- end }}

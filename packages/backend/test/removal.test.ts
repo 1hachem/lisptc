@@ -33,6 +33,28 @@ describe("removing a chat", () => {
 		expect(left).toEqual([]);
 	});
 
+	it("takes its rendered views with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.views.put, {
+			chatId,
+			viewId: "v1",
+			node: { tag: "text", props: { text: "hi" }, children: [] },
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("views").collect(),
+		);
+		expect(left).toEqual([]);
+	});
+
 	it("takes its repl checkpoints with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -137,21 +159,53 @@ describe("removing a workspace", () => {
 			whole: true,
 			chunks: ["{}"],
 		});
+		await alice.as.mutation(api.views.put, {
+			chatId,
+			viewId: "v1",
+			node: { tag: "text", props: { text: "hi" }, children: [] },
+		});
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const { chats, messages, repls, replLayers } = await t.run(async (ctx) => ({
-			chats: await ctx.db.query("chats").collect(),
-			messages: await ctx.db.query("messages").collect(),
-			repls: await ctx.db.query("repls").collect(),
-			replLayers: await ctx.db.query("replLayers").collect(),
-		}));
+		const { chats, messages, repls, replLayers, views } = await t.run(
+			async (ctx) => ({
+				chats: await ctx.db.query("chats").collect(),
+				messages: await ctx.db.query("messages").collect(),
+				repls: await ctx.db.query("repls").collect(),
+				replLayers: await ctx.db.query("replLayers").collect(),
+				views: await ctx.db.query("views").collect(),
+			}),
+		);
+		expect(views).toEqual([]);
 		expect(chats).toEqual([]);
 		expect(messages).toEqual([]);
 		expect(repls).toEqual([]);
 		expect(replLayers).toEqual([]);
+	});
+
+	it("takes its preferences with it and leaves the other workspace's", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const doomed = await alice.as.mutation(api.workspaces.create, {
+			name: "doomed",
+		});
+		for (const workspaceId of [doomed, alice.workspace]) {
+			await alice.as.mutation(api.preferences.put, {
+				workspaceId,
+				preferences: { hidden: ["tests"] },
+			});
+		}
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("preferences").collect(),
+		);
+		expect(left.map((row) => row.workspaceId)).toEqual([alice.workspace]);
 	});
 
 	it("takes its secrets, oauth records, permissions, readme, knowledge, attachments, bin and panel layout with it", async () => {
@@ -446,6 +500,7 @@ describe("deleting an account", () => {
 			storageId: await t.run((ctx) => ctx.storage.store(new Blob(["doomed"]))),
 		});
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId: alice.workspace,
 			preferences: { font: "mono", themeUses: {} },
 		});
 		await alice.as.mutation(api.secrets.put, {
@@ -504,10 +559,13 @@ describe("removing a user", () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId: alice.workspace,
 			preferences: { font: "mono", themeUses: {} },
 		});
 
+		vi.useFakeTimers();
 		await t.mutation(internal.users.purge, { userId: alice.user });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
 		const left = await t.run(
 			async (ctx) => await ctx.db.query("preferences").collect(),

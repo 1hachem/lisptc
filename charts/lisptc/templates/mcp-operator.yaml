@@ -99,8 +99,10 @@ spec:
         app: mcp-operator
     spec:
       serviceAccountName: {{ .Values.mcpOperator.serviceAccount }}
+      {{- with .Values.imagePullSecret }}
       imagePullSecrets:
-        - name: {{ .Values.imagePullSecret }}
+        - name: {{ . }}
+      {{- end }}
       containers:
         - name: mcp-operator
           image: "{{ .Values.mcpOperator.image.repository }}:{{ include "lisptc.imageTag" (list . .Values.mcpOperator.image.tag) }}"

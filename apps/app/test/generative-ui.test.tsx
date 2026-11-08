@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
-import type { ViewNode } from "@repo/interpreter/annotations";
+import type { Id } from "@repo/backend/dataModel";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GenerativeUI } from "../src/components/generative-ui.tsx";
 import { postUiAction } from "../src/lib/ui-action.ts";
+import type { ViewNode } from "../src/lib/ui-node.ts";
+
+const stored = vi.hoisted(() => ({ row: undefined as unknown }));
 
 vi.mock("../src/lib/chat.tsx", () => ({
 	useChatSession: <U,>(
 		selector: (state: { chatId: string; send: () => void }) => U,
 	): U => selector({ chatId: "c1", send: vi.fn() }),
+}));
+vi.mock("@tanstack/react-query", () => ({
+	useQuery: () => ({ data: stored.row }),
 }));
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 vi.mock("../src/lib/ui-action.ts", () => ({
@@ -37,18 +43,40 @@ afterEach(() => {
 	vi.mocked(postUiAction).mockClear();
 });
 
-function render(node: ViewNode) {
-	act(() => root.render(<GenerativeUI node={node} />));
+function render(node: ViewNode, expired = false) {
+	stored.row = { node, rev: 1, expired };
+	act(() =>
+		root.render(<GenerativeUI chatId={"c1" as Id<"chats">} viewId="v1" />),
+	);
 }
 
 describe("GenerativeUI", () => {
+	it("shows an expired view with its controls disabled", () => {
+		render(view("button", { label: "go", action: "a1" }), true);
+		expect(host.textContent).toContain(
+			"this view expired, ask the agent to redraw it",
+		);
+		const button = host.querySelector("button") as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		act(() => button.click());
+		expect(postUiAction).not.toHaveBeenCalled();
+	});
+
+	it("draws nothing until the view is stored", () => {
+		stored.row = null;
+		act(() =>
+			root.render(<GenerativeUI chatId={"c1" as Id<"chats">} viewId="v1" />),
+		);
+		expect(host.textContent).toBe("");
+	});
+
 	it("renders every widget a view can name", () => {
 		render(
 			view("stack", {}, [
 				view("card", { title: "Report" }, [
 					view("heading", { text: "Totals" }),
 					view("text", { text: "plain words" }),
-					view("link", { href: "https://example.com" }),
+					view("link", { text: "", href: "https://example.com" }),
 					view("badge", { text: "ok", tone: "ok" }),
 					view("kpi", { label: "users", value: "42", hint: "this week" }),
 				]),

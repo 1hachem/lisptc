@@ -391,6 +391,21 @@ export const fork = mutation({
 				layerId: message.layerId,
 			});
 		}
+		if (await waitsOnUser(ctx, forked))
+			await ctx.db.patch(forked, { status: "waiting" });
+		const views = await ctx.db
+			.query("views")
+			.withIndex("by_chat_view", (q) => q.eq("chatId", chatId))
+			.collect();
+		for (const view of views)
+			await ctx.db.insert("views", {
+				workspaceId: view.workspaceId,
+				chatId: forked,
+				viewId: view.viewId,
+				node: view.node,
+				rev: view.rev,
+				expired: view.expired,
+			});
 		return forked;
 	},
 });
@@ -404,6 +419,9 @@ async function dropChat(ctx: MutationCtx, chat: Doc<"chats">): Promise<void> {
 	await ctx.db.delete(chat._id);
 	await dropRepl(ctx, chat);
 	await ctx.scheduler.runAfter(0, internal.messages.purge, {
+		chatId: chat._id,
+	});
+	await ctx.scheduler.runAfter(0, internal.views.purge, {
 		chatId: chat._id,
 	});
 }

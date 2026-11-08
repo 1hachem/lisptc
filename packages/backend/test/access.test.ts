@@ -88,9 +88,15 @@ describe("a thread acting as its record's owner", () => {
 			subject: alice.user,
 			workspaceId: alice.workspace,
 		});
-		const before = await thread.query(api.preferences.get, {});
-		await thread.mutation(api.preferences.put, { preferences: before });
-		expect(await alice.as.query(api.preferences.get, {})).toEqual(before);
+		const workspaceId = alice.workspace;
+		const before = await thread.query(api.preferences.get, { workspaceId });
+		await thread.mutation(api.preferences.put, {
+			workspaceId,
+			preferences: before,
+		});
+		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual(
+			before,
+		);
 	});
 
 	it("is refused when its user does not own the workspace it acts for", async () => {
@@ -102,9 +108,9 @@ describe("a thread acting as its record's owner", () => {
 			subject: bob.user,
 			workspaceId: alice.workspace,
 		});
-		await expect(mismatched.query(api.preferences.get, {})).rejects.toThrow(
-			/UNAUTHENTICATED/,
-		);
+		await expect(
+			mismatched.query(api.preferences.get, { workspaceId: alice.workspace }),
+		).rejects.toThrow(/UNAUTHENTICATED/);
 		await expect(
 			mismatched.query(api.memories.list, { workspaceId: alice.workspace }),
 		).rejects.toThrow(/UNAUTHENTICATED/);
@@ -269,7 +275,7 @@ describe("workspace theme", () => {
 describe("workspace model", () => {
 	const model = {
 		provider: "openrouter",
-		model: "google/gemma-4-31b-it",
+		model: "deepseek/deepseek-v4.1-flash-1017",
 	} as const;
 
 	it("has none until one is chosen", async () => {
@@ -349,6 +355,47 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
+	it("refuses reading or writing a view of another user's chat", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 1, expired: false },
+		);
+		await expect(
+			alice.as.query(api.views.get, { chatId, viewId: "v1" }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.views.put, { chatId, viewId: "v1", node }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.views.expire, { chatId, viewId: "v1" }),
+		).rejects.toThrow();
+	});
+
+	it("marks a view expired until it is written again", async () => {
+		const t = harness();
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const node = { tag: "text", props: { text: "hi" }, children: [] };
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		await bob.as.mutation(api.views.expire, { chatId, viewId: "v1" });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 2, expired: true },
+		);
+		await bob.as.mutation(api.views.put, { chatId, viewId: "v1", node });
+		expect(await bob.as.query(api.views.get, { chatId, viewId: "v1" })).toEqual(
+			{ node, rev: 3, expired: false },
+		);
+	});
+
 	it("refuses appending to another user's chat", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -364,7 +411,7 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
-	it("refuses annotating a message in another user's chat", async () => {
+	it("refuses recording into another user's chat", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
@@ -376,21 +423,19 @@ describe("chat access", () => {
 			messages: [{ id: "w1", type: "tool", content: "one" }],
 		});
 		await expect(
-			alice.as.mutation(api.messages.annotate, {
+			alice.as.mutation(api.messages.record, {
 				chatId,
-				id: "w1",
-				kwargs: { extra: true },
+				entries: [{ kind: "extra", value: true }],
 			}),
 		).rejects.toThrow();
 		await expect(
-			t.mutation(api.messages.annotate, {
+			t.mutation(api.messages.record, {
 				chatId,
-				id: "w1",
-				kwargs: { extra: true },
+				entries: [{ kind: "extra", value: true }],
 			}),
 		).rejects.toThrow();
-		const [row] = await bob.as.query(api.messages.transcript, { chatId });
-		expect(row.kwargs).toBeUndefined();
+		const rows = await bob.as.query(api.messages.transcript, { chatId });
+		expect(rows.map((row) => row.wireId)).toEqual(["w1"]);
 	});
 
 	it("hides an archived chat from the list", async () => {
@@ -535,7 +580,7 @@ describe("messages", () => {
 		expect(transcript.map((m) => m.wireId)).toEqual(["w1", undefined]);
 	});
 
-	it("deep-merges an annotation into a message's kwargs by its wire id", async () => {
+	it("deep-merges a revision into a message's kwargs by its wire id", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
@@ -555,7 +600,7 @@ describe("messages", () => {
 				},
 			],
 		});
-		await alice.as.mutation(api.messages.annotate, {
+		await t.mutation(internal.threads.revise, {
 			chatId,
 			id: "w1",
 			kwargs: { nested: { list: [3], inner: { b: 2 } }, added: 1 },
@@ -568,14 +613,14 @@ describe("messages", () => {
 		});
 	});
 
-	it("refuses annotating a message the chat does not hold", async () => {
+	it("refuses revising a message the chat does not hold", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
 		await expect(
-			alice.as.mutation(api.messages.annotate, {
+			t.mutation(internal.threads.revise, {
 				chatId,
 				id: "missing",
 				kwargs: { added: 1 },
@@ -763,8 +808,8 @@ describe("panel layout access", () => {
 						split: "here",
 						content: {
 							kind: "view",
-							title: "big",
-							node: "x".repeat(300_000),
+							title: "x".repeat(300_000),
+							viewId: "view:big",
 						},
 					},
 				],
@@ -868,7 +913,7 @@ describe("panel layout access", () => {
 							content: {
 								kind: "view" as const,
 								title: "My Linear Issues",
-								node: { tag: "card", props: {}, children: [] },
+								viewId: "view:My Linear Issues",
 								chatId: "c1",
 							},
 						},
@@ -898,7 +943,7 @@ describe("panel layout access", () => {
 					content: {
 						kind: "view" as const,
 						title: "t",
-						node: null,
+						viewId: "view:t",
 						chatId: "c1",
 					},
 				},
@@ -1221,33 +1266,78 @@ const DEFAULTS = {
 };
 
 describe("preferences access", () => {
-	it("keeps a user's preferences to that user", async () => {
+	it("keeps a workspace's preferences to its owner", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const preferences = { font: "mono", themeUses: { dusk: 2 } };
-		await bob.as.mutation(api.preferences.put, { preferences });
-		expect(await bob.as.query(api.preferences.get, {})).toEqual({
-			...DEFAULTS,
-			...preferences,
+		await bob.as.mutation(api.preferences.put, {
+			workspaceId: bob.workspace,
+			preferences,
 		});
-		expect(await alice.as.query(api.preferences.get, {})).toEqual(DEFAULTS);
-		await expect(t.query(api.preferences.get, {})).rejects.toThrow();
+		expect(
+			await bob.as.query(api.preferences.get, { workspaceId: bob.workspace }),
+		).toEqual({ ...DEFAULTS, ...preferences });
+		expect(
+			await alice.as.query(api.preferences.get, {
+				workspaceId: alice.workspace,
+			}),
+		).toEqual(DEFAULTS);
+		await expect(
+			alice.as.query(api.preferences.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow(/FORBIDDEN/);
+		await expect(
+			alice.as.mutation(api.preferences.put, {
+				workspaceId: bob.workspace,
+				preferences: { font: "serif" },
+			}),
+		).rejects.toThrow(/FORBIDDEN/);
+		await expect(
+			t.query(api.preferences.get, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
 	});
 
-	it("merges each save into one row per user", async () => {
+	it("keeps each workspace's preferences apart", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
+		const other = await alice.as.mutation(api.workspaces.create, {
+			name: "other",
+		});
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId: alice.workspace,
+			preferences: { sidebar: ["README.md", "chat"], hidden: ["tests"] },
+		});
+		expect(
+			await alice.as.query(api.preferences.get, { workspaceId: other }),
+		).toEqual(DEFAULTS);
+		expect(
+			await alice.as.query(api.preferences.get, {
+				workspaceId: alice.workspace,
+			}),
+		).toEqual({
+			...DEFAULTS,
+			sidebar: ["README.md", "chat"],
+			hidden: ["tests"],
+		});
+	});
+
+	it("merges each save into one row per workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.preferences.put, {
+			workspaceId,
 			preferences: { motion: "lift", input: { lisp: true } },
 		});
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId,
 			preferences: { font: "mono", input: { lisp: false } },
 		});
 		await alice.as.mutation(api.preferences.put, {
+			workspaceId,
 			preferences: { metadata: { tokens: true } },
 		});
-		expect(await alice.as.query(api.preferences.get, {})).toEqual({
+		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual({
 			motion: "lift",
 			font: "mono",
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
@@ -1269,6 +1359,7 @@ describe("preferences access", () => {
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.preferences.put, {
+				workspaceId: alice.workspace,
 				preferences: {
 					font: "x".repeat(MAX_PREFERENCES_BYTES),
 					themeUses: {},
@@ -1423,11 +1514,14 @@ describe("chat listing", () => {
 
 	describe("status", () => {
 		const asking = {
-			type: "tool" as const,
-			content: "held",
-			id: "w1",
+			type: "entry" as const,
+			content: "",
+			id: "e1",
 			kwargs: {
-				asks: { open: [{ id: "a1", title: "run?", prompt: "", choices: [] }] },
+				kind: "asks",
+				value: {
+					open: [{ id: "a1", title: "run?", prompt: "", choices: [] }],
+				},
 			},
 		};
 
@@ -1508,22 +1602,43 @@ describe("chat listing", () => {
 			});
 			await alice.as.mutation(api.chats.settle, { chatId });
 			expect(await status()).toBe("waiting");
-			await alice.as.mutation(api.messages.annotate, {
+			await alice.as.mutation(api.messages.record, {
 				chatId,
-				id: "w1",
-				kwargs: { asks: { answered: { a1: { accepted: true, label: "ok" } } } },
+				entries: [
+					{
+						kind: "asks",
+						value: { answered: { a1: { accepted: true, label: "ok" } } },
+					},
+				],
 			});
 			expect(await status()).toBeUndefined();
+		});
+
+		it("still waits on an ask buried under a long run of later entries", async () => {
+			const { alice, chatId, status } = await opened(harness());
+			const activity = Array.from({ length: 80 }, (_, i) => ({
+				type: "entry" as const,
+				content: "",
+				id: `act${i}`,
+				kwargs: { kind: "activity", value: { id: `x${i}` } },
+			}));
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [asking, ...activity],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
 		});
 
 		it("waits on an open question until the user answers it", async () => {
 			const { alice, chatId, status } = await opened(harness());
 			const question = {
-				type: "tool" as const,
+				type: "entry" as const,
 				content: "",
 				id: "q1",
 				kwargs: {
-					question: {
+					kind: "question",
+					value: {
 						id: "q1",
 						prompt: "Which board?",
 						choices: ["Sales", "Support"],

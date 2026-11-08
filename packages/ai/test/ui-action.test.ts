@@ -1,4 +1,6 @@
+import { record } from "@repo/interpreter/journal";
 import { newSym } from "@repo/interpreter/objects";
+import { viewKind } from "@repo/journal-catalog/view";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { describe, expect, test } from "vitest";
 import { runUiAction } from "../src/ui-action.ts";
@@ -31,5 +33,25 @@ describe("a ui action", () => {
 
 		expect(result.error).toBe(false);
 		expect(seen).toEqual([7n]);
+	});
+
+	test("hands what the action recorded back apart from the reply", async () => {
+		const rendering = extension((hooks) => {
+			hooks.invoke.use(async (ctx) => {
+				record(ctx.interp.channels, viewKind, { viewId: "v1" });
+			});
+		});
+		const repl = testRepl([rendering]);
+		const result = await runUiAction(
+			{ repl: async () => repl },
+			"chat",
+			"a1",
+			{},
+		);
+
+		expect(result).not.toHaveProperty("ui");
+		expect(result.entries).toEqual([
+			expect.objectContaining({ kind: "ui", value: { viewId: "v1" } }),
+		]);
 	});
 });

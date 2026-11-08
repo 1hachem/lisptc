@@ -110,7 +110,7 @@ function OAuthCallback() {
 			const chat = awaitingChat(state);
 			if (chat) {
 				await navigate({
-					to: "/$workspaceId/$",
+					to: "/app/$workspaceId/$",
 					params: {
 						workspaceId: chat.workspaceId,
 						_splat: `chat/${chat.chatId}`,
@@ -129,7 +129,7 @@ function OAuthCallback() {
 				<Status phase={phase} />
 				{phase.kind === "orphaned" || phase.kind === "failed" ? (
 					<Link
-						to="/"
+						to="/app"
 						className="text-left text-[11.5px] text-dim hover:text-fg"
 					>
 						back to the app
