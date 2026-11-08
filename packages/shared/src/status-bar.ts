@@ -1,4 +1,4 @@
-export const STATUS_BAR_ITEMS = ["panes", "desktop", "clock"] as const;
+export const STATUS_BAR_ITEMS = ["panes", "mcp", "desktop", "clock"] as const;
 
 export type StatusBarItem = (typeof STATUS_BAR_ITEMS)[number];
 
@@ -16,6 +16,7 @@ export const STATUS_BAR_GAPS: readonly StatusBarGap[] = Array.from(
 export const STATUS_BAR_SLOTS: readonly string[] = [
 	"panes",
 	...STATUS_BAR_GAPS,
+	"mcp",
 	"desktop",
 	"clock",
 ];

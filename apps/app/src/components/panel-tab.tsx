@@ -30,6 +30,7 @@ import { AnimatedFavicon } from "./animated-favicon.tsx";
 import { BinPage } from "./bin-page.tsx";
 import { ChatSurface } from "./chat-surface.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
+import { McpServerPage } from "./mcp-workspace.tsx";
 import { MemoryPage } from "./memory-page.tsx";
 import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
@@ -203,6 +204,9 @@ const PAGE_TABS: Record<
 	preferences: () => <PreferencesPage />,
 	account: () => <AccountPage />,
 	bin: (workspaceId, id) => <BinPage workspaceId={workspaceId} name={id} />,
+	mcp: (workspaceId, id) => (
+		<McpServerPage workspaceId={workspaceId} server={id} />
+	),
 };
 
 function PageTab({

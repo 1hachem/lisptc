@@ -10,44 +10,96 @@ export type McpServerChip = FunctionReturnType<
 	typeof api.mcpServers.list
 >["servers"][number];
 
-type LoadedChip = McpServerChip & {
-	phase: Exclude<McpServerChip["phase"], "sleeping">;
-};
+export type McpPhase = McpServerChip["phase"];
 
-const DOT: Record<LoadedChip["phase"], string> = {
+export const PHASE_DOT: Record<McpPhase, string> = {
 	starting: "bg-yellow animate-pulse",
 	ready: "bg-green",
+	sleeping: "bg-dim",
 	failed: "bg-red",
 };
 
+export interface WorkspaceMcpServer {
+	server: string;
+	phase?: McpPhase;
+	reason?: string;
+	mounted: boolean;
+}
+
+export function workspaceServers(
+	servers: readonly McpServerChip[],
+	mounted: readonly string[],
+): WorkspaceMcpServer[] {
+	const shared = new Map(
+		servers
+			.filter(({ instance }) => instance === undefined)
+			.map((row) => [row.server, row]),
+	);
+	const names = [...new Set([...mounted, ...shared.keys()])].sort();
+	return names.map((server) => {
+		const row = shared.get(server);
+		return {
+			server,
+			...(row === undefined ? {} : { phase: row.phase }),
+			...(row?.reason === undefined ? {} : { reason: row.reason }),
+			mounted: mounted.includes(server),
+		};
+	});
+}
+
+export function useWorkspaceMcpServers(
+	workspaceId: Id<"workspaces">,
+): WorkspaceMcpServer[] | undefined {
+	const { data: status } = useQuery(
+		convexQuery(api.mcpServers.list, { workspaceId }),
+	);
+	const { data: mounts } = useQuery(
+		convexQuery(api.mcpServers.mounts, { workspaceId }),
+	);
+	if (status === undefined || mounts === undefined) return undefined;
+	return workspaceServers(
+		status.servers,
+		mounts.map(({ server }) => server),
+	);
+}
+
+export function PhaseDot({ phase }: { phase: McpPhase | undefined }) {
+	return (
+		<span
+			aria-hidden
+			className={cn(
+				"size-1.5 flex-none rounded-full",
+				phase === undefined ? "bg-dim/40" : PHASE_DOT[phase],
+			)}
+		/>
+	);
+}
+
 export function McpServerChips({
 	servers,
-	chatId = null,
+	chatId,
 }: {
 	servers: McpServerChip[];
-	chatId?: string | null;
+	chatId: string | null;
 }) {
-	const sorted = servers
-		.filter(({ instance }) => instance === undefined || instance === chatId)
-		.filter((chip): chip is LoadedChip => chip.phase !== "sleeping")
+	const own = servers
+		.filter(({ instance }) => instance !== undefined && instance === chatId)
+		.filter(({ phase }) => phase !== "sleeping")
 		.sort((a, b) => a.server.localeCompare(b.server));
-	if (sorted.length === 0) return null;
+	if (own.length === 0) return null;
 	return (
 		<ul
-			aria-label="MCP servers"
+			aria-label="MCP servers of this chat"
 			className="mx-auto mb-1 flex w-full max-w-[680px] flex-wrap gap-x-3 gap-y-1 px-3 text-[11px] text-dim"
 		>
-			{sorted.map(({ server, instance, phase, reason }) => (
+			{own.map(({ server, phase, reason }) => (
 				<li
-					key={`${server}\0${instance ?? ""}`}
+					key={server}
 					title={reason ? `${phase}: ${reason}` : phase}
 					className="flex items-center gap-1.5"
 				>
-					<span
-						aria-hidden
-						className={cn("size-1.5 flex-none rounded-full", DOT[phase])}
-					/>
-					<span>{instance ? `${server} (own)` : server}</span>
+					<PhaseDot phase={phase} />
+					<span>{server}</span>
 					<span className="sr-only">{phase}</span>
 				</li>
 			))}
@@ -55,7 +107,7 @@ export function McpServerChips({
 	);
 }
 
-function WorkspaceMcpServers({
+function ChatMcpServers({
 	workspaceId,
 	chatId,
 }: {
@@ -68,7 +120,7 @@ function WorkspaceMcpServers({
 
 export function McpServers({ chatId }: { chatId: string | null }) {
 	const { workspace } = useWorkspace();
-	return workspace ? (
-		<WorkspaceMcpServers workspaceId={workspace._id} chatId={chatId} />
+	return workspace && chatId !== null ? (
+		<ChatMcpServers workspaceId={workspace._id} chatId={chatId} />
 	) : null;
 }

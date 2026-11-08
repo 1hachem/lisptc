@@ -24,8 +24,9 @@ once, while user watches.
   '() shows all. Attachments and bin hidden until user
   shows them. User also toggles them in preferences page.
 - :status-bar is bottom bar's 9 slots, left to right. Items: "panes",
-  "desktop" (desktop app status, shows only while connected), "clock". Each
-  empty slot is gap with own name: "gap-1" through "gap-6".
+  "mcp" (workspace mcp servers, each with status dot), "desktop" (desktop
+  app status, shows only while connected), "clock". Each empty slot is gap
+  with own name: "gap-1" through "gap-5".
   (preferences/set :status-bar '("desktop" "gap-1" "panes")) puts desktop
   first, gap second, panes third, keeps rest in order. User also drags them
   on bar or in preferences.

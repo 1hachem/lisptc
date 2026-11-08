@@ -5,6 +5,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
 	type McpServerChip,
 	McpServerChips,
+	workspaceServers,
 } from "../src/components/mcp-servers.tsx";
 
 beforeAll(() => {
@@ -20,98 +21,99 @@ afterEach(() => {
 	document.body.replaceChildren();
 });
 
-async function mount(servers: McpServerChip[]) {
+async function mount(
+	servers: McpServerChip[],
+	chatId: string | null = "chat-a",
+) {
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
 	roots.push(root);
 	await act(async () => {
-		root.render(<McpServerChips servers={servers} />);
+		root.render(<McpServerChips servers={servers} chatId={chatId} />);
 	});
 	return host;
 }
 
+function texts(host: HTMLElement): (string | null)[] {
+	return [...host.querySelectorAll("li")].map((li) => li.textContent);
+}
+
 describe("the MCP servers above the chat input", () => {
-	it("lists each server by name with a dot for its phase", async () => {
+	it("lists only this chat's own servers, each with a dot for its phase", async () => {
 		const host = await mount([
-			{ server: "playwright", phase: "ready", observedAt: 1 },
+			{ server: "fs", phase: "ready", observedAt: 1 },
+			{
+				server: "playwright",
+				instance: "chat-a",
+				phase: "ready",
+				observedAt: 1,
+			},
 			{
 				server: "github",
+				instance: "chat-a",
 				phase: "failed",
 				reason: "ImagePullBackOff",
 				observedAt: 1,
 			},
-			{ server: "fs", phase: "starting", observedAt: 1 },
+			{ server: "sheets", instance: "chat-b", phase: "ready", observedAt: 1 },
 		]);
 
+		expect(texts(host)).toEqual(["githubfailed", "playwrightready"]);
 		const items = [...host.querySelectorAll("li")];
-		expect(items.map((li) => li.textContent)).toEqual([
-			"fsstarting",
-			"githubfailed",
-			"playwrightready",
-		]);
 		expect(items.map((li) => li.querySelector("span")?.className)).toEqual([
-			expect.stringContaining("bg-yellow"),
 			expect.stringContaining("bg-red"),
 			expect.stringContaining("bg-green"),
 		]);
-		expect(items[1]?.title).toBe("failed: ImagePullBackOff");
+		expect(items[0]?.title).toBe("failed: ImagePullBackOff");
 	});
 
-	it("stops mentioning a server once it is unloaded and asleep", async () => {
-		const host = await mount([
-			{ server: "playwright", phase: "ready", observedAt: 1 },
-			{ server: "fs", phase: "sleeping", observedAt: 1 },
-		]);
-
-		const items = [...host.querySelectorAll("li")];
-		expect(items.map((li) => li.textContent)).toEqual(["playwrightready"]);
-	});
-
-	it("draws nothing when the workspace runs no server", async () => {
-		const host = await mount([]);
+	it("draws nothing for a chat that runs no server of its own", async () => {
+		const host = await mount([{ server: "fs", phase: "ready", observedAt: 1 }]);
 		expect(host.children.length).toBe(0);
 	});
 
-	it("draws nothing when every server is asleep", async () => {
+	it("draws nothing when its own servers are asleep", async () => {
 		const host = await mount([
-			{ server: "fs", phase: "sleeping", observedAt: 1 },
+			{ server: "fs", instance: "chat-a", phase: "sleeping", observedAt: 1 },
 		]);
+		expect(host.children.length).toBe(0);
+	});
+
+	it("draws nothing before the chat exists", async () => {
+		const host = await mount(
+			[{ server: "fs", instance: "chat-a", phase: "ready", observedAt: 1 }],
+			null,
+		);
 		expect(host.children.length).toBe(0);
 	});
 });
 
-describe("the MCP servers a chat sees", () => {
-	it("shows the workspace's shared servers and only its own instances", async () => {
-		const host = document.createElement("div");
-		document.body.append(host);
-		const root = createRoot(host);
-		roots.push(root);
-		await act(async () => {
-			root.render(
-				<McpServerChips
-					chatId="chat-a"
-					servers={[
-						{ server: "fs", phase: "ready", observedAt: 1 },
-						{
-							server: "playwright",
-							instance: "chat-a",
-							phase: "ready",
-							observedAt: 1,
-						},
-						{
-							server: "playwright",
-							instance: "chat-b",
-							phase: "ready",
-							observedAt: 1,
-						},
-					]}
-				/>,
-			);
-		});
-
+describe("the workspace's MCP servers", () => {
+	it("joins what is loaded with what runs, leaving out every chat's own", () => {
 		expect(
-			[...host.querySelectorAll("li")].map((li) => li.textContent),
-		).toEqual(["fsready", "playwright (own)ready"]);
+			workspaceServers(
+				[
+					{ server: "fs", phase: "ready", observedAt: 1 },
+					{
+						server: "ocr",
+						phase: "failed",
+						reason: "CrashLoop",
+						observedAt: 1,
+					},
+					{
+						server: "playwright",
+						instance: "chat-a",
+						phase: "ready",
+						observedAt: 1,
+					},
+				],
+				["sheets", "fs"],
+			),
+		).toEqual([
+			{ server: "fs", phase: "ready", mounted: true },
+			{ server: "ocr", phase: "failed", reason: "CrashLoop", mounted: false },
+			{ server: "sheets", mounted: true },
+		]);
 	});
 });

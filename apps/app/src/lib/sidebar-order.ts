@@ -5,6 +5,7 @@ export const SIDEBAR_FOLDERS = [
 	"knowledge",
 	"attachments",
 	"bin",
+	"mcp",
 	"sub-agents",
 	"triggers",
 	"tasks",

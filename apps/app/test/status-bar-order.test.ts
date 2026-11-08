@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { barOrder, placeOf, shownItems } from "../src/lib/status-bar-order.ts";
 
 describe("barOrder", () => {
-	it("puts the pane indicator first and the desktop status beside the clock last, gaps between, when nothing is stored", () => {
+	it("puts the pane indicator first and the mcp servers and desktop status beside the clock last, gaps between, when nothing is stored", () => {
 		const order = barOrder(undefined);
 		expect(order).toEqual([
 			"panes",
@@ -12,7 +12,7 @@ describe("barOrder", () => {
 			"gap-3",
 			"gap-4",
 			"gap-5",
-			"gap-6",
+			"mcp",
 			"desktop",
 			"clock",
 		]);
@@ -36,8 +36,8 @@ describe("barOrder", () => {
 			"gap-3",
 			"gap-4",
 			"gap-5",
-			"gap-6",
 			"gap-1",
+			"mcp",
 			"desktop",
 			"clock",
 		]);
@@ -54,7 +54,7 @@ describe("barOrder", () => {
 			"clock",
 		]);
 		expect(placeOf(order, "desktop")).toBe(1);
-		expect(placeOf(order, "panes")).toBe(6);
+		expect(placeOf(order, "panes")).toBe(5);
 		expect(placeOf(order, "clock")).toBe(STATUS_BAR_SLOT_COUNT);
 	});
 
@@ -75,10 +75,10 @@ describe("barOrder", () => {
 			"gap-3",
 			"gap-4",
 			"gap-5",
-			"gap-6",
 			"gap-2",
 			"gap-1",
 			"panes",
+			"mcp",
 			"desktop",
 		]);
 	});
@@ -95,12 +95,12 @@ describe("shownItems", () => {
 					"gap-3",
 					"gap-4",
 					"gap-5",
-					"gap-6",
+					"mcp",
 					"desktop",
 					"clock",
 				],
 				["clock"],
 			),
-		).toEqual(["panes", "desktop"]);
+		).toEqual(["panes", "mcp", "desktop"]);
 	});
 });

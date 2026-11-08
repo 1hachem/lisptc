@@ -69,6 +69,7 @@ function InputToggle({
 
 const BAR_LABELS: Record<StatusBarItem, string> = {
 	panes: "pane indicator",
+	mcp: "workspace mcp servers",
 	desktop: "desktop status",
 	clock: "clock",
 };

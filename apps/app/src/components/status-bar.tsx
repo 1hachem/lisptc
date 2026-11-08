@@ -9,6 +9,7 @@ import { useStatusBarOrder } from "../lib/status-bar.ts";
 import { isGap, placeOf } from "../lib/status-bar-order.ts";
 import { DesktopStatus } from "./desktop-status.tsx";
 import { DesktopZoom } from "./desktop-zoom.tsx";
+import { McpStatus } from "./mcp-workspace.tsx";
 
 const TICK_MS = 15_000;
 
@@ -58,6 +59,7 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 	const { order, shown, reorder } = useStatusBarOrder();
 	const drawn: Record<StatusBarItem, ReactNode> = {
 		panes: indicator,
+		mcp: <McpStatus />,
 		desktop: (
 			<>
 				<DesktopZoom />

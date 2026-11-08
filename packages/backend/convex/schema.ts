@@ -98,6 +98,7 @@ export const panelContent = v.union(
 			v.literal("preferences"),
 			v.literal("account"),
 			v.literal("bin"),
+			v.literal("mcp"),
 		),
 		id: v.optional(v.string()),
 		title: v.string(),

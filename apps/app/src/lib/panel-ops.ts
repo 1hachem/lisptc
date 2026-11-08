@@ -17,6 +17,7 @@ const PAGES = [
 	"preferences",
 	"account",
 	"bin",
+	"mcp",
 ] as const;
 
 export type Page = (typeof PAGES)[number];

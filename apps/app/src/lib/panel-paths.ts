@@ -14,6 +14,7 @@ const KEYED = {
 	memory: "memories",
 	permission: "permissions",
 	bin: "bin",
+	mcp: "mcp",
 } as const satisfies Partial<Record<Page, string>>;
 
 type KeyedPage = keyof typeof KEYED;
