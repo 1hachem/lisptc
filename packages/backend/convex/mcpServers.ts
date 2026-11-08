@@ -69,6 +69,7 @@ export const list = query({
 async function putServer(
 	ctx: MutationCtx,
 	{ workspaceId, server, instance, phase, reason }: ServerRow,
+	reporter?: "session",
 ): Promise<void> {
 	const existing = await ctx.db
 		.query("mcpServers")
@@ -89,6 +90,7 @@ async function putServer(
 		...(instance === undefined ? {} : { instance }),
 		phase,
 		...(reason === undefined ? {} : { reason }),
+		...(reporter === undefined ? {} : { reporter }),
 		observedAt: Date.now(),
 	};
 	if (existing === null) {
@@ -96,7 +98,12 @@ async function putServer(
 		await ctx.db.insert("mcpServers", next);
 		return;
 	}
-	if (existing.phase === phase && existing.reason === reason) return;
+	if (
+		existing.phase === phase &&
+		existing.reason === reason &&
+		existing.reporter === reporter
+	)
+		return;
 	await ctx.db.replace(existing._id, next);
 }
 
@@ -119,14 +126,18 @@ export const report = mutation({
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, server, phase, reason }) => {
 		await requireWorkspace(ctx, workspaceId);
-		await putServer(ctx, {
-			workspaceId,
-			server,
-			phase,
-			...(reason === undefined
-				? {}
-				: { reason: reason.slice(-MAX_MCP_REASON_LENGTH) }),
-		});
+		await putServer(
+			ctx,
+			{
+				workspaceId,
+				server,
+				phase,
+				...(reason === undefined
+					? {}
+					: { reason: reason.slice(-MAX_MCP_REASON_LENGTH) }),
+			},
+			"session",
+		);
 		return null;
 	},
 });
@@ -217,7 +228,8 @@ export const reconcile = internalMutation({
 		for (const row of servers) await putServer(ctx, row);
 		const liveServers = new Set(servers.map(ownerKey));
 		for (const row of await ctx.db.query("mcpServers").take(RECONCILE_LIMIT))
-			if (!liveServers.has(ownerKey(row))) await ctx.db.delete(row._id);
+			if (row.reporter === undefined && !liveServers.has(ownerKey(row)))
+				await ctx.db.delete(row._id);
 		return null;
 	},
 });

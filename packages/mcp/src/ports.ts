@@ -119,6 +119,10 @@ export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
 
 export type OAuthConnConfig = HttpConnConfig | ContainerConnConfig;
 
+export function oauthKey(conf: OAuthConnConfig, serverUrl: string): string {
+	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
+}
+
 export function offersLogin(conf: ConnConfig): conf is OAuthConnConfig {
 	return "url" in conf || ("image" in conf && conf.oauth !== undefined);
 }
@@ -245,13 +249,16 @@ export interface McpRegistry {
 	unmount(server: string): void | Promise<void>;
 	describe(info: McpServerInfo): void | Promise<void>;
 	forget(server: string): void | Promise<void>;
+	observe(server: string, phase: "ready" | "gone"): void | Promise<void>;
 }
 
 export function memoryRegistry(): McpRegistry & {
 	described(): readonly McpServerInfo[];
+	observed(): ReadonlyMap<string, "ready" | "gone">;
 } {
 	const mounted = new Map<string, McpMount>();
 	const infos = new Map<string, McpServerInfo>();
+	const phases = new Map<string, "ready" | "gone">();
 	return {
 		mounts: () => [...mounted.values()],
 		mount: (mount) => {
@@ -267,6 +274,10 @@ export function memoryRegistry(): McpRegistry & {
 			infos.delete(server);
 		},
 		described: () => [...infos.values()],
+		observe: (server, phase) => {
+			phases.set(server, phase);
+		},
+		observed: () => phases,
 	};
 }
 

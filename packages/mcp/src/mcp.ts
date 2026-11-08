@@ -1051,6 +1051,23 @@ export function registerMcp(
 			: { server: conf.name, conf: conf as HttpConnConfig, tools };
 	}
 
+	function observeItself(
+		conf: ConnConfig | undefined,
+		phase: "ready" | "gone",
+	): void | Promise<void> {
+		if (conf === undefined || "image" in conf) return;
+		const observed = registry.observe(conf.name, phase);
+		return observed instanceof Promise ? observed.catch(() => {}) : observed;
+	}
+
+	function confOfEntry(entry: ServerEntry): ConnConfig | undefined {
+		try {
+			return connConfigFromArgs(entry.args, shown(), toolkit.local, commands);
+		} catch {
+			return undefined;
+		}
+	}
+
 	function connect(
 		args: List,
 		signal: AbortSignal,
@@ -1064,8 +1081,10 @@ export function registerMcp(
 				try {
 					if (signal.aborted)
 						throw new EvalException("MCP load cancelled", conf.name, false);
-					if (bound === conf.name)
+					if (bound === conf.name) {
 						await registry.mount(mountOf(conf, res.tools));
+						await observeItself(conf, "ready");
+					}
 					await registry.describe(infoOf(conf, res));
 				} catch (error) {
 					void client.disconnect(res.serverId).catch(() => {});
@@ -1201,12 +1220,20 @@ export function registerMcp(
 			const entry = entryOf(servers, name);
 			if (entry === undefined)
 				throw new EvalException("MCP server not loaded", name, false);
-			return settle(isOwn(entry) ? undefined : registry.unmount(name), () =>
-				arrayToList(
-					entryOf(servers, name) === undefined
-						? []
-						: doUnload(interp, client, servers, name),
-				),
+			const shared = !isOwn(entry);
+			const conf = confOfEntry(entry);
+			return settle(
+				shared
+					? Promise.resolve(registry.unmount(name)).then(() =>
+							observeItself(conf, "gone"),
+						)
+					: undefined,
+				() =>
+					arrayToList(
+						entryOf(servers, name) === undefined
+							? []
+							: doUnload(interp, client, servers, name),
+					),
 			);
 		},
 		[loadedServer],
@@ -1229,6 +1256,7 @@ export function registerMcp(
 			const own = entry !== undefined && isOwn(entry);
 			return Promise.resolve(own ? undefined : registry.unmount(name))
 				.then(() => (own ? undefined : registry.forget(name)))
+				.then(() => (own ? undefined : observeItself(conf, "gone")))
 				.then(() => {
 					const loadedEntry = entryOf(servers, name);
 					if (loadedEntry === undefined) return;
@@ -1322,9 +1350,12 @@ export function registerMcp(
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(shown(), name);
 			const unloaded = entryOf(servers, name)
-				? settle(registry.unmount(name), () => {
-						if (entryOf(servers, name)) doUnload(interp, client, servers, name);
-					})
+				? Promise.resolve(registry.unmount(name))
+						.then(() => observeItself(conf, "gone"))
+						.then(() => {
+							if (entryOf(servers, name))
+								doUnload(interp, client, servers, name);
+						})
 				: undefined;
 			return Promise.resolve(unloaded)
 				.then(() => withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout"))
@@ -1493,8 +1524,11 @@ export function registerMcp(
 		"Disconnect every loaded MCP server and unload its bindings.",
 		z.tuple([]),
 		() => {
-			const names = servers.get().map((entry) => entry.name);
-			const unmounted = names.map((name) => registry.unmount(name));
+			const shared = servers.get().filter((entry) => !isOwn(entry));
+			const unmounted = shared.flatMap((entry) => [
+				registry.unmount(entry.name),
+				observeItself(confOfEntry(entry), "gone"),
+			]);
 			return settle(
 				unmounted.some((done) => done instanceof Promise)
 					? Promise.all(unmounted)

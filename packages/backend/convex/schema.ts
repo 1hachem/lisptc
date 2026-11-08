@@ -353,6 +353,7 @@ export default defineSchema({
 		instance: v.optional(v.string()),
 		phase: mcpServerPhase,
 		reason: v.optional(v.string()),
+		reporter: v.optional(v.literal("session")),
 		observedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])

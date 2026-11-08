@@ -232,6 +232,32 @@ describe("the MCP servers a workspace has loaded", () => {
 		).rejects.toThrow();
 	});
 
+	it("keeps a status the session reported through the operator's snapshot", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.mcpServers.report, {
+			workspaceId,
+			server: "remote",
+			phase: "ready",
+		});
+
+		await t.mutation(internal.mcpServers.reconcile, { servers: [] });
+
+		expect(
+			(await alice.as.query(api.mcpServers.list, { workspaceId })).servers,
+		).toMatchObject([{ server: "remote", phase: "ready" }]);
+
+		await alice.as.mutation(api.mcpServers.report, {
+			workspaceId,
+			server: "remote",
+			phase: "gone",
+		});
+		expect(
+			(await alice.as.query(api.mcpServers.list, { workspaceId })).servers,
+		).toEqual([]);
+	});
+
 	it("survives the operator's snapshot, which owns only the status", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
