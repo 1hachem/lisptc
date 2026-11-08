@@ -157,35 +157,79 @@ describe("the MCP servers a workspace has loaded", () => {
 		).toEqual(["remote"]);
 	});
 
-	it("keeps a server's logo and whether it signs in, and refuses a logo that is not an image", async () => {
+	it("keeps what it last read from a server, through an unmount, until it is forgotten", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
+		const tools = JSON.stringify([
+			{ name: "read", description: "reads a sheet" },
+		]);
 		await alice.as.mutation(api.mcpServers.mount, {
 			workspaceId,
 			server: "sheets",
-			tools: "[]",
+			tools,
+		});
+		await alice.as.mutation(api.mcpServers.describe, {
+			workspaceId,
+			server: "sheets",
+			description: "Google Sheets",
 			icon: "https://example.com/sheets.png",
 			login: true,
+			tools,
 		});
+		await alice.as.mutation(api.mcpServers.unmount, {
+			workspaceId,
+			server: "sheets",
+		});
+
 		expect(
-			await alice.as.query(api.mcpServers.mounts, { workspaceId }),
-		).toEqual([
+			await alice.as.query(api.mcpServers.catalog, { workspaceId }),
+		).toMatchObject([
 			{
 				server: "sheets",
-				tools: "[]",
+				description: "Google Sheets",
 				icon: "https://example.com/sheets.png",
 				login: true,
+				tools,
 			},
 		]);
+
+		await alice.as.mutation(api.mcpServers.forget, {
+			workspaceId,
+			server: "sheets",
+		});
+		expect(
+			await alice.as.query(api.mcpServers.catalog, { workspaceId }),
+		).toEqual([]);
+	});
+
+	it("refuses a logo that is not an image", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
 		await expect(
-			alice.as.mutation(api.mcpServers.mount, {
-				workspaceId,
+			alice.as.mutation(api.mcpServers.describe, {
+				workspaceId: alice.workspace,
 				server: "evil",
 				tools: "[]",
 				icon: "javascript:alert(1)",
 			}),
 		).rejects.toThrow(/not an https or image url/);
+	});
+
+	it("shows one workspace's catalog to no one else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const mallory = await signIn(t, "mallory@example.com");
+		await alice.as.mutation(api.mcpServers.describe, {
+			workspaceId: alice.workspace,
+			server: "sheets",
+			tools: "[]",
+		});
+		await expect(
+			mallory.as.query(api.mcpServers.catalog, {
+				workspaceId: alice.workspace,
+			}),
+		).rejects.toThrow();
 	});
 
 	it("survives the operator's snapshot, which owns only the status", async () => {

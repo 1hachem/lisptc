@@ -48,8 +48,10 @@ import {
 	type McpMount,
 	type McpPolicy,
 	type McpRegistry,
+	type McpServerInfo,
 	memoryRegistry,
 	type OAuthConnConfig,
+	offersLogin,
 	openPolicy,
 	type Tool,
 	type ToolkitRegistry,
@@ -1043,19 +1045,10 @@ export function registerMcp(
 				(entry) => policy.server(serverOfEntry(entry)).access !== "hidden",
 			);
 
-	function mountOf(
-		conf: ConnConfig,
-		tools: readonly Tool[],
-		icons: readonly Icon[] | undefined,
-	): McpMount {
-		const icon = activityImage(icons, manifestIcons(conf))?.[0]?.src;
-		return {
-			server: conf.name,
-			...(toolkit.all().includes(conf) ? {} : { conf: conf as HttpConnConfig }),
-			tools,
-			...(icon === undefined ? {} : { icon }),
-			...(signsIn(conf) ? { login: true } : {}),
-		};
+	function mountOf(conf: ConnConfig, tools: readonly Tool[]): McpMount {
+		return toolkit.all().includes(conf)
+			? { server: conf.name, tools }
+			: { server: conf.name, conf: conf as HttpConnConfig, tools };
 	}
 
 	function connect(
@@ -1072,7 +1065,8 @@ export function registerMcp(
 					if (signal.aborted)
 						throw new EvalException("MCP load cancelled", conf.name, false);
 					if (bound === conf.name)
-						await registry.mount(mountOf(conf, res.tools, res.icons));
+						await registry.mount(mountOf(conf, res.tools));
+					await registry.describe(infoOf(conf, res));
 				} catch (error) {
 					void client.disconnect(res.serverId).catch(() => {});
 					throw error;
@@ -1234,6 +1228,7 @@ export function registerMcp(
 				throw new EvalException("unknown MCP server", name, false);
 			const own = entry !== undefined && isOwn(entry);
 			return Promise.resolve(own ? undefined : registry.unmount(name))
+				.then(() => (own ? undefined : registry.forget(name)))
 				.then(() => {
 					const loadedEntry = entryOf(servers, name);
 					if (loadedEntry === undefined) return;
@@ -1608,8 +1603,16 @@ export function registerMcp(
 	};
 }
 
-function signsIn(conf: ConnConfig): conf is OAuthConnConfig {
-	return "url" in conf || ("image" in conf && conf.oauth !== undefined);
+function infoOf(conf: ConnConfig, res: ConnectResult): McpServerInfo {
+	const icon = activityImage(res.icons, manifestIcons(conf))?.[0]?.src;
+	const description = res.description ?? conf.description;
+	return {
+		server: conf.name,
+		...(description === undefined ? {} : { description }),
+		...(icon === undefined ? {} : { icon }),
+		...(offersLogin(conf) ? { login: true } : {}),
+		tools: res.tools,
+	};
 }
 
 function oauthServer(
@@ -1617,7 +1620,7 @@ function oauthServer(
 	name: string,
 ): OAuthConnConfig {
 	const conf = predefined.get(name);
-	if (!conf || !signsIn(conf))
+	if (!conf || !offersLogin(conf))
 		throw new EvalException("unknown OAuth MCP server", name, false);
 	return conf;
 }

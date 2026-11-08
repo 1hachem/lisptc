@@ -361,13 +361,23 @@ export default defineSchema({
 			"instance",
 		]),
 
+	mcpCatalog: defineTable({
+		workspaceId: v.id("workspaces"),
+		server: v.string(),
+		description: v.optional(v.string()),
+		icon: v.optional(v.string()),
+		login: v.optional(v.boolean()),
+		tools: v.string(),
+		fetchedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_server", ["workspaceId", "server"]),
+
 	mcpMounts: defineTable({
 		workspaceId: v.id("workspaces"),
 		server: v.string(),
 		conf: v.optional(v.string()),
 		tools: v.string(),
-		icon: v.optional(v.string()),
-		login: v.optional(v.boolean()),
 		mountedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])

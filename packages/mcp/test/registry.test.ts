@@ -66,16 +66,31 @@ describe("the workspace registry", () => {
 		expect(mount.tools.map((tool) => tool.name)).toContain("echo");
 	}, 30_000);
 
-	it("keeps the logo the toolkit gives a server, and says it needs no login", async () => {
+	it("describes what it connected to, and keeps that through an unload", async () => {
 		const registry = memoryRegistry();
 		const { interp } = session(registry, {
 			...fixtureServer("fx"),
 			icon: "https://example.com/fx.png",
+			description: "echoes what it is told",
 		});
 		await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
-		const [mount] = await registry.mounts();
-		expect(mount.icon).toBe("https://example.com/fx.png");
-		expect(mount.login).toBeUndefined();
+		await runAsync(interp, '(unload-mcp "fx")');
+		const [info] = registry.described();
+		expect(info).toMatchObject({
+			server: "fx",
+			icon: "https://example.com/fx.png",
+			description: "echoes what it is told",
+		});
+		expect(info?.login).toBeUndefined();
+		expect(info?.tools.map((tool) => tool.name)).toContain("echo");
+	}, 30_000);
+
+	it("forgets what it described once the server is removed", async () => {
+		const registry = memoryRegistry();
+		const { interp } = session(registry);
+		await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
+		await runAsync(interp, '(remove-mcp "fx")');
+		expect(registry.described()).toEqual([]);
 	}, 30_000);
 
 	it("binds a server another session loaded at the next turn, and says so", async () => {

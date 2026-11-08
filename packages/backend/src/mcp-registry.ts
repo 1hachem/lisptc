@@ -2,6 +2,7 @@ import type {
 	HttpConnConfig,
 	McpMount,
 	McpRegistry,
+	McpServerInfo,
 	Tool,
 } from "@repo/mcp-extension/ports";
 import type { ConvexHttpClient } from "convex/browser";
@@ -20,30 +21,50 @@ export class ConvexMcpRegistry implements McpRegistry {
 		const rows = await this.connect().query(api.mcpServers.mounts, {
 			workspaceId: this.workspaceId,
 		});
-		return rows.map(({ server, conf, tools, icon, login }) => ({
+		return rows.map(({ server, conf, tools }) => ({
 			server,
 			...(conf === undefined
 				? {}
 				: { conf: JSON.parse(conf) as HttpConnConfig }),
 			tools: JSON.parse(tools) as Tool[],
-			...(icon === undefined ? {} : { icon }),
-			...(login === undefined ? {} : { login }),
 		}));
 	}
 
-	async mount({ server, conf, tools, icon, login }: McpMount): Promise<void> {
+	async mount({ server, conf, tools }: McpMount): Promise<void> {
 		await this.connect().mutation(api.mcpServers.mount, {
 			workspaceId: this.workspaceId,
 			server,
 			...(conf === undefined ? {} : { conf: JSON.stringify(conf) }),
 			tools: JSON.stringify(tools),
-			...(icon === undefined ? {} : { icon }),
-			...(login === undefined ? {} : { login }),
 		});
 	}
 
 	async unmount(server: string): Promise<void> {
 		await this.connect().mutation(api.mcpServers.unmount, {
+			workspaceId: this.workspaceId,
+			server,
+		});
+	}
+
+	async describe({
+		server,
+		description,
+		icon,
+		login,
+		tools,
+	}: McpServerInfo): Promise<void> {
+		await this.connect().mutation(api.mcpServers.describe, {
+			workspaceId: this.workspaceId,
+			server,
+			...(description === undefined ? {} : { description }),
+			...(icon === undefined ? {} : { icon }),
+			...(login === undefined ? {} : { login }),
+			tools: JSON.stringify(tools),
+		});
+	}
+
+	async forget(server: string): Promise<void> {
+		await this.connect().mutation(api.mcpServers.forget, {
 			workspaceId: this.workspaceId,
 			server,
 		});

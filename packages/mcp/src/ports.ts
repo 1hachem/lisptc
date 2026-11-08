@@ -119,10 +119,15 @@ export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
 
 export type OAuthConnConfig = HttpConnConfig | ContainerConnConfig;
 
+export function offersLogin(conf: ConnConfig): conf is OAuthConnConfig {
+	return "url" in conf || ("image" in conf && conf.oauth !== undefined);
+}
+
 export interface ConnectResult {
 	serverId: string;
 	tools: Tool[];
 	icons?: Icon[];
+	description?: string;
 }
 
 export interface ToolCall {
@@ -224,18 +229,29 @@ export interface McpMount {
 	readonly server: string;
 	readonly conf?: HttpConnConfig;
 	readonly tools: readonly Tool[];
+}
+
+export interface McpServerInfo {
+	readonly server: string;
+	readonly description?: string;
 	readonly icon?: string;
 	readonly login?: boolean;
+	readonly tools: readonly Tool[];
 }
 
 export interface McpRegistry {
 	mounts(): readonly McpMount[] | Promise<readonly McpMount[]>;
 	mount(mount: McpMount): void | Promise<void>;
 	unmount(server: string): void | Promise<void>;
+	describe(info: McpServerInfo): void | Promise<void>;
+	forget(server: string): void | Promise<void>;
 }
 
-export function memoryRegistry(): McpRegistry {
+export function memoryRegistry(): McpRegistry & {
+	described(): readonly McpServerInfo[];
+} {
 	const mounted = new Map<string, McpMount>();
+	const infos = new Map<string, McpServerInfo>();
 	return {
 		mounts: () => [...mounted.values()],
 		mount: (mount) => {
@@ -244,6 +260,13 @@ export function memoryRegistry(): McpRegistry {
 		unmount: (server) => {
 			mounted.delete(server);
 		},
+		describe: (info) => {
+			infos.set(info.server, info);
+		},
+		forget: (server) => {
+			infos.delete(server);
+		},
+		described: () => [...infos.values()],
 	};
 }
 
