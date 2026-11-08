@@ -1,8 +1,8 @@
-import { offersLogin } from "@repo/mcp-extension/ports";
+import { oauthKey, offersLogin } from "@repo/mcp-extension/ports";
 import { bundledToolkit } from "@repo/mcp-extension/toolkit";
 import type { AgentRepl } from "@repo/repl/repl";
 
-export const MCP_ACTIONS = ["start", "remove", "login"] as const;
+export const MCP_ACTIONS = ["start", "remove", "login", "logout"] as const;
 
 export type McpAction = (typeof MCP_ACTIONS)[number];
 
@@ -12,6 +12,7 @@ const FORMS: Record<McpAction, (server: string) => string> = {
 	start: (server) => `(load-mcp "${server}")`,
 	remove: (server) => `(remove-mcp "${server}")`,
 	login: (server) => `(login "${server}" :url t)`,
+	logout: (server) => `(logout "${server}")`,
 };
 
 export type McpActionResult = { ok: true; url?: string } | { error: string };
@@ -42,6 +43,7 @@ export interface ToolkitEntry {
 	description?: string;
 	icon?: string;
 	login: boolean;
+	loginKey?: string;
 }
 
 export function toolkitEntries(): ToolkitEntry[] {
@@ -54,6 +56,9 @@ export function toolkitEntries(): ToolkitEntry[] {
 				: { description: conf.description }),
 			...(conf.icon === undefined ? {} : { icon: conf.icon }),
 			login: offersLogin(conf),
+			...(offersLogin(conf)
+				? { loginKey: oauthKey(conf, "url" in conf ? conf.url : "") }
+				: {}),
 		}))
 		.sort((a, b) => a.server.localeCompare(b.server));
 }

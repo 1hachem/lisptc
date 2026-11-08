@@ -25,6 +25,7 @@ import {
 	type OAuthClients,
 	type OAuthConnConfig,
 	type OAuthStore,
+	oauthKey,
 	type ServerHandle,
 	type StartWatch,
 	type Tool,
@@ -73,10 +74,6 @@ function oauthScope(conf: OAuthConnConfig): string | undefined {
 	return conf.scopes?.length ? conf.scopes.join(" ") : undefined;
 }
 
-function serverKey(conf: OAuthConnConfig, serverUrl: string): string {
-	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
-}
-
 function landsOnCallbackPort(url: string, port: number): boolean {
 	const { hostname, port: target } = new URL(url);
 	const loopback =
@@ -112,7 +109,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 				: undefined;
 		return StoredOAuthProvider.open(
 			scopedStore,
-			serverKey(conf, serverUrl),
+			oauthKey(conf, serverUrl),
 			ports.redirectUri,
 			oauthScope(conf),
 			issuer,
@@ -335,7 +332,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		},
 
 		async logout(conf: OAuthConnConfig): Promise<void> {
-			await scopedStore.clear(serverKey(conf, "url" in conf ? conf.url : ""));
+			await scopedStore.clear(oauthKey(conf, "url" in conf ? conf.url : ""));
 		},
 
 		async authorize(conf: OAuthConnConfig, code: string): Promise<void> {

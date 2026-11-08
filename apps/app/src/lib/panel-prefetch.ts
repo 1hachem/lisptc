@@ -4,6 +4,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { type FlatLayout, unflatten } from "@repo/shared/split-layout";
 import type { QueryClient } from "@tanstack/react-query";
 import { knowledgeViewer, readsText, storedTextQuery } from "./file-viewer.ts";
+import { toolkitQuery } from "./mcp-action.ts";
 import { type PanelContent, type PanelLayout, shownTabs } from "./panel-ops.ts";
 import { panelAt } from "./panel-paths.ts";
 
@@ -40,11 +41,34 @@ const prefetchFile: Prefetch<"file"> = async (
 	await queryClient.ensureQueryData(storedTextQuery(file.url));
 };
 
+function prefetchMcp(
+	queryClient: QueryClient,
+	workspaceId: Id<"workspaces">,
+): Promise<unknown> {
+	return Promise.all([
+		queryClient.ensureQueryData(toolkitQuery()),
+		queryClient.ensureQueryData(
+			convexQuery(api.mcpServers.list, { workspaceId }),
+		),
+		queryClient.ensureQueryData(
+			convexQuery(api.mcpServers.mounts, { workspaceId }),
+		),
+		queryClient.ensureQueryData(
+			convexQuery(api.mcpServers.catalog, { workspaceId }),
+		),
+		queryClient.ensureQueryData(
+			convexQuery(api.oauth.signedIn, { workspaceId }),
+		),
+	]);
+}
+
 const prefetchPage: Prefetch<"page"> = (queryClient, workspaceId, content) => {
 	if (content.page === "memory")
 		return queryClient.ensureQueryData(
 			convexQuery(api.memories.list, { workspaceId }),
 		);
+	if (content.page === "toolkit" || content.page === "mcp")
+		return prefetchMcp(queryClient, workspaceId);
 	if (content.page === "bin" && content.id !== undefined)
 		return queryClient.ensureQueryData(
 			convexQuery(api.bin.get, { workspaceId, name: content.id }),

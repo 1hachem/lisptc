@@ -1,5 +1,7 @@
+import { convexQuery } from "@convex-dev/react-query";
 import { McpServerIcon, PackageIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import type {
 	McpAction,
@@ -10,7 +12,7 @@ import { ConfirmDialog, TreeFile, TreeFolder } from "@repo/components";
 import { Button } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { fetchToolkit, postMcpAction } from "../lib/mcp-action.ts";
+import { postMcpAction, toolkitQuery } from "../lib/mcp-action.ts";
 import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanel, requestPanelClosed } from "../lib/panel-requests.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
@@ -35,12 +37,21 @@ const TOOLKIT_PAGE: PanelContent = {
 	title: "mcp/toolkit",
 };
 
-function useToolkit(workspaceId: Id<"workspaces">): ToolkitEntry[] | undefined {
-	return useQuery({
-		queryKey: ["mcp-toolkit", workspaceId],
-		queryFn: () => fetchToolkit(workspaceId),
-		staleTime: Number.POSITIVE_INFINITY,
-	}).data;
+function useToolkit(): ToolkitEntry[] | undefined {
+	return useQuery(toolkitQuery()).data;
+}
+
+function useSignedIn(workspaceId: Id<"workspaces">): ReadonlySet<string> {
+	const { data } = useQuery(convexQuery(api.oauth.signedIn, { workspaceId }));
+	return new Set(data ?? []);
+}
+
+function signedInTo(
+	signedIn: ReadonlySet<string>,
+	server: string,
+	listed: ToolkitEntry | undefined,
+): boolean {
+	return signedIn.has(listed?.loginKey ?? `mcp:${server}`);
 }
 
 function fromToolkit(entry: ToolkitEntry): WorkspaceMcpServer {
@@ -72,13 +83,15 @@ function withToolkit(
 
 function useMcpServer(workspaceId: Id<"workspaces">, server: string) {
 	const servers = useWorkspaceMcpServers(workspaceId);
-	const toolkit = useToolkit(workspaceId);
+	const toolkit = useToolkit();
+	const signedIn = useSignedIn(workspaceId);
 	const known = servers?.find((found) => found.server === server);
 	const listed = toolkit?.find((found) => found.server === server);
 	return {
 		loading: servers === undefined,
 		known: known !== undefined,
 		entry: withToolkit(known, listed),
+		signedIn: signedInTo(signedIn, server, listed),
 	};
 }
 
@@ -208,6 +221,7 @@ export function McpFolder({
 const LABELS: Record<McpAction, [idle: string, busy: string]> = {
 	start: ["start", "starting…"],
 	login: ["log in", "opening…"],
+	logout: ["log out", "logging out…"],
 	remove: ["delete", "deleting…"],
 };
 
@@ -235,16 +249,41 @@ function ActionButton({
 	);
 }
 
+function SignInButton({
+	entry,
+	signedIn,
+	busy,
+	run,
+}: {
+	entry: WorkspaceMcpServer | undefined;
+	signedIn: boolean;
+	busy: McpAction | null;
+	run: (action: McpAction) => Promise<void>;
+}) {
+	if (!entry?.login) return null;
+	const action = signedIn ? "logout" : "login";
+	return (
+		<ActionButton
+			action={action}
+			busy={busy}
+			disabled={false}
+			onRun={() => void run(action)}
+		/>
+	);
+}
+
 function McpActions({
 	server,
 	entry,
 	known,
+	signedIn,
 	busy,
 	run,
 }: {
 	server: string;
 	entry: WorkspaceMcpServer | undefined;
 	known: boolean;
+	signedIn: boolean;
 	busy: McpAction | null;
 	run: (action: McpAction) => Promise<void>;
 }) {
@@ -267,14 +306,7 @@ function McpActions({
 				disabled={running}
 				onRun={() => void run("start")}
 			/>
-			{entry?.login && (
-				<ActionButton
-					action="login"
-					busy={busy}
-					disabled={false}
-					onRun={() => void run("login")}
-				/>
-			)}
+			<SignInButton entry={entry} signedIn={signedIn} busy={busy} run={run} />
 			<ActionButton
 				action="remove"
 				busy={busy}
@@ -372,7 +404,7 @@ export function McpServerPage({
 	workspaceId: Id<"workspaces">;
 	server: string;
 }) {
-	const { loading, known, entry } = useMcpServer(workspaceId, server);
+	const { loading, known, entry, signedIn } = useMcpServer(workspaceId, server);
 	const { busy, error, run } = useMcpAction(workspaceId, server);
 	return (
 		<PageView
@@ -382,6 +414,7 @@ export function McpServerPage({
 					server={server}
 					entry={entry}
 					known={known}
+					signedIn={signedIn}
 					busy={busy}
 					run={run}
 				/>
@@ -396,9 +429,11 @@ export function McpServerPage({
 function ToolkitRow({
 	workspaceId,
 	entry,
+	signedIn,
 }: {
 	workspaceId: Id<"workspaces">;
 	entry: WorkspaceMcpServer;
+	signedIn: boolean;
 }) {
 	const { busy, error, run } = useMcpAction(workspaceId, entry.server);
 	const running = entry.phase === "starting" || entry.phase === "ready";
@@ -420,14 +455,7 @@ function ToolkitRow({
 					disabled={running}
 					onRun={() => void run("start")}
 				/>
-				{entry.login && (
-					<ActionButton
-						action="login"
-						busy={busy}
-						disabled={false}
-						onRun={() => void run("login")}
-					/>
-				)}
+				<SignInButton entry={entry} signedIn={signedIn} busy={busy} run={run} />
 			</div>
 			{entry.description !== undefined && (
 				<p className="line-clamp-3 break-words text-[12px] text-dim">
@@ -445,25 +473,28 @@ export function ToolkitPage({
 	workspaceId: Id<"workspaces">;
 }) {
 	const servers = useWorkspaceMcpServers(workspaceId);
-	const toolkit = useToolkit(workspaceId);
-	const rows = toolkit?.map(
-		(listed) =>
+	const toolkit = useToolkit();
+	const signedIn = useSignedIn(workspaceId);
+	const rows = toolkit?.map((listed) => ({
+		entry:
 			withToolkit(
 				servers?.find((found) => found.server === listed.server),
 				listed,
 			) ?? fromToolkit(listed),
-	);
+		signedIn: signedInTo(signedIn, listed.server, listed),
+	}));
 	return (
 		<PageView title="mcp/toolkit">
 			{rows === undefined ? (
 				<div className="text-dim">loading…</div>
 			) : (
 				<ul className="flex flex-col gap-3">
-					{rows.map((entry) => (
+					{rows.map(({ entry, signedIn: ready }) => (
 						<ToolkitRow
 							key={entry.server}
 							workspaceId={workspaceId}
 							entry={entry}
+							signedIn={ready}
 						/>
 					))}
 				</ul>
