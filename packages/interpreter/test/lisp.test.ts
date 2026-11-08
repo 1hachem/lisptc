@@ -336,3 +336,18 @@ describe("runUnhooked", () => {
 		expect(seen).toEqual([]);
 	});
 });
+
+describe("reading through the interpreter", () => {
+	it("reads one form, every form, or why the text does not read", () => {
+		const interp = freshInterp();
+		expect(str(interp.read('(a "b\nc") (d)'))).toBe('(a "b\\nc")');
+		expect(interp.readAll("(a) b 3").map((form) => str(form))).toEqual([
+			"(a)",
+			"b",
+			"3",
+		]);
+		expect(() => interp.read("(a")).toThrow(/unclosed/);
+		expect(interp.readFailure("(a")?.reason).toBe("unexpected end of input");
+		expect(interp.readFailure("(a)")).toBeUndefined();
+	});
+});

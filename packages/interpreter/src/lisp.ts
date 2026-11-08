@@ -49,6 +49,7 @@ import {
 	Cell,
 	catchSym,
 	condSym,
+	EndOfFile,
 	Keyword,
 	type List,
 	lambdaSym,
@@ -65,7 +66,7 @@ import {
 } from "./objects.ts";
 import { str } from "./print.ts";
 import { qqExpand, qqQuote } from "./quasiquote.ts";
-import { Reader } from "./reader.ts";
+import { Reader, readFailure, type SyntaxFailure } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
 import { LANGUAGE_MEMORIES, LANGUAGE_REFERENCE } from "./source.ts";
@@ -269,6 +270,36 @@ export class Interp {
 
 	builtinMemories(): readonly string[] {
 		return this.memories;
+	}
+
+	read(text: string): unknown {
+		const reader = new Reader();
+		reader.push(text);
+		if (reader.isEmpty()) throw new EvalException("no expression in", text);
+		try {
+			return reader.read();
+		} catch (ex) {
+			if (ex === EndOfFile) throw new EvalException("unclosed form in", text);
+			throw ex;
+		}
+	}
+
+	readAll(text: string): unknown[] {
+		const reader = new Reader();
+		reader.push(text);
+		const forms: unknown[] = [];
+		try {
+			while (!reader.isEmpty()) forms.push(reader.read());
+		} catch (ex) {
+			if (ex === EndOfFile)
+				throw new EvalException("unclosed form at line", reader.line);
+			throw ex;
+		}
+		return forms;
+	}
+
+	readFailure(text: string): SyntaxFailure | undefined {
+		return readFailure(text);
 	}
 
 	def<T extends z.ZodType>(
