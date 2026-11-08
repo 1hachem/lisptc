@@ -1,17 +1,13 @@
-import type { Memory } from "@repo/memory-extension/ports";
+import type { MemoryRecord } from "@repo/memory-extension/ports";
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { MAX_MEMORY_BYTES, MAX_WHEN_MEMORIES } from "../convex/limits.js";
-import {
-	ConvexMemoryStore,
-	type MemoryClient,
-	type StoredMemory,
-} from "../src/memory-store.ts";
+import { ConvexMemoryStore, type MemoryClient } from "../src/memory-store.ts";
 import { harness, signIn } from "./helpers.ts";
 
-function row(key: string, body: string): StoredMemory {
+function row(key: string, body: string): MemoryRecord {
 	return { key, body, links: [], score: 1, used: 0, lastUsed: 0 };
 }
 
@@ -110,7 +106,7 @@ describe("memory access", () => {
 	it("caps the memories a judge is asked about, since each one is paid on every message", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
-		const situational = (key: string): StoredMemory => ({
+		const situational = (key: string): MemoryRecord => ({
 			...row(key, '"note"'),
 			on: `(when "${key}")`,
 		});
@@ -173,7 +169,7 @@ function named(reference: unknown): string {
 	return getFunctionName(reference as FunctionReference<"query" | "mutation">);
 }
 
-function spyClient(rows: StoredMemory[]): {
+function spyClient(rows: MemoryRecord[]): {
 	client: MemoryClient;
 	calls: Call[];
 } {
@@ -200,10 +196,6 @@ function listed(calls: Call[]): Call[] {
 	return calls.filter((call) => call.name === named(api.memories.list));
 }
 
-function remembered(key: string, body: unknown): Memory {
-	return { key, body, links: new Map(), score: 1, used: 0, lastUsed: 0 };
-}
-
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 
 describe("the convex memory store", () => {
@@ -213,7 +205,7 @@ describe("the convex memory store", () => {
 		const store = new ConvexMemoryStore(WORKSPACE, () => client);
 
 		expect(await store.all()).toHaveLength(1);
-		expect((await store.get("triage"))?.body).toBe("logs");
+		expect((await store.get("triage"))?.body).toBe('"logs"');
 		rows.push(row("billing", '"stripe"'));
 		expect((await store.all()).map((memory) => memory.key)).toEqual([
 			"triage",
@@ -227,9 +219,9 @@ describe("the convex memory store", () => {
 		const { client } = spyClient(rows);
 		const store = new ConvexMemoryStore(WORKSPACE, () => client);
 
-		expect((await store.get("triage"))?.body).toBe("logs");
+		expect((await store.get("triage"))?.body).toBe('"logs"');
 		rows[0] = row("triage", '"traces"');
-		expect((await store.get("triage"))?.body).toBe("traces");
+		expect((await store.get("triage"))?.body).toBe('"traces"');
 		expect(await store.get("missing")).toBeUndefined();
 	});
 
@@ -237,7 +229,7 @@ describe("the convex memory store", () => {
 		const { client, calls } = spyClient([]);
 		const store = new ConvexMemoryStore(WORKSPACE, () => client);
 
-		await store.put(remembered("triage", "logs"));
+		await store.put(row("triage", '"logs"'));
 		expect(calls.at(-1)).toMatchObject({
 			args: { workspaceId: WORKSPACE, memory: { key: "triage" } },
 		});

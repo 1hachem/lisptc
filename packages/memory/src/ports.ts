@@ -10,6 +10,7 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
+import { str } from "@repo/interpreter/print";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 import type { SearchEngine } from "@repo/shared/search";
 
@@ -54,30 +55,40 @@ export interface Memory {
 	lastUsed: number;
 }
 
+export interface MemoryRecord {
+	key: string;
+	body: string;
+	on?: string;
+	links: { key: string; weight: number }[];
+	score: number;
+	used: number;
+	lastUsed: number;
+}
+
 export interface MemoryStore {
-	all(): Awaitable<Memory[]>;
-	get(key: string): Awaitable<Memory | undefined>;
-	put(memory: Memory): Awaitable<void>;
+	all(): Awaitable<MemoryRecord[]>;
+	get(key: string): Awaitable<MemoryRecord | undefined>;
+	put(record: MemoryRecord): Awaitable<void>;
 	delete(key: string): Awaitable<boolean>;
 }
 
 export class VolatileStore implements MemoryStore {
-	private readonly memories = new Map<string, Memory>();
+	private readonly records = new Map<string, MemoryRecord>();
 
-	all(): Memory[] {
-		return [...this.memories.values()];
+	all(): MemoryRecord[] {
+		return [...this.records.values()];
 	}
 
-	get(key: string): Memory | undefined {
-		return this.memories.get(key);
+	get(key: string): MemoryRecord | undefined {
+		return this.records.get(key);
 	}
 
-	put(memory: Memory): void {
-		this.memories.set(memory.key, memory);
+	put(record: MemoryRecord): void {
+		this.records.set(record.key, record);
 	}
 
 	delete(key: string): boolean {
-		return this.memories.delete(key);
+		return this.records.delete(key);
 	}
 }
 
@@ -106,7 +117,7 @@ function isTextPattern(pattern: unknown): boolean {
 	return listToArray((pattern as Cell).cdr as List).every(isTextPattern);
 }
 
-export function parseTrigger(value: unknown): Trigger | undefined {
+function parseTrigger(value: unknown): Trigger | undefined {
 	if (value === null || value === undefined) return undefined;
 	if (!(value instanceof Cell) || !(value.car instanceof Sym))
 		throw new EvalException("trigger expected, as (kind pattern)", value);
@@ -255,6 +266,45 @@ export function formToMemory(form: unknown): Memory | undefined {
 		score: Number(opts.get("score") ?? INITIAL_SCORE),
 		used: Number(opts.get("used") ?? 0),
 		lastUsed: Number(opts.get("last-used") ?? 0),
+	};
+}
+
+export function memoryToRecord(memory: Memory): MemoryRecord {
+	return {
+		key: memory.key,
+		body: str(memory.body),
+		...(memory.on === undefined ? {} : { on: str(triggerToForm(memory.on)) }),
+		links: [...memory.links].map(([key, weight]) => ({ key, weight })),
+		score: memory.score,
+		used: memory.used,
+		lastUsed: memory.lastUsed,
+	};
+}
+
+export function recordToMemory(
+	record: MemoryRecord,
+	read: (text: string) => unknown,
+): Memory | undefined {
+	let body: unknown;
+	try {
+		body = read(record.body);
+	} catch {
+		return undefined;
+	}
+	let on: Trigger | undefined;
+	try {
+		on = record.on === undefined ? undefined : readableTrigger(read(record.on));
+	} catch {
+		on = undefined;
+	}
+	return {
+		key: record.key,
+		body,
+		on,
+		links: new Map(record.links.map(({ key, weight }) => [key, weight])),
+		score: record.score,
+		used: record.used,
+		lastUsed: record.lastUsed,
 	};
 }
 

@@ -36,7 +36,6 @@ import {
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
-import type { ChatMessage } from "@repo/shared/messages";
 import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
@@ -55,10 +54,13 @@ import {
 	LINKED_FIRES_AT,
 	type Memory,
 	type MemoryHost,
+	type MemoryRecord,
 	type MemoryStore,
 	memoryToForm,
+	memoryToRecord,
 	type Recognize,
 	recognizeNothing,
+	recordToMemory,
 	type Situation,
 	TRIGGER_KINDS,
 	type Trigger,
@@ -76,6 +78,7 @@ export const MAX_CASCADE_DEPTH = 3;
 export const MAX_RECALL_WORDS = 200;
 export const DEFAULT_RECALL_LIMIT = 5;
 export const MAX_BUILTIN_WORDS = 300;
+export const MAX_BUILTIN_STEP_WORDS = 3000;
 export const RECALLED_RESTS_STEPS = 100;
 
 function matches(pattern: string, text: string): boolean {
@@ -297,11 +300,6 @@ const recalledCodec: StateCodec<ReadonlyMap<string, number>> = {
 		),
 };
 
-const keysCodec: StateCodec<readonly string[]> = {
-	toLisp: (keys) => arrayToList([...keys]),
-	fromLisp: (list) => listToArray(list as List) as string[],
-};
-
 const runtimeCodec: StateCodec<readonly Memory[] | undefined> = {
 	toLisp: (memories) =>
 		memories === undefined
@@ -315,10 +313,8 @@ const runtimeCodec: StateCodec<readonly Memory[] | undefined> = {
 			: undefined,
 };
 
-function carriesLine(message: ChatMessage, key: string): boolean {
-	return message.content
-		.split("\n")
-		.some((line) => line.startsWith(`${key}: `));
+function surfacedLine(memory: Memory): string {
+	return `${memory.key}: ${bodyText(memory.body)}\n`;
 }
 
 interface Step {
@@ -327,6 +323,7 @@ interface Step {
 	readonly surfaced: readonly FiredMemory[];
 	readonly pending: string;
 	readonly spent: number;
+	readonly builtinSpent: number;
 	readonly dropped: number;
 	readonly stepping: boolean;
 }
@@ -337,6 +334,7 @@ const QUIET: Step = {
 	surfaced: [],
 	pending: "",
 	spent: 0,
+	builtinSpent: 0,
 	dropped: 0,
 	stepping: false,
 };
@@ -355,10 +353,19 @@ const stepCodec: StateCodec<Step> = {
 			BigInt(step.spent),
 			BigInt(step.dropped),
 			step.stepping || null,
+			BigInt(step.builtinSpent),
 		]),
 	fromLisp: (list) => {
-		const [fired, open, surfaced, pending, spent, dropped, stepping] =
-			listToArray(list as List);
+		const [
+			fired,
+			open,
+			surfaced,
+			pending,
+			spent,
+			dropped,
+			stepping,
+			builtinSpent,
+		] = listToArray(list as List);
 		return {
 			fired: listToArray(fired as List) as string[],
 			open: listToArray(open as List) as string[],
@@ -372,6 +379,7 @@ const stepCodec: StateCodec<Step> = {
 			}),
 			pending: pending as string,
 			spent: Number(spent),
+			builtinSpent: Number(builtinSpent ?? 0),
 			dropped: Number(dropped),
 			stepping: stepping === true,
 		};
@@ -383,7 +391,6 @@ export class MemoryBank {
 	private depth = 0;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
-	private loaded: State<readonly string[]> = detachedState([]);
 	private recalled: State<ReadonlyMap<string, number>> = detachedState(
 		new Map(),
 	);
@@ -415,12 +422,6 @@ export class MemoryBank {
 			stepCodec,
 			QUIET,
 			"What the memory bank has fired, opened and surfaced in the current step, and the recall words it has shown and held back.",
-		);
-		this.loaded = interp.state(
-			"memory/loaded",
-			keysCodec,
-			[],
-			"The built-in memories whose text is still in the conversation, so they do not load twice.",
 		);
 		this.recalled = interp.state(
 			"memory/recalled",
@@ -489,16 +490,23 @@ export class MemoryBank {
 		return this.builtins().has(memory.key);
 	}
 
-	keepLoaded(messages: readonly ChatMessage[]): void {
-		const loaded = this.loaded.get();
-		if (loaded.length === 0) return;
-		this.loaded.set(
-			loaded.filter((key) => messages.some((m) => carriesLine(m, key))),
-		);
+	*lookup(key: string): Eval<Memory | undefined> {
+		return this.builtins().get(key) ?? (yield* this.remembered(key));
 	}
 
-	*lookup(key: string): Eval<Memory | undefined> {
-		return this.builtins().get(key) ?? (yield* settled(this.store.get(key)));
+	*remembered(key: string): Eval<Memory | undefined> {
+		const stored = yield* settled(this.store.get(key));
+		return stored === undefined ? undefined : this.decode(stored);
+	}
+
+	private decode(stored: MemoryRecord): Memory | undefined {
+		const interp = this.declaredIn;
+		if (interp === undefined)
+			throw new EvalException(
+				"the memory bank reads the store only once it is installed in an interpreter",
+				stored.key,
+			);
+		return recordToMemory(stored, (text) => interp.read(text));
 	}
 
 	*everything(): Eval<Memory[]> {
@@ -508,7 +516,9 @@ export class MemoryBank {
 	}
 
 	private *reload(): Eval<Memory[]> {
-		const stored = yield* settled(this.store.all());
+		const stored = (yield* settled(this.store.all())).flatMap(
+			(found) => this.decode(found) ?? [],
+		);
 		this.runtime.set(stored);
 		return [...this.builtins().values(), ...stored];
 	}
@@ -624,12 +634,9 @@ export class MemoryBank {
 		seen: { message: string; step?: string },
 		interp: Interp,
 	): Eval<void> {
-		const spent = [
-			...this.loaded.get(),
-			...[...this.recalled.get().keys()].filter((key) =>
-				this.resting(key, interp),
-			),
-		];
+		const spent = [...this.recalled.get().keys()].filter((key) =>
+			this.resting(key, interp),
+		);
 		const repl = yield* this.askRepl(interp, seen.step);
 		const cues = repl.cues.filter((cue) => !spent.includes(cue.key));
 		if (cues.length === 0) return;
@@ -704,7 +711,7 @@ export class MemoryBank {
 	}
 
 	*remember(memory: Memory): Eval<void> {
-		yield* settled(this.store.put(memory));
+		yield* settled(this.store.put(memoryToRecord(memory)));
 		this.stale();
 	}
 
@@ -734,12 +741,16 @@ export class MemoryBank {
 	}
 
 	*fire(memory: Memory, interp: Interp): Eval<void> {
-		const { fired, open } = this.step.get();
+		const { fired, open, builtinSpent } = this.step.get();
 		if (fired.includes(memory.key)) return;
 		if (this.depth >= MAX_CASCADE_DEPTH) return;
 		const builtin = this.isBuiltin(memory);
-		const loaded = this.loaded.get();
-		if (builtin && loaded.includes(memory.key)) return;
+		if (builtin && this.resting(memory.key, interp)) return;
+		if (
+			builtin &&
+			builtinSpent + wordCount(surfacedLine(memory)) > MAX_BUILTIN_STEP_WORDS
+		)
+			return;
 		this.change({
 			fired: [...fired, memory.key],
 			open: builtin ? open : [...open, memory.key],
@@ -747,8 +758,7 @@ export class MemoryBank {
 		this.recalled.set(
 			new Map([...this.recalled.get(), [memory.key, stepsTaken(interp)]]),
 		);
-		if (builtin) this.loaded.set([...loaded, memory.key]);
-		else yield* this.reinforce(memory);
+		if (!builtin) yield* this.reinforce(memory);
 		this.surface(memory, builtin);
 		this.depth++;
 		try {
@@ -774,7 +784,7 @@ export class MemoryBank {
 		const keys = this.step.get().fired;
 		if (keys.length < 2) return;
 		for (const key of keys) {
-			const memory = yield* settled(this.store.get(key));
+			const memory = yield* this.remembered(key);
 			if (memory === undefined) continue;
 			for (const other of keys)
 				if (other !== key)
@@ -803,7 +813,7 @@ export class MemoryBank {
 	private surface(memory: Memory, builtin: boolean): void {
 		const key = memory.key;
 		const body = bodyText(memory.body);
-		const line = `${key}: ${body}\n`;
+		const line = surfacedLine(memory);
 		const words = builtin ? 0 : wordCount(line);
 		const step = this.step.get();
 		if (!builtin && step.spent >= MAX_RECALL_WORDS) {
@@ -816,6 +826,7 @@ export class MemoryBank {
 				: { key, body, on: memory.on.kind };
 		this.change({
 			spent: step.spent + words,
+			builtinSpent: step.builtinSpent + (builtin ? wordCount(line) : 0),
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
@@ -880,10 +891,6 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 			} finally {
 				ctx.emit((await driveAsync(bank.endStep())).value);
 			}
-		});
-		hooks.context.use((interp, messages, next) => {
-			bank.keepLoaded(messages);
-			return next(interp, messages);
 		});
 	};
 }
@@ -1035,7 +1042,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			const links = new Map<string, number>();
 			for (const linked of listToArray((opts.get("links") ?? null) as List))
 				if (typeof linked === "string") links.set(linked, LINKED_FIRES_AT);
-			const existing = yield* settled(bank.store.get(key));
+			const existing = yield* bank.remembered(key);
 			yield* bank.remember({
 				key,
 				body,
@@ -1191,7 +1198,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		z.tuple([zString, z.unknown()]),
 		function* ([key, body]): Eval {
 			refuseInternal(key);
-			const memory = yield* settled(bank.store.get(key));
+			const memory = yield* bank.remembered(key);
 			if (memory === undefined)
 				throw new EvalException("unknown memory", key, false);
 			if (!bank.isOpen(key))

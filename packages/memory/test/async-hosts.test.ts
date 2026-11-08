@@ -4,7 +4,11 @@ import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { MemoryBank, memoryExtension } from "../src/memory.ts";
-import { type Memory, type MemoryStore, VolatileStore } from "../src/ports.ts";
+import {
+	type MemoryRecord,
+	type MemoryStore,
+	VolatileStore,
+} from "../src/ports.ts";
 import { bareHost, MemoryInterp } from "./helpers.ts";
 
 class PromisedStore implements MemoryStore {
@@ -16,16 +20,16 @@ class PromisedStore implements MemoryStore {
 		return Promise.resolve().then(() => value);
 	}
 
-	all(): Promise<Memory[]> {
+	all(): Promise<MemoryRecord[]> {
 		return this.later(this.inner.all());
 	}
 
-	get(key: string): Promise<Memory | undefined> {
+	get(key: string): Promise<MemoryRecord | undefined> {
 		return this.later(this.inner.get(key));
 	}
 
-	put(memory: Memory): Promise<void> {
-		return this.later(this.inner.put(memory));
+	put(record: MemoryRecord): Promise<void> {
+		return this.later(this.inner.put(record));
 	}
 
 	delete(key: string): Promise<boolean> {

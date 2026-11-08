@@ -72,7 +72,9 @@ describe("a REPL built from a list of its own", () => {
 		expect(r.hooks.filled(memorySlot)).toBe(bank);
 		await r.eval('(memory/remember "k" "a note worth keeping")');
 
-		expect((await bank.store.get("k"))?.body).toBe("a note worth keeping");
+		expect(await bank.store.get("k")).toMatchObject({
+			body: '"a note worth keeping"',
+		});
 	});
 
 	it("emits a fired memory for the model and records it in the journal, never in the REPL output", async () => {

@@ -15,10 +15,10 @@ import { openSession } from "@repo/interpreter/session";
 import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { type Entry, view } from "@repo/shared/journal";
-import type { ChatMessage } from "@repo/shared/messages";
 import { describe, expect, it } from "vitest";
 import {
 	HALF_LIFE_MS,
+	MAX_BUILTIN_STEP_WORDS,
 	MAX_BUILTIN_WORDS,
 	MAX_RECALL_WORDS,
 	MemoryBank,
@@ -91,7 +91,6 @@ interface Fixture {
 	bank: MemoryBank;
 	hear(text: string): Promise<string[]>;
 	step(code: string, result: string): Promise<string[]>;
-	context(messages: readonly ChatMessage[]): void;
 	entries(): Entry[];
 }
 
@@ -110,7 +109,7 @@ function fixture(
 		extensions: [extension, carrying(options.memories ?? BROWSER)],
 	});
 	runSync(interp, prelude);
-	const hooks = openSession([extension]);
+	openSession([extension]);
 	const buffer = bufferTransport();
 	interp.channels.pipe(buffer);
 	const conversation: Turn[] = [];
@@ -146,23 +145,11 @@ function fixture(
 			await drive(bank.endStep());
 			return fired.map((m) => m.key);
 		},
-		context(messages) {
-			hooks.context.run((_i, m) => m, interp, messages);
-		},
 	};
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
 	return str((await runAsync(f.interp, code)).value);
-}
-
-function feedback(...keys: string[]): ChatMessage {
-	return {
-		role: "user",
-		content: ["<memories>", ...keys.map((k) => `${k}: …`), "</memories>"].join(
-			"\n",
-		),
-	};
 }
 
 describe("built-in memories", () => {
@@ -242,6 +229,26 @@ describe("built-in memories", () => {
 		await f.hear("deploy it");
 		const notes = f.bank.builtins().get("internal/deploy/notes");
 		expect(notes && f.bank.strength(notes)).toBe(1);
+	});
+
+	it("load at most their step budget in one step, and the rest on a later one", async () => {
+		const body = Array.from({ length: MAX_BUILTIN_WORDS - 1 }, () => "w").join(
+			" ",
+		);
+		const fit = Math.floor(MAX_BUILTIN_STEP_WORDS / MAX_BUILTIN_WORDS);
+		const keys = Array.from(
+			{ length: fit + 2 },
+			(_, at) => `internal/t/m${at}`,
+		);
+		const f = fixture({
+			memories: keys
+				.map((key) => `(memory "${key}" :on (user "go") "${body}")`)
+				.join("\n"),
+		});
+		const first = await f.hear("go");
+		expect(first).toHaveLength(fit);
+		const second = await f.hear("go on");
+		expect([...first, ...second].sort()).toEqual([...keys].sort());
 	});
 
 	it("surface past the recall budget, which is for the agent's own", async () => {
@@ -466,9 +473,9 @@ describe("the when trigger", () => {
 		expect(await ev(f, keys)).toBe('("internal/browser/local")');
 		await f.bank.store.put({
 			key: "elsewhere",
-			body: "x",
-			on: { kind: "when", pattern: "user asks about billing" },
-			links: new Map(),
+			body: '"x"',
+			on: '(when "user asks about billing")',
+			links: [],
 			score: 1,
 			used: 0,
 			lastUsed: 0,
@@ -586,9 +593,7 @@ describe("the when trigger", () => {
 		const { recognize } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
 		expect(await f.hear("open my browser")).toContain("internal/browser/local");
-		f.context([feedback("internal/browser/local", "internal/browser/flags")]);
 		expect(await f.step("(open)", "opened")).toEqual([]);
-		f.context([]);
 		expect(await f.step("(click)", "clicked")).toEqual([]);
 	});
 
@@ -608,20 +613,18 @@ describe("the when trigger", () => {
 describe("a loaded built-in", () => {
 	const ASK = "user wants to automate a web browser";
 
-	it("loads once while its text is still in the conversation", async () => {
+	it("loads once, and not again while its rest lasts", async () => {
 		const { recognize, calls } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
 		expect(await f.hear("open my browser")).toContain("internal/browser/local");
-		f.context([feedback("internal/browser/local", "internal/browser/flags")]);
 		expect(await f.hear("now click the button")).toEqual([]);
 		expect(calls).toHaveLength(1);
 	});
 
-	it("loads again once its text has left the conversation and its rest is over", async () => {
+	it("loads again once its rest is over", async () => {
 		const { recognize } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
 		await f.hear("open my browser");
-		f.context([{ role: "user", content: "a summary of earlier work" }]);
 		expect(await f.hear("open the browser again")).toEqual([]);
 		for (let step = 1; step < RECALLED_RESTS_STEPS; step++)
 			await f.step("(open)", "opened");
