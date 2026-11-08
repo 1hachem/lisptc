@@ -70,7 +70,7 @@ export function registerAttachments(
 			const bytes = yield* settled(store.read("attachments", checked));
 			return bytes === undefined
 				? null
-				: yield* settled(codecFor(checked).read(checked, bytes, pdf));
+				: yield* settled(codecFor(checked).read(checked, bytes, pdf, interp));
 		},
 	);
 

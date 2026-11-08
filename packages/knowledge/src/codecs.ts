@@ -1,18 +1,22 @@
 import { EvalException, messageOf } from "@repo/interpreter/errors";
-import {
-	EndOfFile,
-	exactJsonToLisp,
-	lispToJson,
-} from "@repo/interpreter/objects";
+import { exactJsonToLisp, lispToJson } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
-import { Reader } from "@repo/interpreter/reader";
 import type { Awaitable } from "@repo/shared/host";
 import type { PdfReader } from "./ports.ts";
 
+export interface FormReader {
+	readAll(text: string): unknown[];
+}
+
 export interface Codec {
 	readonly contentType: string;
-	read(name: string, bytes: Uint8Array, pdf: PdfReader): Awaitable<unknown>;
-	write(name: string, value: unknown): string;
+	read(
+		name: string,
+		bytes: Uint8Array,
+		pdf: PdfReader,
+		forms: FormReader,
+	): Awaitable<unknown>;
+	write(name: string, value: unknown, forms: FormReader): string;
 }
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
@@ -68,23 +72,15 @@ function encodeJson(name: string, value: unknown): string {
 	}
 }
 
-function readsAsOneForm(source: string): unknown {
-	const reader = new Reader();
-	reader.push(source);
-	if (reader.isEmpty()) return null;
-	const value = reader.read();
-	try {
-		reader.read();
-	} catch (ex) {
-		if (ex === EndOfFile) return value;
-		throw ex;
-	}
-	throw new Error("more than one form");
+function readsAsOneForm(forms: FormReader, source: string): unknown {
+	const read = forms.readAll(source);
+	if (read.length > 1) throw new Error("more than one form");
+	return read.length === 0 ? null : read[0];
 }
 
-function parseForm(name: string, source: string): unknown {
+function parseForm(forms: FormReader, name: string, source: string): unknown {
 	try {
-		return readsAsOneForm(source);
+		return readsAsOneForm(forms, source);
 	} catch (ex) {
 		throw new EvalException(
 			`${name} is not one data form: ${messageOf(ex)}`,
@@ -93,11 +89,11 @@ function parseForm(name: string, source: string): unknown {
 	}
 }
 
-function printForm(value: unknown): string {
+function printForm(forms: FormReader, value: unknown): string {
 	const source = str(value);
 	let back: unknown;
 	try {
-		back = readsAsOneForm(source);
+		back = readsAsOneForm(forms, source);
 	} catch {
 		back = undefined;
 	}
@@ -144,8 +140,9 @@ export const CODECS: ReadonlyMap<string, Codec> = new Map<string, Codec>([
 		"ptc",
 		{
 			contentType: "text/plain",
-			read: (name, bytes) => parseForm(name, textOf(name, bytes)),
-			write: (_name, value) => printForm(value),
+			read: (name, bytes, _pdf, forms) =>
+				parseForm(forms, name, textOf(name, bytes)),
+			write: (_name, value, forms) => printForm(forms, value),
 		},
 	],
 	["svg", text("image/svg+xml")],
