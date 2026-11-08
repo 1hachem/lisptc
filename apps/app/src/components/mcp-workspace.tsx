@@ -1,5 +1,5 @@
 import type { Id } from "@repo/backend/dataModel";
-import type { McpAction } from "@repo/backend/mcp-actions";
+import type { McpAction, McpActionResult } from "@repo/backend/mcp-actions";
 import { TreeFile, TreeFolder } from "@repo/components";
 import { Button } from "@repo/ui";
 import { useState } from "react";
@@ -27,6 +27,25 @@ function phaseText(entry: WorkspaceMcpServer): string {
 	return entry.reason ? `${entry.phase}: ${entry.reason}` : entry.phase;
 }
 
+function landLink(link: Window | null, result: McpActionResult): void {
+	if (link === null) return;
+	if ("url" in result && result.url !== undefined)
+		link.location.href = result.url;
+	else link.close();
+}
+
+async function attempt(
+	workspaceId: Id<"workspaces">,
+	server: string,
+	action: McpAction,
+): Promise<McpActionResult> {
+	try {
+		return await postMcpAction(workspaceId, server, action);
+	} catch (ex) {
+		return { error: ex instanceof Error ? ex.message : String(ex) };
+	}
+}
+
 function useMcpAction(workspaceId: Id<"workspaces">, server: string) {
 	const [busy, setBusy] = useState<McpAction | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -34,22 +53,11 @@ function useMcpAction(workspaceId: Id<"workspaces">, server: string) {
 		setBusy(action);
 		setError(null);
 		const link = action === "login" ? window.open("", "_blank") : null;
-		try {
-			const result = await postMcpAction(workspaceId, server, action);
-			const url = "error" in result ? undefined : result.url;
-			if ("error" in result) setError(result.error);
-			if (link !== null) {
-				if (url === undefined) link.close();
-				else link.location.href = url;
-			}
-			if (action === "remove" && !("error" in result))
-				requestPanelClosed(mcpPage(server));
-		} catch (ex) {
-			link?.close();
-			setError(ex instanceof Error ? ex.message : String(ex));
-		} finally {
-			setBusy(null);
-		}
+		const result = await attempt(workspaceId, server, action);
+		landLink(link, result);
+		setBusy(null);
+		if ("error" in result) setError(result.error);
+		else if (action === "remove") requestPanelClosed(mcpPage(server));
 	};
 	return { busy, error, run };
 }
@@ -108,6 +116,102 @@ export function McpFolder({
 	);
 }
 
+const LABELS: Record<McpAction, [idle: string, busy: string]> = {
+	start: ["start", "starting…"],
+	login: ["log in", "opening…"],
+	remove: ["delete", "deleting…"],
+};
+
+function ActionButton({
+	action,
+	busy,
+	disabled,
+	onRun,
+}: {
+	action: McpAction;
+	busy: McpAction | null;
+	disabled: boolean;
+	onRun: () => void;
+}) {
+	const [idle, running] = LABELS[action];
+	return (
+		<Button
+			size="sm"
+			variant={action === "remove" ? "destructive" : "outline"}
+			disabled={busy !== null || disabled}
+			onClick={onRun}
+		>
+			{busy === action ? running : idle}
+		</Button>
+	);
+}
+
+function McpActions({
+	server,
+	entry,
+	busy,
+	run,
+}: {
+	server: string;
+	entry: WorkspaceMcpServer | undefined;
+	busy: McpAction | null;
+	run: (action: McpAction) => Promise<void>;
+}) {
+	const running = entry?.phase === "starting" || entry?.phase === "ready";
+	const remove = () => {
+		if (window.confirm(`delete ${server} and everything it holds?`))
+			void run("remove");
+	};
+	return (
+		<div className="flex items-center gap-1.5">
+			<ActionButton
+				action="start"
+				busy={busy}
+				disabled={running}
+				onRun={() => void run("start")}
+			/>
+			<ActionButton
+				action="login"
+				busy={busy}
+				disabled={false}
+				onRun={() => void run("login")}
+			/>
+			<ActionButton
+				action="remove"
+				busy={busy}
+				disabled={entry === undefined}
+				onRun={remove}
+			/>
+		</div>
+	);
+}
+
+function McpServerDetail({
+	server,
+	servers,
+}: {
+	server: string;
+	servers: WorkspaceMcpServer[] | undefined;
+}) {
+	if (servers === undefined) return <div className="text-dim">loading…</div>;
+	const entry = servers.find((found) => found.server === server);
+	if (entry === undefined)
+		return <div className="text-dim">no mcp server named {server}</div>;
+	return (
+		<div className="flex flex-col gap-4">
+			<Field label="status">
+				<span className="flex items-center gap-2">
+					<PhaseDot phase={entry.phase} />
+					<span>{phaseText(entry)}</span>
+				</span>
+			</Field>
+			<Field label="mounted">
+				{entry.mounted ? "loaded in this workspace" : "not loaded"}
+			</Field>
+		</div>
+	);
+}
+
 export function McpServerPage({
 	workspaceId,
 	server,
@@ -118,59 +222,14 @@ export function McpServerPage({
 	const servers = useWorkspaceMcpServers(workspaceId);
 	const { busy, error, run } = useMcpAction(workspaceId, server);
 	const entry = servers?.find((found) => found.server === server);
-	const running = entry?.phase === "starting" || entry?.phase === "ready";
 	return (
 		<PageView
 			title={`mcp/${server}`}
 			actions={
-				<div className="flex items-center gap-1.5">
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== null || running}
-						onClick={() => void run("start")}
-					>
-						{busy === "start" ? "starting…" : "start"}
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== null}
-						onClick={() => void run("login")}
-					>
-						{busy === "login" ? "opening…" : "log in"}
-					</Button>
-					<Button
-						size="sm"
-						variant="destructive"
-						disabled={busy !== null || entry === undefined}
-						onClick={() => {
-							if (window.confirm(`delete ${server} and everything it holds?`))
-								void run("remove");
-						}}
-					>
-						{busy === "remove" ? "deleting…" : "delete"}
-					</Button>
-				</div>
+				<McpActions server={server} entry={entry} busy={busy} run={run} />
 			}
 		>
-			{servers === undefined ? (
-				<div className="text-dim">loading…</div>
-			) : entry === undefined ? (
-				<div className="text-dim">no mcp server named {server}</div>
-			) : (
-				<div className="flex flex-col gap-4">
-					<Field label="status">
-						<span className="flex items-center gap-2">
-							<PhaseDot phase={entry.phase} />
-							<span>{phaseText(entry)}</span>
-						</span>
-					</Field>
-					<Field label="mounted">
-						{entry.mounted ? "loaded in this workspace" : "not loaded"}
-					</Field>
-				</div>
-			)}
+			<McpServerDetail server={server} servers={servers} />
 			{error !== null && (
 				<div role="alert" className="mt-4 text-[12px] text-red">
 					{error}
