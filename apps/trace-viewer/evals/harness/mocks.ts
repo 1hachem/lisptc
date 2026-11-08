@@ -83,9 +83,9 @@ export interface MockTool {
 	inputSchema?: Record<string, unknown>;
 }
 
-type MockCall = (args: Record<string, unknown>) => unknown;
+export type MockCall = (args: Record<string, unknown>) => unknown;
 
-type MockResult =
+export type MockResult =
 	| MockCall
 	| Record<string, unknown>
 	| unknown[]

@@ -895,7 +895,7 @@ function toolRows(entry: ServerEntry, policy: McpPolicy): List[] {
 	return shownTools(entry, policy).map((tool) => toolRow(entry, tool));
 }
 
-interface Rebound {
+export interface Rebound {
 	readonly bound: readonly string[];
 	readonly dropped: readonly string[];
 }
