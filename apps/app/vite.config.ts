@@ -38,7 +38,6 @@ export default defineConfig({
 		}),
 	],
 	environments: {
-		ssr: { resolve: { external: ["gpt-tokenizer"] } },
 		nitro: { resolve: { external: ["gpt-tokenizer"] } },
 	},
 	optimizeDeps: {
