@@ -31,11 +31,16 @@ export default defineConfig({
 			serverDir: "server",
 			features: { websocket: true },
 			compressPublicAssets: { gzip: true, brotli: true },
+			traceDeps: ["gpt-tokenizer"],
 			hooks: {
 				compiled: (built) => copyRuntimeAssets(built.options.output.serverDir),
 			},
 		}),
 	],
+	environments: {
+		ssr: { resolve: { external: ["gpt-tokenizer"] } },
+		nitro: { resolve: { external: ["gpt-tokenizer"] } },
+	},
 	optimizeDeps: {
 		exclude: ["@repo/components", "@repo/ui"],
 	},

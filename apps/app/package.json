@@ -73,6 +73,7 @@
     "@tiptap/starter-kit": "^3.32.0",
     "better-auth": "~1.6.33",
     "convex": "^1.46.0",
+    "gpt-tokenizer": "^4.1.0",
     "jose": "^6.2.12",
     "lexical": "^0.49.0",
     "posthog-js": "^1.425.1",
