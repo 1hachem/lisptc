@@ -10,7 +10,6 @@ import {
 	type PermissionsHost,
 	type PermissionsStore,
 } from "./ports.ts";
-import { parseRules } from "./rules.ts";
 import { uiApprover } from "./ui-approver.ts";
 
 export class FilePermissionsStore implements PermissionsStore {
@@ -27,7 +26,6 @@ export class FilePermissionsStore implements PermissionsStore {
 	}
 
 	save(source: string): void {
-		parseRules(source);
 		mkdirSync(dirname(this.path), { recursive: true });
 		writeFileSync(this.path, source, { mode: 0o600 });
 		this.read = undefined;

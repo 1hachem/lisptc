@@ -1,5 +1,6 @@
 import type { Hold } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
+import { Interp } from "@repo/interpreter/lisp";
 import { asksKind } from "@repo/journal-catalog/asks";
 import { view } from "@repo/shared/journal";
 import { describe, expect, it, vi } from "vitest";
@@ -747,6 +748,7 @@ describe("following the saved config", () => {
 	it("decides by what the store holds now, not what it held at the start", () => {
 		const store = new MemoryPermissionsStore("(permission/deny eval)");
 		const rules = new SessionRules(store);
+		rules.readWith(new Interp());
 		expect(rules.decide("eval").verdict).toBe("deny");
 		store.save("(permission/server fx (hide echo))");
 		expect(rules.decide("eval").verdict).toBe("allow");

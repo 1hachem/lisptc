@@ -50,14 +50,4 @@ describe("the convex permissions store", () => {
 		expect(saved).toEqual(["(permission/ask eval)"]);
 		expect(store.source()).toBe("(permission/ask eval)");
 	});
-
-	it("refuses to save a config that does not parse, and keeps the old one", async () => {
-		const { client, saved } = spyClient("(permission/deny eval)");
-		const store = await ConvexPermissionsStore.open(WORKSPACE, () => client);
-		await expect(store.save("(permission/permit eval)")).rejects.toThrow(
-			"unknown permissions form",
-		);
-		expect(saved).toEqual([]);
-		expect(store.source()).toBe("(permission/deny eval)");
-	});
 });
