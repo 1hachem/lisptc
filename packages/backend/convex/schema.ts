@@ -366,6 +366,8 @@ export default defineSchema({
 		server: v.string(),
 		conf: v.optional(v.string()),
 		tools: v.string(),
+		icon: v.optional(v.string()),
+		login: v.optional(v.boolean()),
 		mountedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])

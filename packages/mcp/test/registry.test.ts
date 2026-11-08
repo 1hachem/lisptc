@@ -8,7 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
 import { MemoryOAuthStore } from "../src/oauth-host.ts";
-import { type McpRegistry, memoryRegistry } from "../src/ports.ts";
+import {
+	type McpRegistry,
+	memoryRegistry,
+	type StdioConnConfig,
+} from "../src/ports.ts";
 import { fixtureServer, recordingHost, withServers } from "./helpers.ts";
 
 const opened: Interp[] = [];
@@ -17,7 +21,10 @@ afterEach(() => {
 	for (const interp of opened.splice(0)) interp.dispose();
 });
 
-function session(registry: McpRegistry) {
+function session(
+	registry: McpRegistry,
+	server: StdioConnConfig = fixtureServer("fx"),
+) {
 	const extension = mcpExtension({
 		...withServers(
 			{
@@ -27,7 +34,7 @@ function session(registry: McpRegistry) {
 					oauth: new MemoryOAuthStore(),
 				}),
 			},
-			fixtureServer("fx"),
+			server,
 		),
 		registry,
 	});
@@ -57,6 +64,18 @@ describe("the workspace registry", () => {
 		expect(mount.server).toBe("fx");
 		expect(mount.conf).toBeUndefined();
 		expect(mount.tools.map((tool) => tool.name)).toContain("echo");
+	}, 30_000);
+
+	it("keeps the logo the toolkit gives a server, and says it needs no login", async () => {
+		const registry = memoryRegistry();
+		const { interp } = session(registry, {
+			...fixtureServer("fx"),
+			icon: "https://example.com/fx.png",
+		});
+		await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
+		const [mount] = await registry.mounts();
+		expect(mount.icon).toBe("https://example.com/fx.png");
+		expect(mount.login).toBeUndefined();
 	}, 30_000);
 
 	it("binds a server another session loaded at the next turn, and says so", async () => {

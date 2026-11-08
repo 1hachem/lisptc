@@ -134,7 +134,17 @@ const mountRow = v.object({
 	server: v.string(),
 	conf: v.optional(v.string()),
 	tools: v.string(),
+	icon: v.optional(v.string()),
+	login: v.optional(v.boolean()),
 });
+
+const MAX_MCP_ICON_BYTES = 64 * 1024;
+
+function iconFits(icon: string | undefined): boolean {
+	if (icon === undefined) return true;
+	if (icon.length > MAX_MCP_ICON_BYTES) return false;
+	return icon.startsWith("https://") || icon.startsWith("data:image/");
+}
 
 export const mounts = query({
 	args: { workspaceId: v.id("workspaces") },
@@ -145,10 +155,12 @@ export const mounts = query({
 			.query("mcpMounts")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.take(LIST_LIMIT);
-		return rows.map(({ server, conf, tools }) => ({
+		return rows.map(({ server, conf, tools, icon, login }) => ({
 			server,
 			...(conf === undefined ? {} : { conf }),
 			tools,
+			...(icon === undefined ? {} : { icon }),
+			...(login === undefined ? {} : { login }),
 		}));
 	},
 });
@@ -169,29 +181,36 @@ async function mountOf(
 export const mount = mutation({
 	args: { workspaceId: v.id("workspaces"), ...mountRow.fields },
 	returns: v.null(),
-	handler: async (ctx, { workspaceId, server, conf, tools }) => {
+	handler: async (ctx, { workspaceId, server, conf, tools, icon, login }) => {
 		await requireWorkspace(ctx, workspaceId);
 		if (tools.length + (conf?.length ?? 0) > MAX_MCP_MOUNT_BYTES)
 			throw new Error(
 				`the tools of ${server} exceed ${MAX_MCP_MOUNT_BYTES} bytes`,
 			);
-		const existing = await mountOf(ctx, workspaceId, server);
-		if (existing === null) {
-			await ctx.db.insert("mcpMounts", {
-				workspaceId,
-				server,
-				...(conf === undefined ? {} : { conf }),
-				tools,
-				mountedAt: Date.now(),
-			});
-			return null;
-		}
-		if (existing.conf === conf && existing.tools === tools) return null;
-		await ctx.db.replace(existing._id, {
+		if (!iconFits(icon))
+			throw new Error(`the icon of ${server} is not an https or image url`);
+		const row = {
 			workspaceId,
 			server,
 			...(conf === undefined ? {} : { conf }),
 			tools,
+			...(icon === undefined ? {} : { icon }),
+			...(login === true ? { login } : {}),
+		};
+		const existing = await mountOf(ctx, workspaceId, server);
+		if (existing === null) {
+			await ctx.db.insert("mcpMounts", { ...row, mountedAt: Date.now() });
+			return null;
+		}
+		if (
+			existing.conf === conf &&
+			existing.tools === tools &&
+			existing.icon === icon &&
+			(existing.login === true) === (login === true)
+		)
+			return null;
+		await ctx.db.replace(existing._id, {
+			...row,
 			mountedAt: existing.mountedAt,
 		});
 		return null;

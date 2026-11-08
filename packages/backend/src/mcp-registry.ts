@@ -20,21 +20,25 @@ export class ConvexMcpRegistry implements McpRegistry {
 		const rows = await this.connect().query(api.mcpServers.mounts, {
 			workspaceId: this.workspaceId,
 		});
-		return rows.map(({ server, conf, tools }) => ({
+		return rows.map(({ server, conf, tools, icon, login }) => ({
 			server,
 			...(conf === undefined
 				? {}
 				: { conf: JSON.parse(conf) as HttpConnConfig }),
 			tools: JSON.parse(tools) as Tool[],
+			...(icon === undefined ? {} : { icon }),
+			...(login === undefined ? {} : { login }),
 		}));
 	}
 
-	async mount({ server, conf, tools }: McpMount): Promise<void> {
+	async mount({ server, conf, tools, icon, login }: McpMount): Promise<void> {
 		await this.connect().mutation(api.mcpServers.mount, {
 			workspaceId: this.workspaceId,
 			server,
 			...(conf === undefined ? {} : { conf: JSON.stringify(conf) }),
 			tools: JSON.stringify(tools),
+			...(icon === undefined ? {} : { icon }),
+			...(login === undefined ? {} : { login }),
 		});
 	}
 

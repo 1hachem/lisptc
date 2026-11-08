@@ -224,6 +224,8 @@ export interface McpMount {
 	readonly server: string;
 	readonly conf?: HttpConnConfig;
 	readonly tools: readonly Tool[];
+	readonly icon?: string;
+	readonly login?: boolean;
 }
 
 export interface McpRegistry {

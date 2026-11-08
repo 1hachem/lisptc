@@ -157,6 +157,37 @@ describe("the MCP servers a workspace has loaded", () => {
 		).toEqual(["remote"]);
 	});
 
+	it("keeps a server's logo and whether it signs in, and refuses a logo that is not an image", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "sheets",
+			tools: "[]",
+			icon: "https://example.com/sheets.png",
+			login: true,
+		});
+		expect(
+			await alice.as.query(api.mcpServers.mounts, { workspaceId }),
+		).toEqual([
+			{
+				server: "sheets",
+				tools: "[]",
+				icon: "https://example.com/sheets.png",
+				login: true,
+			},
+		]);
+		await expect(
+			alice.as.mutation(api.mcpServers.mount, {
+				workspaceId,
+				server: "evil",
+				tools: "[]",
+				icon: "javascript:alert(1)",
+			}),
+		).rejects.toThrow(/not an https or image url/);
+	});
+
 	it("survives the operator's snapshot, which owns only the status", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

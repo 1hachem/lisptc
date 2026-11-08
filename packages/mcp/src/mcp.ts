@@ -1006,10 +1006,19 @@ export function registerMcp(
 			.get()
 			.filter((entry) => policy.server(entry.name).access !== "hidden");
 
-	function mountOf(conf: ConnConfig, tools: readonly Tool[]): McpMount {
-		return toolkit.all().includes(conf)
-			? { server: conf.name, tools }
-			: { server: conf.name, conf: conf as HttpConnConfig, tools };
+	function mountOf(
+		conf: ConnConfig,
+		tools: readonly Tool[],
+		icons: readonly Icon[] | undefined,
+	): McpMount {
+		const icon = activityImage(icons, manifestIcons(conf))?.[0]?.src;
+		return {
+			server: conf.name,
+			...(toolkit.all().includes(conf) ? {} : { conf: conf as HttpConnConfig }),
+			tools,
+			...(icon === undefined ? {} : { icon }),
+			...(signsIn(conf) ? { login: true } : {}),
+		};
 	}
 
 	function connect(
@@ -1024,7 +1033,7 @@ export function registerMcp(
 				try {
 					if (signal.aborted)
 						throw new EvalException("MCP load cancelled", conf.name, false);
-					await registry.mount(mountOf(conf, res.tools));
+					await registry.mount(mountOf(conf, res.tools, res.icons));
 				} catch (error) {
 					void client.disconnect(res.serverId).catch(() => {});
 					throw error;
@@ -1556,12 +1565,16 @@ export function registerMcp(
 	};
 }
 
+function signsIn(conf: ConnConfig): conf is OAuthConnConfig {
+	return "url" in conf || ("image" in conf && conf.oauth !== undefined);
+}
+
 function oauthServer(
 	predefined: Map<string, ConnConfig>,
 	name: string,
 ): OAuthConnConfig {
 	const conf = predefined.get(name);
-	if (!conf || !("url" in conf || ("image" in conf && conf.oauth)))
+	if (!conf || !signsIn(conf))
 		throw new EvalException("unknown OAuth MCP server", name, false);
 	return conf;
 }
