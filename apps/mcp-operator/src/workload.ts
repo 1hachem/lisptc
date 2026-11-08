@@ -157,10 +157,6 @@ function ownLabels(server: McpServer): Record<string, string> {
 	};
 }
 
-export function selectorFor(name: string): string {
-	return `${MANAGED_BY}=${MANAGER},${SERVER_LABEL}=${name}`;
-}
-
 const MOUNTS = [{ name: "shm", mountPath: "/dev/shm" }];
 
 function hardened(

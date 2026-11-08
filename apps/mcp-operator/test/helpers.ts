@@ -23,7 +23,7 @@ export const PREFIX = "lisptc-ws-";
 const WORKSPACE = "ws1";
 export const NAMESPACE = `${PREFIX}${WORKSPACE}`;
 
-export const browser: ContainerConnConfig = {
+const browser: ContainerConnConfig = {
 	name: "playwright",
 	image: "playwright-mcp",
 	port: 8931,
@@ -236,7 +236,7 @@ function recordingServers(target: McpServer) {
 	return { servers, writes, removed };
 }
 
-export function recordingSink() {
+function recordingSink() {
 	const servers: ServerRow[] = [];
 	const snapshots: Snapshot[] = [];
 	const sink: StatusSink = {
