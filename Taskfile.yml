@@ -10,9 +10,6 @@ includes:
   dashi-codes: ./taskfiles/dashi-codes.yml
   evals: ./taskfiles/evals.yml
   cluster: ./taskfiles/cluster.yml
-  compose:
-    taskfile: ./taskfiles/compose.yml
-    flatten: true
   mcp-images:
     taskfile: ./taskfiles/mcp-images.yml
     flatten: true
@@ -60,7 +57,7 @@ tasks:
     desc: run the whole stack on the local k3s cluster under tilt, in the lisptc-dev namespace, with live reload
     aliases:
       - dev
-    deps: [registry, cluster:_reachable]
+    deps: [mcp:images:build, registry, cluster:_reachable]
     cmds:
       - defer: setsid -w tilt down
       - tilt up --stream {{.CLI_ARGS}}
@@ -80,7 +77,7 @@ tasks:
     aliases:
       - up:prod
       - prod
-    deps: [registry, cluster:_reachable]
+    deps: [mcp:images:build, registry, cluster:_reachable]
     cmds:
       - defer: setsid -w tilt down
       - task: _infisical-run
