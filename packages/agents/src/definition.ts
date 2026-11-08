@@ -1,6 +1,6 @@
+import type { Interp } from "@repo/interpreter/lisp";
 import { Cell, type List } from "@repo/interpreter/objects";
 import { parsePlist } from "@repo/interpreter/plist";
-import { Reader } from "@repo/interpreter/reader";
 import type { AgentDefinition } from "./ports.ts";
 
 export const AGENT_FOLDER = "sub-agents";
@@ -29,11 +29,12 @@ export function writeDefinition(definition: AgentDefinition): string {
 	return `${lines.join("\n")})`;
 }
 
-export function readDefinition(text: string): AgentDefinition | undefined {
+export function readDefinition(
+	interp: Interp,
+	text: string,
+): AgentDefinition | undefined {
 	try {
-		const reader = new Reader();
-		reader.push(text);
-		const form = reader.read();
+		const form = interp.read(text);
 		if (!(form instanceof Cell) || !(form.cdr instanceof Cell))
 			return undefined;
 		const name = form.cdr.car;

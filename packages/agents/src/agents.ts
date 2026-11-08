@@ -13,14 +13,13 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { keyName } from "@repo/interpreter/plist";
-import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import { activityKind } from "@repo/journal-catalog/activity";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
-import { AGENT_FOLDER, writeDefinition } from "./definition.ts";
+import { AGENT_FOLDER, readDefinition, writeDefinition } from "./definition.ts";
 import {
 	EXPORTS_GLOBAL,
 	EXPORTS_STATE,
@@ -198,6 +197,7 @@ function chatOf(value: unknown): ChatSeed {
 }
 
 function definitionFrom(
+	interp: Interp,
 	form: string,
 	name: string,
 	options: Map<string, unknown>,
@@ -207,7 +207,7 @@ function definitionFrom(
 	const budget = options.get("budget");
 	if (permissions !== undefined) {
 		const rules = textOf(form, ":permissions", permissions);
-		const failure = readFailure(rules);
+		const failure = interp.readFailure(rules);
 		if (failure !== undefined)
 			throw new EvalException(
 				`${form}: :permissions does not read: ${failure.reason}`,
@@ -258,19 +258,24 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		return host.threads;
 	}
 
+	async function saved(name: string): Promise<AgentDefinition | undefined> {
+		const text = await library.source(name);
+		return text === undefined ? undefined : readDefinition(interp, text);
+	}
+
 	async function definitionOf(
 		name: string,
 		options: Map<string, unknown>,
 	): Promise<AgentDefinition> {
 		if (options.has("prompt")) {
-			if ((await library.saved(name)) !== undefined)
+			if ((await saved(name)) !== undefined)
 				throw new EvalException(
 					"spawn: a saved agent has that name; spawn it without :prompt, or give this one another name",
 					name,
 				);
-			return definitionFrom("spawn", name, options);
+			return definitionFrom(interp, "spawn", name, options);
 		}
-		const definition = await library.saved(name);
+		const definition = await saved(name);
 		if (definition === undefined)
 			throw new EvalException(
 				'spawn: no saved agent by that name; pass :prompt "task" for a temporary agent that starts on that task, or delegate the work',
@@ -308,7 +313,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			if (values.length !== 1)
 				throw new EvalException("defagent takes one name, then :prompt", rest);
 			const name = nameOf("defagent", values[0]);
-			const definition = definitionFrom("defagent", name, options);
+			const definition = definitionFrom(interp, "defagent", name, options);
 			await library.save(name, writeDefinition(definition));
 			handles.saved(name);
 			return name;

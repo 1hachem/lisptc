@@ -40,6 +40,8 @@ import type {
 	Spawn,
 } from "../src/ports.ts";
 
+const definitionIn = (text: string) => readDefinition(new Interp(), text);
+
 class FakeThreads implements AgentThreads {
 	readonly spawned: Spawn[] = [];
 	readonly sent: { agent: string; message: Message }[] = [];
@@ -125,20 +127,21 @@ describe("a definition file", () => {
 			permissions: '(permission/deny "fs/*")',
 			budget: 40,
 		};
-		expect(readDefinition(writeDefinition(full))).toEqual(full);
-		expect(readDefinition(writeDefinition({ name: "r", prompt: "p" }))).toEqual(
-			{ name: "r", prompt: "p" },
-		);
+		expect(definitionIn(writeDefinition(full))).toEqual(full);
+		expect(definitionIn(writeDefinition({ name: "r", prompt: "p" }))).toEqual({
+			name: "r",
+			prompt: "p",
+		});
 		expect(writeDefinition({ name: "r", prompt: "dig" })).toBe(
 			'(defagent "r"\n  :prompt "dig")',
 		);
-		expect(readDefinition("not a form")).toBeUndefined();
-		expect(readDefinition("(defagent")).toBeUndefined();
+		expect(definitionIn("not a form")).toBeUndefined();
+		expect(definitionIn("(defagent")).toBeUndefined();
 	});
 
 	test("reads a file saved with a :roster, ignoring the key", () => {
 		expect(
-			readDefinition(
+			definitionIn(
 				'(defagent "lead"\n  :prompt "dig"\n  :roster \'("scout" "digger")\n  :budget 40)',
 			),
 		).toEqual({ name: "lead", prompt: "dig", budget: 40 });
@@ -151,7 +154,7 @@ describe("defagent", () => {
 		await run('(defagent "researcher" :prompt "dig" :budget 9)');
 		expect(folder.list("w", "sub-agents")).toEqual(["researcher.ptc"]);
 		expect(
-			readDefinition(folder.read("w", "sub-agents", "researcher.ptc") ?? ""),
+			definitionIn(folder.read("w", "sub-agents", "researcher.ptc") ?? ""),
 		).toEqual({
 			name: "researcher",
 			prompt: "dig",
@@ -196,13 +199,13 @@ describe("defagent with permissions", () => {
 		await run(
 			'(defagent "r" :prompt "p" :permissions "(permission/deny fs/*)")',
 		);
-		expect(
-			readDefinition(folder.read("w", "sub-agents", "r.ptc") ?? ""),
-		).toEqual({
-			name: "r",
-			prompt: "p",
-			permissions: "(permission/deny fs/*)",
-		});
+		expect(definitionIn(folder.read("w", "sub-agents", "r.ptc") ?? "")).toEqual(
+			{
+				name: "r",
+				prompt: "p",
+				permissions: "(permission/deny fs/*)",
+			},
+		);
 	});
 
 	test("goes through the form the host asks for", async () => {
@@ -562,7 +565,7 @@ describe("agent-keep", () => {
 		expect(await shown('(agent-keep "scratch")')).toBe('"scratch"');
 		expect(calls).toContain(KEEP);
 		expect(
-			readDefinition(folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
+			definitionIn(folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
 		).toEqual({ name: "scratch", prompt: "dig", budget: 5 });
 		expect(await shown("(agents)")).toBe('("scratch")');
 	});
@@ -596,7 +599,7 @@ describe("agent-keep", () => {
 		restore(after.interp, image);
 		await runAsync(after.interp, '(agent-keep "scratch")');
 		expect(
-			readDefinition(after.folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
+			definitionIn(after.folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
 		).toEqual({ name: "scratch", prompt: "dig" });
 	});
 });

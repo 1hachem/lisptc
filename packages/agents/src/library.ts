@@ -1,11 +1,5 @@
 import type { SourceFolder } from "@repo/shared/host";
-import {
-	AGENT_FOLDER,
-	agentFileName,
-	agentNameOf,
-	readDefinition,
-} from "./definition.ts";
-import type { AgentDefinition } from "./ports.ts";
+import { AGENT_FOLDER, agentFileName, agentNameOf } from "./definition.ts";
 
 export class AgentLibrary {
 	constructor(
@@ -27,11 +21,6 @@ export class AgentLibrary {
 			AGENT_FOLDER,
 			agentFileName(name),
 		);
-	}
-
-	async saved(name: string): Promise<AgentDefinition | undefined> {
-		const text = await this.source(name);
-		return text === undefined ? undefined : readDefinition(text);
 	}
 
 	async save(name: string, text: string): Promise<void> {
