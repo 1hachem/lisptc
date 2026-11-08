@@ -19,40 +19,74 @@ const PHASE_DOT: Record<McpPhase, string> = {
 	failed: "bg-red",
 };
 
-export type McpMountRow = FunctionReturnType<
-	typeof api.mcpServers.mounts
+export type McpCatalogRow = FunctionReturnType<
+	typeof api.mcpServers.catalog
 >[number];
+
+export interface McpToolSummary {
+	name: string;
+	description?: string;
+}
 
 export interface WorkspaceMcpServer {
 	server: string;
 	phase?: McpPhase;
 	reason?: string;
 	mounted: boolean;
+	description?: string;
 	icon?: string;
 	login: boolean;
+	tools: McpToolSummary[];
+	fetchedAt?: number;
+}
+
+function toolsOf(json: string | undefined): McpToolSummary[] {
+	if (json === undefined) return [];
+	const parsed: unknown = JSON.parse(json);
+	if (!Array.isArray(parsed)) return [];
+	return parsed.flatMap((tool: { name?: unknown; description?: unknown }) =>
+		typeof tool?.name === "string"
+			? [
+					{
+						name: tool.name,
+						...(typeof tool.description === "string"
+							? { description: tool.description }
+							: {}),
+					},
+				]
+			: [],
+	);
 }
 
 export function workspaceServers(
 	servers: readonly McpServerChip[],
-	mounts: readonly Pick<McpMountRow, "server" | "icon" | "login">[],
+	mounted: readonly string[],
+	catalog: readonly McpCatalogRow[],
 ): WorkspaceMcpServer[] {
 	const shared = new Map(
 		servers
 			.filter(({ instance }) => instance === undefined)
 			.map((row) => [row.server, row]),
 	);
-	const mounted = new Map(mounts.map((mount) => [mount.server, mount]));
-	const names = [...new Set([...mounted.keys(), ...shared.keys()])].sort();
+	const known = new Map(catalog.map((row) => [row.server, row]));
+	const names = [
+		...new Set([...mounted, ...shared.keys(), ...known.keys()]),
+	].sort();
 	return names.map((server) => {
 		const row = shared.get(server);
-		const mount = mounted.get(server);
+		const info = known.get(server);
 		return {
 			server,
 			...(row === undefined ? {} : { phase: row.phase }),
 			...(row?.reason === undefined ? {} : { reason: row.reason }),
-			mounted: mount !== undefined,
-			...(mount?.icon === undefined ? {} : { icon: mount.icon }),
-			login: mount?.login === true,
+			mounted: mounted.includes(server),
+			...(info?.description === undefined
+				? {}
+				: { description: info.description }),
+			...(info?.icon === undefined ? {} : { icon: info.icon }),
+			login: info?.login === true,
+			tools: toolsOf(info?.tools),
+			...(info === undefined ? {} : { fetchedAt: info.fetchedAt }),
 		};
 	});
 }
@@ -66,8 +100,16 @@ export function useWorkspaceMcpServers(
 	const { data: mounts } = useQuery(
 		convexQuery(api.mcpServers.mounts, { workspaceId }),
 	);
-	if (status === undefined || mounts === undefined) return undefined;
-	return workspaceServers(status.servers, mounts);
+	const { data: catalog } = useQuery(
+		convexQuery(api.mcpServers.catalog, { workspaceId }),
+	);
+	if (status === undefined || mounts === undefined || catalog === undefined)
+		return undefined;
+	return workspaceServers(
+		status.servers,
+		mounts.map(({ server }) => server),
+		catalog,
+	);
 }
 
 export function PhaseDot({ phase }: { phase: McpPhase | undefined }) {

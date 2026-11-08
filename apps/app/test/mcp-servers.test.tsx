@@ -90,17 +90,11 @@ describe("the MCP servers above the chat input", () => {
 });
 
 describe("the workspace's MCP servers", () => {
-	it("joins what is loaded with what runs, leaving out every chat's own", () => {
+	it("joins what is loaded, what runs and what was last read, leaving out every chat's own", () => {
 		expect(
 			workspaceServers(
 				[
 					{ server: "fs", phase: "ready", observedAt: 1 },
-					{
-						server: "ocr",
-						phase: "failed",
-						reason: "CrashLoop",
-						observedAt: 1,
-					},
 					{
 						server: "playwright",
 						instance: "chat-a",
@@ -108,29 +102,30 @@ describe("the workspace's MCP servers", () => {
 						observedAt: 1,
 					},
 				],
+				["fs"],
 				[
 					{
 						server: "sheets",
+						description: "Google Sheets",
 						icon: "https://example.com/sheets.png",
 						login: true,
+						tools: JSON.stringify([
+							{ name: "read", description: "reads a range", inputSchema: {} },
+						]),
+						fetchedAt: 7,
 					},
-					{ server: "fs" },
 				],
 			),
 		).toEqual([
-			{ server: "fs", phase: "ready", mounted: true, login: false },
-			{
-				server: "ocr",
-				phase: "failed",
-				reason: "CrashLoop",
-				mounted: false,
-				login: false,
-			},
+			{ server: "fs", phase: "ready", mounted: true, login: false, tools: [] },
 			{
 				server: "sheets",
-				mounted: true,
+				mounted: false,
+				description: "Google Sheets",
 				icon: "https://example.com/sheets.png",
 				login: true,
+				tools: [{ name: "read", description: "reads a range" }],
+				fetchedAt: 7,
 			},
 		]);
 	});

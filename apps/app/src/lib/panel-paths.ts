@@ -24,6 +24,7 @@ const NAMED = {
 	settings: "settings",
 	preferences: "preferences",
 	account: "account",
+	toolkit: "toolkit",
 } as const satisfies Record<Exclude<Page, KeyedPage>, string>;
 
 type NamedPage = keyof typeof NAMED;

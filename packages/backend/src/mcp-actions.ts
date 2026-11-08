@@ -1,3 +1,5 @@
+import { offersLogin } from "@repo/mcp-extension/ports";
+import { bundledToolkit } from "@repo/mcp-extension/toolkit";
 import type { AgentRepl } from "@repo/repl/repl";
 
 export const MCP_ACTIONS = ["start", "remove", "login"] as const;
@@ -33,4 +35,25 @@ export async function runMcpAction(
 		return { error: out.failure ?? out.message ?? `${action} did not finish` };
 	const url = action === "login" ? urlIn(out.results) : undefined;
 	return { ok: true, ...(url === undefined ? {} : { url }) };
+}
+
+export interface ToolkitEntry {
+	server: string;
+	description?: string;
+	icon?: string;
+	login: boolean;
+}
+
+export function toolkitEntries(): ToolkitEntry[] {
+	return bundledToolkit()
+		.all()
+		.map((conf) => ({
+			server: conf.name,
+			...(conf.description === undefined
+				? {}
+				: { description: conf.description }),
+			...(conf.icon === undefined ? {} : { icon: conf.icon }),
+			login: offersLogin(conf),
+		}))
+		.sort((a, b) => a.server.localeCompare(b.server));
 }

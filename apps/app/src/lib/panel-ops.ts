@@ -18,6 +18,7 @@ const PAGES = [
 	"account",
 	"bin",
 	"mcp",
+	"toolkit",
 ] as const;
 
 export type Page = (typeof PAGES)[number];
