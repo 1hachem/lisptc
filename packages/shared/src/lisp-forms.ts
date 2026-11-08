@@ -13,7 +13,6 @@ export interface Skipped {
 function stringFrom(text: string, i: number): { end: number; closed: boolean } {
 	for (let j = i + 1; j < text.length; j++) {
 		const c = text[j];
-		if (c === "\n") return { end: j, closed: false };
 		if (c === "\\") j++;
 		else if (c === '"') return { end: j + 1, closed: true };
 	}

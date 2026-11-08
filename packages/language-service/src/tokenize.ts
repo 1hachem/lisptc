@@ -21,16 +21,24 @@ export interface ListForm {
 export type Node = Atom | ListForm;
 
 export function tokenizeWithPositions(text: string): Atom[] {
-	const tokenPat = tokenPattern();
 	const tokens: Atom[] = [];
-	const lines = text.split("\n");
-	for (let line = 0; line < lines.length; line++) {
-		const s = lines[line];
-		for (;;) {
-			const m = tokenPat.exec(s);
-			if (m === null) break;
-			if (m[1] !== undefined)
-				tokens.push({ kind: "atom", text: m[1], line, char: m.index });
+	let line = 0;
+	let lineStart = 0;
+	for (const m of text.matchAll(tokenPattern())) {
+		if (m[1] !== undefined)
+			tokens.push({
+				kind: "atom",
+				text: m[1],
+				line,
+				char: m.index - lineStart,
+			});
+		for (
+			let at = m[0].indexOf("\n");
+			at !== -1;
+			at = m[0].indexOf("\n", at + 1)
+		) {
+			line++;
+			lineStart = m.index + at + 1;
 		}
 	}
 	return tokens;
