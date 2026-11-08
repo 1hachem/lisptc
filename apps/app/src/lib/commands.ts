@@ -5,8 +5,8 @@ import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
 import { useForkPicker } from "./fork-picker.tsx";
 import { useModelPicker } from "./model-picker.tsx";
-import type { PanelContent } from "./panel-ops.ts";
-import { requestPanel } from "./panel-requests.ts";
+import { type PanelContent, traceOpen } from "./panel-ops.ts";
+import { requestPanel, requestPanelOps } from "./panel-requests.ts";
 import { schemeVariant } from "./theme-uses.ts";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
@@ -52,6 +52,7 @@ export const commands: Command[] = [
 		aliases: ["/panel"],
 	},
 	{ name: "/theme", desc: "choose the colour theme" },
+	{ name: "/trace", desc: "open the trace of this chat" },
 ];
 
 const PREFERENCES: PanelContent = {
@@ -129,6 +130,12 @@ export function useCommandRunner() {
 				"/revert": () => {
 					if (store.getState().chatId === null) return "nothing to revert yet";
 					openForkPicker();
+					return null;
+				},
+				"/trace": () => {
+					const { chatId } = store.getState();
+					if (chatId === null) return "nothing to trace yet";
+					requestPanelOps([traceOpen(chatId)]);
 					return null;
 				},
 				"/dark": () => switchScheme("dark"),
