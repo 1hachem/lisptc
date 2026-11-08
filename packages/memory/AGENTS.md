@@ -30,7 +30,7 @@ global, and the bank reads them from there. They are merged in when read, and
 are never copied.
 
 **The session's bookkeeping lives in the Lisp image**, as interpreter state,
-never in a field of the bank: what was heard, what fired, what is loaded. The
+never in a field of the bank: what was heard, what fired and at which step. The
 image also holds the one cache the root rule allows: the remembered memories,
 read from the store once. Every listing, recognition and event trigger answers
 from it, and every remember, revise, reinforce or forget empties it.

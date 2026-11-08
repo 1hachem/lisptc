@@ -255,11 +255,17 @@ notifies a live REPL.
 The shape of the pattern, the rule about ports that may have to wait, and where
 a shared port lives are in `packages/interpreter/AGENTS.md`.
 
-**No extension interprets code on its own.** Lisp text is read and evaluated
-by the interpreter, never by an extension that runs the reader over it to pick
-out forms or data. Text that declares something is evaluated, and its forms put
-the data where the extension reads it, in a global or through a form the
-extension defines. An extension that needs to read code defines a form or a
+**All session state lives in the REPL image.** What a session has seen,
+fired, loaded or counted is interpreter state, kept in the image, never a field
+of an extension, a host or anything above them. Stored data still has its one
+source of truth in the persistence host. The image holds what this session
+knows about it.
+
+**Nothing but the interpreter interprets code.** No extension and no host runs
+the reader over text to pick out forms or data, and none searches text for
+what a form would tell it. Text that declares something is evaluated, and its
+forms put the data where the extension reads it, in a global or through a form
+the extension defines. An extension that needs to read code defines a form or a
 macro for it.
 
 ## The session seam
