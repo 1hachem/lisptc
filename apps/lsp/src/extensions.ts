@@ -38,6 +38,7 @@ export function docExtensions(): InterpExtension[] {
 		llmExtension(llmHost),
 		semanticExtension(semanticHost),
 		compactionExtension(compactionHost),
+		memoryExtension(memoryHost),
 	];
 }
 

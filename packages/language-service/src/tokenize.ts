@@ -87,6 +87,17 @@ export interface Call {
 	head: Atom;
 	keywords: Set<string>;
 	argCount: number;
+	positional: Node[];
+}
+
+function positionalOf(items: Node[]): Node[] {
+	const positional: Node[] = [];
+	for (let at = 0; at < items.length; at++) {
+		const item = items[at];
+		if (item.kind === "atom" && isKeywordToken(item.text)) at++;
+		else positional.push(item);
+	}
+	return positional;
 }
 
 export function collectCalls(nodes: Node[], out: Call[] = []): Call[] {
@@ -102,7 +113,13 @@ export function collectCalls(nodes: Node[], out: Call[] = []): Call[] {
 					)
 					.map((item) => item.text.slice(1)),
 			);
-			out.push({ name: head.text, head, keywords, argCount: rest.length });
+			out.push({
+				name: head.text,
+				head,
+				keywords,
+				argCount: rest.length,
+				positional: positionalOf(rest),
+			});
 		}
 		collectCalls(n.items, out);
 	}

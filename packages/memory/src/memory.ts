@@ -982,6 +982,16 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.channels);
 	runUnhooked(interp, DECLARE);
+	interp.setDoc("memory", {
+		signature:
+			'(memory "key" [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links ("key"...)] "body")',
+		doc: `Declare a built-in memory, in a .memories.ptc file an extension ships. Its body holds at most ${MAX_BUILTIN_WORDS} words; split a longer one and link the parts.`,
+		wordCaps: [{ position: 1, words: MAX_BUILTIN_WORDS }],
+	});
+	interp.setDoc("area", {
+		signature: '(area "name" :when "situation")',
+		doc: "Declare the area a .memories.ptc file's memories are filed under, and the situation that opens it to recognition.",
+	});
 	bank.declareIn(interp);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
