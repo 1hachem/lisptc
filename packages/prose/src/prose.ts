@@ -3,7 +3,6 @@ import { UnresolvedHead } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
-import { Reader, readFailure } from "@repo/interpreter/reader";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
 import {
@@ -21,7 +20,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 		interp.hooks.readSource.use((interp, text, next) =>
 			next(
 				interp,
-				stripProse(text, (what) =>
+				stripProse(interp, text, (what) =>
 					note.emit(interp.channels, {
 						model: { kind: "skipped", text: what },
 					}),
@@ -63,44 +62,48 @@ export function proseExtension(host: ProseHost): InterpExtension {
 	});
 }
 
-const proseJudge: FormJudge = {
-	unclosed: (text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
-	unreadable(text, start, end) {
-		const reason = unreadableReason(text, start, end);
-		if (reason === undefined) return undefined;
-		return `${abbreviate(text.slice(start, end))} — ${reason}, so this was read as prose`;
-	},
-};
+function proseJudge(interp: Interp): FormJudge {
+	return {
+		unclosed: (text, at) => `unclosed "(" on line ${lineAt(text, at)}`,
+		unreadable(text, start, end) {
+			const reason = unreadableReason(interp, text, start, end);
+			if (reason === undefined) return undefined;
+			return `${abbreviate(text.slice(start, end))} — ${reason}, so this was read as prose`;
+		},
+	};
+}
 
 function unreadableReason(
+	interp: Interp,
 	text: string,
 	start: number,
 	end: number,
 ): string | undefined {
-	const failure = readFailure(text.slice(start, end));
+	const failure = interp.readFailure(text.slice(start, end));
 	if (failure === undefined) return undefined;
 	return `${failure.reason} on line ${lineAt(text, start) + failure.line - 1}`;
 }
 
 export function stripProse(
+	interp: Interp,
 	text: string,
 	onSkip?: (what: string) => void,
 ): string {
-	return formsOnly(text, proseJudge, onSkip);
+	return formsOnly(text, proseJudge(interp), onSkip);
 }
 
 export function proseSkipped(interp: Interp, text: string): Skipped[] {
 	const skipped: Skipped[] = [];
 	for (const span of formSpans(text)) {
 		const [start, end] = span;
-		const unreadable = unreadableReason(text, start, end);
+		const unreadable = unreadableReason(interp, text, start, end);
 		if (unreadable !== undefined) {
 			skipped.push({ span, reason: unreadable });
 			continue;
 		}
 		const classification = readsAsProse(
 			interp,
-			readForm(text.slice(start, end)),
+			interp.read(text.slice(start, end)),
 		);
 		if (classification === undefined) continue;
 		for (const gap of around(ranSpans(interp, text, start, end), start, end))
@@ -121,8 +124,10 @@ function ranSpans(
 	const spans: FormSpan[] = [];
 	for (const [from, to] of formSpans(text.slice(at, end - 1))) {
 		const inner = text.slice(at + from, at + to);
-		if (unreadableReason(text, at + from, at + to) !== undefined) continue;
-		if (isKnownCall(interp, readForm(inner))) spans.push([at + from, at + to]);
+		if (unreadableReason(interp, text, at + from, at + to) !== undefined)
+			continue;
+		if (isKnownCall(interp, interp.read(inner)))
+			spans.push([at + from, at + to]);
 		else spans.push(...ranSpans(interp, text, at + from, at + to));
 	}
 	return spans;
@@ -141,12 +146,6 @@ function around(
 	}
 	if (end > at) gaps.push([at, end]);
 	return gaps;
-}
-
-function readForm(source: string): unknown {
-	const tokens = new Reader();
-	tokens.push(source);
-	return tokens.read();
 }
 
 function* runNested(interp: Interp, form: Cell): Eval<number> {
