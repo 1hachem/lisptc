@@ -18,7 +18,8 @@
         "scripts/**/*.ts",
         "runtime-assets.ts"
       ],
-      "ignoreBinaries": ["magick"]
+      "ignoreBinaries": ["magick"],
+      "ignoreDependencies": ["gpt-tokenizer"]
     },
     "apps/lsp": {
       "entry": ["test/**/*.ts"],
