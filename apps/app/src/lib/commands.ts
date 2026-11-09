@@ -5,8 +5,9 @@ import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
 import { useForkPicker } from "./fork-picker.tsx";
 import { useModelPicker } from "./model-picker.tsx";
-import { type PanelContent, traceOpen } from "./panel-ops.ts";
-import { requestPanel, requestPanelOps } from "./panel-requests.ts";
+import type { PanelContent } from "./panel-ops.ts";
+import { requestPanel } from "./panel-requests.ts";
+import { useSideTrace } from "./side-trace.tsx";
 import { schemeVariant } from "./theme-uses.ts";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
@@ -52,7 +53,7 @@ export const commands: Command[] = [
 		aliases: ["/panel"],
 	},
 	{ name: "/theme", desc: "choose the colour theme" },
-	{ name: "/trace", desc: "open the trace of this chat" },
+	{ name: "/trace", desc: "toggle the trace beside this chat" },
 ];
 
 const PREFERENCES: PanelContent = {
@@ -103,6 +104,7 @@ export function useCommandRunner() {
 	const { theme, chooseTheme, openThemePicker, openFontPicker } =
 		useAppearance();
 	const { openForkPicker } = useForkPicker();
+	const sideTrace = useSideTrace();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
@@ -133,9 +135,9 @@ export function useCommandRunner() {
 					return null;
 				},
 				"/trace": () => {
-					const { chatId } = store.getState();
-					if (chatId === null) return "nothing to trace yet";
-					requestPanelOps([traceOpen(chatId)]);
+					if (store.getState().chatId === null || sideTrace === null)
+						return "nothing to trace yet";
+					sideTrace.toggle();
 					return null;
 				},
 				"/dark": () => switchScheme("dark"),
@@ -154,6 +156,7 @@ export function useCommandRunner() {
 			openThemePicker,
 			openFontPicker,
 			openForkPicker,
+			sideTrace,
 		],
 	);
 }

@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
-import type { PanelOp } from "@repo/shared/panel-layout";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PanelContent } from "../src/lib/panel-ops.ts";
+import type { SideTrace } from "../src/lib/panel-ops.ts";
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -26,23 +25,35 @@ vi.mock("../src/lib/transcript.ts", () => ({}));
 vi.mock("../src/lib/ui.tsx", () => ({ useUI: () => ({}) }));
 
 const { useCommandRunner } = await import("../src/lib/commands.ts");
-const { traceOpen } = await import("../src/lib/panel-ops.ts");
-const { usePanelRequests } = await import("../src/lib/panel-requests.ts");
+const { SideTraceProvider } = await import("../src/lib/side-trace.tsx");
 
-const requested: (readonly PanelOp<PanelContent>[])[] = [];
-const record = (ops: readonly PanelOp<PanelContent>[]) => {
-	requested.push(ops);
+let trace: SideTrace = { shown: "collapsed" };
+const control = {
+	get trace() {
+		return trace;
+	},
+	show: () => {
+		trace = { shown: "open" };
+	},
+	toggle: () => {
+		trace = { shown: trace.shown === "open" ? "collapsed" : "open" };
+	},
 };
 
 async function run(name: string): Promise<string | null> {
 	let runner: ((name: string) => Promise<string | null>) | undefined;
 	function Probe() {
-		usePanelRequests(record);
 		runner = useCommandRunner();
 		return null;
 	}
 	const root = createRoot(document.createElement("div"));
-	act(() => root.render(<Probe />));
+	act(() =>
+		root.render(
+			<SideTraceProvider control={control}>
+				<Probe />
+			</SideTraceProvider>,
+		),
+	);
 	const shown = await (runner as (name: string) => Promise<string | null>)(
 		name,
 	);
@@ -51,19 +62,26 @@ async function run(name: string): Promise<string | null> {
 }
 
 afterEach(() => {
-	requested.length = 0;
+	trace = { shown: "collapsed" };
 	chatId = null;
 });
 
 describe("/trace", () => {
-	it("opens the trace of the current chat", async () => {
+	it("opens the trace beside the current chat", async () => {
 		chatId = "c1";
 		expect(await run("/trace")).toBeNull();
-		expect(requested).toEqual([[traceOpen("c1")]]);
+		expect(trace.shown).toBe("open");
+	});
+
+	it("collapses the trace beside the chat when it is already open", async () => {
+		chatId = "c1";
+		trace = { shown: "open" };
+		expect(await run("/trace")).toBeNull();
+		expect(trace.shown).toBe("collapsed");
 	});
 
 	it("says there is nothing to trace before the chat has started", async () => {
 		expect(await run("/trace")).toBe("nothing to trace yet");
-		expect(requested).toEqual([]);
+		expect(trace.shown).toBe("collapsed");
 	});
 });
