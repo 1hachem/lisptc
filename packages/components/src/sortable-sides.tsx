@@ -137,8 +137,18 @@ function spotsFor<Side extends string, Id extends string>(
 	kind: string,
 	active: Id,
 	settle: (next: Sides<Side, Id>) => void,
+	preview: ((next: Sides<Side, Id> | undefined) => void) | undefined,
 ): DropSpot[] {
 	const from = sideOf(sides, active);
+	const spot = (hit: Rect, line: Rect, next: Sides<Side, Id>): DropSpot =>
+		preview
+			? {
+					hit,
+					enter: () => preview(next),
+					leave: () => preview(undefined),
+					drop: () => settle(next),
+				}
+			: { hit, shows: line, drop: () => settle(next) };
 	return sideElements(kind).flatMap((element) => {
 		const side = element.getAttribute("data-side") as Side | null;
 		if (side === null || !(side in sides)) return [];
@@ -151,21 +161,13 @@ function spotsFor<Side extends string, Id extends string>(
 			const rect = rectOf(entry);
 			const below =
 				from === side && list.indexOf(active) < list.indexOf(over as Id);
-			return [
-				{ hit: rect, shows: lineAt(rect, below), drop: () => settle(next) },
-			];
+			return [spot(rect, lineAt(rect, below), next)];
 		});
 		const toEnd = movedAcross(sides, active, sideTarget(side));
 		const last = entries.at(-1);
 		const whole = rectOf(element);
 		const onSide: DropSpot[] = toEnd
-			? [
-					{
-						hit: whole,
-						shows: last ? lineAt(rectOf(last), true) : whole,
-						drop: () => settle(toEnd),
-					},
-				]
+			? [spot(whole, last ? lineAt(rectOf(last), true) : whole, toEnd)]
 			: [];
 		return [...onEntries, ...onSide];
 	});
@@ -191,18 +193,28 @@ export function SortableSides<Side extends string, Id extends string>({
 	const [dropped, setDropped] = useState<Dropped<Side, Id>>();
 	const held = stillAwaiting(given, dropped);
 	if (held !== dropped) setDropped(held);
-	const sides = awaitingSides(given, held);
+	const settled = awaitingSides(given, held);
+	const [live, setLive] = useState<Sides<Side, Id>>();
+	const sides = live ?? settled;
+	const shown: MotionId = reduced ? "none" : motion;
 	const settle = useCallback(
 		(next: Sides<Side, Id>) => {
-			if (sameSides(next, sides)) return;
+			setLive(undefined);
+			if (sameSides(next, settled)) return;
 			setDropped({ next, over: given });
 			onMove(next);
 		},
-		[sides, given, onMove],
+		[settled, given, onMove],
 	);
 	useDropSpots((carried) =>
 		carried.kind === kind
-			? spotsFor(sides, kind, carried.payload as Id, settle)
+			? spotsFor(
+					settled,
+					kind,
+					carried.payload as Id,
+					settle,
+					shown === "none" ? undefined : setLive,
+				)
 			: [],
 	);
 	return (
@@ -210,7 +222,7 @@ export function SortableSides<Side extends string, Id extends string>({
 			value={{
 				sides,
 				kind,
-				motion: reduced ? "none" : motion,
+				motion: shown,
 				ghost: (id) => overlay(id as Id),
 				onPickUp: onPickUp && ((id) => onPickUp(id as Id)),
 			}}
