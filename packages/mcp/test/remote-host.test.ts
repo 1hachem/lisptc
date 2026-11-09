@@ -29,7 +29,7 @@ describe("what the remote host reports about the servers it dials", () => {
 		const { host, reports } = reporting();
 
 		expect(await host.ensure(answering)).toEqual({ url: answering.url });
-		await host.stop("linear");
+		await host.stop({ name: "linear" });
 
 		expect(reports).toEqual([
 			{ server: "linear", phase: "ready" },
@@ -54,7 +54,7 @@ describe("what the remote host reports about the servers it dials", () => {
 	it("reports nothing for a server it never dialed", async () => {
 		const { host, reports } = reporting();
 
-		await host.stop("linear");
+		await host.stop({ name: "linear" });
 
 		expect(reports).toEqual([]);
 	});

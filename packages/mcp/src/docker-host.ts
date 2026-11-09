@@ -2,13 +2,17 @@ import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { type Launch, launchFor } from "./launch.ts";
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerReporter,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type McpHost,
+	refKey,
+	refOf,
+	type ServerHandle,
+	type ServerRef,
+	type ServerReporter,
+	type ServerState,
+	type StartWatch,
+	subjectOf,
 } from "./ports.ts";
 import { reachable, START_LIMITS, waitForStart } from "./start-wait.ts";
 
@@ -21,6 +25,7 @@ const HOST_LABEL = "lisptc.mcp.host";
 const SERVER_LABEL = "lisptc.mcp.server";
 
 interface Container {
+	server: ServerRef;
 	id: string;
 	appId?: string;
 	handle: ServerHandle;
@@ -46,7 +51,7 @@ export async function dockerAnswers(): Promise<boolean> {
 
 export class DockerHost implements McpHost {
 	private readonly containers = new Map<string, Container>();
-	private readonly instance = randomUUID();
+	private readonly hostId = randomUUID();
 
 	constructor(private readonly report: ServerReporter = () => {}) {}
 
@@ -54,54 +59,54 @@ export class DockerHost implements McpHost {
 		const launch = launchFor(conf);
 		if (launch === undefined)
 			throw new Error(`${conf.name}: has no container to run.`);
-		const running = this.containers.get(conf.name);
+		const running = this.containers.get(refKey(conf));
 		if (running && running.state === "running") return running.handle;
 		return await this.start(conf, launch, watch);
 	}
 
-	async stop(name: string): Promise<void> {
-		if (await this.drop(name)) this.report({ server: name, phase: "sleeping" });
+	async stop(server: ServerRef): Promise<void> {
+		if (await this.drop(server))
+			this.report({ ...subjectOf(server), phase: "sleeping" });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		await this.drop(conf.name);
-		this.report({ server: conf.name, phase: "gone" });
+		await this.drop(conf);
+		this.report({ ...subjectOf(conf), phase: "gone" });
 	}
 
-	private async drop(name: string): Promise<boolean> {
-		const container = this.containers.get(name);
+	private async drop(server: ServerRef): Promise<boolean> {
+		const container = this.containers.get(refKey(server));
 		if (!container) return false;
-		this.containers.delete(name);
+		this.containers.delete(refKey(server));
 		if (container.appId) await this.discard(container.appId);
 		await this.discard(container.id);
 		return true;
 	}
 
 	async stopAll(): Promise<void> {
-		for (const name of [...this.containers.keys()]) await this.stop(name);
+		for (const { server } of [...this.containers.values()])
+			await this.stop(server);
 		await this.reapStrays();
 	}
 
-	status(name: string): ServerState {
-		const container = this.containers.get(name);
-		return container ? container.state : "unknown";
+	status(server: ServerRef): ServerState {
+		return this.containers.get(refKey(server))?.state ?? "unknown";
 	}
 
-	logs(name: string): string {
-		const container = this.containers.get(name);
-		return container ? container.logs : "";
+	logs(server: ServerRef): string {
+		return this.containers.get(refKey(server))?.logs ?? "";
 	}
 
-	used(_name: string): void {}
+	used(_server: ServerRef): void {}
 
-	async asleep(_name: string): Promise<boolean> {
+	async asleep(_server: ServerRef): Promise<boolean> {
 		return false;
 	}
 
 	private labels(conf: ConnConfig): string[] {
 		return [
 			"--label",
-			`${HOST_LABEL}=${this.instance}`,
+			`${HOST_LABEL}=${this.hostId}`,
 			"--label",
 			`${SERVER_LABEL}=${conf.name}`,
 		];
@@ -123,15 +128,15 @@ export class DockerHost implements McpHost {
 		launch: Launch,
 		watch?: StartWatch,
 	): Promise<ServerHandle> {
-		this.report({ server: conf.name, phase: "starting" });
+		this.report({ ...subjectOf(conf), phase: "starting" });
 		try {
 			watch?.progress?.(`${conf.name} is starting its container`);
 			const handle = await this.launch(conf, launch, watch);
-			this.report({ server: conf.name, phase: "ready" });
+			this.report({ ...subjectOf(conf), phase: "ready" });
 			return handle;
 		} catch (ex) {
 			this.report({
-				server: conf.name,
+				...subjectOf(conf),
 				phase: "failed",
 				reason: ex instanceof Error ? ex.message : String(ex),
 			});
@@ -165,12 +170,13 @@ export class DockerHost implements McpHost {
 
 		const id = await this.docker(conf.name, args);
 		const container: Container = {
+			server: refOf(conf),
 			id,
 			handle: { url: launch.path },
 			logs: "",
 			state: "running",
 		};
-		this.follow(conf.name, container);
+		this.follow(container);
 		try {
 			if (app)
 				container.appId = await this.docker(conf.name, [
@@ -190,11 +196,11 @@ export class DockerHost implements McpHost {
 			const url = new URL(launch.path, `http://${published}`).toString();
 			const headers = "headers" in conf ? conf.headers : undefined;
 			container.handle = headers ? { url, headers } : { url };
-			this.containers.set(conf.name, container);
+			this.containers.set(refKey(conf), container);
 			await this.answering(conf.name, container, new URL(url).origin, watch);
 			return container.handle;
 		} catch (ex) {
-			this.containers.delete(conf.name);
+			this.containers.delete(refKey(conf));
 			if (container.appId) await this.discard(container.appId);
 			await this.discard(id);
 			throw ex;
@@ -239,7 +245,8 @@ export class DockerHost implements McpHost {
 		);
 	}
 
-	private follow(name: string, container: Container): void {
+	private follow(container: Container): void {
+		const key = refKey(container.server);
 		const tail = spawn("docker", ["logs", "--follow", container.id], {
 			stdio: ["ignore", "pipe", "pipe"],
 		});
@@ -253,10 +260,10 @@ export class DockerHost implements McpHost {
 		});
 		tail.on("close", () => {
 			container.state = "stopped";
-			if (this.containers.get(name) !== container) return;
-			this.containers.delete(name);
+			if (this.containers.get(key) !== container) return;
+			this.containers.delete(key);
 			this.report({
-				server: name,
+				...subjectOf(container.server),
 				phase: "failed",
 				reason: `its container exited.${whyItDied(container)}`,
 			});
@@ -275,7 +282,7 @@ export class DockerHost implements McpHost {
 			"--all",
 			"--quiet",
 			"--filter",
-			`label=${HOST_LABEL}=${this.instance}`,
+			`label=${HOST_LABEL}=${this.hostId}`,
 		]).catch(() => undefined);
 		const ids = found?.stdout.trim().split("\n").filter(Boolean) ?? [];
 		for (const id of ids) await this.discard(id);

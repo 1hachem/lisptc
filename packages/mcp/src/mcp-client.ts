@@ -25,7 +25,10 @@ import {
 	type OAuthConnConfig,
 	type OAuthStore,
 	oauthKey,
+	refKey,
+	refOf,
 	type ServerHandle,
+	type ServerRef,
 	type StartWatch,
 	type Tool,
 	type ToolCall,
@@ -76,7 +79,7 @@ function serverDescription(...candidates: unknown[]): string | undefined {
 }
 
 export function mcpClient(ports: McpClientPorts): McpClient {
-	const clients = new Map<string, { client: Client; name: string }>();
+	const clients = new Map<string, { client: Client; server: ServerRef }>();
 
 	const tokenKey = (key: string): string =>
 		ports.scope === undefined ? key : `${ports.scope}/${key}`;
@@ -216,7 +219,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			throw new Error("connected but the server exposed no tools");
 		}
 		const serverId = randomUUID();
-		clients.set(serverId, { client, name: conf.name });
+		clients.set(serverId, { client, server: refOf(conf) });
 		const version = client.getServerVersion();
 		const icons = version?.icons as Icon[] | undefined;
 		const description = serverDescription(
@@ -251,7 +254,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		async callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown> {
 			const entry = clients.get(call.serverId);
 			if (!entry) throw new Error(`no such server: ${call.serverId}`);
-			ports.host.used(entry.name);
+			ports.host.used(entry.server);
 			const result = await entry.client.callTool(
 				{ name: call.tool, arguments: call.args },
 				undefined,
@@ -284,12 +287,12 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			if (!entry) throw new Error(`no such server: ${serverId}`);
 			clients.delete(serverId);
 			await entry.client.close().catch(() => {});
-			await ports.host.stop(entry.name);
+			await ports.host.stop(entry.server);
 		},
 
 		async remove(conf: ConnConfig): Promise<void> {
 			for (const [serverId, entry] of clients)
-				if (entry.name === conf.name) {
+				if (refKey(entry.server) === refKey(conf)) {
 					clients.delete(serverId);
 					await entry.client.close().catch(() => {});
 				}
@@ -298,7 +301,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 
 		async asleep(serverId: string): Promise<boolean> {
 			const entry = clients.get(serverId);
-			return entry ? await ports.host.asleep(entry.name) : false;
+			return entry ? await ports.host.asleep(entry.server) : false;
 		},
 
 		async login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }> {

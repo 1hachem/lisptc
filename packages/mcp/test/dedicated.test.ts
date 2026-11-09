@@ -17,7 +17,7 @@ afterEach(() => {
 	for (const interp of opened.splice(0)) interp.dispose();
 });
 
-async function bothLoaded() {
+function chatSession(instance?: string) {
 	const host = recordingHost();
 	const registry = memoryRegistry();
 	const extension = mcpExtension({
@@ -29,10 +29,16 @@ async function bothLoaded() {
 			{ ...fixtureServer("fx"), image: "ghcr.io/o/fx:main", port: 8000 },
 		),
 		registry,
+		...(instance === undefined ? {} : { instance }),
 	});
 	const interp = new Interp({ extensions: [extension] });
 	runSync(interp, prelude);
 	opened.push(interp);
+	return { host, registry, interp, extension };
+}
+
+async function bothLoaded() {
+	const { host, registry, interp, extension } = chatSession("chat-a");
 	await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
 	await (runSync(interp, '(load-mcp "fx" :dedicated t)') as Promise<unknown>);
 	const hooks = openSession([extension]);
@@ -76,6 +82,22 @@ describe("a chat's own instance beside the workspace's", () => {
 		expect(interp.hasGlobal(newSym("fx-own/echo"))).toBe(false);
 		expect(interp.hasGlobal(newSym("fx/echo"))).toBe(true);
 		expect(await servers(registry)).toEqual(["fx"]);
+	}, 30_000);
+
+	it("runs as the chat's own instance, beside the shared one", async () => {
+		const { host } = await bothLoaded();
+		expect(
+			host.ensured.map((conf) =>
+				"instance" in conf ? conf.instance : undefined,
+			),
+		).toEqual([undefined, "chat-a"]);
+	}, 30_000);
+
+	it("cannot be loaded by a session that belongs to no chat", async () => {
+		const { interp } = chatSession();
+		await expect(
+			runAsync(interp, '(load-mcp "fx" :dedicated t)'),
+		).rejects.toThrow(/belongs to no chat of its own/);
 	}, 30_000);
 
 	it("removes only its own instance", async () => {

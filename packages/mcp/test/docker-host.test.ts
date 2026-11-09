@@ -124,7 +124,7 @@ describe("what the docker host reports about the containers it runs", () => {
 		const { host, reports } = reporting(30);
 
 		await host.ensure(playwright);
-		await host.stop("playwright");
+		await host.stop({ name: "playwright" });
 
 		expect(reports).toEqual([
 			{ server: "playwright", phase: "starting" },
@@ -140,7 +140,7 @@ describe("what the docker host reports about the containers it runs", () => {
 		await host.remove(playwright);
 
 		expect(reports.at(-1)).toEqual({ server: "playwright", phase: "gone" });
-		expect(host.status("playwright")).toBe("unknown");
+		expect(host.status({ name: "playwright" })).toBe("unknown");
 	});
 
 	it("reports a server failed when its container cannot be run", async () => {
@@ -164,6 +164,6 @@ describe("what the docker host reports about the containers it runs", () => {
 			phase: "failed",
 			reason: "its container exited.\nserver listening",
 		});
-		expect(host.status("playwright")).toBe("unknown");
+		expect(host.status({ name: "playwright" })).toBe("unknown");
 	});
 });

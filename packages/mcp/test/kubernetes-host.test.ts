@@ -80,15 +80,8 @@ function host(store: ServerStore, clock = () => 1000, imageTag?: string) {
 	});
 }
 
-function chatHost(store: ServerStore, chat: string) {
-	return new KubernetesHost({
-		scope: "ws1",
-		chat,
-		namespace: "lisptc",
-		store,
-		limits: { pollMs: 1, stallMs: 200, ceilingMs: 400 },
-		clock: () => 1000,
-	});
+function ownOf(chat: string) {
+	return { ...browser, instance: chat };
 }
 
 function ticking() {
@@ -199,8 +192,8 @@ describe("the kubernetes host", () => {
 	it("shares one server between every chat of the workspace", async () => {
 		const fake = fakeStore();
 
-		await chatHost(fake.store, "chat-a").ensure(browser);
-		await chatHost(fake.store, "chat-b").ensure(browser);
+		await host(fake.store).ensure(browser);
+		await host(fake.store).ensure(browser);
 
 		expect([...fake.servers.keys()]).toEqual([NAME]);
 		expect(fake.servers.get(NAME)?.spec.instance).toBeUndefined();
@@ -215,7 +208,7 @@ describe("the kubernetes host", () => {
 
 		expect(fake.removed).toEqual([NAME]);
 		expect(fake.servers.has(NAME)).toBe(false);
-		expect(kube.status("playwright")).toBe("unknown");
+		expect(kube.status({ name: "playwright" })).toBe("unknown");
 	});
 
 	it("deletes a server it never started, by the name it would have", async () => {
@@ -228,11 +221,10 @@ describe("the kubernetes host", () => {
 
 	it("deletes only this chat's own instance of a dedicated server", async () => {
 		const fake = fakeStore();
-		const own = { ...browser, tenancy: "dedicated" } as const;
-		await chatHost(fake.store, "chat-a").ensure(own);
+		await host(fake.store).ensure(ownOf("chat-a"));
 		await host(fake.store).ensure(browser);
 
-		await chatHost(fake.store, "chat-a").remove(own);
+		await host(fake.store).remove(ownOf("chat-a"));
 
 		expect(fake.removed).toEqual([serverName("ws1", "playwright", "chat-a")]);
 		expect(fake.servers.has(NAME)).toBe(true);
@@ -240,12 +232,10 @@ describe("the kubernetes host", () => {
 
 	it("runs a dedicated server once per chat, apart from the shared one", async () => {
 		const fake = fakeStore();
-		const own = { ...browser, tenancy: "dedicated" } as const;
-
-		await chatHost(fake.store, "chat-a").ensure(own);
-		await chatHost(fake.store, "chat-a").ensure(own);
-		await chatHost(fake.store, "chat-b").ensure(own);
-		await chatHost(fake.store, "chat-a").ensure(browser);
+		await host(fake.store).ensure(ownOf("chat-a"));
+		await host(fake.store).ensure(ownOf("chat-a"));
+		await host(fake.store).ensure(ownOf("chat-b"));
+		await host(fake.store).ensure(browser);
 
 		expect([...fake.servers.keys()].sort()).toEqual(
 			[
@@ -292,8 +282,8 @@ describe("the kubernetes host", () => {
 		await expect(kube.ensure(browser)).rejects.toThrow(
 			/mcp exited with code 1[\s\S]*chromium crashed/,
 		);
-		expect(kube.status("playwright")).toBe("stopped");
-		expect(kube.logs("playwright")).toContain("chromium crashed");
+		expect(kube.status({ name: "playwright" })).toBe("stopped");
+		expect(kube.logs({ name: "playwright" })).toContain("chromium crashed");
 	});
 
 	it("ignores a status the operator wrote for an older spec", async () => {
@@ -441,10 +431,10 @@ describe("the kubernetes host", () => {
 		const kube = host(fake.store);
 		await kube.ensure(browser);
 
-		await kube.stop("playwright");
+		await kube.stop({ name: "playwright" });
 
 		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(0);
-		expect(kube.status("playwright")).toBe("stopped");
+		expect(kube.status({ name: "playwright" })).toBe("stopped");
 	});
 
 	it("puts every server it runs to sleep when it stops them all", async () => {
@@ -455,7 +445,7 @@ describe("the kubernetes host", () => {
 		await kube.stopAll();
 
 		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(0);
-		expect(kube.status("playwright")).toBe("stopped");
+		expect(kube.status({ name: "playwright" })).toBe("stopped");
 	});
 
 	it("records a remote server on the cluster and hands back its url at once", async () => {
@@ -495,14 +485,31 @@ describe("the kubernetes host", () => {
 		const kube = host(fake.store, time.clock);
 		await kube.ensure(browser);
 
-		kube.used("playwright");
+		kube.used({ name: "playwright" });
 		time.pass(30);
-		kube.used("playwright");
+		kube.used({ name: "playwright" });
 		time.pass(60);
-		kube.used("playwright");
+		kube.used({ name: "playwright" });
 
 		expect(fake.patches.map((patch) => patch.lastUsed)).toEqual([1090]);
 		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(1090);
+	});
+
+	it("keeps a chat's own server awake apart from the shared one beside it", async () => {
+		const fake = fakeStore();
+		const time = ticking();
+		const kube = host(fake.store, time.clock);
+		await kube.ensure(browser);
+		await kube.ensure(ownOf("chat-a"));
+
+		time.pass(90);
+		kube.used({ name: "playwright", instance: "chat-a" });
+
+		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(1000);
+		expect(
+			fake.servers.get(serverName("ws1", "playwright", "chat-a"))?.spec
+				.lastUsed,
+		).toBe(1090);
 	});
 
 	it("tells a server went to sleep once the operator slept it", async () => {
@@ -513,13 +520,13 @@ describe("the kubernetes host", () => {
 		}));
 		const kube = host(fake.store);
 		await kube.ensure(browser);
-		expect(await kube.asleep("playwright")).toBe(false);
+		expect(await kube.asleep({ name: "playwright" })).toBe(false);
 
 		phase = "Sleeping";
 
-		expect(await kube.asleep("playwright")).toBe(true);
-		expect(kube.status("playwright")).toBe("stopped");
-		expect(await kube.asleep("playwright")).toBe(false);
+		expect(await kube.asleep({ name: "playwright" })).toBe(true);
+		expect(kube.status({ name: "playwright" })).toBe("stopped");
+		expect(await kube.asleep({ name: "playwright" })).toBe(false);
 	});
 
 	it("tells a server went to sleep once its idle window has passed", async () => {
@@ -530,9 +537,9 @@ describe("the kubernetes host", () => {
 		const idle = fake.servers.get(NAME)?.spec.idleSeconds ?? 0;
 
 		time.pass(idle - 1);
-		expect(await kube.asleep("playwright")).toBe(false);
+		expect(await kube.asleep({ name: "playwright" })).toBe(false);
 		time.pass(1);
-		expect(await kube.asleep("playwright")).toBe(true);
+		expect(await kube.asleep({ name: "playwright" })).toBe(true);
 	});
 
 	it("lets go of a server someone deleted from the cluster", async () => {
@@ -542,16 +549,16 @@ describe("the kubernetes host", () => {
 
 		fake.servers.delete(NAME);
 
-		expect(await kube.asleep("playwright")).toBe(true);
-		expect(kube.status("playwright")).toBe("stopped");
+		expect(await kube.asleep({ name: "playwright" })).toBe(true);
+		expect(kube.status({ name: "playwright" })).toBe("stopped");
 	});
 
 	it("knows nothing of a server it does not run", async () => {
 		const kube = host(fakeStore().store);
 
-		kube.used("remote");
+		kube.used({ name: "remote" });
 
-		expect(kube.status("remote")).toBe("unknown");
-		expect(await kube.asleep("remote")).toBe(false);
+		expect(kube.status({ name: "remote" })).toBe("unknown");
+		expect(await kube.asleep({ name: "remote" })).toBe(false);
 	});
 });

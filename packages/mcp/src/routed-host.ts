@@ -1,9 +1,11 @@
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type McpHost,
+	refKey,
+	type ServerHandle,
+	type ServerRef,
+	type ServerState,
+	type StartWatch,
 } from "./ports.ts";
 
 export interface HostRoute {
@@ -18,17 +20,17 @@ export class RoutedHost implements McpHost {
 
 	async ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle> {
 		const host = this.hostOf(conf);
-		this.owners.set(conf.name, host);
+		this.owners.set(refKey(conf), host);
 		return await host.ensure(conf, watch);
 	}
 
-	async stop(name: string): Promise<void> {
-		await this.owners.get(name)?.stop(name);
+	async stop(server: ServerRef): Promise<void> {
+		await this.ownerOf(server)?.stop(server);
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
 		await this.hostOf(conf).remove(conf);
-		this.owners.delete(conf.name);
+		this.owners.delete(refKey(conf));
 	}
 
 	async stopAll(): Promise<void> {
@@ -39,20 +41,24 @@ export class RoutedHost implements McpHost {
 		);
 	}
 
-	status(name: string): ServerState {
-		return this.owners.get(name)?.status(name) ?? "unknown";
+	status(server: ServerRef): ServerState {
+		return this.ownerOf(server)?.status(server) ?? "unknown";
 	}
 
-	logs(name: string): string {
-		return this.owners.get(name)?.logs(name) ?? "";
+	logs(server: ServerRef): string {
+		return this.ownerOf(server)?.logs(server) ?? "";
 	}
 
-	used(name: string): void {
-		this.owners.get(name)?.used(name);
+	used(server: ServerRef): void {
+		this.ownerOf(server)?.used(server);
 	}
 
-	async asleep(name: string): Promise<boolean> {
-		return (await this.owners.get(name)?.asleep(name)) ?? false;
+	async asleep(server: ServerRef): Promise<boolean> {
+		return (await this.ownerOf(server)?.asleep(server)) ?? false;
+	}
+
+	private ownerOf(server: ServerRef): McpHost | undefined {
+		return this.owners.get(refKey(server));
 	}
 
 	private hostOf(conf: ConnConfig): McpHost {

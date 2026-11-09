@@ -120,7 +120,7 @@ describe("choosing where servers run", () => {
 		const kubernetes = candidate(async () => true);
 		const host = new ProbedHost([kubernetes.entry], () => recordingHost());
 		await Promise.all([host.ensure(browser), host.ensure(browser)]);
-		await host.stop("browser");
+		await host.stop({ name: "browser" });
 		await host.stopAll();
 		expect(kubernetes.probed).toBe(1);
 		expect(kubernetes.host.stopped).toEqual(["browser"]);
@@ -132,7 +132,7 @@ describe("choosing where servers run", () => {
 		const host = new ProbedHost([kubernetes.entry], () => recordingHost());
 		await host.stopAll();
 		expect(kubernetes.probed).toBe(0);
-		expect(host.status("browser")).toBe("unknown");
-		expect(host.logs("browser")).toBe("");
+		expect(host.status({ name: "browser" })).toBe("unknown");
+		expect(host.logs({ name: "browser" })).toBe("");
 	});
 });

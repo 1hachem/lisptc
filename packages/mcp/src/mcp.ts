@@ -268,7 +268,7 @@ interface ToolRef {
 const OWN_SUFFIX = "-own";
 
 function bindingOf(conf: ConnConfig): string {
-	return "tenancy" in conf && conf.tenancy === "dedicated"
+	return "instance" in conf && conf.instance !== undefined
 		? `${conf.name}${OWN_SUFFIX}`
 		: conf.name;
 }
@@ -354,6 +354,7 @@ export interface McpExtensionHost {
 	registry?: McpRegistry;
 	machine?: UserMachine;
 	commands?: boolean;
+	instance?: string;
 }
 
 function extractAuthCode(raw: string): string {
@@ -465,6 +466,7 @@ function connConfigFromArgs(
 	predefined: Map<string, ConnConfig>,
 	local: LocalVariant,
 	commands: boolean,
+	instance: string | undefined,
 ): ConnConfig {
 	const args = listToArray(rest);
 	if (args.length === 1) return lookupPredefined(predefined, asName(args[0]));
@@ -484,12 +486,16 @@ function connConfigFromArgs(
 	const conf = isLocal(opts)
 		? lookupLocal(predefined, local, name)
 		: lookupPredefined(predefined, name);
-	return dedicated(withFlags(conf, opts), opts);
+	return dedicated(withFlags(conf, opts), opts, instance);
 }
 
 const LOAD_KEYS = new Set(["name", "local", "dedicated"]);
 
-function dedicated(conf: ConnConfig, opts: Plist): ConnConfig {
+function dedicated(
+	conf: ConnConfig,
+	opts: Plist,
+	instance: string | undefined,
+): ConnConfig {
 	if (!opts.has("dedicated") || opts.get("dedicated") === null) return conf;
 	if (!("image" in conf))
 		throw new EvalException(
@@ -497,7 +503,13 @@ function dedicated(conf: ConnConfig, opts: Plist): ConnConfig {
 			conf.name,
 			false,
 		);
-	return { ...conf, tenancy: "dedicated" };
+	if (instance === undefined)
+		throw new EvalException(
+			`${conf.name} cannot be :dedicated here: this session belongs to no chat of its own`,
+			conf.name,
+			false,
+		);
+	return { ...conf, instance };
 }
 
 function flagsOf(conf: ConnConfig): Record<string, string[]> {
@@ -999,6 +1011,7 @@ export function registerMcp(
 		| "clock"
 		| "machine"
 		| "commands"
+		| "instance"
 	> & {
 		registry: McpRegistry;
 	},
@@ -1038,6 +1051,8 @@ export function registerMcp(
 				.filter((conf) => policy.server(conf.name).access !== "hidden")
 				.map((conf) => [conf.name, conf]),
 		);
+	const configOf = (args: List): ConnConfig =>
+		connConfigFromArgs(args, shown(), toolkit.local, commands, host.instance);
 	const loaded = (): ServerEntry[] =>
 		servers
 			.get()
@@ -1056,7 +1071,7 @@ export function registerMcp(
 		signal: AbortSignal,
 		progress?: Progress,
 	): Promise<List> {
-		const conf = connConfigFromArgs(args, shown(), toolkit.local, commands);
+		const conf = configOf(args);
 		const bound = bindingOf(conf);
 		admitServer(policy, conf.name);
 		return client.connect(conf, { signal, progress }).then(
@@ -1086,7 +1101,7 @@ export function registerMcp(
 	}
 
 	function startLoad(args: List): LispPromise {
-		const conf = connConfigFromArgs(args, shown(), toolkit.local, commands);
+		const conf = configOf(args);
 		const name = bindingOf(conf);
 		admitServer(policy, conf.name);
 		const n = loads.get() + 1;
@@ -1181,7 +1196,7 @@ export function registerMcp(
 		'Start loading an MCP server; returns a job. (await job) connects and installs its `server/tool` bindings, then returns its tools, each as (name argument-count description) exactly as (list-tools) reports them — so there is no need to list them afterwards. A toolkit server is loaded by the name (search-mcps)/(list-toolkit) reported — (load-mcp "name") or (load-mcp :name "name"); add :local t to run a toolkit server marked :also-local on the user machine through their desktop app; pass :url to load a remote server instead. :command is not supported.',
 		z.tuple([zList]),
 		function* ([rest]) {
-			const conf = connConfigFromArgs(rest, shown(), toolkit.local, commands);
+			const conf = configOf(rest);
 			if ("local" in conf && conf.local === true)
 				yield* interp.guard(`${LOCAL_GATE}${conf.name}`, []);
 			const bound = bindingOf(conf);
@@ -1221,9 +1236,7 @@ export function registerMcp(
 		([name]) => {
 			const entry = entryOf(servers, name);
 			const conf =
-				entry === undefined
-					? shown().get(name)
-					: connConfigFromArgs(entry.args, shown(), toolkit.local, commands);
+				entry === undefined ? shown().get(name) : configOf(entry.args);
 			if (conf === undefined)
 				throw new EvalException("unknown MCP server", name, false);
 			const own = entry !== undefined && isOwn(entry);

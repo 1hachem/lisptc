@@ -84,12 +84,10 @@ export interface SecretRef {
 	keys: string[];
 }
 
-export type Tenancy = "shared" | "dedicated";
-
 export type ContainerConnConfig = ConnMeta & {
 	name: string;
 	image: string;
-	tenancy?: Tenancy;
+	instance?: string;
 	internal?: boolean;
 	port: number;
 	path?: string;
@@ -189,10 +187,35 @@ export type ServerHandle = AddressHandle | TransportHandle;
 
 export type ServerState = "running" | "stopped" | "unknown";
 
+export interface ServerRef {
+	name: string;
+	instance?: string;
+}
+
+export function refOf(ref: ServerRef): ServerRef {
+	return ref.instance === undefined
+		? { name: ref.name }
+		: { name: ref.name, instance: ref.instance };
+}
+
+export function refKey(ref: ServerRef): string {
+	return ref.instance === undefined ? ref.name : `${ref.name}\0${ref.instance}`;
+}
+
+export function subjectOf(ref: ServerRef): {
+	server: string;
+	instance?: string;
+} {
+	return ref.instance === undefined
+		? { server: ref.name }
+		: { server: ref.name, instance: ref.instance };
+}
+
 export type ServerPhase = "starting" | "ready" | "sleeping" | "failed" | "gone";
 
 export interface ServerReport {
 	server: string;
+	instance?: string;
 	phase: ServerPhase;
 	reason?: string;
 }
@@ -206,13 +229,13 @@ export interface StartWatch {
 
 export interface McpHost {
 	ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle>;
-	stop(name: string): Promise<void>;
+	stop(server: ServerRef): Promise<void>;
 	remove(conf: ConnConfig): Promise<void>;
 	stopAll(): Promise<void>;
-	status(name: string): ServerState;
-	logs(name: string): string;
-	used(name: string): void;
-	asleep(name: string): Promise<boolean>;
+	status(server: ServerRef): ServerState;
+	logs(server: ServerRef): string;
+	used(server: ServerRef): void;
+	asleep(server: ServerRef): Promise<boolean>;
 }
 
 export interface UserMachine {

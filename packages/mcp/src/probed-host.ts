@@ -2,6 +2,7 @@ import type {
 	ConnConfig,
 	McpHost,
 	ServerHandle,
+	ServerRef,
 	ServerState,
 	StartWatch,
 } from "./ports.ts";
@@ -38,8 +39,8 @@ export class ProbedHost implements McpHost {
 		return await (await this.resolve()).ensure(conf, watch);
 	}
 
-	async stop(name: string): Promise<void> {
-		await (await this.settled())?.stop(name);
+	async stop(server: ServerRef): Promise<void> {
+		await (await this.settled())?.stop(server);
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
@@ -50,20 +51,20 @@ export class ProbedHost implements McpHost {
 		await (await this.settled())?.stopAll();
 	}
 
-	status(name: string): ServerState {
-		return this.host?.status(name) ?? "unknown";
+	status(server: ServerRef): ServerState {
+		return this.host?.status(server) ?? "unknown";
 	}
 
-	logs(name: string): string {
-		return this.host?.logs(name) ?? "";
+	logs(server: ServerRef): string {
+		return this.host?.logs(server) ?? "";
 	}
 
-	used(name: string): void {
-		this.host?.used(name);
+	used(server: ServerRef): void {
+		this.host?.used(server);
 	}
 
-	async asleep(name: string): Promise<boolean> {
-		return (await this.host?.asleep(name)) ?? false;
+	async asleep(server: ServerRef): Promise<boolean> {
+		return (await this.host?.asleep(server)) ?? false;
 	}
 
 	private settled(): Promise<McpHost | undefined> {

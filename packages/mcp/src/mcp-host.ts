@@ -94,11 +94,7 @@ export function dockerHost(report?: ServerReporter): McpHost {
 	]);
 }
 
-export function containerHost(
-	scope: string,
-	report?: ServerReporter,
-	chat?: string,
-): McpHost {
+export function containerHost(scope: string, report?: ServerReporter): McpHost {
 	const inCluster =
 		mcpEnv.LISPTC_MCP_HOST === "kubernetes" ||
 		mcpEnv.KUBERNETES_SERVICE_HOST !== undefined;
@@ -109,7 +105,6 @@ export function containerHost(
 		create: () =>
 			new KubernetesHost({
 				scope,
-				...(chat === undefined ? {} : { chat }),
 				namespace: mcpEnv.LISPTC_MCP_NAMESPACE ?? "",
 				imageTag: mcpEnv.LISPTC_MCP_IMAGE_TAG,
 			}),

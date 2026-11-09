@@ -46,7 +46,7 @@ describe("what the local process host reports about the servers it runs", () => 
 
 		await host.ensure(conf);
 		await host.ensure(conf);
-		await host.stop("notes");
+		await host.stop({ name: "notes" });
 
 		expect(reports).toEqual([
 			{ server: "notes", phase: "starting" },
@@ -64,7 +64,7 @@ describe("what the local process host reports about the servers it runs", () => 
 		await host.remove(conf);
 
 		expect(reports.at(-1)).toEqual({ server: "notes", phase: "gone" });
-		expect(host.status("notes")).toBe("unknown");
+		expect(host.status({ name: "notes" })).toBe("unknown");
 	});
 
 	it("reports a server failed when it exits before it answers", async () => {
@@ -92,17 +92,22 @@ describe("what the local process host reports about the servers it runs", () => 
 			phase: "failed",
 			reason: "its process exited with code 3.\nout of memory",
 		});
-		expect(host.status("notes")).toBe("unknown");
+		expect(host.status({ name: "notes" })).toBe("unknown");
 	});
 });
 
 describe("what the local process host reports about the stdio servers it pipes", () => {
-	async function piped(host: LocalProcessHost, script: string) {
-		const handle = await host.ensure({
-			name: "fx",
-			command: process.execPath,
-			args: ["-e", script],
-		});
+	async function piped(
+		host: LocalProcessHost,
+		script: string,
+		instance?: string,
+	) {
+		const command = { command: process.execPath, args: ["-e", script] };
+		const handle = await host.ensure(
+			instance === undefined
+				? { name: "fx", ...command }
+				: { name: "fx", image: "fx-mcp", port: 8000, instance, ...command },
+		);
 		if (!("transport" in handle)) throw new Error("expected a transport");
 		const transport = handle.transport();
 		await transport.start();
@@ -121,7 +126,20 @@ describe("what the local process host reports about the stdio servers it pipes",
 			{ server: "fx", phase: "ready" },
 			{ server: "fx", phase: "sleeping" },
 		]);
-		expect(host.status("fx")).toBe("unknown");
+		expect(host.status({ name: "fx" })).toBe("unknown");
+	});
+
+	it("reports a chat's own server under its instance, apart from the shared one", async () => {
+		const { host, reports } = reporting();
+		const transport = await piped(host, "setInterval(() => {}, 1000)", "c1");
+
+		expect(reports).toEqual([
+			{ server: "fx", instance: "c1", phase: "starting" },
+			{ server: "fx", instance: "c1", phase: "ready" },
+		]);
+		expect(host.status({ name: "fx", instance: "c1" })).toBe("running");
+		expect(host.status({ name: "fx" })).toBe("unknown");
+		await transport.close();
 	});
 
 	it("reports a server failed when it exits on its own", async () => {
@@ -130,7 +148,7 @@ describe("what the local process host reports about the stdio servers it pipes",
 
 		await vi.waitFor(() => expect(reports).toHaveLength(3), { timeout: 5000 });
 		expect(reports[2]).toMatchObject({ server: "fx", phase: "failed" });
-		expect(host.status("fx")).toBe("unknown");
+		expect(host.status({ name: "fx" })).toBe("unknown");
 	});
 
 	it("refuses an image it has no command to run", async () => {

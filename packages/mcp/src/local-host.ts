@@ -1,14 +1,18 @@
 import { spawn } from "node:child_process";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type {
-	ConnConfig,
-	HttpConnConfig,
-	McpHost,
-	McpTransport,
-	ServerHandle,
-	ServerReporter,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type HttpConnConfig,
+	type McpHost,
+	type McpTransport,
+	refKey,
+	refOf,
+	type ServerHandle,
+	type ServerRef,
+	type ServerReporter,
+	type ServerState,
+	type StartWatch,
+	subjectOf,
 } from "./ports.ts";
 import {
 	type ReportedTransport,
@@ -28,7 +32,7 @@ interface LocalServer {
 type LaunchedConf = HttpConnConfig & { command: string };
 
 interface Piped {
-	readonly name: string;
+	readonly key: string;
 	readonly reported: ReportedTransport;
 }
 
@@ -115,7 +119,8 @@ export class LocalProcessHost implements McpHost {
 			throw new Error(
 				`${conf.name}: runs as a container image and the host started none`,
 			);
-		const { name, command, args, env } = conf;
+		const { command, args, env } = conf;
+		const server = refOf(conf);
 		return {
 			transport: () => {
 				const stdio = new StdioClientTransport({
@@ -128,9 +133,9 @@ export class LocalProcessHost implements McpHost {
 					},
 				});
 				const piped: Piped = {
-					name,
+					key: refKey(server),
 					reported: reportedTransport(
-						name,
+						server,
 						stdio as unknown as McpTransport,
 						this.report,
 						() => this.piped.delete(piped),
@@ -142,19 +147,20 @@ export class LocalProcessHost implements McpHost {
 		};
 	}
 
-	async stop(name: string): Promise<void> {
-		if (await this.drop(name)) this.report({ server: name, phase: "sleeping" });
+	async stop(server: ServerRef): Promise<void> {
+		if (await this.drop(server))
+			this.report({ ...subjectOf(server), phase: "sleeping" });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		await this.drop(conf.name);
-		this.report({ server: conf.name, phase: "gone" });
+		await this.drop(conf);
+		this.report({ ...subjectOf(conf), phase: "gone" });
 	}
 
-	private async drop(name: string): Promise<boolean> {
-		const server = this.started.get(name);
+	private async drop(ref: ServerRef): Promise<boolean> {
+		const server = this.started.get(ref.name);
 		if (!server) return false;
-		this.started.delete(name);
+		this.started.delete(ref.name);
 		const { pid } = server.child;
 		try {
 			if (pid !== undefined) process.kill(-pid, "SIGTERM");
@@ -165,24 +171,25 @@ export class LocalProcessHost implements McpHost {
 	}
 
 	async stopAll(): Promise<void> {
-		for (const name of [...this.started.keys()]) await this.stop(name);
+		for (const name of [...this.started.keys()]) await this.stop({ name });
 		await Promise.all([...this.piped].map((piped) => piped.reported.end()));
 	}
 
-	status(name: string): ServerState {
-		for (const piped of this.piped) if (piped.name === name) return "running";
-		const server = this.started.get(name);
+	status(ref: ServerRef): ServerState {
+		const key = refKey(ref);
+		for (const piped of this.piped) if (piped.key === key) return "running";
+		const server = this.started.get(ref.name);
 		if (!server) return "unknown";
 		return server.exited ? "stopped" : "running";
 	}
 
-	logs(name: string): string {
-		return this.started.get(name)?.stderr ?? "";
+	logs(server: ServerRef): string {
+		return this.started.get(server.name)?.stderr ?? "";
 	}
 
-	used(_name: string): void {}
+	used(_server: ServerRef): void {}
 
-	async asleep(_name: string): Promise<boolean> {
+	async asleep(_server: ServerRef): Promise<boolean> {
 		return false;
 	}
 

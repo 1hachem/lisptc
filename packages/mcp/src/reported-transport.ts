@@ -1,4 +1,9 @@
-import type { McpTransport, ServerReporter } from "./ports.ts";
+import {
+	type McpTransport,
+	type ServerRef,
+	type ServerReporter,
+	subjectOf,
+} from "./ports.ts";
 
 export interface ReportedTransport {
 	readonly transport: McpTransport;
@@ -6,29 +11,30 @@ export interface ReportedTransport {
 }
 
 export function reportedTransport(
-	server: string,
+	server: ServerRef,
 	inner: McpTransport,
 	report: ServerReporter,
 	ended: () => void,
 ): ReportedTransport {
+	const about = subjectOf(server);
 	let closing = false;
 	let started = false;
 	let lastError: Error | undefined;
 	const transport: McpTransport = {
 		async start() {
-			report({ server, phase: "starting" });
+			report({ ...about, phase: "starting" });
 			try {
 				await inner.start();
 			} catch (ex) {
 				report({
-					server,
+					...about,
 					phase: "failed",
 					reason: ex instanceof Error ? ex.message : String(ex),
 				});
 				throw ex;
 			}
 			started = true;
-			report({ server, phase: "ready" });
+			report({ ...about, phase: "ready" });
 		},
 		send: (message) => inner.send(message),
 		async close() {
@@ -46,9 +52,9 @@ export function reportedTransport(
 		if (started)
 			report(
 				closing
-					? { server, phase: "sleeping" }
+					? { ...about, phase: "sleeping" }
 					: {
-							server,
+							...about,
 							phase: "failed",
 							reason: lastError?.message ?? "its process exited.",
 						},

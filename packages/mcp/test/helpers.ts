@@ -71,7 +71,7 @@ export function recordingHost(): McpHost & {
 				return { url: `http://${conf.name}.recorded.test/mcp` };
 			return await local.ensure(conf);
 		},
-		stop: async (name) => {
+		stop: async ({ name }) => {
 			stopped.push(name);
 		},
 		remove: async (conf) => {
@@ -80,12 +80,13 @@ export function recordingHost(): McpHost & {
 		stopAll: async () => {
 			stoppedAll += 1;
 		},
-		status: (name): ServerState => (name === "known" ? "running" : "unknown"),
-		logs: (name) => (name === "known" ? "the fallback's log" : ""),
-		used(name) {
+		status: ({ name }): ServerState =>
+			name === "known" ? "running" : "unknown",
+		logs: ({ name }) => (name === "known" ? "the fallback's log" : ""),
+		used({ name }) {
 			uses.push(name);
 		},
-		asleep: async (name) => sleeping.has(name),
+		asleep: async ({ name }) => sleeping.has(name),
 	};
 }
 

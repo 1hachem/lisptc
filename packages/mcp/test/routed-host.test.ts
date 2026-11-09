@@ -34,8 +34,8 @@ describe("a routed host", () => {
 		const { host, remotes, containers } = routed();
 		await host.ensure(remote);
 
-		await host.stop("linear");
-		await host.stop("never-loaded");
+		await host.stop({ name: "linear" });
+		await host.stop({ name: "never-loaded" });
 
 		expect(remotes.stopped).toEqual(["linear"]);
 		expect(containers.stopped).toEqual([]);
@@ -46,11 +46,11 @@ describe("a routed host", () => {
 		remotes.sleeping.add("linear");
 		await host.ensure(remote);
 
-		host.used("linear");
+		host.used({ name: "linear" });
 
 		expect(remotes.uses).toEqual(["linear"]);
-		expect(await host.asleep("linear")).toBe(true);
-		expect(host.status("other")).toBe("unknown");
+		expect(await host.asleep({ name: "linear" })).toBe(true);
+		expect(host.status({ name: "other" })).toBe("unknown");
 	});
 
 	it("takes every host down with it", async () => {
