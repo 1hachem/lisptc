@@ -54,14 +54,16 @@ import {
 	LINKED_FIRES_AT,
 	type Memory,
 	type MemoryHost,
-	type MemoryRecord,
 	type MemoryStore,
 	memoryToForm,
 	memoryToRecord,
+	memoryToSource,
 	type Recognize,
 	recognizeNothing,
 	recordToMemory,
+	rememberedFrom,
 	type Situation,
+	type StoredMemory,
 	TRIGGER_KINDS,
 	type Trigger,
 	type TriggerKind,
@@ -499,14 +501,44 @@ export class MemoryBank {
 		return stored === undefined ? undefined : this.decode(stored);
 	}
 
-	private decode(stored: MemoryRecord): Memory | undefined {
+	private decode(stored: StoredMemory): Memory | undefined {
 		const interp = this.declaredIn;
 		if (interp === undefined)
 			throw new EvalException(
 				"the memory bank reads the store only once it is installed in an interpreter",
 				stored.key,
 			);
-		return recordToMemory(stored, (text) => interp.read(text));
+		if ("source" in stored) return this.admit(interp, stored.source);
+		const memory = recordToMemory(stored, (text) => interp.read(text));
+		return memory === undefined
+			? undefined
+			: this.admit(interp, str(memoryToSource(memory)));
+	}
+
+	private admit(interp: Interp, source: string): Memory | undefined {
+		this.builtins();
+		const declared = newSym(DECLARED_MEMORIES);
+		const before = interp.getGlobal(declared);
+		try {
+			const form = interp.read(source);
+			if (
+				!(form instanceof Cell) ||
+				!(form.car instanceof Sym) ||
+				form.car.name !== "memory"
+			)
+				return undefined;
+			runUnhooked(interp, source);
+			const entry = (interp.getGlobal(declared) as Cell).car;
+			const memory = rememberedFrom(entry);
+			const others = (before instanceof Cell ? listToArray(before) : []).filter(
+				(other) => !(other instanceof Cell && other.car === memory.key),
+			);
+			interp.defineGlobal(declared, new Cell(entry, arrayToList(others)));
+			return memory;
+		} catch {
+			interp.defineGlobal(declared, before);
+			return undefined;
+		}
 	}
 
 	*everything(): Eval<Memory[]> {
@@ -711,7 +743,12 @@ export class MemoryBank {
 	}
 
 	*remember(memory: Memory): Eval<void> {
-		yield* settled(this.store.put(memoryToRecord(memory)));
+		yield* settled(
+			this.store.put({
+				record: memoryToRecord(memory),
+				source: str(memoryToSource(memory)),
+			}),
+		);
 		this.stale();
 	}
 

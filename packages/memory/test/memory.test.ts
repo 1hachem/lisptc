@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bufferTransport } from "@repo/interpreter/channels-host";
@@ -36,11 +36,10 @@ import {
 import {
 	LINKED_FIRES_AT,
 	type Memory,
-	type MemoryRecord,
-	memoryToRecord,
+	type MemoryWrite,
 	VolatileStore,
 } from "../src/ports.ts";
-import { bareHost, MemoryInterp } from "./helpers.ts";
+import { bareHost, MemoryInterp, written } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
@@ -105,9 +104,18 @@ function remembered(f: Fixture, key: string): Promise<Memory | undefined> {
 	return drive(f.bank.remembered(key));
 }
 
-function plain(key: string, lastUsed = 0): MemoryRecord {
-	return { key, body: '"v"', links: [], score: 1, used: 0, lastUsed };
+function plain(key: string, lastUsed = 0): MemoryWrite {
+	return written({
+		key,
+		body: "v",
+		links: new Map(),
+		score: 1,
+		used: 0,
+		lastUsed,
+	});
 }
+
+const DECLARED_KEYS = "(mapcar (lambda (entry) (car entry)) *memories*)";
 
 describe("remembering and recalling", () => {
 	it("stores prose and hands it back on a matching query", async () => {
@@ -525,7 +533,7 @@ describe("chaining", () => {
 		const depth = MAX_CASCADE_DEPTH + 3;
 		for (let i = 0; i < depth; i++)
 			store.put(
-				memoryToRecord({
+				written({
 					key: `m${i}`,
 					body: `body ${i}`,
 					on: i === 0 ? undefined : { kind: "recall", pattern: `^m${i - 1}$` },
@@ -677,20 +685,15 @@ describe("the recall budget", () => {
 });
 
 describe("the file store", () => {
-	it("round-trips a record through JSON on disk", () => {
+	it("writes a remembered memory as one memory form in a .ptc file", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
-		const record: MemoryRecord = {
-			key: "triage",
-			body: '"keep the ids"',
-			on: '(error "undefined")',
-			links: [{ key: "other", weight: LINKED_FIRES_AT }],
-			score: 1.5,
-			used: 3,
-			lastUsed: 1_700_000_000_000,
-		};
-		new FileMemoryStore(dir).put(record);
+		const f = fixture(new MemoryBank(new FileMemoryStore(dir)));
+		await ev(f, '(memory/remember "triage" "keep the ids")');
 
-		expect(new FileMemoryStore(dir).get("triage")).toEqual(record);
+		expect(readdirSync(dir)).toEqual(["triage.ptc"]);
+		const text = readFileSync(join(dir, "triage.ptc"), "utf8");
+		expect(text.startsWith('(memory "triage"')).toBe(true);
+		expect(text).toContain('"keep the ids"');
 	});
 
 	it("carries prose, a trigger, links and strength back through the store", async () => {
@@ -712,14 +715,50 @@ describe("the file store", () => {
 		expect(await remembered(second, "triage")).toEqual(memory);
 	});
 
+	it("declares a memory read from a file in the image's memories", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
+		await ev(
+			fixture(new MemoryBank(new FileMemoryStore(dir))),
+			'(memory/remember "k" "v")',
+		);
+
+		const second = fixture(new MemoryBank(new FileMemoryStore(dir)));
+		await ev(second, "(memories)");
+
+		expect(await ev(second, DECLARED_KEYS)).toContain('"k"');
+	});
+
+	it("declares a memory read from a record in the image's memories", async () => {
+		const store = new VolatileStore();
+		store.put(plain("k"));
+		const f = fixture(new MemoryBank(store));
+		await ev(f, "(memories)");
+
+		expect(await ev(f, DECLARED_KEYS)).toContain('"k"');
+	});
+
+	it("declares a memory once however often the store is read", async () => {
+		const store = new VolatileStore();
+		store.put(plain("k"));
+		const f = fixture(new MemoryBank(store));
+		await ev(f, "(memories)");
+		await ev(f, '(memory/remember "other" "w")');
+		await ev(f, "(memories)");
+
+		expect(
+			await ev(f, `(count-if (lambda (key) (equal key "k")) ${DECLARED_KEYS})`),
+		).toBe("1");
+	});
+
 	it("carries a situation and the look-alike it must not fire on", async () => {
-		const f = fixture();
+		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
+		const f = fixture(new MemoryBank(new FileMemoryStore(dir)));
 		await ev(
 			f,
 			`(memory/remember "web" "drive it" :when "the agent is about to drive a web page" :unless "the agent only reads a page's text")`,
 		);
 
-		const g = fixture(new MemoryBank(f.bank.store));
+		const g = fixture(new MemoryBank(new FileMemoryStore(dir)));
 
 		expect((await remembered(g, "web"))?.on).toEqual({
 			kind: "when",
@@ -749,11 +788,10 @@ describe("the file store", () => {
 		expect(await second.step('(concat "playwright")')).toContain("pw: note");
 	});
 
-	it("keeps a memory whose trigger no longer parses, rather than losing it", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
-		writeFileSync(
-			join(dir, "old.json"),
-			JSON.stringify({
+	it("keeps a stored record whose trigger no longer parses, rather than losing it", async () => {
+		const store = new VolatileStore();
+		store.put({
+			record: {
 				key: "old",
 				body: '"from an older grammar"',
 				on: '(call "load-mcp")',
@@ -761,13 +799,11 @@ describe("the file store", () => {
 				score: 1,
 				used: 0,
 				lastUsed: 0,
-			}),
-		);
+			},
+			source: "",
+		});
 
-		const back = await remembered(
-			fixture(new MemoryBank(new FileMemoryStore(dir))),
-			"old",
-		);
+		const back = await remembered(fixture(new MemoryBank(store)), "old");
 
 		expect(back?.body).toBe("from an older grammar");
 		expect(back?.on).toBeUndefined();
@@ -785,12 +821,21 @@ describe("the file store", () => {
 		expect(str(back?.body)).toBe("(defun double (x) (* x 2))");
 	});
 
-	it("skips a file that does not hold a memory", () => {
+	it("skips a file that does not hold a memory and loads the rest", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
-		writeFileSync(join(dir, "broken.json"), "{ not json");
+		writeFileSync(join(dir, "broken.ptc"), '(memory "broken" ');
+		writeFileSync(join(dir, "other.ptc"), '(defun other () "not a memory")');
+		writeFileSync(join(dir, "old.json"), '{"key":"old"}');
 		new FileMemoryStore(dir).put(plain("fine"));
+		const f = fixture(new MemoryBank(new FileMemoryStore(dir)));
 
-		expect(new FileMemoryStore(dir).all().map((m) => m.key)).toEqual(["fine"]);
+		expect(
+			await ev(
+				f,
+				'(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list))',
+			),
+		).toBe('("fine")');
+		await expect(ev(f, "(other)")).rejects.toThrow();
 	});
 
 	it("outlives the interpreter that wrote it", async () => {
@@ -811,13 +856,22 @@ describe("the file store", () => {
 		).toEqual([]);
 	});
 
-	it("names a memory after its key and a scope after itself", () => {
+	it("names a memory after its key and a scope after itself", async () => {
 		const base = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const scoped = join(base, "thread-a");
-		new FileMemoryStore(scoped).put(plain("a key/with punctuation"));
+		const key = "a key/with punctuation";
+		new FileMemoryStore(scoped).put(plain(key));
 
 		expect(readdirSync(base)).toEqual(["thread-a"]);
-		expect(readdirSync(scoped)).toEqual(["a_key_with_punctuation.json"]);
+		expect(readdirSync(scoped)).toEqual([`${encodeURIComponent(key)}.ptc`]);
+		expect(
+			(
+				await remembered(
+					fixture(new MemoryBank(new FileMemoryStore(scoped))),
+					key,
+				)
+			)?.key,
+		).toBe(key);
 	});
 
 	it("ignores a scope directory when listing the base it sits in", () => {

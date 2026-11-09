@@ -1,4 +1,8 @@
-import type { MemoryRecord, MemoryStore } from "@repo/memory-extension/ports";
+import type {
+	MemoryRecord,
+	MemoryStore,
+	MemoryWrite,
+} from "@repo/memory-extension/ports";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
@@ -38,7 +42,7 @@ export class ConvexMemoryStore implements MemoryStore {
 		return row === null ? undefined : recordOf(row);
 	}
 
-	async put(record: MemoryRecord): Promise<void> {
+	async put({ record }: MemoryWrite): Promise<void> {
 		await this.connect().mutation(api.memories.put, {
 			workspaceId: this.workspaceId,
 			memory: recordOf(record),

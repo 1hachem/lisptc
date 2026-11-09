@@ -65,10 +65,22 @@ export interface MemoryRecord {
 	lastUsed: number;
 }
 
+export interface MemorySource {
+	key: string;
+	source: string;
+}
+
+export type StoredMemory = MemoryRecord | MemorySource;
+
+export interface MemoryWrite {
+	record: MemoryRecord;
+	source: string;
+}
+
 export interface MemoryStore {
-	all(): Awaitable<MemoryRecord[]>;
-	get(key: string): Awaitable<MemoryRecord | undefined>;
-	put(record: MemoryRecord): Awaitable<void>;
+	all(): Awaitable<StoredMemory[]>;
+	get(key: string): Awaitable<StoredMemory | undefined>;
+	put(memory: MemoryWrite): Awaitable<void>;
 	delete(key: string): Awaitable<boolean>;
 }
 
@@ -83,7 +95,7 @@ export class VolatileStore implements MemoryStore {
 		return this.records.get(key);
 	}
 
-	put(record: MemoryRecord): void {
+	put({ record }: MemoryWrite): void {
 		this.records.set(record.key, record);
 	}
 
@@ -327,18 +339,18 @@ export function areaFrom(declared: unknown): AreaGate {
 	return { name, situation };
 }
 
-export function builtinFrom(declared: unknown): Memory {
-	if (!(declared instanceof Cell) || typeof declared.car !== "string")
-		throw new EvalException(
-			'a built-in memory is declared as (memory "key" :when "situation" [:unless "situation"] [:links ("key"...)] "body"), or with :on (kind "pattern") in place of :when',
-			declared,
-		);
-	const key = declared.car;
-	if (!key.startsWith(INTERNAL) || areaOf(key) === undefined)
-		throw new EvalException(
-			`a built-in memory key is in the internal namespace, under its area: write "${INTERNAL}area/name"`,
-			key,
-		);
+interface Declaration {
+	key: string;
+	body: unknown;
+	opts: Map<string, unknown>;
+}
+
+function declaration(
+	declared: Cell,
+	allowed: readonly string[],
+	what: string,
+): Declaration {
+	const key = declared.car as string;
 	const options: unknown[] = [];
 	const values: unknown[] = [];
 	let at: unknown = declared.cdr;
@@ -352,19 +364,34 @@ export function builtinFrom(declared: unknown): Memory {
 		}
 	}
 	const [body, ...extra] = values;
-	if (typeof body !== "string" || body.trim() === "")
-		throw new EvalException("a built-in memory needs a body string", key);
 	if (extra.length > 0)
+		throw new EvalException(`${what} has one body, after its options`, key);
+	return {
+		key,
+		body,
+		opts: plistOptions(arrayToList(options) as List, allowed),
+	};
+}
+
+export function builtinFrom(declared: unknown): Memory {
+	if (!(declared instanceof Cell) || typeof declared.car !== "string")
 		throw new EvalException(
-			"a built-in memory has one body string, after its options",
+			'a built-in memory is declared as (memory "key" :when "situation" [:unless "situation"] [:links ("key"...)] "body"), or with :on (kind "pattern") in place of :when',
+			declared,
+		);
+	const key = declared.car;
+	if (!key.startsWith(INTERNAL) || areaOf(key) === undefined)
+		throw new EvalException(
+			`a built-in memory key is in the internal namespace, under its area: write "${INTERNAL}area/name"`,
 			key,
 		);
-	const opts = plistOptions(arrayToList(options) as List, [
-		"on",
-		"when",
-		"unless",
-		"links",
-	]);
+	const { body, opts } = declaration(
+		declared,
+		["on", "when", "unless", "links"],
+		"a built-in memory",
+	);
+	if (typeof body !== "string" || body.trim() === "")
+		throw new EvalException("a built-in memory needs a body string", key);
 	const links = new Map<string, number>();
 	for (const linked of listToArray((opts.get("links") ?? null) as List)) {
 		if (typeof linked !== "string")
@@ -380,6 +407,67 @@ export function builtinFrom(declared: unknown): Memory {
 		used: 0,
 		lastUsed: 0,
 	};
+}
+
+export function rememberedFrom(declared: unknown): Memory {
+	if (
+		!(declared instanceof Cell) ||
+		typeof declared.car !== "string" ||
+		declared.car.startsWith(INTERNAL)
+	)
+		throw new EvalException(
+			`a remembered memory is (memory "key" [:when "situation" | :on (kind "pattern")] :links (("key" . weight)...) :score n :used n :last-used ms body), keyed outside ${INTERNAL}`,
+			declared,
+		);
+	const { key, body, opts } = declaration(
+		declared,
+		["on", "when", "unless", "links", "score", "used", "last-used"],
+		"a remembered memory",
+	);
+	if (body === undefined)
+		throw new EvalException("a remembered memory needs a body", key);
+	const links = new Map<string, number>();
+	for (const pair of listToArray((opts.get("links") ?? null) as List))
+		if (pair instanceof Cell && typeof pair.car === "string")
+			links.set(pair.car, Number(pair.cdr));
+	return {
+		key,
+		body,
+		on: authoredTrigger(opts.get("on"), opts.get("when"), opts.get("unless")),
+		links,
+		score: Number(opts.get("score") ?? INITIAL_SCORE),
+		used: Number(opts.get("used") ?? 0),
+		lastUsed: Number(opts.get("last-used") ?? 0),
+	};
+}
+
+export function memoryToSource(memory: Memory): unknown {
+	const trigger: unknown[] =
+		memory.on === undefined
+			? []
+			: memory.on.kind === "when"
+				? [
+						newLispKeyword("when"),
+						memory.on.pattern,
+						...(memory.on.unless === undefined
+							? []
+							: [newLispKeyword("unless"), memory.on.unless]),
+					]
+				: [newLispKeyword("on"), triggerToForm(memory.on)];
+	return arrayToList([
+		newSym("memory"),
+		memory.key,
+		...trigger,
+		newLispKeyword("links"),
+		arrayToList([...memory.links].map(([k, w]) => new Cell(k, w))),
+		newLispKeyword("score"),
+		memory.score,
+		newLispKeyword("used"),
+		memory.used,
+		newLispKeyword("last-used"),
+		memory.lastUsed,
+		memory.body,
+	]);
 }
 
 export interface Turn {

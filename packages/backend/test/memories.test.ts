@@ -229,7 +229,10 @@ describe("the convex memory store", () => {
 		const { client, calls } = spyClient([]);
 		const store = new ConvexMemoryStore(WORKSPACE, () => client);
 
-		await store.put(row("triage", '"logs"'));
+		await store.put({
+			record: row("triage", '"logs"'),
+			source: '(memory "triage" "logs")',
+		});
 		expect(calls.at(-1)).toMatchObject({
 			args: { workspaceId: WORKSPACE, memory: { key: "triage" } },
 		});

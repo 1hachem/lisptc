@@ -12,24 +12,15 @@ import { memoryEnv } from "@repo/env/memory";
 import { EvalException } from "@repo/interpreter/errors";
 import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
-import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
 	type MemoryHost,
-	type MemoryRecord,
+	type MemorySource,
 	type MemoryStore,
+	type MemoryWrite,
 	recognizeNothing,
+	type StoredMemory,
 } from "./ports.ts";
-
-const memoryRecord: z.ZodType<MemoryRecord> = z.object({
-	key: z.string(),
-	body: z.string(),
-	on: z.string().optional(),
-	links: z.array(z.object({ key: z.string(), weight: z.number() })),
-	score: z.number(),
-	used: z.number(),
-	lastUsed: z.number(),
-});
 
 export function memoryDirFor(scope?: string): string {
 	const base =
@@ -46,8 +37,10 @@ function sanitize(name: string): string {
 	return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+const SOURCE = ".ptc";
+
 function keyToFileName(key: string): string {
-	return `${sanitize(key)}.json`;
+	return `${encodeURIComponent(key)}${SOURCE}`;
 }
 
 export class FileMemoryStore implements MemoryStore {
@@ -61,32 +54,30 @@ export class FileMemoryStore implements MemoryStore {
 		return join(this.base(), keyToFileName(key));
 	}
 
-	all(): MemoryRecord[] {
-		const out: MemoryRecord[] = [];
+	all(): MemorySource[] {
+		const out: MemorySource[] = [];
 		try {
 			const base = this.base();
 			if (!existsSync(base)) return out;
 			for (const entry of readdirSync(base, { withFileTypes: true })) {
-				if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-				const found = this.readOne(join(base, entry.name));
+				if (!entry.isFile() || !entry.name.endsWith(SOURCE)) continue;
+				const found = this.readOne(
+					decodeURIComponent(entry.name.slice(0, -SOURCE.length)),
+				);
 				if (found !== undefined) out.push(found);
 			}
 		} catch {}
 		return out;
 	}
 
-	get(key: string): MemoryRecord | undefined {
-		return this.readOne(this.file(key));
+	get(key: string): MemorySource | undefined {
+		return this.readOne(key);
 	}
 
-	put(memory: MemoryRecord): void {
+	put({ record, source }: MemoryWrite): void {
 		try {
 			mkdirSync(this.base(), { recursive: true, mode: 0o700 });
-			writeFileSync(
-				this.file(memory.key),
-				`${JSON.stringify(memory, null, "\t")}\n`,
-				{ mode: 0o600 },
-			);
+			writeFileSync(this.file(record.key), `${source}\n`, { mode: 0o600 });
 		} catch (ex) {
 			throw new EvalException(
 				"could not write this memory to disk",
@@ -107,9 +98,9 @@ export class FileMemoryStore implements MemoryStore {
 		}
 	}
 
-	private readOne(path: string): MemoryRecord | undefined {
+	private readOne(key: string): MemorySource | undefined {
 		try {
-			return memoryRecord.parse(JSON.parse(readFileSync(path, "utf8")));
+			return { key, source: readFileSync(this.file(key), "utf8") };
 		} catch {
 			return undefined;
 		}
@@ -139,20 +130,20 @@ export class LayeredStore implements MemoryStore {
 		private readonly shared: MemoryStore,
 	) {}
 
-	all(): Awaitable<MemoryRecord[]> {
+	all(): Awaitable<StoredMemory[]> {
 		return both(this.shared.all(), this.own.all(), (shared, own) => {
-			const byKey = new Map<string, MemoryRecord>();
+			const byKey = new Map<string, StoredMemory>();
 			for (const memory of shared) byKey.set(memory.key, memory);
 			for (const memory of own) byKey.set(memory.key, memory);
 			return [...byKey.values()];
 		});
 	}
 
-	get(key: string): Awaitable<MemoryRecord | undefined> {
+	get(key: string): Awaitable<StoredMemory | undefined> {
 		return then(this.own.get(key), (mine) => mine ?? this.shared.get(key));
 	}
 
-	put(memory: MemoryRecord): Awaitable<void> {
+	put(memory: MemoryWrite): Awaitable<void> {
 		return this.own.put(memory);
 	}
 

@@ -36,7 +36,7 @@ import {
 	VolatileStore,
 	WHEN_FIRES_AT,
 } from "../src/ports.ts";
-import { bareHost, MemoryInterp } from "./helpers.ts";
+import { bareHost, MemoryInterp, written } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
@@ -471,15 +471,17 @@ describe("the when trigger", () => {
 		const f = fixture();
 		const keys = `(mapcar (lambda (entry) (cdr (assoc "key" entry))) (memory/list :when))`;
 		expect(await ev(f, keys)).toBe('("internal/browser/local")');
-		await f.bank.store.put({
-			key: "elsewhere",
-			body: '"x"',
-			on: '(when "user asks about billing")',
-			links: [],
-			score: 1,
-			used: 0,
-			lastUsed: 0,
-		});
+		await f.bank.store.put(
+			written({
+				key: "elsewhere",
+				body: "x",
+				on: { kind: "when", pattern: "user asks about billing" },
+				links: new Map(),
+				score: 1,
+				used: 0,
+				lastUsed: 0,
+			}),
+		);
 		expect(await ev(f, keys)).toBe('("internal/browser/local")');
 		await ev(f, `(memory/remember "mine" "y" :when "${ASK}")`);
 		expect(await ev(f, keys)).toBe(

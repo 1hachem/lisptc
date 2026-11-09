@@ -7,6 +7,7 @@ import { MemoryBank, memoryExtension } from "../src/memory.ts";
 import {
 	type MemoryRecord,
 	type MemoryStore,
+	type MemoryWrite,
 	VolatileStore,
 } from "../src/ports.ts";
 import { bareHost, MemoryInterp } from "./helpers.ts";
@@ -28,8 +29,8 @@ class PromisedStore implements MemoryStore {
 		return this.later(this.inner.get(key));
 	}
 
-	put(record: MemoryRecord): Promise<void> {
-		return this.later(this.inner.put(record));
+	put(memory: MemoryWrite): Promise<void> {
+		return this.later(this.inner.put(memory));
 	}
 
 	delete(key: string): Promise<boolean> {
