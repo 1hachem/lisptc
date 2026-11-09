@@ -49,7 +49,12 @@ status.** A host runs one kind of server and hands nothing on to another. A
 root that needs several composes them in a routed host, which sends each
 server to the first host that claims it. Nothing above a host writes a
 server's status, so a new place a server runs is a new host that reports, never
-a status written beside it. Read the modalities off the entry shapes in
+a status written beside it.
+
+**A server is its name and its instance, never its name alone.** A chat's own
+server carries the chat as its instance from the moment it is loaded, and every
+host keys, names and reports it by both. The extension stamps the instance, so
+no host is told which chat it serves. Read the modalities off the entry shapes in
 `src/toolkit.ts`, not from prose.
 
 **An entry that names an `image` carries a `port` and never a `url`.** The
