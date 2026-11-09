@@ -61,3 +61,7 @@ export const MAX_VIEW_BYTES = 262_144;
 export const DESKTOP_SEEN_REFRESH_MS = 30_000;
 
 export const DESKTOP_STALE_MS = 90_000;
+
+export const MCP_REPORT_BEAT_MS = 30_000;
+
+export const MCP_REPORTER_STALE_MS = 150_000;

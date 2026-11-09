@@ -31,4 +31,11 @@ crons.interval(
 	{},
 );
 
+crons.interval(
+	"fail the running MCP servers of a host that stopped reporting",
+	{ minutes: 1 },
+	internal.mcpServers.sweep,
+	{},
+);
+
 export default crons;

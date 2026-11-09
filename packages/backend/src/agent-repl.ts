@@ -17,7 +17,6 @@ import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
 import { containerHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
-import type { ServerReporter } from "@repo/mcp-extension/ports";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -41,7 +40,6 @@ import { workspaceExtension } from "@repo/workspace-extension";
 import { workspaceHostFor } from "@repo/workspace-extension/host";
 import type { ConvexHttpClient } from "convex/browser";
 import type { Infer } from "convex/values";
-import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
@@ -56,6 +54,7 @@ import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
+import { reportsOf } from "./server-reports.ts";
 import { ConvexSourceFolder } from "./source-folder.ts";
 import { ConvexViewStore } from "./view-store.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
@@ -66,20 +65,6 @@ export type WorkspaceClient = Pick<
 >;
 
 export type Connect = () => WorkspaceClient;
-
-function reportsOf(
-	workspaceId: Id<"workspaces">,
-	connect: Connect,
-): ServerReporter {
-	let reported: Promise<unknown> = Promise.resolve();
-	return (report) => {
-		reported = reported
-			.then(() =>
-				connect().mutation(api.mcpServers.report, { workspaceId, ...report }),
-			)
-			.catch(() => {});
-	};
-}
 
 const themeChoices = themes.map((theme) => ({
 	id: theme.id,

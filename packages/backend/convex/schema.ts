@@ -353,7 +353,7 @@ export default defineSchema({
 		instance: v.optional(v.string()),
 		phase: mcpServerPhase,
 		reason: v.optional(v.string()),
-		reporter: v.optional(v.literal("session")),
+		reporter: v.optional(v.string()),
 		observedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])
@@ -361,7 +361,16 @@ export default defineSchema({
 			"workspaceId",
 			"server",
 			"instance",
-		]),
+		])
+		.index("by_reporter", ["reporter"]),
+
+	mcpReporters: defineTable({
+		reporter: v.string(),
+		workspaceId: v.optional(v.id("workspaces")),
+		beatAt: v.number(),
+	})
+		.index("by_reporter", ["reporter"])
+		.index("by_beat", ["beatAt"]),
 
 	mcpCatalog: defineTable({
 		workspaceId: v.id("workspaces"),
