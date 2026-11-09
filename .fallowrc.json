@@ -1,7 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "minimumVersion": "3.28.0",
-  "ignorePatterns": [".agents/**", "packages/tree-sitter/**"],
+  "ignorePatterns": [
+    ".agents/**",
+    "packages/tree-sitter/**",
+    "packages/dragology/**"
+  ],
   "entry": [
     "apps/app/server/routes/**/*.ts",
     "apps/app/server/plugins/**/*.ts",
@@ -10,7 +14,10 @@
   ],
   "usedClassMembers": [
     "toString",
-    { "extends": "TextNode", "members": ["isSimpleText", "isUnmergeable"] }
+    {
+      "extends": "TextNode",
+      "members": ["isSimpleText", "isUnmergeable"]
+    }
   ],
   "rules": {
     "unused-files": "error",
