@@ -29,9 +29,15 @@ Tailwind's roomy default heights and icon sizes, nor an arbitrary pixel size.
 `packages/ui/AGENTS.md` holds the scale.
 
 `@repo/ui` is the only workspace dependency besides `@repo/shared`, whose pure
-split layout the split view draws, and `@repo/journal-catalog`, whose shapes
-the components draw. Adding another one is a sign the component belongs in the
-app instead.
+split layout the split view draws, `@repo/journal-catalog`, whose shapes the
+components draw, and `@repo/dragology`, which the drag layer runs on. Adding
+another one is a sign the component belongs in the app instead.
+
+**Every drag goes through the drag layer** in `src/drag-layer.tsx`, mounted
+once at the app shell. A thing that drags is a source (`useDragSource`), a
+place it lands is a drop spot measured from the DOM at pickup
+(`useDropSpots`). Do not start a native HTML5 drag, and do not add another
+drag library: `biome.json` refuses `@dnd-kit`.
 
 ## Tests
 
