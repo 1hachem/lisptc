@@ -1,4 +1,3 @@
-import * as _ from "lodash-es";
 import {
 	type DragFrame,
 	type DragInitContext,
@@ -16,6 +15,7 @@ import {
 	type TransitionLike,
 } from "../transition";
 import { assertDefined } from "../utils/assert";
+import { memoize } from "../utils/collections";
 
 export function withSnapRadius<T extends object>(
 	this: DragSpec<T>,
@@ -35,10 +35,10 @@ export function withSnapRadius<T extends object>(
 
 class WithSnapRadiusOp<T extends object> extends Modifier<T> {
 	readonly name = "withSnapRadius";
-	private readonly dropRendered = _.memoize((state: T) =>
+	private readonly dropRendered = memoize((state: T) =>
 		renderStateReadOnly(this.ctx, state),
 	);
-	private readonly dropGrabPos = _.memoize((state: T) =>
+	private readonly dropGrabPos = memoize((state: T) =>
 		assertDefined(getElementPositionCheap(this.ctx, state)),
 	);
 	snapped = false;

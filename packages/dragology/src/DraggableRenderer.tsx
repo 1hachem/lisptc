@@ -1,4 +1,3 @@
-import * as _ from "lodash-es";
 import type React from "react";
 import {
 	type SetStateAction,
@@ -49,6 +48,7 @@ import {
 } from "./useRenderError";
 import { useStateWithRef } from "./useStateWithRef";
 import { assert } from "./utils/assert";
+import { isEqual } from "./utils/collections";
 import { pipe } from "./utils/pipe";
 
 type SpringOrigin = {
@@ -505,7 +505,7 @@ function resolveChainNows<T extends object>(
 	frame: DragFrame,
 	result: DragResult<T>,
 ): DragStatusDragging<T> {
-	if (!result.chainNow || _.isEqual(result.dropState, status.startState))
+	if (!result.chainNow || isEqual(result.dropState, status.startState))
 		return status;
 
 	const newState = result.dropState;

@@ -1,6 +1,6 @@
 import { Delaunay as D3Delaunay } from "d3-delaunay";
-import * as _ from "lodash-es";
 import { assert, assertWarning } from "../utils/assert";
+import { range } from "../utils/collections";
 import { Vec2, type Vec2able } from "./vec2";
 
 export class CoincidentPointsError extends Error {
@@ -61,7 +61,7 @@ export class Delaunay {
 
 	triangles(): Vec2[][] {
 		if (this.numPoints() < 2) return [];
-		return _.range(this.numTriangles()).map((i) => this.triangle(i));
+		return range(this.numTriangles()).map((i) => this.triangle(i));
 	}
 
 	findTriangle(pt: Vec2, { edge = 0, limit = Infinity } = {}): number {
@@ -156,7 +156,7 @@ export class Delaunay {
 		const hull = collinearIdxs
 			? [
 					...collinearIdxs,
-					..._.reverse(collinearIdxs.slice(1, collinearIdxs.length - 1)),
+					...collinearIdxs.slice(1, collinearIdxs.length - 1).reverse(),
 				]
 			: this._inner.hull;
 		const points = this._inner.points;

@@ -1,4 +1,3 @@
-import * as _ from "lodash-es";
 import {
 	type DragFrame,
 	type DragInitContext,
@@ -24,6 +23,7 @@ import {
 	type OpTreeViewProps,
 } from "../op";
 import { assert } from "../utils/assert";
+import { minBy, range } from "../utils/collections";
 import { type Many, manyToArray } from "../utils/flexible-types";
 
 export function closest<T extends object>(
@@ -93,8 +93,8 @@ class ClosestOp<T extends object> extends Operator<T> {
 		}
 		let best = this.lockedIndex;
 		if (best === null) {
-			best = _.minBy(
-				_.range(this.options.length),
+			best = minBy(
+				range(this.options.length),
 				(i) => resultAt(i).gap - (i === this.lastBest ? this.stickiness : 0),
 			)!;
 			if (this.isPastLock(resultAt(best))) this.lockedIndex = best;

@@ -1,4 +1,3 @@
-import * as _ from "lodash-es";
 import {
 	type DragFrame,
 	type DragInitContext,
@@ -44,6 +43,7 @@ import {
 } from "../svgx/layers";
 import { lerpLayeredWeighted } from "../svgx/lerp";
 import { assert, assertNever } from "../utils/assert";
+import { minBy } from "../utils/collections";
 import { type Many, manyToArray } from "../utils/flexible-types";
 import { ValueView } from "../ValueView";
 import { fixedState } from "./fixed";
@@ -150,7 +150,7 @@ class BetweenOp<T extends object> extends Operator<T> {
 				weights,
 			));
 
-		const closest = _.minBy(renderedStates, (rs) =>
+		const closest = minBy(renderedStates, (rs) =>
 			rs.position.dist(frame.pointer),
 		)!;
 
