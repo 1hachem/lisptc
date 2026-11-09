@@ -109,6 +109,11 @@ function moveTo<Id>(list: readonly Id[], from: number, to: number): Id[] {
 	return next;
 }
 
+function halves(rect: Rect): [Rect, Rect] {
+	const upper = { ...rect, height: rect.height / 2 };
+	return [upper, { ...upper, top: rect.top + upper.height }];
+}
+
 function lineAt(rect: Rect, below: boolean): Rect {
 	return {
 		left: rect.left,
@@ -118,11 +123,14 @@ function lineAt(rect: Rect, below: boolean): Rect {
 	};
 }
 
+type Carrying = { kind: string; payload: unknown };
+
 interface SidesState {
 	sides: Sides<string, string>;
 	kind: string;
 	motion: MotionId;
 	ghost: (id: string) => ReactNode;
+	also?: (id: string) => Carrying | undefined;
 	onPickUp?: (id: string) => void;
 }
 
@@ -132,7 +140,7 @@ function sideElements(kind: string): Element[] {
 	return [...document.querySelectorAll(`[data-sides="${CSS.escape(kind)}"]`)];
 }
 
-function spotsFor<Side extends string, Id extends string>(
+export function sidesSpots<Side extends string, Id extends string>(
 	sides: Sides<Side, Id>,
 	kind: string,
 	active: Id,
@@ -154,17 +162,24 @@ function spotsFor<Side extends string, Id extends string>(
 		if (side === null || !(side in sides)) return [];
 		const list = sides[side];
 		const entries = [...element.querySelectorAll(":scope > [data-entry]")];
+		const toEnd = movedAcross(sides, active, sideTarget(side));
+		const last = entries.at(-1);
 		const onEntries = entries.flatMap((entry): DropSpot[] => {
 			const over = entry.getAttribute("data-entry") ?? undefined;
 			const next = movedAcross(sides, active, over);
 			if (!next || over === undefined) return [];
 			const rect = rectOf(entry);
+			if (from !== side && entry === last && toEnd) {
+				const [upper, lower] = halves(rect);
+				return [
+					spot(upper, lineAt(rect, false), next),
+					spot(lower, lineAt(rect, true), toEnd),
+				];
+			}
 			const below =
 				from === side && list.indexOf(active) < list.indexOf(over as Id);
 			return [spot(rect, lineAt(rect, below), next)];
 		});
-		const toEnd = movedAcross(sides, active, sideTarget(side));
-		const last = entries.at(-1);
 		const whole = rectOf(element);
 		const onSide: DropSpot[] = toEnd
 			? [spot(whole, last ? lineAt(rectOf(last), true) : whole, toEnd)]
@@ -179,6 +194,7 @@ export function SortableSides<Side extends string, Id extends string>({
 	onPickUp,
 	motion = "slide",
 	overlay,
+	also,
 	children,
 }: {
 	sides: Sides<Side, Id>;
@@ -186,6 +202,7 @@ export function SortableSides<Side extends string, Id extends string>({
 	onPickUp?: (id: Id) => void;
 	motion?: MotionId;
 	overlay: (id: Id) => ReactNode;
+	also?: (id: Id) => { kind: string; payload: unknown } | undefined;
 	children: ReactNode;
 }) {
 	const kind = `sides${useId()}`;
@@ -208,7 +225,7 @@ export function SortableSides<Side extends string, Id extends string>({
 	);
 	useDropSpots((carried) =>
 		carried.kind === kind
-			? spotsFor(
+			? sidesSpots(
 					settled,
 					kind,
 					carried.payload as Id,
@@ -224,6 +241,7 @@ export function SortableSides<Side extends string, Id extends string>({
 				kind,
 				motion: shown,
 				ghost: (id) => overlay(id as Id),
+				also: also && ((id) => also(id as Id)),
 				onPickUp: onPickUp && ((id) => onPickUp(id as Id)),
 			}}
 		>
@@ -249,6 +267,7 @@ function SideEntry({
 		kind: context.kind,
 		payload: id,
 		ghost: context.ghost(id),
+		also: [context.also?.(id)].filter((as) => as !== undefined),
 		onPickUp: () => context.onPickUp?.(id),
 	}));
 	return (
