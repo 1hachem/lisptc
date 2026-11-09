@@ -1,7 +1,8 @@
 import { SortableSides } from "@repo/components";
 import type { ReactNode } from "react";
+import { panelCarry } from "../lib/panel-ops.ts";
 import { useSidebarMotion, useSidebarSides } from "../lib/sidebar.ts";
-import { EntryDragged } from "./entry-rail.tsx";
+import { ENTRY_PAGES, EntryDragged } from "./entry-rail.tsx";
 import { FoldersProvider, useCloseFolder } from "./workspace-tree.tsx";
 
 function DraggableEntries({ children }: { children: ReactNode }) {
@@ -15,6 +16,10 @@ function DraggableEntries({ children }: { children: ReactNode }) {
 			onPickUp={closeFolder}
 			motion={motion}
 			overlay={(entry) => <EntryDragged entry={entry} />}
+			also={(entry) => {
+				const page = ENTRY_PAGES[entry];
+				return page && panelCarry(page);
+			}}
 		>
 			{children}
 		</SortableSides>

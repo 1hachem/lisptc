@@ -54,6 +54,7 @@ import {
 } from "react";
 import {
 	type Carried,
+	carriedAs,
 	type DropSpot,
 	type Rect,
 	rectOf,
@@ -127,8 +128,8 @@ export function SplitView<T>({
 	const stage = useRef<HTMLDivElement>(null);
 	const carried = useCarried();
 	const dragging =
-		carried !== null &&
-		(carried.kind === tabKind || carried.kind === external?.kind);
+		carriedAs(carried, tabKind) ||
+		(external !== undefined && carriedAs(carried, external.kind));
 	const [live, setLive] = useState<{ layout: SplitLayout<T>; tab: string }>();
 	useDropSpots((held) => {
 		const tab = tabCarried(held, tabKind, layout, external);

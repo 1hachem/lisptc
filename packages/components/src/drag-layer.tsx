@@ -35,6 +35,14 @@ export interface Carried {
 	kind: string;
 	payload: unknown;
 	ghost: ReactNode;
+	also?: readonly { kind: string; payload: unknown }[];
+}
+
+export function carriedAs(carried: Carried | null, kind: string): boolean {
+	return (
+		carried !== null &&
+		(carried.kind === kind || !!carried.also?.some((as) => as.kind === kind))
+	);
 }
 
 export interface DropSpot {
@@ -155,9 +163,14 @@ export function DragLayer({ children }: { children: ReactNode }) {
 					kind: source.kind,
 					payload: source.payload,
 					ghost: source.ghost,
+					also: source.also,
 				};
-				const spots = [...spotters].flatMap((spotter) =>
-					spotter.current(carried),
+				const identities = [
+					carried,
+					...(source.also ?? []).map((as) => ({ ...carried, ...as })),
+				];
+				const spots = identities.flatMap((identity) =>
+					[...spotters].flatMap((spotter) => spotter.current(identity)),
 				);
 				setCarry({ carried, spots, from, pointer: pressed.start });
 			});
