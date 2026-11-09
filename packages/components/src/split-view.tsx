@@ -129,24 +129,33 @@ export function SplitView<T>({
 	const dragging =
 		carried !== null &&
 		(carried.kind === tabKind || carried.kind === external?.kind);
+	const [live, setLive] = useState<{ layout: SplitLayout<T>; tab: string }>();
 	useDropSpots((held) => {
 		const tab = tabCarried(held, tabKind, layout, external);
 		if (!tab || !stage.current) return [];
-		return splitSpots(stage.current, layout, (drop) => {
-			if (tab.moving) {
-				moved.current = tab.tab.id;
-				onChange(moveTab(layout, tab.tab.id, drop));
-				return;
-			}
-			onChange(dropTab(layout, tab.tab, drop));
-		});
+		const landed = (drop: Drop) =>
+			tab.moving
+				? moveTab(layout, tab.tab.id, drop)
+				: dropTab(layout, tab.tab, drop);
+		return splitSpots(
+			stage.current,
+			layout,
+			(drop) => {
+				setLive(undefined);
+				if (tab.moving) moved.current = tab.tab.id;
+				onChange(landed(drop));
+			},
+			(drop) => setLive(drop && { layout: landed(drop), tab: tab.tab.id }),
+		);
 	});
-	const pager = usePagedScroll(layout.root !== null);
+	const shown = live?.layout ?? layout;
+	const pager = usePagedScroll(shown.root !== null);
 	const [held, maximize] = useState<Maximized | null>(null);
 	const maximized =
-		held !== null && paneIds(layout.root).includes(held.pane) ? held : null;
+		held !== null && paneIds(shown.root).includes(held.pane) ? held : null;
 	const view = {
-		layout,
+		layout: shown,
+		previewing: live?.tab,
 		dragging,
 		tabKind,
 		onChange,
@@ -161,13 +170,13 @@ export function SplitView<T>({
 		<div className="flex h-full min-h-0 flex-col">
 			<Stage
 				stage={stage}
-				layout={layout}
+				layout={shown}
 				view={view}
 				pager={pager}
 				animated={animated}
 				placeholder={placeholder}
 			/>
-			{footer?.(<PageIndicator layout={layout} pager={pager} />)}
+			{footer?.(<PageIndicator layout={shown} pager={pager} />)}
 		</div>
 	);
 }
@@ -238,26 +247,36 @@ export function splitSpots<T>(
 	stage: Element,
 	layout: SplitLayout<T>,
 	drop: (drop: Drop) => void,
+	preview?: (drop: Drop | undefined) => void,
 ): DropSpot[] {
+	const landing = (hit: Rect, shows: Rect, at: Drop): DropSpot =>
+		preview
+			? {
+					hit,
+					enter: () => preview(at),
+					leave: () => preview(undefined),
+					drop: () => drop(at),
+				}
+			: { hit, shows, drop: () => drop(at) };
 	const area = rectOf(stage);
 	const root = layout.root;
-	if (!root)
-		return [{ hit: area, shows: area, drop: () => drop({ pane: "" }) }];
-	const view = EDGES.map((edge) => ({
-		hit: edgeOf(area, edge, VIEW_EDGE_PX),
-		shows: halfOf(area, edge),
-		drop: () => drop({ node: root.id, edge }),
-	}));
+	if (!root) return [landing(area, area, { pane: "" })];
+	const view = EDGES.map((edge) =>
+		landing(edgeOf(area, edge, VIEW_EDGE_PX), halfOf(area, edge), {
+			node: root.id,
+			edge,
+		}),
+	);
 	const slots = [...stage.querySelectorAll("[data-tab-slot]")].map(
 		(slot): DropSpot => {
 			const rect = clipped(rectOf(slot), area);
 			const pane = slot.getAttribute("data-pane") ?? "";
 			const index = Number(slot.getAttribute("data-tab-slot"));
-			return {
-				hit: rect,
-				shows: { ...rect, left: rect.left - MARK_PX / 2, width: MARK_PX },
-				drop: () => drop({ pane, index }),
-			};
+			return landing(
+				rect,
+				{ ...rect, left: rect.left - MARK_PX / 2, width: MARK_PX },
+				{ pane, index },
+			);
 		},
 	);
 	const bodies = [...stage.querySelectorAll("[data-pane-body]")].map(
@@ -267,17 +286,13 @@ export function splitSpots<T>(
 		}),
 	);
 	const edges = bodies.flatMap(({ pane, rect }) =>
-		EDGES.map((edge) => ({
-			hit: bandOf(rect, edge),
-			shows: halfOf(rect, edge),
-			drop: () => drop({ pane, edge }),
-		})),
+		EDGES.map((edge) =>
+			landing(bandOf(rect, edge), halfOf(rect, edge), { pane, edge }),
+		),
 	);
-	const centers = bodies.map(({ pane, rect }) => ({
-		hit: middleOf(rect),
-		shows: rect,
-		drop: () => drop({ pane }),
-	}));
+	const centers = bodies.map(({ pane, rect }) =>
+		landing(middleOf(rect), rect, { pane }),
+	);
 	return [...view, ...slots, ...edges, ...centers].filter(
 		(spot) => spot.hit.width > 0 && spot.hit.height > 0,
 	);
@@ -501,6 +516,7 @@ function usePagedScroll(shown: boolean) {
 
 interface View<T> {
 	layout: SplitLayout<T>;
+	previewing: string | undefined;
 	dragging: boolean;
 	tabKind: string;
 	onChange: (layout: SplitLayout<T>) => void;
@@ -742,6 +758,7 @@ function Split({ first, children }: { first: boolean; children: ReactNode }) {
 function PaneView<T>({
 	pane,
 	layout,
+	previewing,
 	dragging,
 	tabKind,
 	onChange,
@@ -753,6 +770,7 @@ function PaneView<T>({
 }: {
 	pane: Pane<T>;
 	layout: SplitLayout<T>;
+	previewing: string | undefined;
 	dragging: boolean;
 	tabKind: string;
 	onChange: (layout: SplitLayout<T>) => void;
@@ -896,11 +914,21 @@ function PaneView<T>({
 						value={tab.id}
 						className={`absolute inset-0 overflow-auto ${SLIDES_SHORT} ${dragging ? "pointer-events-none" : ""}`}
 					>
-						{renderTab(tab.content, tab.id)}
+						{tab.id === previewing ? (
+							<Arriving />
+						) : (
+							renderTab(tab.content, tab.id)
+						)}
 					</TabsContent>
 				))}
 			</div>
 		</Tabs>
+	);
+}
+
+function Arriving() {
+	return (
+		<div className="absolute inset-2 rounded-md border-2 border-accent border-dashed bg-accent/10" />
 	);
 }
 
