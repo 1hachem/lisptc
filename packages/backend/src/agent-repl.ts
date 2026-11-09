@@ -103,7 +103,7 @@ export async function workspaceExtensions(
 	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const report = reportsOf(workspaceId, connect);
-	const containers = containerHost(workspaceId, report, chatId);
+	const containers = containerHost(workspaceId, report);
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
@@ -198,6 +198,7 @@ export async function workspaceExtensions(
 			}),
 			policy: permissions.rules,
 			registry: new ConvexMcpRegistry(workspaceId, connect),
+			...(chatId === undefined ? {} : { instance: chatId }),
 		}),
 		llmExtension(llmHost),
 		semanticExtension(semanticHost),

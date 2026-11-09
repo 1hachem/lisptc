@@ -362,6 +362,7 @@ export default defineSchema({
 			"server",
 			"instance",
 		])
+		.index("by_instance", ["instance"])
 		.index("by_reporter", ["reporter"]),
 
 	mcpReporters: defineTable({

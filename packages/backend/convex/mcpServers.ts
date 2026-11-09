@@ -73,6 +73,16 @@ export const list = query({
 	},
 });
 
+async function heldByChat(
+	ctx: MutationCtx,
+	workspaceId: Id<"workspaces">,
+	instance: string,
+): Promise<boolean> {
+	const chatId = ctx.db.normalizeId("chats", instance);
+	if (chatId === null) return false;
+	return (await ctx.db.get(chatId))?.workspaceId === workspaceId;
+}
+
 async function putServer(
 	ctx: MutationCtx,
 	{ workspaceId, server, instance, phase, reason }: ServerRow,
@@ -87,7 +97,10 @@ async function putServer(
 				.eq("instance", instance),
 		)
 		.unique();
-	if (phase === "gone") {
+	if (
+		phase === "gone" ||
+		(instance !== undefined && !(await heldByChat(ctx, workspaceId, instance)))
+	) {
 		if (existing !== null) await ctx.db.delete(existing._id);
 		return;
 	}
@@ -126,6 +139,7 @@ export const observeServer = internalMutation({
 
 const reported = v.object({
 	server: v.string(),
+	instance: v.optional(v.string()),
 	phase: v.union(mcpServerPhase, v.literal("gone")),
 	reason: v.optional(v.string()),
 });
@@ -170,11 +184,11 @@ export const report = mutation({
 		...reported.fields,
 	},
 	returns: v.null(),
-	handler: async (ctx, { workspaceId, reporter, server, phase, reason }) => {
+	handler: async (ctx, { workspaceId, reporter, reason, ...row }) => {
 		await requireWorkspace(ctx, workspaceId);
 		const by = sessionReporter(reporter);
 		await beat(ctx, by, workspaceId);
-		await putServer(ctx, { workspaceId, server, phase, ...tailOf(reason) }, by);
+		await putServer(ctx, { workspaceId, ...row, ...tailOf(reason) }, by);
 		return null;
 	},
 });
@@ -190,12 +204,8 @@ export const heartbeat = mutation({
 		await requireWorkspace(ctx, workspaceId);
 		const by = sessionReporter(reporter);
 		await beat(ctx, by, workspaceId);
-		for (const { server, phase, reason } of servers)
-			await putServer(
-				ctx,
-				{ workspaceId, server, phase, ...tailOf(reason) },
-				by,
-			);
+		for (const { reason, ...row } of servers)
+			await putServer(ctx, { workspaceId, ...row, ...tailOf(reason) }, by);
 		return null;
 	},
 });
@@ -441,6 +451,23 @@ export const purge = internalMutation({
 		)
 			await ctx.scheduler.runAfter(0, internal.mcpServers.purge, {
 				workspaceId,
+			});
+		return null;
+	},
+});
+
+export const purgeInstance = internalMutation({
+	args: { instance: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { instance }) => {
+		const servers = await ctx.db
+			.query("mcpServers")
+			.withIndex("by_instance", (q) => q.eq("instance", instance))
+			.take(PURGE_BATCH);
+		for (const row of servers) await ctx.db.delete(row._id);
+		if (servers.length === PURGE_BATCH)
+			await ctx.scheduler.runAfter(0, internal.mcpServers.purgeInstance, {
+				instance,
 			});
 		return null;
 	},

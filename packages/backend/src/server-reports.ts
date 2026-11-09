@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { ServerReport, ServerReporter } from "@repo/mcp-extension/ports";
+import {
+	refKey,
+	type ServerReport,
+	type ServerReporter,
+} from "@repo/mcp-extension/ports";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
@@ -41,8 +45,9 @@ export function reportsOf(
 	};
 
 	return (report) => {
-		if (report.phase === "gone") held.delete(report.server);
-		else held.set(report.server, report);
+		const key = refKey({ name: report.server, instance: report.instance });
+		if (report.phase === "gone") held.delete(key);
+		else held.set(key, report);
 		send(() =>
 			connect().mutation(api.mcpServers.report, {
 				workspaceId,

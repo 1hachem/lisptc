@@ -24,6 +24,7 @@ import type * as lib_chunks from "../lib/chunks.js";
 import type * as lib_claimed from "../lib/claimed.js";
 import type * as lib_clamp from "../lib/clamp.js";
 import type * as lib_env from "../lib/env.js";
+import type * as lib_existing from "../lib/existing.js";
 import type * as lib_files from "../lib/files.js";
 import type * as lib_names from "../lib/names.js";
 import type * as lib_preferenceDefaults from "../lib/preferenceDefaults.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   "lib/claimed": typeof lib_claimed;
   "lib/clamp": typeof lib_clamp;
   "lib/env": typeof lib_env;
+  "lib/existing": typeof lib_existing;
   "lib/files": typeof lib_files;
   "lib/names": typeof lib_names;
   "lib/preferenceDefaults": typeof lib_preferenceDefaults;

@@ -3,6 +3,7 @@ import type {
 	McpHost,
 	McpTransport,
 	ServerHandle,
+	ServerRef,
 	ServerReporter,
 	ServerState,
 	StdioConnConfig,
@@ -66,14 +67,14 @@ export class BridgedHost implements McpHost {
 			});
 			throw ex;
 		}
-		const opened = reportedTransport(name, channel, this.report, () => {
+		const opened = reportedTransport({ name }, channel, this.report, () => {
 			if (this.opened.get(name) === opened) this.opened.delete(name);
 		});
 		this.opened.set(name, opened);
 		return { transport: () => opened.transport };
 	}
 
-	async stop(name: string): Promise<void> {
+	async stop({ name }: ServerRef): Promise<void> {
 		const opened = this.opened.get(name);
 		if (opened === undefined) return;
 		this.opened.delete(name);
@@ -81,26 +82,28 @@ export class BridgedHost implements McpHost {
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		await this.stop(conf.name);
+		await this.stop(conf);
 		this.report({ server: conf.name, phase: "gone" });
 	}
 
 	async stopAll(): Promise<void> {
-		await Promise.all([...this.opened.keys()].map((name) => this.stop(name)));
+		await Promise.all(
+			[...this.opened.keys()].map((name) => this.stop({ name })),
+		);
 	}
 
-	status(name: string): ServerState {
+	status({ name }: ServerRef): ServerState {
 		if (!this.opened.has(name)) return "unknown";
 		return this.desktop.running(name) ? "running" : "stopped";
 	}
 
-	logs(_name: string): string {
+	logs(_server: ServerRef): string {
 		return "";
 	}
 
-	used(_name: string): void {}
+	used(_server: ServerRef): void {}
 
-	async asleep(_name: string): Promise<boolean> {
+	async asleep(_server: ServerRef): Promise<boolean> {
 		return false;
 	}
 }

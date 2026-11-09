@@ -63,7 +63,7 @@ describe("BridgedHost", () => {
 		expect(desktop.opened).toEqual([
 			{ name: "fs", command: "npx", args: ["fs-mcp"], env: {} },
 		]);
-		expect(host.status("fs")).toBe("running");
+		expect(host.status({ name: "fs" })).toBe("running");
 	});
 
 	it("reports a bridged server stopped once the desktop no longer runs it", async () => {
@@ -75,7 +75,7 @@ describe("BridgedHost", () => {
 
 		alive.value = false;
 
-		expect(host.status("fs")).toBe("stopped");
+		expect(host.status({ name: "fs" })).toBe("stopped");
 	});
 
 	it("refuses a server that does not run on the desktop", async () => {
@@ -91,14 +91,14 @@ describe("BridgedHost", () => {
 		const host = new BridgedHost(bridge(), (r) => reports.push(r));
 		await connected(host);
 
-		await host.stop("fs");
+		await host.stop({ name: "fs" });
 
 		expect(reports).toEqual([
 			{ server: "fs", phase: "starting" },
 			{ server: "fs", phase: "ready" },
 			{ server: "fs", phase: "sleeping" },
 		]);
-		expect(host.status("fs")).toBe("unknown");
+		expect(host.status({ name: "fs" })).toBe("unknown");
 	});
 
 	it("reports a server failed when it exits on the desktop", async () => {
@@ -114,7 +114,7 @@ describe("BridgedHost", () => {
 			phase: "failed",
 			reason: '"fs" exited on the desktop',
 		});
-		expect(host.status("fs")).toBe("unknown");
+		expect(host.status({ name: "fs" })).toBe("unknown");
 	});
 
 	it("reports the bridge's refusal when no desktop is connected", async () => {

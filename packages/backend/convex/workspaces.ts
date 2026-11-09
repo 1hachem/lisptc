@@ -10,6 +10,7 @@ import {
 	query,
 } from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
+import { existingIn } from "./lib/existing.js";
 import { slugify } from "./lib/slug.js";
 import { dropRepl } from "./repls.js";
 import { modelChoice, workspaceIcon } from "./schema.js";
@@ -156,20 +157,7 @@ export const remove = mutation({
 	},
 });
 
-export const existing = internalQuery({
-	args: { ids: v.array(v.string()) },
-	returns: v.array(v.string()),
-	handler: async (ctx, { ids }) => {
-		if (ids.length > 256) throw new ConvexError({ code: "TOO_MANY" });
-		const found: string[] = [];
-		for (const id of ids) {
-			const normalized = ctx.db.normalizeId("workspaces", id);
-			if (normalized !== null && (await ctx.db.get(normalized)) !== null)
-				found.push(id);
-		}
-		return found;
-	},
-});
+export const existing = existingIn("workspaces");
 
 export const owner = internalQuery({
 	args: { workspaceId: v.id("workspaces") },
