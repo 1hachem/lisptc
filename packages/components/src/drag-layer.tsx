@@ -15,7 +15,6 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
-	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -317,24 +316,28 @@ function Overlay({ carry, onEnd }: { carry: Carry; onEnd: () => void }) {
 	}, [geometry, carry.carried.ghost]);
 	const [state, setState] = useState<At>({ at: HOME });
 	const grabbed = useRef(false);
-	useLayoutEffect(() => {
+	useEffect(() => {
 		if (!frame || !geometry || grabbed.current) return;
-		const grab = frame.querySelector("[data-grab]");
-		if (!grab) return;
 		grabbed.current = true;
-		grab.dispatchEvent(
-			new window.PointerEvent("pointerdown", {
-				bubbles: true,
-				cancelable: true,
-				clientX: carry.pointer.x,
-				clientY: carry.pointer.y,
-				button: 0,
-				buttons: 1,
-				pointerId: 1,
-				isPrimary: true,
-			}),
-		);
-	});
+		const handle = requestAnimationFrame(() => {
+			frame.querySelector("[data-grab]")?.dispatchEvent(
+				new window.PointerEvent("pointerdown", {
+					bubbles: true,
+					cancelable: true,
+					clientX: carry.pointer.x,
+					clientY: carry.pointer.y,
+					button: 0,
+					buttons: 1,
+					pointerId: 1,
+					isPrimary: true,
+				}),
+			);
+		});
+		return () => {
+			cancelAnimationFrame(handle);
+			grabbed.current = false;
+		};
+	}, [frame, geometry, carry.pointer]);
 	const onDropState = useCallback(
 		(next: At) => {
 			setState(next);
