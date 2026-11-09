@@ -98,7 +98,7 @@ export function containerHost(
 		create: () => new DockerHost(new LocalProcessHost(), report),
 	};
 	const tried = {
-		kubernetes: [kubernetes, docker],
+		kubernetes: [kubernetes],
 		docker: [docker],
 	};
 	if (mcpEnv.LISPTC_MCP_HOST === "process") return new LocalProcessHost();

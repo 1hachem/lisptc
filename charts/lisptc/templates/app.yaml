@@ -43,11 +43,6 @@ spec:
       {{- end }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      volumes:
-        - name: docker
-          hostPath:
-            path: /var/run/docker.sock
-            type: Socket
       {{- end }}
       containers:
         - name: app
@@ -75,11 +70,6 @@ spec:
             - name: LISPTC_OAUTH_REDIRECT_URL
               value: {{ printf "%s/oauth/callback" (include "lisptc.url" (include "lisptc.appHostname" .)) | quote }}
             {{- end }}
-          {{- if .Values.dev.enabled }}
-          volumeMounts:
-            - name: docker
-              mountPath: /var/run/docker.sock
-          {{- end }}
           livenessProbe:
             httpGet:
               {{- if .Values.dev.enabled }}
