@@ -159,7 +159,6 @@ export default defineSchema({
 		hidden: v.optional(v.array(v.string())),
 		statusBar: v.optional(v.array(v.string())),
 		statusBarHidden: v.optional(v.array(v.string())),
-		motion: v.optional(v.string()),
 		panelMotion: v.optional(v.boolean()),
 		traceBesideChat: v.optional(v.boolean()),
 		traceLink: v.optional(v.boolean()),
