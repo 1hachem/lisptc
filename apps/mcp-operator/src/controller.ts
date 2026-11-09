@@ -2,10 +2,10 @@ import type { McpServer } from "@repo/mcp-extension/kubernetes";
 import type { Cluster, Servers } from "./cluster.ts";
 import { type Placement, reconcile } from "./reconcile.ts";
 import type {
+	Existing,
 	ServerRow,
 	Snapshot,
 	StatusSink,
-	Workspaces,
 } from "./status-sink.ts";
 import { sweep } from "./sweep.ts";
 import { ownerOf } from "./workload.ts";
@@ -17,7 +17,8 @@ export interface ControllerDeps {
 	cluster: Cluster;
 	servers: Servers;
 	sink: StatusSink;
-	workspaces: Workspaces;
+	workspaces: Existing;
+	chats: Existing;
 	placement: Placement;
 	lookup(name: string): McpServer | undefined;
 	all(): McpServer[];
@@ -112,12 +113,13 @@ export class Controller {
 	}
 
 	async sweep(): Promise<void> {
-		const { cluster, placement, servers, workspaces } = this.deps;
+		const { cluster, placement, servers, workspaces, chats } = this.deps;
 		await sweep({
 			cluster,
 			prefix: placement.prefix,
 			servers: this.deps.all(),
 			existing: (ids) => workspaces.existing(ids),
+			existingChats: (ids) => chats.existing(ids),
 			removeServer: (name) => servers.remove(name),
 			now: this.clock(),
 		});

@@ -1,10 +1,10 @@
 import { ConvexHttpClient } from "convex/browser";
-import { makeFunctionReference } from "convex/server";
+import { type FunctionReference, makeFunctionReference } from "convex/server";
 import type {
+	Existing,
 	ServerRow,
 	Snapshot,
 	StatusSink,
-	Workspaces,
 } from "./status-sink.ts";
 
 type ServerArgs = Omit<ServerRow, "workspace"> & { workspaceId: string };
@@ -18,9 +18,18 @@ const reconcile = makeFunctionReference<
 	null
 >("mcpServers:reconcile");
 
-const existing = makeFunctionReference<"query", { ids: string[] }, string[]>(
+type ExistingQuery = FunctionReference<
+	"query",
+	"public",
+	{ ids: string[] },
+	string[]
+>;
+
+const existingWorkspaces: ExistingQuery = makeFunctionReference(
 	"workspaces:existing",
 );
+
+const existingChats: ExistingQuery = makeFunctionReference("chats:existing");
 
 const EXISTING_BATCH = 256;
 
@@ -39,7 +48,11 @@ function adminClient(url: string, adminKey: string): ConvexHttpClient {
 	return client;
 }
 
-export function convexWorkspaces(url: string, adminKey: string): Workspaces {
+function convexExisting(
+	url: string,
+	adminKey: string,
+	existing: ExistingQuery,
+): Existing {
 	const client = adminClient(url, adminKey);
 	return {
 		async existing(ids) {
@@ -52,6 +65,14 @@ export function convexWorkspaces(url: string, adminKey: string): Workspaces {
 			return found;
 		},
 	};
+}
+
+export function convexWorkspaces(url: string, adminKey: string): Existing {
+	return convexExisting(url, adminKey, existingWorkspaces);
+}
+
+export function convexChats(url: string, adminKey: string): Existing {
+	return convexExisting(url, adminKey, existingChats);
 }
 
 export function convexSink(url: string, adminKey: string): StatusSink {

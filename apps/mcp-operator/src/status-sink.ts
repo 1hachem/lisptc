@@ -20,6 +20,6 @@ export interface StatusSink {
 	reconcile(snapshot: Snapshot): Promise<void>;
 }
 
-export interface Workspaces {
+export interface Existing {
 	existing(ids: readonly string[]): Promise<ReadonlySet<string>>;
 }
