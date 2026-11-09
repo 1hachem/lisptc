@@ -34,10 +34,7 @@ export class ProbedHost implements McpHost {
 		private readonly last: () => McpHost,
 	) {}
 
-	async ensure(
-		conf: ConnConfig,
-		watch?: StartWatch,
-	): Promise<ServerHandle | undefined> {
+	async ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle> {
 		return await (await this.resolve()).ensure(conf, watch);
 	}
 
@@ -59,10 +56,6 @@ export class ProbedHost implements McpHost {
 
 	logs(name: string): string {
 		return this.host?.logs(name) ?? "";
-	}
-
-	watches(conf: ConnConfig): boolean {
-		return this.host?.watches?.(conf) ?? false;
 	}
 
 	used(name: string): void {

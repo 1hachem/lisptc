@@ -5,8 +5,7 @@ import {
 	PatchStrategy,
 	setHeaderOptions,
 } from "@kubernetes/client-node";
-import { launchFor } from "./docker-host.ts";
-import { LocalProcessHost } from "./local-host.ts";
+import { launchFor } from "./launch.ts";
 import {
 	GROUP,
 	KIND,
@@ -51,7 +50,6 @@ export interface KubernetesHostOptions {
 	chat?: string;
 	namespace: string;
 	store?: ServerStore;
-	fallback?: McpHost;
 	clock?: () => number;
 	limits?: StartLimits;
 	imageTag?: string;
@@ -212,13 +210,11 @@ export class KubernetesHost implements McpHost {
 	private readonly followed = new Map<string, Followed>();
 	private readonly starting = new Map<string, Start>();
 	private readonly store: ServerStore;
-	private readonly fallback: McpHost;
 	private readonly clock: () => number;
 	private readonly limits: StartLimits;
 
 	constructor(private readonly options: KubernetesHostOptions) {
 		this.store = options.store ?? clientStore(options.namespace);
-		this.fallback = options.fallback ?? new LocalProcessHost();
 		this.clock = options.clock ?? epochSeconds;
 		this.limits = options.limits ?? START_LIMITS.cluster;
 	}
@@ -226,10 +222,8 @@ export class KubernetesHost implements McpHost {
 	async ensure(
 		conf: ConnConfig,
 		watch: StartWatch = {},
-	): Promise<ServerHandle | undefined> {
+	): Promise<ServerHandle> {
 		if ("url" in conf) return await this.remote(conf);
-		if (launchFor(conf) === undefined)
-			return await this.fallback.ensure(conf, watch);
 		const start = this.starting.get(conf.name) ?? this.begin(conf);
 		return await this.join(start, watch);
 	}
@@ -266,17 +260,12 @@ export class KubernetesHost implements McpHost {
 	async stop(name: string): Promise<void> {
 		await this.starting.get(name)?.run.catch(() => {});
 		const followed = this.followed.get(name);
-		if (!followed) return await this.fallback.stop(name);
+		if (!followed) return;
 		this.unfollow(followed);
 		await this.store.patchSpec(followed.name, { lastUsed: 0 });
 	}
 
-	watches(conf: ConnConfig): boolean {
-		return "url" in conf || launchFor(conf) !== undefined;
-	}
-
 	async remove(conf: ConnConfig): Promise<void> {
-		if (!this.watches(conf)) return await this.fallback.remove(conf);
 		await this.starting.get(conf.name)?.run.catch(() => {});
 		const followed = this.followed.get(conf.name);
 		if (followed) this.unfollow(followed);
@@ -299,25 +288,21 @@ export class KubernetesHost implements McpHost {
 				this.store.patchSpec(followed.name, { lastUsed: 0 }),
 			),
 		);
-		await this.fallback.stopAll();
 	}
 
 	status(name: string): ServerState {
 		const followed = this.followed.get(name);
-		return followed ? followed.state : this.fallback.status(name);
+		return followed ? followed.state : "unknown";
 	}
 
 	logs(name: string): string {
 		const followed = this.followed.get(name);
-		return followed ? followed.logs : this.fallback.logs(name);
+		return followed ? followed.logs : "";
 	}
 
 	used(name: string): void {
 		const followed = this.followed.get(name);
-		if (!followed) {
-			this.fallback.used(name);
-			return;
-		}
+		if (!followed) return;
 		const now = this.clock();
 		if (followed.state !== "running" || now - followed.touched < TOUCH_SECONDS)
 			return;
@@ -327,7 +312,7 @@ export class KubernetesHost implements McpHost {
 
 	async asleep(name: string): Promise<boolean> {
 		const followed = this.followed.get(name);
-		if (!followed) return await this.fallback.asleep(name);
+		if (!followed) return false;
 		if (followed.state !== "running") return false;
 		const live = await this.store.get(followed.name);
 		const slept =

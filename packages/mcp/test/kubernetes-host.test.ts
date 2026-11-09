@@ -7,7 +7,6 @@ import {
 } from "../src/mcp-server-resource.ts";
 import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
 import { bundledToolkit } from "../src/toolkit.ts";
-import { recordingHost } from "./helpers.ts";
 
 const browser: ContainerConnConfig = {
 	name: "playwright",
@@ -70,17 +69,11 @@ function fakeStore(operator: Operator = ready) {
 	return { store, servers, patches, removed };
 }
 
-function host(
-	store: ServerStore,
-	fallback = recordingHost(),
-	clock = () => 1000,
-	imageTag?: string,
-) {
+function host(store: ServerStore, clock = () => 1000, imageTag?: string) {
 	return new KubernetesHost({
 		scope: "ws1",
 		namespace: "lisptc",
 		store,
-		fallback,
 		limits: { pollMs: 1, stallMs: 200, ceilingMs: 400 },
 		clock,
 		imageTag,
@@ -93,7 +86,6 @@ function chatHost(store: ServerStore, chat: string) {
 		chat,
 		namespace: "lisptc",
 		store,
-		fallback: recordingHost(),
 		limits: { pollMs: 1, stallMs: 200, ceilingMs: 400 },
 		clock: () => 1000,
 	});
@@ -133,7 +125,7 @@ describe("the kubernetes host", () => {
 	])("runs internal image %s as %s when handed a tag", async (image, ran) => {
 		const fake = fakeStore();
 
-		await host(fake.store, recordingHost(), () => 1000, "pr-7-abc").ensure({
+		await host(fake.store, () => 1000, "pr-7-abc").ensure({
 			...browser,
 			image,
 			internal: true,
@@ -145,7 +137,7 @@ describe("the kubernetes host", () => {
 	it("runs an image the repo does not build at its own tag", async () => {
 		const fake = fakeStore();
 
-		await host(fake.store, recordingHost(), () => 1000, "pr-7-abc").ensure({
+		await host(fake.store, () => 1000, "pr-7-abc").ensure({
 			...browser,
 			image: "grafana/mcp-grafana:latest",
 		});
@@ -169,7 +161,7 @@ describe("the kubernetes host", () => {
 
 	it("runs every internal image the toolkit names at the tag it was handed", async () => {
 		const fake = fakeStore();
-		const tagged = host(fake.store, recordingHost(), () => 1000, "pr-7-abc");
+		const tagged = host(fake.store, () => 1000, "pr-7-abc");
 		const images = bundledToolkit()
 			.all()
 			.filter((conf) => "internal" in conf && conf.internal);
@@ -346,7 +338,6 @@ describe("the kubernetes host", () => {
 			scope: "ws1",
 			namespace: "lisptc",
 			store: fake.store,
-			fallback: recordingHost(),
 			limits: { pollMs: 5, stallMs: 250, ceilingMs: 2_000 },
 		});
 
@@ -392,7 +383,6 @@ describe("the kubernetes host", () => {
 			scope: "ws1",
 			namespace: "lisptc",
 			store: fake.store,
-			fallback: recordingHost(),
 			limits: { pollMs: 1, stallMs: 5_000, ceilingMs: 5_000 },
 		});
 		const first = kube.ensure(browser);
@@ -425,7 +415,6 @@ describe("the kubernetes host", () => {
 			scope: "ws1",
 			namespace: "lisptc",
 			store: fake.store,
-			fallback: recordingHost(),
 			limits: { pollMs: 1, stallMs: 5_000, ceilingMs: 5_000 },
 		});
 		const one = new AbortController();
@@ -460,29 +449,24 @@ describe("the kubernetes host", () => {
 
 	it("puts every server it runs to sleep when it stops them all", async () => {
 		const fake = fakeStore();
-		const fallback = recordingHost();
-		const kube = host(fake.store, fallback);
+		const kube = host(fake.store);
 		await kube.ensure(browser);
 
 		await kube.stopAll();
 
 		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(0);
 		expect(kube.status("playwright")).toBe("stopped");
-		expect(fallback.stoppedAll).toBe(1);
 	});
 
 	it("records a remote server on the cluster and hands back its url at once", async () => {
 		const fake = fakeStore(() => undefined);
-		const fallback = recordingHost();
-		const kube = host(fake.store, fallback);
+		const kube = host(fake.store);
 
 		expect(await kube.ensure(remote)).toEqual({ url: remote.url });
 
-		expect(fallback.ensured).toEqual([]);
 		expect(fake.servers.get(serverName("ws1", "remote"))?.spec.remote).toEqual({
 			url: remote.url,
 		});
-		expect(kube.watches(remote)).toBe(true);
 	});
 
 	it("deletes a remote server it was asked to remove", async () => {
@@ -508,7 +492,7 @@ describe("the kubernetes host", () => {
 	it("keeps a server awake only while its tools are called", async () => {
 		const fake = fakeStore();
 		const time = ticking();
-		const kube = host(fake.store, recordingHost(), time.clock);
+		const kube = host(fake.store, time.clock);
 		await kube.ensure(browser);
 
 		kube.used("playwright");
@@ -541,7 +525,7 @@ describe("the kubernetes host", () => {
 	it("tells a server went to sleep once its idle window has passed", async () => {
 		const fake = fakeStore();
 		const time = ticking();
-		const kube = host(fake.store, recordingHost(), time.clock);
+		const kube = host(fake.store, time.clock);
 		await kube.ensure(browser);
 		const idle = fake.servers.get(NAME)?.spec.idleSeconds ?? 0;
 
@@ -562,14 +546,12 @@ describe("the kubernetes host", () => {
 		expect(kube.status("playwright")).toBe("stopped");
 	});
 
-	it("asks the fallback about a server it does not run", async () => {
-		const fallback = recordingHost();
-		fallback.sleeping.add("remote");
-		const kube = host(fakeStore().store, fallback);
+	it("knows nothing of a server it does not run", async () => {
+		const kube = host(fakeStore().store);
 
 		kube.used("remote");
 
-		expect(fallback.uses).toEqual(["remote"]);
-		expect(await kube.asleep("remote")).toBe(true);
+		expect(kube.status("remote")).toBe("unknown");
+		expect(await kube.asleep("remote")).toBe(false);
 	});
 });

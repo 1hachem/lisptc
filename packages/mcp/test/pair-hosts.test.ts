@@ -13,7 +13,7 @@ describe("a pair on a host without containers", () => {
 		).rejects.toThrow(/needs a container host/);
 	});
 
-	it("runs an image without an app as a local process", async () => {
+	it("pipes an image without an app to its command, as a local process", async () => {
 		await expect(
 			new LocalProcessHost().ensure({
 				name: "notes",
@@ -21,6 +21,6 @@ describe("a pair on a host without containers", () => {
 				port: 8000,
 				command: "notes-mcp",
 			}),
-		).resolves.toBeUndefined();
+		).resolves.toHaveProperty("transport");
 	});
 });

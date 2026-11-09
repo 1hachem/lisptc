@@ -4,7 +4,6 @@ import {
 	UnauthorizedError,
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
@@ -42,23 +41,6 @@ function sdkTransport(inner: McpTransport): Transport {
 	inner.onclose = () => outer.onclose?.();
 	inner.onerror = (error) => outer.onerror?.(error);
 	return outer;
-}
-
-function stdioTransport(conf: ConnConfig): StdioClientTransport {
-	const command = "command" in conf ? conf.command : undefined;
-	if (command === undefined)
-		throw new Error(
-			`${conf.name}: runs as a container image and the host started none`,
-		);
-	return new StdioClientTransport({
-		command,
-		args: conf.args ?? [],
-		env: {
-			// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
-			...(process.env as Record<string, string>),
-			...(conf.env ?? {}),
-		},
-	});
 }
 
 export interface McpClientPorts {
@@ -118,7 +100,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 
 	async function serverUrlOf(conf: OAuthConnConfig): Promise<string> {
 		const handle = await ports.host.ensure(conf);
-		if (handle && "url" in handle) return handle.url;
+		if ("url" in handle) return handle.url;
 		if ("url" in conf) return conf.url;
 		throw new Error(`${conf.name}: the host started no server to sign in to`);
 	}
@@ -211,11 +193,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		}
 	}
 
-	function plainTransport(
-		conf: ConnConfig,
-		handle: ServerHandle | undefined,
-	): Transport {
-		if (!handle) return stdioTransport(conf);
+	function plainTransport(handle: ServerHandle): Transport {
 		if ("transport" in handle) return sdkTransport(handle.transport());
 		return new StreamableHTTPClientTransport(new URL(handle.url), {
 			requestInit: handle.headers ? { headers: handle.headers } : undefined,
@@ -228,13 +206,10 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		watch: StartWatch,
 	): Promise<ConnectResult> {
 		const { signal } = watch;
-		const handle: ServerHandle | undefined = await ports.host.ensure(
-			conf,
-			watch,
-		);
-		if (handle && "url" in handle && signsIn(conf))
+		const handle = await ports.host.ensure(conf, watch);
+		if ("url" in handle && signsIn(conf))
 			await connectAuthorized(client, conf, handle.url, signal);
-		else await client.connect(plainTransport(conf, handle), { signal });
+		else await client.connect(plainTransport(handle), { signal });
 		const { tools } = await client.listTools(undefined, { signal });
 		if (tools.length === 0) {
 			await client.close().catch(() => {});
@@ -347,9 +322,6 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 				throw new Error("authorization did not complete (unexpected redirect)");
 		},
 
-		watches(conf: ConnConfig): boolean {
-			return ports.host.watches?.(conf) ?? false;
-		},
 		async shutdown(): Promise<void> {
 			await ports.host.stopAll();
 		},

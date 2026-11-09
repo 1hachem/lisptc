@@ -94,13 +94,50 @@ describe("what the local process host reports about the servers it runs", () => 
 		});
 		expect(host.status("notes")).toBe("unknown");
 	});
+});
 
-	it("watches the servers it launches, and leaves a remote one to the session", () => {
-		const host = new LocalProcessHost();
+describe("what the local process host reports about the stdio servers it pipes", () => {
+	async function piped(host: LocalProcessHost, script: string) {
+		const handle = await host.ensure({
+			name: "fx",
+			command: process.execPath,
+			args: ["-e", script],
+		});
+		if (!("transport" in handle)) throw new Error("expected a transport");
+		const transport = handle.transport();
+		await transport.start();
+		return transport;
+	}
 
-		expect(host.watches(serving(8000, ""))).toBe(true);
-		expect(
-			host.watches({ name: "linear", url: "https://mcp.linear.app/mcp" }),
-		).toBe(false);
+	it("reports a server starting, then ready, then asleep once its connection closes", async () => {
+		const { host, reports } = reporting();
+		const transport = await piped(host, "setInterval(() => {}, 1000)");
+
+		await transport.close();
+
+		await vi.waitFor(() => expect(reports).toHaveLength(3), { timeout: 5000 });
+		expect(reports).toEqual([
+			{ server: "fx", phase: "starting" },
+			{ server: "fx", phase: "ready" },
+			{ server: "fx", phase: "sleeping" },
+		]);
+		expect(host.status("fx")).toBe("unknown");
+	});
+
+	it("reports a server failed when it exits on its own", async () => {
+		const { host, reports } = reporting();
+		await piped(host, "setTimeout(() => process.exit(1), 200)");
+
+		await vi.waitFor(() => expect(reports).toHaveLength(3), { timeout: 5000 });
+		expect(reports[2]).toMatchObject({ server: "fx", phase: "failed" });
+		expect(host.status("fx")).toBe("unknown");
+	});
+
+	it("refuses an image it has no command to run", async () => {
+		const { host } = reporting();
+
+		await expect(
+			host.ensure({ name: "fs", image: "fs-mcp", port: 8000 }),
+		).rejects.toThrow(/runs as a container image/);
 	});
 });

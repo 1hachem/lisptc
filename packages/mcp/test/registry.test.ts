@@ -85,27 +85,6 @@ describe("the workspace registry", () => {
 		expect(info?.tools.map((tool) => tool.name)).toContain("echo");
 	}, 30_000);
 
-	it("reports a server no host watches as ready once connected, and gone once unloaded", async () => {
-		const registry = memoryRegistry();
-		const { interp } = session(registry);
-		await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
-		expect(registry.observed().get("fx")).toBe("ready");
-		await runAsync(interp, '(unload-mcp "fx")');
-		expect(registry.observed().get("fx")).toBe("gone");
-	}, 30_000);
-
-	it("leaves a container's status to the host that runs it", async () => {
-		const registry = memoryRegistry();
-		const { interp } = session(registry, {
-			...fixtureServer("fx"),
-			image: "ghcr.io/o/fx:main",
-			port: 8000,
-		});
-		await (runSync(interp, '(load-mcp "fx")') as Promise<unknown>);
-		await runAsync(interp, '(unload-mcp "fx")');
-		expect(registry.observed().has("fx")).toBe(false);
-	}, 30_000);
-
 	it("forgets what it described once the server is removed", async () => {
 		const registry = memoryRegistry();
 		const { interp } = session(registry);

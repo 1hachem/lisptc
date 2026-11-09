@@ -4,7 +4,6 @@ import type {
 	V1Pod,
 	V1Service,
 } from "@kubernetes/client-node";
-import { launchFor } from "@repo/mcp-extension/docker-host";
 import {
 	KIND,
 	type McpServer,
@@ -13,6 +12,7 @@ import {
 	specFor,
 	VERSION,
 } from "@repo/mcp-extension/kubernetes";
+import { launchFor } from "@repo/mcp-extension/launch";
 import type { ContainerConnConfig } from "@repo/mcp-extension/ports";
 import type { Cluster, Located, Probe, Servers } from "../src/cluster.ts";
 import type { Deps } from "../src/reconcile.ts";

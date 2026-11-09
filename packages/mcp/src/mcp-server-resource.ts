@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Launch } from "./launch.ts";
 import type {
 	AppContainer,
 	ConnConfig,
@@ -6,13 +7,6 @@ import type {
 	NamedPort,
 	Resources,
 } from "./ports.ts";
-
-export interface Launch {
-	image: string;
-	exposed: string;
-	path: string;
-	args: string[];
-}
 
 export const GROUP = "lisptc.io";
 export const VERSION = "v1alpha1";

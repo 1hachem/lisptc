@@ -13,9 +13,9 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { DockerHost, launchFor } from "../src/docker-host.ts";
+import { DockerHost } from "../src/docker-host.ts";
+import { launchFor } from "../src/launch.ts";
 import type { ConnConfig, HttpConnConfig, ServerReport } from "../src/ports.ts";
-import { recordingHost } from "./helpers.ts";
 
 const locallyLaunched: HttpConnConfig = {
 	name: "sheets",
@@ -30,7 +30,7 @@ const remote: HttpConnConfig = {
 	oauth: true,
 };
 
-describe("what the docker host does with each toolkit modality", () => {
+describe("how each toolkit modality launches in a container", () => {
 	it("runs an image-backed server from its own image", () => {
 		const launch = launchFor({
 			name: "playwright",
@@ -76,44 +76,6 @@ describe("what the docker host does with each toolkit modality", () => {
 	});
 });
 
-describe("the docker host", () => {
-	it("hands a server it launches no container for to the fallback", async () => {
-		const fallback = recordingHost();
-		const host = new DockerHost(fallback);
-
-		const handle = await host.ensure(locallyLaunched);
-
-		expect(handle).toEqual({ url: "http://localhost:8911/mcp" });
-		expect(fallback.ensured.map((c) => c.name)).toEqual(["sheets"]);
-	});
-
-	it("asks the fallback about a server it never started", async () => {
-		const host = new DockerHost(recordingHost());
-
-		expect(host.status("known")).toBe("running");
-		expect(host.logs("known")).toBe("the fallback's log");
-		expect(host.status("playwright")).toBe("unknown");
-	});
-
-	it("stops through the fallback for a name it does not own", async () => {
-		const fallback = recordingHost();
-		const host = new DockerHost(fallback);
-
-		await host.stop("sheets");
-
-		expect(fallback.stopped).toEqual(["sheets"]);
-	});
-
-	it("takes the fallback down with it", async () => {
-		const fallback = recordingHost();
-		const host = new DockerHost(fallback);
-
-		await host.stopAll();
-
-		expect(fallback.stoppedAll).toBe(1);
-	});
-});
-
 const stubDocker = `#!/bin/sh
 case "$1" in
   run) [ -n "$STUB_DOCKER_REFUSE" ] && { echo "no such image" >&2; exit 1; }; echo stub-container ;;
@@ -154,7 +116,7 @@ describe("what the docker host reports about the containers it runs", () => {
 	function reporting(lives: number) {
 		process.env.STUB_DOCKER_LIVES = String(lives);
 		const reports: ServerReport[] = [];
-		const host = new DockerHost(recordingHost(), (r) => reports.push(r));
+		const host = new DockerHost((r) => reports.push(r));
 		return { host, reports };
 	}
 

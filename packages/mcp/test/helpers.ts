@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import { note } from "@repo/interpreter/topics";
+import { LocalProcessHost } from "../src/local-host.ts";
 import type { McpExtensionHost } from "../src/mcp.ts";
 import type {
 	ConnConfig,
@@ -53,6 +54,7 @@ export function recordingHost(): McpHost & {
 	const uses: string[] = [];
 	const sleeping = new Set<string>();
 	let stoppedAll = 0;
+	const local = new LocalProcessHost();
 	return {
 		ensured,
 		stopped,
@@ -62,9 +64,12 @@ export function recordingHost(): McpHost & {
 		get stoppedAll() {
 			return stoppedAll;
 		},
-		ensure: async (conf): Promise<ServerHandle | undefined> => {
+		ensure: async (conf): Promise<ServerHandle> => {
 			ensured.push(conf);
-			return "url" in conf ? { url: conf.url } : undefined;
+			if ("url" in conf) return { url: conf.url };
+			if (conf.command === undefined)
+				return { url: `http://${conf.name}.recorded.test/mcp` };
+			return await local.ensure(conf);
 		},
 		stop: async (name) => {
 			stopped.push(name);
@@ -81,7 +86,6 @@ export function recordingHost(): McpHost & {
 			uses.push(name);
 		},
 		asleep: async (name) => sleeping.has(name),
-		watches: (conf) => "image" in conf,
 	};
 }
 

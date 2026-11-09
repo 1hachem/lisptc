@@ -69,12 +69,4 @@ export class ConvexMcpRegistry implements McpRegistry {
 			server,
 		});
 	}
-
-	async observe(server: string, phase: "ready" | "gone"): Promise<void> {
-		await this.connect().mutation(api.mcpServers.report, {
-			workspaceId: this.workspaceId,
-			server,
-			phase,
-		});
-	}
 }

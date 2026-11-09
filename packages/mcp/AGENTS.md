@@ -16,8 +16,9 @@ Turbo tag: `extension`.
 `src/ports.ts` is the contract layer: the client, host, registry and store
 interfaces, and the tool and connection shapes that cross them. A consumer
 imports it without pulling in the extension. `src/mcp-client.ts`,
-`src/local-host.ts`, `src/docker-host.ts`, `src/kubernetes-host.ts`,
-`src/probed-host.ts` and `src/mcp-oauth.ts` implement against it. **The OAuth
+`src/local-host.ts`, `src/remote-host.ts`, `src/docker-host.ts`,
+`src/kubernetes-host.ts`, `src/routed-host.ts`, `src/probed-host.ts` and
+`src/mcp-oauth.ts` implement against it. **The OAuth
 state is the root's to keep**: every root hands the client an `OAuthStore`. The file one in `src/oauth-host.ts` is for the apps
 that run on the user's own machine, never for the served agent. The served
 agent keeps it in Convex, whichever container host it runs.
@@ -41,7 +42,14 @@ through `sharedAuthCallback`. A client that binds its own loses the flows the
 shared one is holding.
 
 A container host is the one strategy the extension is handed, and it covers
-every modality a toolkit entry can have. Read the modalities off the entry shapes in
+every modality a toolkit entry can have.
+
+**Each server runs on exactly one host, and that host alone reports its
+status.** A host runs one kind of server and hands nothing on to another. A
+root that needs several composes them in a routed host, which sends each
+server to the first host that claims it. Nothing above a host writes a
+server's status, so a new place a server runs is a new host that reports, never
+a status written beside it. Read the modalities off the entry shapes in
 `src/toolkit.ts`, not from prose.
 
 **An entry that names an `image` carries a `port` and never a `url`.** The

@@ -1,8 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
-import { LocalProcessHost } from "./local-host.ts";
-import type { Launch } from "./mcp-server-resource.ts";
+import { type Launch, launchFor } from "./launch.ts";
 import type {
 	ConnConfig,
 	McpHost,
@@ -17,10 +16,6 @@ const exec = promisify(execFile);
 
 const LOGS_KEEP = 8192;
 const PROBE_TIMEOUT_MS = 5_000;
-
-const GATEWAY_IMAGE = "supercorp/supergateway:3.4.3";
-const GATEWAY_PORT = "8000";
-const MCP_PATH = "/mcp";
 
 const HOST_LABEL = "lisptc.mcp.host";
 const SERVER_LABEL = "lisptc.mcp.server";
@@ -38,45 +33,6 @@ function whyItDied(container: Container): string {
 	return tail ? `\n${tail}` : "";
 }
 
-function shellQuote(word: string): string {
-	return /^[\w@%+=:,./-]+$/.test(word)
-		? word
-		: `'${word.replaceAll("'", `'\\''`)}'`;
-}
-
-function stdioCommand(conf: ConnConfig): string {
-	const command = "command" in conf ? conf.command : undefined;
-	if (command === undefined) return "";
-	return [command, ...(conf.args ?? [])].map(shellQuote).join(" ");
-}
-
-export function launchFor(conf: ConnConfig): Launch | undefined {
-	if ("image" in conf)
-		return {
-			image: conf.image,
-			exposed: String(conf.port),
-			path: conf.path ?? MCP_PATH,
-			args: conf.command ? [] : (conf.args ?? []),
-		};
-	if ("url" in conf) return undefined;
-	return {
-		image: GATEWAY_IMAGE,
-		exposed: GATEWAY_PORT,
-		path: MCP_PATH,
-		args: [
-			"--stdio",
-			stdioCommand(conf),
-			"--outputTransport",
-			"streamableHttp",
-			"--stateful",
-			"--port",
-			GATEWAY_PORT,
-			"--streamableHttpPath",
-			MCP_PATH,
-		],
-	};
-}
-
 export async function dockerAnswers(): Promise<boolean> {
 	try {
 		await exec("docker", ["info", "--format", "{{.ServerVersion}}"], {
@@ -92,29 +48,22 @@ export class DockerHost implements McpHost {
 	private readonly containers = new Map<string, Container>();
 	private readonly instance = randomUUID();
 
-	constructor(
-		private readonly fallback: McpHost = new LocalProcessHost(),
-		private readonly report: ServerReporter = () => {},
-	) {}
+	constructor(private readonly report: ServerReporter = () => {}) {}
 
-	async ensure(
-		conf: ConnConfig,
-		watch?: StartWatch,
-	): Promise<ServerHandle | undefined> {
+	async ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle> {
 		const launch = launchFor(conf);
-		if (launch === undefined) return await this.fallback.ensure(conf, watch);
+		if (launch === undefined)
+			throw new Error(`${conf.name}: has no container to run.`);
 		const running = this.containers.get(conf.name);
 		if (running && running.state === "running") return running.handle;
 		return await this.start(conf, launch, watch);
 	}
 
 	async stop(name: string): Promise<void> {
-		if (!(await this.drop(name))) return await this.fallback.stop(name);
-		this.report({ server: name, phase: "sleeping" });
+		if (await this.drop(name)) this.report({ server: name, phase: "sleeping" });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		if (launchFor(conf) === undefined) return await this.fallback.remove(conf);
 		await this.drop(conf.name);
 		this.report({ server: conf.name, phase: "gone" });
 	}
@@ -130,32 +79,23 @@ export class DockerHost implements McpHost {
 
 	async stopAll(): Promise<void> {
 		for (const name of [...this.containers.keys()]) await this.stop(name);
-		await this.fallback.stopAll();
 		await this.reapStrays();
 	}
 
 	status(name: string): ServerState {
 		const container = this.containers.get(name);
-		return container ? container.state : this.fallback.status(name);
+		return container ? container.state : "unknown";
 	}
 
 	logs(name: string): string {
 		const container = this.containers.get(name);
-		return container ? container.logs : this.fallback.logs(name);
+		return container ? container.logs : "";
 	}
 
-	watches(conf: ConnConfig): boolean {
-		return (
-			launchFor(conf) !== undefined || (this.fallback.watches?.(conf) ?? false)
-		);
-	}
+	used(_name: string): void {}
 
-	used(name: string): void {
-		if (!this.containers.has(name)) this.fallback.used(name);
-	}
-
-	async asleep(name: string): Promise<boolean> {
-		return this.containers.has(name) ? false : await this.fallback.asleep(name);
+	async asleep(_name: string): Promise<boolean> {
+		return false;
 	}
 
 	private labels(conf: ConnConfig): string[] {

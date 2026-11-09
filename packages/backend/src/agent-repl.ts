@@ -17,6 +17,7 @@ import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
 import { containerHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { RoutedHost } from "@repo/mcp-extension/routed-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -45,7 +46,7 @@ import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
-import { BridgedHost, type Desktop } from "./desktop-bridge.ts";
+import { BridgedHost, type Desktop, desktopServer } from "./desktop-bridge.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMcpRegistry } from "./mcp-registry.ts";
@@ -101,11 +102,8 @@ export async function workspaceExtensions(
 	connect: Connect,
 	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
-	const containers = containerHost(
-		workspaceId,
-		reportsOf(workspaceId, connect),
-		chatId,
-	);
+	const report = reportsOf(workspaceId, connect);
+	const containers = containerHost(workspaceId, report, chatId);
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
@@ -189,7 +187,13 @@ export async function workspaceExtensions(
 					? { host: containers }
 					: {
 							desktop: async () => desktop.connected(),
-							host: new BridgedHost(desktop, containers),
+							host: new RoutedHost([
+								{
+									claims: desktopServer,
+									host: new BridgedHost(desktop, report),
+								},
+								{ claims: () => true, host: containers },
+							]),
 						}),
 			}),
 			policy: permissions.rules,

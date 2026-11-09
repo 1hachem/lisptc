@@ -1,13 +1,19 @@
 import { spawn } from "node:child_process";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type {
 	ConnConfig,
 	HttpConnConfig,
 	McpHost,
+	McpTransport,
 	ServerHandle,
 	ServerReporter,
 	ServerState,
 	StartWatch,
 } from "./ports.ts";
+import {
+	type ReportedTransport,
+	reportedTransport,
+} from "./reported-transport.ts";
 import { reachable, START_LIMITS, waitForStart } from "./start-wait.ts";
 
 const STDERR_KEEP = 4096;
@@ -21,6 +27,11 @@ interface LocalServer {
 
 type LaunchedConf = HttpConnConfig & { command: string };
 
+interface Piped {
+	readonly name: string;
+	readonly reported: ReportedTransport;
+}
+
 function launched(conf: ConnConfig): conf is LaunchedConf {
 	return "url" in conf && conf.command !== undefined;
 }
@@ -32,22 +43,21 @@ function whyItDied(server: LocalServer): string {
 
 export class LocalProcessHost implements McpHost {
 	private readonly started = new Map<string, LocalServer>();
+	private readonly piped = new Set<Piped>();
 
 	constructor(private readonly report: ServerReporter = () => {}) {}
 
-	async ensure(
-		conf: ConnConfig,
-		watch?: StartWatch,
-	): Promise<ServerHandle | undefined> {
+	async ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle> {
 		if ("image" in conf && conf.app)
 			throw new Error(
 				`${conf.name}: runs an app beside it, which needs a container host (docker or kubernetes), not a local process.`,
 			);
-		if (!("url" in conf)) return undefined;
+		if (!("url" in conf)) return this.pipe(conf);
+		if (!launched(conf))
+			throw new Error(`${conf.name}: is a remote server, not a local one.`);
 		const handle: ServerHandle = conf.headers
 			? { url: conf.url, headers: conf.headers }
 			: { url: conf.url };
-		if (!launched(conf)) return handle;
 		const known = this.started.get(conf.name)?.ready === true;
 		try {
 			const ready = await this.start(conf, handle, watch);
@@ -100,16 +110,48 @@ export class LocalProcessHost implements McpHost {
 		return handle;
 	}
 
+	private pipe(conf: Exclude<ConnConfig, HttpConnConfig>): ServerHandle {
+		if (conf.command === undefined)
+			throw new Error(
+				`${conf.name}: runs as a container image and the host started none`,
+			);
+		const { name, command, args, env } = conf;
+		return {
+			transport: () => {
+				const stdio = new StdioClientTransport({
+					command,
+					args: args ?? [],
+					env: {
+						// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
+						...(process.env as Record<string, string>),
+						...(env ?? {}),
+					},
+				});
+				const piped: Piped = {
+					name,
+					reported: reportedTransport(
+						name,
+						stdio as unknown as McpTransport,
+						this.report,
+						() => this.piped.delete(piped),
+					),
+				};
+				this.piped.add(piped);
+				return piped.reported.transport;
+			},
+		};
+	}
+
 	async stop(name: string): Promise<void> {
-		if (this.drop(name)) this.report({ server: name, phase: "sleeping" });
+		if (await this.drop(name)) this.report({ server: name, phase: "sleeping" });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		this.drop(conf.name);
-		if (launched(conf)) this.report({ server: conf.name, phase: "gone" });
+		await this.drop(conf.name);
+		this.report({ server: conf.name, phase: "gone" });
 	}
 
-	private drop(name: string): boolean {
+	private async drop(name: string): Promise<boolean> {
 		const server = this.started.get(name);
 		if (!server) return false;
 		this.started.delete(name);
@@ -124,16 +166,14 @@ export class LocalProcessHost implements McpHost {
 
 	async stopAll(): Promise<void> {
 		for (const name of [...this.started.keys()]) await this.stop(name);
+		await Promise.all([...this.piped].map((piped) => piped.reported.end()));
 	}
 
 	status(name: string): ServerState {
+		for (const piped of this.piped) if (piped.name === name) return "running";
 		const server = this.started.get(name);
 		if (!server) return "unknown";
 		return server.exited ? "stopped" : "running";
-	}
-
-	watches(conf: ConnConfig): boolean {
-		return launched(conf);
 	}
 
 	logs(name: string): string {

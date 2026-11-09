@@ -4,6 +4,7 @@ import { systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { DockerHost, dockerAnswers } from "./docker-host.ts";
 import { clusterServes, KubernetesHost } from "./kubernetes-host.ts";
+import { launchFor } from "./launch.ts";
 import { LocalProcessHost } from "./local-host.ts";
 import { cachedMachine } from "./machine.ts";
 import type { McpExtensionHost } from "./mcp.ts";
@@ -18,6 +19,8 @@ import type {
 	ServerReporter,
 } from "./ports.ts";
 import { type HostCandidate, ProbedHost } from "./probed-host.ts";
+import { RemoteHost, remoteServer } from "./remote-host.ts";
+import { RoutedHost } from "./routed-host.ts";
 import { miniSearchEngine } from "./search.ts";
 import {
 	bridgedEntries,
@@ -48,7 +51,7 @@ function oauthClients(): OAuthClients {
 
 export function localMcpClient(options: McpHostOptions): McpClient {
 	return mcpClient({
-		host: options.host ?? new LocalProcessHost(),
+		host: options.host ?? localHost(),
 		oauth: options.oauth,
 		redirectUri: oauthEnv.LISPTC_OAUTH_REDIRECT_URL,
 		callbackPort: oauthEnv.LISPTC_OAUTH_CALLBACK_PORT,
@@ -69,6 +72,26 @@ export function finishAuthorization(
 		callbackUrl,
 		oauthClients(),
 	);
+}
+
+const everything = () => true;
+
+export function localHost(report?: ServerReporter): McpHost {
+	return new RoutedHost([
+		{ claims: remoteServer, host: new RemoteHost(report) },
+		{ claims: everything, host: new LocalProcessHost(report) },
+	]);
+}
+
+export function dockerHost(report?: ServerReporter): McpHost {
+	return new RoutedHost([
+		{ claims: remoteServer, host: new RemoteHost(report) },
+		{
+			claims: (conf) => launchFor(conf) !== undefined,
+			host: new DockerHost(report),
+		},
+		{ claims: everything, host: new LocalProcessHost(report) },
+	]);
 }
 
 export function containerHost(
@@ -95,16 +118,15 @@ export function containerHost(
 	const docker: HostCandidate = {
 		name: "docker",
 		available: dockerAnswers,
-		create: () => new DockerHost(new LocalProcessHost(report), report),
+		create: () => dockerHost(report),
 	};
 	const tried = {
 		kubernetes: [kubernetes],
 		docker: [docker],
 	};
-	if (mcpEnv.LISPTC_MCP_HOST === "process") return new LocalProcessHost(report);
-	return new ProbedHost(
-		tried[mcpEnv.LISPTC_MCP_HOST ?? "kubernetes"],
-		() => new LocalProcessHost(report),
+	if (mcpEnv.LISPTC_MCP_HOST === "process") return localHost(report);
+	return new ProbedHost(tried[mcpEnv.LISPTC_MCP_HOST ?? "kubernetes"], () =>
+		localHost(report),
 	);
 }
 
@@ -125,16 +147,13 @@ function desktopParts(
 }
 
 export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
-	const host = options.host ?? new LocalProcessHost();
 	return {
-		client: localMcpClient({ ...options, host }),
+		client: localMcpClient(options),
 		...(options.desktop !== undefined
 			? desktopParts(options.desktop)
 			: {
 					toolkit:
-						host instanceof LocalProcessHost
-							? localToolkit()
-							: bundledToolkit(),
+						options.host === undefined ? localToolkit() : bundledToolkit(),
 				}),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,

@@ -3,10 +3,14 @@ import type {
 	McpHost,
 	McpTransport,
 	ServerHandle,
+	ServerReporter,
 	ServerState,
-	StartWatch,
 	StdioConnConfig,
 } from "@repo/mcp-extension/ports";
+import {
+	type ReportedTransport,
+	reportedTransport,
+} from "@repo/mcp-extension/reported-transport";
 import type { DesktopPreferences } from "@repo/shared/desktop";
 import type { Id } from "../convex/_generated/dataModel.js";
 
@@ -29,76 +33,74 @@ export interface Desktop {
 
 export type DesktopFor = (userId: Id<"users">) => Desktop;
 
-function localServer(conf: ConnConfig): StdioConnConfig | undefined {
-	if ("url" in conf || "image" in conf) return undefined;
-	return conf.local === true ? conf : undefined;
+export function desktopServer(conf: ConnConfig): conf is StdioConnConfig {
+	if ("url" in conf || "image" in conf) return false;
+	return conf.local === true;
 }
 
 export class BridgedHost implements McpHost {
-	private readonly opened = new Set<string>();
+	private readonly opened = new Map<string, ReportedTransport>();
 
 	constructor(
 		private readonly desktop: Desktop,
-		private readonly fallback: McpHost,
+		private readonly report: ServerReporter = () => {},
 	) {}
 
-	async ensure(
-		conf: ConnConfig,
-		watch?: StartWatch,
-	): Promise<ServerHandle | undefined> {
-		const local = localServer(conf);
-		if (local === undefined) return this.fallback.ensure(conf, watch);
-		const channel = await this.desktop.open({
-			name: local.name,
-			command: local.command,
-			args: local.args ?? [],
-			env: local.env ?? {},
+	async ensure(conf: ConnConfig): Promise<ServerHandle> {
+		if (!desktopServer(conf))
+			throw new Error(`${conf.name}: does not run on the desktop.`);
+		const { name } = conf;
+		let channel: McpTransport;
+		try {
+			channel = await this.desktop.open({
+				name,
+				command: conf.command,
+				args: conf.args ?? [],
+				env: conf.env ?? {},
+			});
+		} catch (ex) {
+			this.report({
+				server: name,
+				phase: "failed",
+				reason: ex instanceof Error ? ex.message : String(ex),
+			});
+			throw ex;
+		}
+		const opened = reportedTransport(name, channel, this.report, () => {
+			if (this.opened.get(name) === opened) this.opened.delete(name);
 		});
-		this.opened.add(local.name);
-		return { transport: () => channel };
+		this.opened.set(name, opened);
+		return { transport: () => opened.transport };
 	}
 
 	async stop(name: string): Promise<void> {
-		if (!this.opened.delete(name)) return this.fallback.stop(name);
-		await this.desktop.close(name);
-	}
-
-	watches(conf: ConnConfig): boolean {
-		return (
-			localServer(conf) === undefined &&
-			(this.fallback.watches?.(conf) ?? false)
-		);
+		const opened = this.opened.get(name);
+		if (opened === undefined) return;
+		this.opened.delete(name);
+		await opened.end();
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		if (localServer(conf) === undefined || !this.opened.delete(conf.name))
-			return this.fallback.remove(conf);
-		await this.desktop.close(conf.name);
+		await this.stop(conf.name);
+		this.report({ server: conf.name, phase: "gone" });
 	}
 
 	async stopAll(): Promise<void> {
-		const names = [...this.opened];
-		this.opened.clear();
-		await Promise.all([
-			...names.map((name) => this.desktop.close(name)),
-			this.fallback.stopAll(),
-		]);
+		await Promise.all([...this.opened.keys()].map((name) => this.stop(name)));
 	}
 
 	status(name: string): ServerState {
-		if (!this.opened.has(name)) return this.fallback.status(name);
+		if (!this.opened.has(name)) return "unknown";
 		return this.desktop.running(name) ? "running" : "stopped";
 	}
 
-	logs(name: string): string {
-		return this.opened.has(name) ? "" : this.fallback.logs(name);
+	logs(_name: string): string {
+		return "";
 	}
 
-	used(name: string): void {
-		if (!this.opened.has(name)) this.fallback.used(name);
-	}
+	used(_name: string): void {}
 
-	async asleep(name: string): Promise<boolean> {
-		return this.opened.has(name) ? false : this.fallback.asleep(name);
+	async asleep(_name: string): Promise<boolean> {
+		return false;
 	}
 }
