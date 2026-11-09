@@ -51,13 +51,14 @@ describe("the MCP servers the operator mirrors", () => {
 		]);
 	});
 });
-describe("the MCP servers a docker host reports", () => {
+describe("the MCP servers a session's host reports", () => {
 	it("writes what the workspace's own host reports, keeping the tail of a long reason", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 
 		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
 			workspaceId,
 			server: "playwright",
 			phase: "failed",
@@ -78,12 +79,14 @@ describe("the MCP servers a docker host reports", () => {
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
 			workspaceId,
 			server: "fs",
 			phase: "ready",
 		});
 
 		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
 			workspaceId,
 			server: "fs",
 			phase: "gone",
@@ -102,6 +105,7 @@ describe("the MCP servers a docker host reports", () => {
 
 		await expect(
 			mallory.as.mutation(api.mcpServers.report, {
+				reporter: "agent-1",
 				workspaceId: alice.workspace,
 				server: "playwright",
 				phase: "ready",
@@ -239,11 +243,12 @@ describe("the MCP servers a workspace has loaded", () => {
 		).rejects.toThrow();
 	});
 
-	it("keeps a status the session reported through the operator's snapshot", async () => {
+	it("keeps a status a session reported through the operator's snapshot", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
 			workspaceId,
 			server: "remote",
 			phase: "ready",
@@ -256,6 +261,7 @@ describe("the MCP servers a workspace has loaded", () => {
 		).toMatchObject([{ server: "remote", phase: "ready" }]);
 
 		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
 			workspaceId,
 			server: "remote",
 			phase: "gone",
@@ -407,23 +413,6 @@ describe("the MCP servers of a host that stops reporting", () => {
 		expect(await phases(alice.as, workspaceId)).toEqual({
 			playwright: { phase: "ready", reason: undefined },
 		});
-	});
-
-	it("leaves a server no host watches as the session last saw it", async () => {
-		vi.useFakeTimers();
-		const t = harness();
-		const alice = await signIn(t, "alice@example.com");
-		const workspaceId = alice.workspace;
-		await alice.as.mutation(api.mcpServers.report, {
-			workspaceId,
-			server: "linear",
-			phase: "ready",
-		});
-
-		vi.advanceTimersByTime(MCP_REPORTER_STALE_MS + 1);
-		await t.mutation(internal.mcpServers.sweep, {});
-
-		expect((await phases(alice.as, workspaceId)).linear?.phase).toBe("ready");
 	});
 
 	it("refuses a beat for a host of someone else's workspace, or in the operator's name", async () => {

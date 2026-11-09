@@ -21,9 +21,7 @@ const LIST_LIMIT = 256;
 const RECONCILE_LIMIT = 4096;
 const SWEEP_BATCH = 64;
 
-const OPERATOR = "operator";
-const UNWATCHED = "session";
-const RESERVED_REPORTERS = new Set([OPERATOR, UNWATCHED]);
+export const OPERATOR = "operator";
 
 const serverRow = v.object({
 	workspaceId: v.id("workspaces"),
@@ -160,23 +158,22 @@ async function beat(
 	await ctx.db.patch(existing._id, { beatAt: Date.now() });
 }
 
-function hostReporter(reporter: string): string {
-	if (RESERVED_REPORTERS.has(reporter))
-		throw new ConvexError({ code: "FORBIDDEN" });
+function sessionReporter(reporter: string): string {
+	if (reporter === OPERATOR) throw new ConvexError({ code: "FORBIDDEN" });
 	return reporter;
 }
 
 export const report = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
-		reporter: v.optional(v.string()),
+		reporter: v.string(),
 		...reported.fields,
 	},
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, reporter, server, phase, reason }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const by = reporter === undefined ? UNWATCHED : hostReporter(reporter);
-		if (reporter !== undefined) await beat(ctx, by, workspaceId);
+		const by = sessionReporter(reporter);
+		await beat(ctx, by, workspaceId);
 		await putServer(ctx, { workspaceId, server, phase, ...tailOf(reason) }, by);
 		return null;
 	},
@@ -191,7 +188,7 @@ export const heartbeat = mutation({
 	returns: v.null(),
 	handler: async (ctx, { workspaceId, reporter, servers }) => {
 		await requireWorkspace(ctx, workspaceId);
-		const by = hostReporter(reporter);
+		const by = sessionReporter(reporter);
 		await beat(ctx, by, workspaceId);
 		for (const { server, phase, reason } of servers)
 			await putServer(
@@ -317,10 +314,7 @@ export const reconcile = internalMutation({
 		await beat(ctx, OPERATOR);
 		const liveServers = new Set(servers.map(ownerKey));
 		for (const row of await ctx.db.query("mcpServers").take(RECONCILE_LIMIT))
-			if (
-				(row.reporter === undefined || row.reporter === OPERATOR) &&
-				!liveServers.has(ownerKey(row))
-			)
+			if (row.reporter === OPERATOR && !liveServers.has(ownerKey(row)))
 				await ctx.db.delete(row._id);
 		return null;
 	},
