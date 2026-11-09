@@ -145,7 +145,9 @@ export class DockerHost implements McpHost {
 	}
 
 	watches(conf: ConnConfig): boolean {
-		return launchFor(conf) !== undefined;
+		return (
+			launchFor(conf) !== undefined || (this.fallback.watches?.(conf) ?? false)
+		);
 	}
 
 	used(name: string): void {

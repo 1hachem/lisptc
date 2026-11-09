@@ -95,16 +95,16 @@ export function containerHost(
 	const docker: HostCandidate = {
 		name: "docker",
 		available: dockerAnswers,
-		create: () => new DockerHost(new LocalProcessHost(), report),
+		create: () => new DockerHost(new LocalProcessHost(report), report),
 	};
 	const tried = {
 		kubernetes: [kubernetes],
 		docker: [docker],
 	};
-	if (mcpEnv.LISPTC_MCP_HOST === "process") return new LocalProcessHost();
+	if (mcpEnv.LISPTC_MCP_HOST === "process") return new LocalProcessHost(report);
 	return new ProbedHost(
 		tried[mcpEnv.LISPTC_MCP_HOST ?? "kubernetes"],
-		() => new LocalProcessHost(),
+		() => new LocalProcessHost(report),
 	);
 }
 

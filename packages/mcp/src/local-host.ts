@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import type {
 	ConnConfig,
+	HttpConnConfig,
 	McpHost,
 	ServerHandle,
+	ServerReporter,
 	ServerState,
 	StartWatch,
 } from "./ports.ts";
@@ -13,6 +15,14 @@ const STDERR_KEEP = 4096;
 interface LocalServer {
 	child: ReturnType<typeof spawn>;
 	stderr: string;
+	exited: boolean;
+	ready: boolean;
+}
+
+type LaunchedConf = HttpConnConfig & { command: string };
+
+function launched(conf: ConnConfig): conf is LaunchedConf {
+	return "url" in conf && conf.command !== undefined;
 }
 
 function whyItDied(server: LocalServer): string {
@@ -22,6 +32,8 @@ function whyItDied(server: LocalServer): string {
 
 export class LocalProcessHost implements McpHost {
 	private readonly started = new Map<string, LocalServer>();
+
+	constructor(private readonly report: ServerReporter = () => {}) {}
 
 	async ensure(
 		conf: ConnConfig,
@@ -35,20 +47,42 @@ export class LocalProcessHost implements McpHost {
 		const handle: ServerHandle = conf.headers
 			? { url: conf.url, headers: conf.headers }
 			: { url: conf.url };
-		if (!conf.command) return handle;
+		if (!launched(conf)) return handle;
+		const known = this.started.get(conf.name)?.ready === true;
+		try {
+			const ready = await this.start(conf, handle, watch);
+			if (!known) this.report({ server: conf.name, phase: "ready" });
+			return ready;
+		} catch (ex) {
+			this.report({
+				server: conf.name,
+				phase: "failed",
+				reason: ex instanceof Error ? ex.message : String(ex),
+			});
+			throw ex;
+		}
+	}
+
+	private async start(
+		conf: LaunchedConf,
+		handle: ServerHandle,
+		watch?: StartWatch,
+	): Promise<ServerHandle> {
 		const origin = new URL(conf.url).origin;
 		if (await reachable(origin)) return handle;
 		let server = this.started.get(conf.name);
-		if (!server || server.child.exitCode !== null) {
-			server = this.spawn(conf.command, conf.args, conf.env);
+		if (!server || server.exited) {
+			this.report({ server: conf.name, phase: "starting" });
+			server = this.spawn(conf);
 			this.started.set(conf.name, server);
 		}
 		const started = server;
-		return await waitForStart(
+		await waitForStart(
 			async () => {
-				if (await reachable(origin)) return { ready: handle };
-				if (started.child.exitCode !== null) {
-					this.started.delete(conf.name);
+				if (await reachable(origin)) return { ready: undefined };
+				if (started.exited) {
+					if (this.started.get(conf.name) === started)
+						this.started.delete(conf.name);
 					throw new Error(
 						`${conf.name}: its server exited with code ${started.child.exitCode} before ${origin} answered.${whyItDied(started)}`,
 					);
@@ -62,22 +96,30 @@ export class LocalProcessHost implements McpHost {
 				),
 			watch,
 		);
+		started.ready = true;
+		return handle;
 	}
 
 	async stop(name: string): Promise<void> {
+		if (this.drop(name)) this.report({ server: name, phase: "sleeping" });
+	}
+
+	async remove(conf: ConnConfig): Promise<void> {
+		this.drop(conf.name);
+		if (launched(conf)) this.report({ server: conf.name, phase: "gone" });
+	}
+
+	private drop(name: string): boolean {
 		const server = this.started.get(name);
-		if (!server) return;
+		if (!server) return false;
+		this.started.delete(name);
 		const { pid } = server.child;
 		try {
 			if (pid !== undefined) process.kill(-pid, "SIGTERM");
 		} catch {
 			server.child.kill("SIGTERM");
 		}
-		this.started.delete(name);
-	}
-
-	async remove(conf: ConnConfig): Promise<void> {
-		await this.stop(conf.name);
+		return true;
 	}
 
 	async stopAll(): Promise<void> {
@@ -87,7 +129,11 @@ export class LocalProcessHost implements McpHost {
 	status(name: string): ServerState {
 		const server = this.started.get(name);
 		if (!server) return "unknown";
-		return server.child.exitCode === null ? "running" : "stopped";
+		return server.exited ? "stopped" : "running";
+	}
+
+	watches(conf: ConnConfig): boolean {
+		return launched(conf);
 	}
 
 	logs(name: string): string {
@@ -100,11 +146,7 @@ export class LocalProcessHost implements McpHost {
 		return false;
 	}
 
-	private spawn(
-		command: string,
-		args?: string[],
-		env?: Record<string, string>,
-	): LocalServer {
+	private spawn({ name, command, args, env }: LaunchedConf): LocalServer {
 		const child = spawn(command, args ?? [], {
 			detached: true,
 			stdio: ["ignore", "ignore", "pipe"],
@@ -114,12 +156,27 @@ export class LocalProcessHost implements McpHost {
 				...(env ?? {}),
 			},
 		});
-		const server: LocalServer = { child, stderr: "" };
+		const server: LocalServer = {
+			child,
+			stderr: "",
+			exited: false,
+			ready: false,
+		};
 		child.stderr?.on("data", (chunk: Buffer) => {
 			server.stderr = (server.stderr + chunk.toString()).slice(-STDERR_KEEP);
 		});
 		child.on("error", (err) => {
 			server.stderr += `\n${err.message}`;
+		});
+		child.on("close", (code, signal) => {
+			server.exited = true;
+			if (!server.ready || this.started.get(name) !== server) return;
+			this.started.delete(name);
+			this.report({
+				server: name,
+				phase: "failed",
+				reason: `its process exited with ${signal ?? `code ${code}`}.${whyItDied(server)}`,
+			});
 		});
 		child.unref();
 		return server;
