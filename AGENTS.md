@@ -7,6 +7,13 @@ It holds what is true repo-wide. **Every workspace carries an `AGENTS.md` of its
 own**, with its shape and the rules that govern it. Read that one before working
 in a package, and put a rule that belongs to one package there, not here.
 
+## Build it clean, or stop and say so
+
+Always build code cleanly, modularly, and with proper architecture and
+separation of concerns. Never bolt a feature on just because it was asked for.
+If there is no easy way to build it naturally, and you would recommend a
+refactor to make the whole thing clean, stop before doing the work and say so.
+
 ## The code is the only source of truth
 
 These files hold rules: how things are interfaced, which way dependencies run,
