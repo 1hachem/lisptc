@@ -39,7 +39,9 @@ export interface Carried {
 
 export interface DropSpot {
 	hit: Rect;
-	shows: Rect;
+	shows?: Rect;
+	enter?: () => void;
+	leave?: () => void;
 	drop: () => void;
 }
 
@@ -144,7 +146,7 @@ export function DragLayer({ children }: { children: ReactNode }) {
 	const spotters = useRef(new Set<RefObject<Spotter>>()).current;
 	const end = useCallback(() => setCarry(null), []);
 	const begin = useCallback(
-		(pressed: Press, pointer: { x: number; y: number }) => {
+		(pressed: Press) => {
 			const source = pressed.source();
 			source.onPickUp?.();
 			const from = rectOf(pressed.from);
@@ -157,7 +159,7 @@ export function DragLayer({ children }: { children: ReactNode }) {
 				const spots = [...spotters].flatMap((spotter) =>
 					spotter.current(carried),
 				);
-				setCarry({ carried, spots, from, pointer });
+				setCarry({ carried, spots, from, pointer: pressed.start });
 			});
 		},
 		[spotters],
@@ -169,7 +171,7 @@ export function DragLayer({ children }: { children: ReactNode }) {
 			const dy = event.clientY - press.start.y;
 			if (dx * dx + dy * dy <= DRAG_AFTER_PX * DRAG_AFTER_PX) return;
 			setPress(null);
-			begin(press, { x: event.clientX, y: event.clientY });
+			begin(press);
 		};
 		const release = () => setPress(null);
 		document.addEventListener("pointermove", move);
@@ -221,6 +223,21 @@ function Ghost({ children }: { children: ReactNode }) {
 	);
 }
 
+function useHovered(spots: readonly DropSpot[]) {
+	const current = useRef(HOME);
+	const hover = useCallback(
+		(at: number) => {
+			if (at === current.current) return;
+			spots[current.current]?.leave?.();
+			current.current = at;
+			spots[at]?.enter?.();
+		},
+		[spots],
+	);
+	useEffect(() => () => hover(HOME), [hover]);
+	return hover;
+}
+
 function Overlay({ carry, onEnd }: { carry: Carry; onEnd: () => void }) {
 	const [frame, setFrame] = useState<HTMLDivElement | null>(null);
 	const geometry = useMemo(() => {
@@ -240,7 +257,7 @@ function Overlay({ carry, onEnd }: { carry: Carry; onEnd: () => void }) {
 			height,
 			from: local(carry.from),
 			hits: carry.spots.map((spot) => local(spot.hit)),
-			shows: carry.spots.map((spot) => local(spot.shows)),
+			shows: carry.spots.map((spot) => spot.shows && local(spot.shows)),
 			pointer: {
 				x: (carry.pointer.x - client.left) * scale,
 				y: (carry.pointer.y - client.top) * scale,
@@ -338,9 +355,11 @@ function Overlay({ carry, onEnd }: { carry: Carry; onEnd: () => void }) {
 			grabbed.current = false;
 		};
 	}, [frame, geometry, carry.pointer]);
+	const hovered = useHovered(carry.spots);
 	const onDropState = useCallback(
 		(next: At) => {
 			setState(next);
+			hovered(HOME);
 			const spot = carry.spots[next.at];
 			if (spot) {
 				spot.drop();
@@ -349,8 +368,9 @@ function Overlay({ carry, onEnd }: { carry: Carry; onEnd: () => void }) {
 			}
 			setTimeout(onEnd, SETTLE_MS);
 		},
-		[carry.spots, onEnd],
+		[carry.spots, hovered, onEnd],
 	);
+	const onDragState = useCallback((next: At) => hovered(next.at), [hovered]);
 	return (
 		<div
 			ref={setFrame}
@@ -362,6 +382,7 @@ function Overlay({ carry, onEnd }: { carry: Carry; onEnd: () => void }) {
 					draggable={draggable}
 					state={state}
 					onDropState={onDropState}
+					onDragState={onDragState}
 					width={geometry.width}
 					height={geometry.height}
 				/>
