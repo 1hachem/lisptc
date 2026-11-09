@@ -1055,7 +1055,7 @@ export function registerMcp(
 		conf: ConnConfig | undefined,
 		phase: "ready" | "gone",
 	): void | Promise<void> {
-		if (conf === undefined || "image" in conf) return;
+		if (conf === undefined || client.watches?.(conf)) return;
 		const observed = registry.observe(conf.name, phase);
 		return observed instanceof Promise ? observed.catch(() => {}) : observed;
 	}

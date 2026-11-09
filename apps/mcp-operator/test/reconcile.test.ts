@@ -1,6 +1,17 @@
-import { serverName } from "@repo/mcp-extension/kubernetes";
+import {
+	containerOf,
+	KIND,
+	type McpServer,
+	remoteSpecFor,
+	serverName,
+	VERSION,
+} from "@repo/mcp-extension/kubernetes";
 import { describe, expect, it } from "vitest";
-import { FINALIZER, reconcile } from "../src/reconcile.ts";
+import {
+	FINALIZER,
+	REMOTE_PROBE_SECONDS,
+	reconcile,
+} from "../src/reconcile.ts";
 import { SHM_LIMIT, SPEC_HASH } from "../src/workload.ts";
 import { NAMESPACE, RELEASE, server, world } from "./helpers.ts";
 
@@ -202,7 +213,10 @@ describe("rolling the pod", () => {
 		await reconcile(w.target, w.deps(1100));
 		expect(w.fake.pods.get(name)?.metadata?.labels?.[SPEC_HASH]).toBe(hash);
 
-		w.target.spec.mcp = { ...w.target.spec.mcp, image: "playwright-mcp:next" };
+		w.target.spec.mcp = {
+			...containerOf(w.target.spec),
+			image: "playwright-mcp:next",
+		};
 		await reconcile(w.target, w.deps(1101));
 		expect(w.fake.pods.has(name)).toBe(false);
 		await reconcile(w.target, w.deps(1102));
@@ -236,7 +250,7 @@ describe("rolling the pod", () => {
 			"playwright-mcp:pr-7-b",
 			"chromium-vnc",
 		]);
-		expect(w.target.spec.mcp.image).toBe("playwright-mcp");
+		expect(w.target.spec.mcp?.image).toBe("playwright-mcp");
 
 		w.fake.runPods();
 		await reconcile(w.target, deployed(1103, ["playwright-mcp"]));
@@ -347,5 +361,81 @@ describe("the table it keeps in step", () => {
 
 		expect(w.target.status?.phase).toBe("Starting");
 		expect(w.sink.servers.map((row) => row.phase)).toEqual(["starting"]);
+	});
+});
+
+const REMOTE_URL = "https://mcp.example.com/mcp";
+
+function remoteServer(): McpServer {
+	return {
+		apiVersion: `lisptc.io/${VERSION}`,
+		kind: KIND,
+		metadata: {
+			name: serverName("ws1", "remote"),
+			namespace: RELEASE,
+			uid: "uid-remote",
+			generation: 1,
+			finalizers: [],
+		},
+		spec: remoteSpecFor({ name: "remote", url: REMOTE_URL }, "ws1", 1000),
+	};
+}
+
+describe("a remote server", () => {
+	it("is Ready once it answers, and runs nothing on the cluster", async () => {
+		const w = world(remoteServer());
+
+		const outcome = await reconcile(w.target, w.deps(1000));
+
+		expect(w.target.status?.phase).toBe("Ready");
+		expect(w.target.status?.endpoints).toEqual({ mcp: REMOTE_URL });
+		expect(w.fake.namespaces.size).toBe(0);
+		expect(w.fake.pods.size).toBe(0);
+		expect(w.sink.servers.at(-1)).toMatchObject({
+			server: "remote",
+			phase: "ready",
+		});
+		expect(outcome.requeueAt).toBe(1000 + REMOTE_PROBE_SECONDS);
+	});
+
+	it("is Failed with what went wrong while it does not answer, and Ready once it does again", async () => {
+		const w = world(remoteServer());
+		w.fake.setRemote(REMOTE_URL, {
+			answered: false,
+			reason: "it answered HTTP 503",
+		});
+
+		await reconcile(w.target, w.deps(1000));
+		expect(w.target.status).toMatchObject({
+			phase: "Failed",
+			reason: "it answered HTTP 503",
+		});
+
+		w.fake.setRemote(REMOTE_URL, { answered: true });
+		await reconcile(w.target, w.deps(1060));
+		expect(w.target.status?.phase).toBe("Ready");
+	});
+
+	it("sleeps once nobody has used it for its idle window", async () => {
+		const w = world(remoteServer());
+		await reconcile(w.target, w.deps(1000));
+
+		await reconcile(w.target, w.deps(1000 + w.target.spec.idleSeconds));
+
+		expect(w.target.status?.phase).toBe("Sleeping");
+	});
+
+	it("is gone from the table once deleted", async () => {
+		const w = world(remoteServer());
+		await reconcile(w.target, w.deps(1000));
+		w.target.metadata.deletionTimestamp = "2026-11-09T00:00:00Z";
+
+		await reconcile(w.target, w.deps(1001));
+
+		expect(w.target.metadata.finalizers).toEqual([]);
+		expect(w.sink.servers.at(-1)).toMatchObject({
+			server: "remote",
+			phase: "gone",
+		});
 	});
 });

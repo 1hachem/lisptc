@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
 	AppContainer,
 	ConnConfig,
+	HttpConnConfig,
 	NamedPort,
 	Resources,
 } from "./ports.ts";
@@ -48,12 +49,17 @@ export interface AppSlot {
 	resources: ResourceRequirements;
 }
 
+export interface RemoteSlot {
+	url: string;
+}
+
 export interface McpServerSpec {
 	workspace: string;
 	server: string;
 	instance?: string;
-	mcp: McpSlot;
+	mcp?: McpSlot;
 	app?: AppSlot;
+	remote?: RemoteSlot;
 	restarts: number;
 	lastUsed: number;
 	idleSeconds: number;
@@ -187,11 +193,32 @@ export function specFor(
 	};
 }
 
+export function remoteSpecFor(
+	conf: HttpConnConfig,
+	workspace: string,
+	now: number,
+): McpServerSpec {
+	return {
+		workspace,
+		server: conf.name,
+		remote: { url: conf.url },
+		restarts: 0,
+		lastUsed: now,
+		idleSeconds: DEFAULT_IDLE_SECONDS,
+	};
+}
+
+export function containerOf(spec: McpServerSpec): McpSlot {
+	if (spec.mcp === undefined)
+		throw new Error(`${spec.server} runs no container: it is a remote server.`);
+	return spec.mcp;
+}
+
 export function workloadHash(spec: McpServerSpec): string {
 	return createHash("sha256")
 		.update(
 			JSON.stringify({
-				mcp: spec.mcp,
+				mcp: spec.mcp ?? null,
 				app: spec.app ?? null,
 				restarts: spec.restarts,
 			}),

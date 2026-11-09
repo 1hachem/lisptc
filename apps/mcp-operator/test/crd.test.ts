@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { containerOf, remoteSpecFor } from "@repo/mcp-extension/kubernetes";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
@@ -23,6 +24,26 @@ describe("the McpServer CRD", () => {
 		expect(valid).toBe(true);
 	});
 
+	it("accepts the spec the host writes for a remote server", () => {
+		const spec = remoteSpecFor(
+			{ name: "remote", url: "https://mcp.example.com/mcp" },
+			"ws1",
+			1000,
+		);
+		expect(validate(spec)).toBe(true);
+	});
+
+	it("rejects a remote server whose url is not http", () => {
+		const spec = remoteSpecFor(
+			{ name: "remote", url: "https://mcp.example.com/mcp" },
+			"ws1",
+			1000,
+		);
+		expect(validate({ ...spec, remote: { url: "file:///etc/passwd" } })).toBe(
+			false,
+		);
+	});
+
 	it("accepts a server without an app", () => {
 		expect(
 			validate(server({ name: "fs", image: "fs-mcp", port: 8000 }).spec),
@@ -36,13 +57,13 @@ describe("the McpServer CRD", () => {
 			port: 8000,
 			secret: { name: "lisptc-mcp-ocr", keys: ["MISTRAL_API_KEY"] },
 		}).spec;
-		expect(spec.mcp.secret).toBe("lisptc-mcp-ocr");
+		expect(spec.mcp?.secret).toBe("lisptc-mcp-ocr");
 		expect(validate(spec)).toBe(true);
 	});
 
 	it("rejects a secret that is not a valid name", () => {
 		const spec = structuredClone(server().spec);
-		spec.mcp.secret = "Not A Name";
+		spec.mcp = { ...containerOf(spec), secret: "Not A Name" };
 		expect(validate(spec)).toBe(false);
 	});
 });

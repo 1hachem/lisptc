@@ -14,6 +14,7 @@ import {
 	type McpServerSpec,
 	type McpServerStatus,
 	PLURAL,
+	remoteSpecFor,
 	retagged,
 	serverName,
 	specFor,
@@ -21,6 +22,7 @@ import {
 } from "./mcp-server-resource.ts";
 import type {
 	ConnConfig,
+	HttpConnConfig,
 	McpHost,
 	ServerHandle,
 	ServerState,
@@ -225,6 +227,7 @@ export class KubernetesHost implements McpHost {
 		conf: ConnConfig,
 		watch: StartWatch = {},
 	): Promise<ServerHandle | undefined> {
+		if ("url" in conf) return await this.remote(conf);
 		if (launchFor(conf) === undefined)
 			return await this.fallback.ensure(conf, watch);
 		const start = this.starting.get(conf.name) ?? this.begin(conf);
@@ -268,8 +271,12 @@ export class KubernetesHost implements McpHost {
 		await this.store.patchSpec(followed.name, { lastUsed: 0 });
 	}
 
+	watches(conf: ConnConfig): boolean {
+		return "url" in conf || launchFor(conf) !== undefined;
+	}
+
 	async remove(conf: ConnConfig): Promise<void> {
-		if (launchFor(conf) === undefined) return await this.fallback.remove(conf);
+		if (!this.watches(conf)) return await this.fallback.remove(conf);
 		await this.starting.get(conf.name)?.run.catch(() => {});
 		const followed = this.followed.get(conf.name);
 		if (followed) this.unfollow(followed);
@@ -382,6 +389,35 @@ export class KubernetesHost implements McpHost {
 		this.follow(followed);
 		const headers = "headers" in conf ? conf.headers : undefined;
 		return headers ? { url, headers } : { url };
+	}
+
+	private async remote(conf: HttpConnConfig): Promise<ServerHandle> {
+		const name = serverName(this.options.scope, conf.name);
+		const wanted = remoteSpecFor(conf, this.options.scope, this.clock());
+		const live = await this.store.get(name);
+		if (live)
+			await this.store.patchSpec(name, {
+				...wanted,
+				idleSeconds: live.spec.idleSeconds,
+			});
+		else
+			await this.store.create({
+				apiVersion: `${GROUP}/${VERSION}`,
+				kind: KIND,
+				metadata: { name },
+				spec: wanted,
+			});
+		const followed: Followed = this.followed.get(conf.name) ?? {
+			name,
+			state: "running",
+			logs: "",
+			touched: 0,
+		};
+		this.followed.set(conf.name, followed);
+		this.follow(followed);
+		return conf.headers
+			? { url: conf.url, headers: conf.headers }
+			: { url: conf.url };
 	}
 
 	private instanceOf(conf: ConnConfig): string | undefined {

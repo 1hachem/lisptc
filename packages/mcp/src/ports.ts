@@ -151,6 +151,7 @@ export interface McpClient {
 	logout(conf: OAuthConnConfig): Promise<void>;
 	authorize(conf: OAuthConnConfig, code: string): Promise<void>;
 	shutdown(): Promise<void>;
+	watches?(conf: ConnConfig): boolean;
 }
 
 export class AuthorizationRequired extends Error {
@@ -216,6 +217,7 @@ export interface McpHost {
 	logs(name: string): string;
 	used(name: string): void;
 	asleep(name: string): Promise<boolean>;
+	watches?(conf: ConnConfig): boolean;
 }
 
 export interface UserMachine {

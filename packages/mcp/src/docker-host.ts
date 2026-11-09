@@ -144,6 +144,10 @@ export class DockerHost implements McpHost {
 		return container ? container.logs : this.fallback.logs(name);
 	}
 
+	watches(conf: ConnConfig): boolean {
+		return launchFor(conf) !== undefined;
+	}
+
 	used(name: string): void {
 		if (!this.containers.has(name)) this.fallback.used(name);
 	}

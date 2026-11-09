@@ -24,6 +24,7 @@ import {
 
 export const FINALIZER = "lisptc.io/cleanup";
 const SOON_SECONDS = 2;
+export const REMOTE_PROBE_SECONDS = 60;
 
 export interface Placement {
 	prefix: string;
@@ -125,9 +126,25 @@ class Run {
 				this.namespace,
 				placement.pullSecret,
 			);
-		const { secret } = this.server.spec.mcp;
+		const secret = this.server.spec.mcp?.secret;
 		if (secret)
 			await cluster.copySecret(placement.release, this.namespace, secret);
+	}
+
+	async probeRemote(url: string): Promise<Outcome> {
+		const { cluster, now } = this.deps;
+		const { spec } = this.server;
+		const next = Math.min(
+			now + REMOTE_PROBE_SECONDS,
+			spec.lastUsed + spec.idleSeconds,
+		);
+		const probe = await cluster.probe(url);
+		return await this.settle(
+			probe.answered
+				? { phase: "Ready", endpoints: { mcp: url } }
+				: { phase: "Failed", reason: probe.reason, endpoints: { mcp: url } },
+			next,
+		);
 	}
 
 	async sleep(): Promise<Outcome> {
@@ -220,6 +237,7 @@ class Run {
 		if (metadata.deletionTimestamp) return await this.finalize();
 		await this.ensureFinalizer();
 		if (now - spec.lastUsed >= spec.idleSeconds) return await this.sleep();
+		if (spec.remote) return await this.probeRemote(spec.remote.url);
 		await this.prepareNamespace();
 		const pod = await this.currentPod();
 		if (!pod)

@@ -26,6 +26,10 @@ import { MANAGED_BY, MANAGER, SPEC_HASH } from "./workload.ts";
 
 const LOG_LINES = 20;
 const REACH_TIMEOUT_MS = 2_000;
+
+const PROBE_TIMEOUT_MS = 5_000;
+
+export type Probe = { answered: true } | { answered: false; reason: string };
 const MANAGED = `${MANAGED_BY}=${MANAGER}`;
 
 export interface Located {
@@ -54,6 +58,7 @@ export interface Cluster {
 	deleteDaemonSet(namespace: string, name: string): Promise<void>;
 	pods(namespace: string, selector: string): Promise<V1Pod[]>;
 	reachable(url: string): Promise<boolean>;
+	probe(url: string): Promise<Probe>;
 	origin(namespace: string, service: string, port: number): string;
 	managedPods(): Promise<Located[]>;
 	managedNamespaces(): Promise<Located[]>;
@@ -230,6 +235,25 @@ export function clientCluster(config: KubeConfig): Cluster {
 		async pods(namespace, labelSelector) {
 			const list = await core.listNamespacedPod({ namespace, labelSelector });
 			return list.items;
+		},
+		async probe(url) {
+			try {
+				const response = await fetch(url, {
+					method: "GET",
+					headers: { accept: "application/json, text/event-stream" },
+					redirect: "manual",
+					signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+				});
+				await response.body?.cancel().catch(() => {});
+				return response.status < 500
+					? { answered: true }
+					: { answered: false, reason: `it answered HTTP ${response.status}` };
+			} catch (ex) {
+				return {
+					answered: false,
+					reason: `it did not answer: ${ex instanceof Error ? ex.message : String(ex)}`,
+				};
+			}
 		},
 		async reachable(url) {
 			try {

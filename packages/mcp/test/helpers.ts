@@ -81,6 +81,7 @@ export function recordingHost(): McpHost & {
 			uses.push(name);
 		},
 		asleep: async (name) => sleeping.has(name),
+		watches: (conf) => "image" in conf,
 	};
 }
 

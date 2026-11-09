@@ -347,6 +347,9 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 				throw new Error("authorization did not complete (unexpected redirect)");
 		},
 
+		watches(conf: ConnConfig): boolean {
+			return ports.host.watches?.(conf) ?? false;
+		},
 		async shutdown(): Promise<void> {
 			await ports.host.stopAll();
 		},

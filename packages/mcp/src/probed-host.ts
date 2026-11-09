@@ -61,6 +61,10 @@ export class ProbedHost implements McpHost {
 		return this.host?.logs(name) ?? "";
 	}
 
+	watches(conf: ConnConfig): boolean {
+		return this.host?.watches?.(conf) ?? false;
+	}
+
 	used(name: string): void {
 		this.host?.used(name);
 	}

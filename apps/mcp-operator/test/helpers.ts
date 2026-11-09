@@ -14,7 +14,7 @@ import {
 	VERSION,
 } from "@repo/mcp-extension/kubernetes";
 import type { ContainerConnConfig } from "@repo/mcp-extension/ports";
-import type { Cluster, Located, Servers } from "../src/cluster.ts";
+import type { Cluster, Located, Probe, Servers } from "../src/cluster.ts";
 import type { Deps } from "../src/reconcile.ts";
 import type { ServerRow, Snapshot, StatusSink } from "../src/status-sink.ts";
 
@@ -68,6 +68,7 @@ export function fakeCluster() {
 	const removed: string[] = [];
 	const daemonSets = new Map<string, V1DaemonSet>();
 	let answering = true;
+	const remote = new Map<string, Probe>();
 	let logs = "";
 	let event: string | undefined;
 
@@ -154,6 +155,9 @@ export function fakeCluster() {
 		async reachable() {
 			return answering;
 		},
+		async probe(url: string) {
+			return remote.get(url) ?? { answered: true as const };
+		},
 		origin(namespace, service, port) {
 			return `http://${service}.${namespace}:${port}`;
 		},
@@ -197,6 +201,9 @@ export function fakeCluster() {
 		},
 		setAnswering(value: boolean) {
 			answering = value;
+		},
+		setRemote(url: string, probe: Probe) {
+			remote.set(url, probe);
 		},
 		setLogs(value: string) {
 			logs = value;

@@ -8,6 +8,7 @@ import type {
 	V1Service,
 } from "@kubernetes/client-node";
 import {
+	containerOf,
 	dnsLabel,
 	type McpServer,
 	type McpServerSpec,
@@ -57,11 +58,12 @@ export function rolledOut(
 	spec: McpServerSpec,
 	rollout: Rollout | undefined,
 ): McpServerSpec {
-	if (!rollout?.repositories.includes(repositoryOf(spec.mcp.image)))
+	const { mcp } = spec;
+	if (!mcp || !rollout?.repositories.includes(repositoryOf(mcp.image)))
 		return spec;
 	return {
 		...spec,
-		mcp: { ...spec.mcp, image: retagged(spec.mcp.image, rollout.tag) },
+		mcp: { ...mcp, image: retagged(mcp.image, rollout.tag) },
 	};
 }
 
@@ -176,7 +178,8 @@ function hardened(
 
 export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 	const name = server.metadata.name;
-	const { mcp, app } = server.spec;
+	const { app } = server.spec;
+	const mcp = containerOf(server.spec);
 	const containers: V1Container[] = [
 		{
 			...hardened(MCP_CONTAINER, mcp.image, mcp.args, mcp.resources),
@@ -224,7 +227,8 @@ export function podFor(server: McpServer, placement: WorkloadPlacement): V1Pod {
 }
 
 export function serviceFor(server: McpServer): V1Service {
-	const { mcp, app } = server.spec;
+	const { app } = server.spec;
+	const mcp = containerOf(server.spec);
 	const exposed = (app?.ports ?? []).filter((port) =>
 		app?.expose.includes(port.name),
 	);
@@ -251,7 +255,8 @@ export function endpointsFor(
 	server: McpServer,
 	origin: (port: number) => string,
 ): Record<string, string> {
-	const { mcp, app } = server.spec;
+	const { app } = server.spec;
+	const mcp = containerOf(server.spec);
 	const endpoints: Record<string, string> = {
 		mcp: new URL(mcp.path, origin(mcp.port)).toString(),
 	};

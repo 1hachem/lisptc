@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { launchFor } from "../src/docker-host.ts";
 import {
+	containerOf,
 	NAME_MAX,
 	serverName,
 	specFor,
@@ -101,7 +102,7 @@ describe("what rolls the pod", () => {
 		expect(
 			workloadHash({
 				...made,
-				mcp: { ...made.mcp, image: "playwright-mcp:2" },
+				mcp: { ...containerOf(made), image: "playwright-mcp:2" },
 			}),
 		).not.toBe(workloadHash(made));
 	});

@@ -139,7 +139,7 @@ describe("the kubernetes host", () => {
 			internal: true,
 		});
 
-		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe(ran);
+		expect(fake.servers.get(NAME)?.spec.mcp?.image).toBe(ran);
 	});
 
 	it("runs an image the repo does not build at its own tag", async () => {
@@ -150,7 +150,7 @@ describe("the kubernetes host", () => {
 			image: "grafana/mcp-grafana:latest",
 		});
 
-		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe(
+		expect(fake.servers.get(NAME)?.spec.mcp?.image).toBe(
 			"grafana/mcp-grafana:latest",
 		);
 	});
@@ -164,7 +164,7 @@ describe("the kubernetes host", () => {
 			internal: true,
 		});
 
-		expect(fake.servers.get(NAME)?.spec.mcp.image).toBe("mcp-browser:latest");
+		expect(fake.servers.get(NAME)?.spec.mcp?.image).toBe("mcp-browser:latest");
 	});
 
 	it("runs every internal image the toolkit names at the tag it was handed", async () => {
@@ -179,7 +179,7 @@ describe("the kubernetes host", () => {
 		expect(images.length).toBeGreaterThan(0);
 		for (const conf of images)
 			expect(
-				fake.servers.get(serverName("ws1", conf.name))?.spec.mcp.image,
+				fake.servers.get(serverName("ws1", conf.name))?.spec.mcp?.image,
 			).toMatch(/:pr-7-abc$/);
 	});
 
@@ -244,16 +244,6 @@ describe("the kubernetes host", () => {
 
 		expect(fake.removed).toEqual([serverName("ws1", "playwright", "chat-a")]);
 		expect(fake.servers.has(NAME)).toBe(true);
-	});
-
-	it("hands a server without a container to its fallback to remove", async () => {
-		const fake = fakeStore();
-		const fallback = recordingHost();
-
-		await host(fake.store, fallback).remove(remote);
-
-		expect(fallback.removed).toEqual(["remote"]);
-		expect(fake.removed).toEqual([]);
 	});
 
 	it("runs a dedicated server once per chat, apart from the shared one", async () => {
@@ -481,16 +471,37 @@ describe("the kubernetes host", () => {
 		expect(fallback.stoppedAll).toBe(1);
 	});
 
-	it("hands a remote server and a stdio one to the right place", async () => {
-		const fake = fakeStore();
+	it("records a remote server on the cluster and hands back its url at once", async () => {
+		const fake = fakeStore(() => undefined);
 		const fallback = recordingHost();
 		const kube = host(fake.store, fallback);
+
+		expect(await kube.ensure(remote)).toEqual({ url: remote.url });
+
+		expect(fallback.ensured).toEqual([]);
+		expect(fake.servers.get(serverName("ws1", "remote"))?.spec.remote).toEqual({
+			url: remote.url,
+		});
+		expect(kube.watches(remote)).toBe(true);
+	});
+
+	it("deletes a remote server it was asked to remove", async () => {
+		const fake = fakeStore();
+		const kube = host(fake.store);
+		await kube.ensure(remote);
+
+		await kube.remove(remote);
+
+		expect(fake.servers.has(serverName("ws1", "remote"))).toBe(false);
+	});
+
+	it("runs a stdio server with a command as a container", async () => {
+		const fake = fakeStore();
+		const kube = host(fake.store);
 		const stdio: StdioConnConfig = { name: "fs", command: "npx", args: ["x"] };
 
-		await kube.ensure(remote);
 		await kube.ensure(stdio);
 
-		expect(fallback.ensured.map((conf) => conf.name)).toEqual(["remote"]);
 		expect(fake.servers.has(serverName("ws1", "fs"))).toBe(true);
 	});
 
