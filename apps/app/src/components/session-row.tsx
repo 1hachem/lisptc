@@ -22,7 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type CSSProperties, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
 import { abandonChat } from "../lib/chat.tsx";
-import { dragsAs, type PanelContent, traceOpen } from "../lib/panel-ops.ts";
+import { type PanelContent, panelCarry, traceOpen } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { ConfirmItem } from "./confirm-item.tsx";
@@ -247,7 +247,7 @@ export function SessionRow({
 				{...statusGlyph(chat)}
 				selected={selected}
 				depth={depth}
-				onDragStart={dragsAs(opens)}
+				carry={panelCarry(opens)}
 				link={(content, className) => (
 					<PanelLink
 						workspaceId={chat.workspaceId}

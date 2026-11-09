@@ -13,7 +13,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { restoreFailure } from "../lib/bin.ts";
 import { knowledgeIcon } from "../lib/file-icons.ts";
 import { searched, useSelection } from "../lib/file-list.ts";
-import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import { type PanelContent, panelCarry } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { useKnowledgeUpload } from "../lib/uploads.ts";
 import { BulkToolbar } from "./bulk-toolbar.tsx";
@@ -74,7 +74,7 @@ function FileRow<T extends StoredFile>({
 			icon={knowledgeIcon(file.name, file.contentType)}
 			depth={1}
 			selected={shown(page)}
-			onDragStart={dragsAs(page)}
+			carry={panelCarry(page)}
 			check={check}
 			trailing={
 				<FileMenu

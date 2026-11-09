@@ -1,34 +1,26 @@
 "use client";
 
-import {
-	type Collision,
-	type CollisionDetection,
-	closestCenter,
-	DndContext,
-	type DragEndEvent,
-	type DragOverEvent,
-	type DragStartEvent,
-	KeyboardSensor,
-	MeasuringStrategy,
-	PointerSensor,
-	pointerWithin,
-	type UniqueIdentifier,
-	useDroppable,
-	useSensor,
-	useSensors,
-} from "@dnd-kit/core";
-import {
-	arrayMove,
-	SortableContext,
-	sortableKeyboardCoordinates,
-	verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
 import type { MotionId } from "@repo/ui/motions.ts";
-import { createContext, type ReactNode, useContext, useState } from "react";
-import { CursorDragOverlay } from "./cursor-drag-overlay.tsx";
-import { SortableEntry, usePrefersReducedMotion } from "./sortable-tree.tsx";
+import {
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useId,
+	useState,
+} from "react";
+import {
+	type DropSpot,
+	type Rect,
+	rectOf,
+	useCarried,
+	useDragSource,
+	useDropSpots,
+} from "./drag-layer.tsx";
+import { EntryDragged, usePrefersReducedMotion } from "./sortable-tree.tsx";
 
-const DRAG_AFTER_PX = 4;
+const LINE_PX = 2;
+
 const SIDE_PREFIX = "side:";
 
 export type Sides<Side extends string, Id extends string> = Record<
@@ -42,7 +34,7 @@ function sideTarget(side: string): string {
 
 function sideOf<Side extends string, Id extends string>(
 	sides: Sides<Side, Id>,
-	id: UniqueIdentifier | undefined,
+	id: string | undefined,
 ): Side | undefined {
 	if (id === undefined) return undefined;
 	const named = String(id);
@@ -57,7 +49,7 @@ function sideOf<Side extends string, Id extends string>(
 export function movedAcross<Side extends string, Id extends string>(
 	sides: Sides<Side, Id>,
 	active: Id,
-	over: UniqueIdentifier | undefined,
+	over: string | undefined,
 ): Sides<Side, Id> | undefined {
 	const from = sideOf(sides, active);
 	const to = sideOf(sides, over);
@@ -68,7 +60,7 @@ export function movedAcross<Side extends string, Id extends string>(
 		if (at < 0 || over === active) return undefined;
 		return {
 			...sides,
-			[from]: arrayMove([...list], list.indexOf(active), at),
+			[from]: moveTo(list, list.indexOf(active), at),
 		};
 	}
 	const target = sides[to];
@@ -110,21 +102,74 @@ export function awaitingSides<Side extends string, Id extends string>(
 	return stillAwaiting(given, dropped)?.next ?? given;
 }
 
-const preferEntries: CollisionDetection = (args) => {
-	const within = pointerWithin(args);
-	const isSide = (hit: Collision) => String(hit.id).startsWith(SIDE_PREFIX);
-	const entries = within.filter((hit) => !isSide(hit));
-	if (entries.length > 0) return entries;
-	if (within.length > 0) return within;
-	return closestCenter(args);
-};
+function moveTo<Id>(list: readonly Id[], from: number, to: number): Id[] {
+	const next = [...list];
+	const [picked] = next.splice(from, 1);
+	if (picked !== undefined) next.splice(to, 0, picked);
+	return next;
+}
+
+function lineAt(rect: Rect, below: boolean): Rect {
+	return {
+		left: rect.left,
+		top: below ? rect.top + rect.height - LINE_PX / 2 : rect.top - LINE_PX / 2,
+		width: rect.width,
+		height: LINE_PX,
+	};
+}
 
 interface SidesState {
 	sides: Sides<string, string>;
+	kind: string;
 	motion: MotionId;
+	ghost: (id: string) => ReactNode;
+	onPickUp?: (id: string) => void;
 }
 
 const SidesContext = createContext<SidesState | null>(null);
+
+function sideElements(kind: string): Element[] {
+	return [...document.querySelectorAll(`[data-sides="${CSS.escape(kind)}"]`)];
+}
+
+function spotsFor<Side extends string, Id extends string>(
+	sides: Sides<Side, Id>,
+	kind: string,
+	active: Id,
+	settle: (next: Sides<Side, Id>) => void,
+): DropSpot[] {
+	const from = sideOf(sides, active);
+	return sideElements(kind).flatMap((element) => {
+		const side = element.getAttribute("data-side") as Side | null;
+		if (side === null || !(side in sides)) return [];
+		const list = sides[side];
+		const entries = [...element.querySelectorAll(":scope > [data-entry]")];
+		const onEntries = entries.flatMap((entry): DropSpot[] => {
+			const over = entry.getAttribute("data-entry") ?? undefined;
+			const next = movedAcross(sides, active, over);
+			if (!next || over === undefined) return [];
+			const rect = rectOf(entry);
+			const below =
+				from === side && list.indexOf(active) < list.indexOf(over as Id);
+			return [
+				{ hit: rect, shows: lineAt(rect, below), drop: () => settle(next) },
+			];
+		});
+		const toEnd = movedAcross(sides, active, sideTarget(side));
+		const last = entries.at(-1);
+		const whole = rectOf(element);
+		const onSide: DropSpot[] = toEnd
+			? [
+					{
+						hit: whole,
+						shows: last ? lineAt(rectOf(last), true) : whole,
+						drop: () => settle(toEnd),
+					},
+				]
+			: [];
+		return [...onEntries, ...onSide];
+	});
+}
 
 export function SortableSides<Side extends string, Id extends string>({
 	sides: given,
@@ -141,69 +186,68 @@ export function SortableSides<Side extends string, Id extends string>({
 	overlay: (id: Id) => ReactNode;
 	children: ReactNode;
 }) {
+	const kind = `sides${useId()}`;
 	const reduced = usePrefersReducedMotion();
-	const shown: MotionId = reduced || motion === "none" ? "none" : "overlay";
-	const [live, setLive] = useState<Sides<Side, Id>>();
-	const [dragged, setDragged] = useState<Id>();
 	const [dropped, setDropped] = useState<Dropped<Side, Id>>();
 	const held = stillAwaiting(given, dropped);
 	if (held !== dropped) setDropped(held);
-	const settledSides = awaitingSides(given, held);
-	const sides = live ?? settledSides;
-	const sensors = useSensors(
-		useSensor(PointerSensor, {
-			activationConstraint: { distance: DRAG_AFTER_PX },
-		}),
-		useSensor(KeyboardSensor, {
-			coordinateGetter: sortableKeyboardCoordinates,
-		}),
+	const sides = awaitingSides(given, held);
+	const settle = useCallback(
+		(next: Sides<Side, Id>) => {
+			if (sameSides(next, sides)) return;
+			setDropped({ next, over: given });
+			onMove(next);
+		},
+		[sides, given, onMove],
 	);
-	const entry = (id: UniqueIdentifier) =>
-		sideOf(sides, id) === undefined || String(id).startsWith(SIDE_PREFIX)
-			? undefined
-			: (String(id) as Id);
-	const onDragStart = ({ active }: DragStartEvent) => {
-		const picked = entry(active.id);
-		setDragged(picked);
-		setLive(settledSides);
-		if (picked) onPickUp?.(picked);
-	};
-	const onDragOver = ({ active, over }: DragOverEvent) => {
-		const picked = entry(active.id);
-		if (!picked) return;
-		if (sideOf(sides, picked) === sideOf(sides, over?.id)) return;
-		const next = movedAcross(sides, picked, over?.id);
-		if (next) setLive(next);
-	};
-	const onDragEnd = ({ active, over }: DragEndEvent) => {
-		const picked = entry(active.id);
-		const next = picked && movedAcross(sides, picked, over?.id);
-		const settled = next ?? sides;
-		setDragged(undefined);
-		setLive(undefined);
-		if (sameSides(settled, settledSides)) return;
-		setDropped({ next: settled, over: given });
-		onMove(settled);
-	};
-	const onDragCancel = () => {
-		setDragged(undefined);
-		setLive(undefined);
-	};
+	useDropSpots((carried) =>
+		carried.kind === kind
+			? spotsFor(sides, kind, carried.payload as Id, settle)
+			: [],
+	);
 	return (
-		<DndContext
-			sensors={sensors}
-			measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-			collisionDetection={preferEntries}
-			onDragStart={onDragStart}
-			onDragOver={onDragOver}
-			onDragEnd={onDragEnd}
-			onDragCancel={onDragCancel}
+		<SidesContext
+			value={{
+				sides,
+				kind,
+				motion: reduced ? "none" : motion,
+				ghost: (id) => overlay(id as Id),
+				onPickUp: onPickUp && ((id) => onPickUp(id as Id)),
+			}}
 		>
-			<SidesContext value={{ sides, motion: shown }}>{children}</SidesContext>
-			<CursorDragOverlay dropAnimation={null}>
-				{dragged && <div className="cursor-grabbing">{overlay(dragged)}</div>}
-			</CursorDragOverlay>
-		</DndContext>
+			{children}
+		</SidesContext>
+	);
+}
+
+function SideEntry({
+	id,
+	context,
+	className,
+	children,
+}: {
+	id: string;
+	context: SidesState;
+	className: string;
+	children: ReactNode;
+}) {
+	const carried = useCarried();
+	const dragged = carried?.kind === context.kind && carried.payload === id;
+	const source = useDragSource(() => ({
+		kind: context.kind,
+		payload: id,
+		ghost: context.ghost(id),
+		onPickUp: () => context.onPickUp?.(id),
+	}));
+	return (
+		<div
+			{...source}
+			data-entry={id}
+			data-dragging={dragged}
+			className={`outline-none ${className} ${dragged && context.motion !== "none" ? "opacity-40" : ""}`}
+		>
+			<EntryDragged value={dragged}>{children}</EntryDragged>
+		</div>
 	);
 }
 
@@ -221,30 +265,19 @@ export function SortableSide<Id extends string>({
 	const context = useContext(SidesContext);
 	if (context === null)
 		throw new Error("SortableSide must be used within SortableSides");
-	const { setNodeRef, isOver } = useDroppable({ id: sideTarget(side) });
 	const order = (context.sides[side] ?? []) as readonly Id[];
 	return (
-		<div
-			ref={setNodeRef}
-			data-side={side}
-			data-over={isOver}
-			className={className}
-		>
-			<SortableContext
-				items={[...order]}
-				strategy={verticalListSortingStrategy}
-			>
-				{order.map((id, index) => (
-					<SortableEntry
-						key={id}
-						id={id}
-						motion={context.motion}
-						className={entryClassName?.(id, index)}
-					>
-						{children(id)}
-					</SortableEntry>
-				))}
-			</SortableContext>
+		<div data-sides={context.kind} data-side={side} className={className}>
+			{order.map((id, index) => (
+				<SideEntry
+					key={id}
+					id={id}
+					context={context}
+					className={entryClassName?.(id, index) ?? ""}
+				>
+					{children(id)}
+				</SideEntry>
+			))}
 		</div>
 	);
 }

@@ -11,14 +11,9 @@ import {
 	SquareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import {
-	createContext,
-	type DragEvent,
-	type ReactNode,
-	useContext,
-	useState,
-} from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 import { createPortal } from "react-dom";
+import { type Carried, useDragSource } from "./drag-layer.tsx";
 import { useEntryDragged } from "./sortable-tree.tsx";
 
 const INDENT_REM = 0.875;
@@ -141,7 +136,7 @@ export function TreeFile({
 	depth = 0,
 	link,
 	trailing,
-	onDragStart,
+	carry,
 	check,
 }: {
 	name: string;
@@ -153,9 +148,10 @@ export function TreeFile({
 	depth?: number;
 	link: (content: ReactNode, className: string) => ReactNode;
 	trailing?: ReactNode;
-	onDragStart?: (event: DragEvent<HTMLElement>) => void;
+	carry?: Carried;
 	check?: TreeCheck;
 }) {
+	const source = useDragSource(() => carry as Carried);
 	const mark = (
 		<span title={iconLabel} className="flex flex-none">
 			{glyph ?? (
@@ -168,15 +164,8 @@ export function TreeFile({
 		</span>
 	);
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: the whole row is what drags into a panel, while its link stays the control a keyboard reaches
 		<div
-			draggable={onDragStart !== undefined || undefined}
-			onDragStart={onDragStart}
-			onPointerDown={
-				onDragStart === undefined
-					? undefined
-					: (event) => event.stopPropagation()
-			}
+			{...(carry ? source : {})}
 			data-selected={selected}
 			data-checked={check?.checked}
 			className={`group/row flex items-center ${

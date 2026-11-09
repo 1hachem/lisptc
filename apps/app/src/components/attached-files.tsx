@@ -2,7 +2,7 @@ import { FileTree, TreeFile } from "@repo/components";
 import type { AttachedFile } from "@repo/shared/files";
 import { useChatSession } from "../lib/chat.tsx";
 import { knowledgeIcon } from "../lib/file-icons.ts";
-import { type PanelContent, startPanelDrag } from "../lib/panel-ops.ts";
+import { type PanelContent, panelCarry } from "../lib/panel-ops.ts";
 import { PanelLink } from "./panel-link.tsx";
 
 function AttachedRow({ file }: { file: AttachedFile }) {
@@ -18,7 +18,7 @@ function AttachedRow({ file }: { file: AttachedFile }) {
 			icon={knowledgeIcon(file.name, null)}
 			iconLabel={`${file.folder}/${file.name}`}
 			selected={false}
-			onDragStart={(event) => startPanelDrag(event.dataTransfer, opens)}
+			carry={panelCarry(opens)}
 			link={(content, className) => (
 				<PanelLink
 					workspaceId={workspaceId}

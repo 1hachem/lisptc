@@ -1,3 +1,4 @@
+import type { Carried } from "@repo/components";
 import { focusedTab, type PanelOp } from "@repo/shared/panel-layout";
 import {
 	allTabs,
@@ -203,7 +204,7 @@ export function tabMinWidth(content: PanelContent): number {
 		: CHAT_MIN_WIDTH;
 }
 
-export const PANEL_DRAG = "application/x-lisptc-panel";
+export const PANEL_CARRY = "panel";
 
 function tabId(content: PanelContent): string {
 	switch (content.kind) {
@@ -230,25 +231,19 @@ export function panelTab(content: PanelContent): Tab<PanelContent> {
 	return { id: tabId(content), content };
 }
 
-export function startPanelDrag(data: DataTransfer, content: PanelContent) {
-	data.setData(PANEL_DRAG, JSON.stringify(content));
-	data.effectAllowed = "copyMove";
+export function panelCarry(content: PanelContent): Carried {
+	return {
+		kind: PANEL_CARRY,
+		payload: content,
+		ghost: tabLabel(content),
+	};
 }
 
-export function dragsAs(content: PanelContent) {
-	return (event: { dataTransfer: DataTransfer }) =>
-		startPanelDrag(event.dataTransfer, content);
-}
-
-export function readPanelDrag(
-	data: DataTransfer,
+export function readPanelCarry(
+	payload: unknown,
 ): Tab<PanelContent> | undefined {
-	try {
-		const content = contentOf(JSON.parse(data.getData(PANEL_DRAG)));
-		return content === undefined ? undefined : panelTab(content);
-	} catch {
-		return undefined;
-	}
+	const content = contentOf(payload);
+	return content === undefined ? undefined : panelTab(content);
 }
 
 export function sideTraceShown(

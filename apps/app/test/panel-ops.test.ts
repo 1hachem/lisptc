@@ -5,13 +5,12 @@ import {
 	CHAT_MIN_WIDTH,
 	leadChat,
 	NEW_CHAT,
-	PANEL_DRAG,
 	type PanelContent,
-	readPanelDrag,
+	panelCarry,
+	readPanelCarry,
 	SIDE_TRACE_MIN_WIDTH,
 	STARTING_LAYOUT,
 	sideTraceShown,
-	startPanelDrag,
 	tabMinWidth,
 	traceOpen,
 } from "../src/lib/panel-ops.ts";
@@ -22,30 +21,17 @@ const report: PanelContent = {
 	name: "q3.pdf",
 };
 
-function transfer(): DataTransfer {
-	const held = new Map<string, string>();
-	return {
-		effectAllowed: "none",
-		setData: (key: string, value: string) => held.set(key, value),
-		getData: (key: string) => held.get(key) ?? "",
-	} as unknown as DataTransfer;
-}
-
 describe("dragging a file into the panel", () => {
 	it("carries the file across as the tab it opens", () => {
-		const data = transfer();
-		startPanelDrag(data, report);
-		expect(readPanelDrag(data)).toEqual({
+		expect(readPanelCarry(panelCarry(report).payload)).toEqual({
 			id: "file:knowledge/q3.pdf",
 			content: report,
 		});
 	});
 
 	it("reads nothing from a drag that carries something else", () => {
-		const data = transfer();
-		data.setData(PANEL_DRAG, "{not json");
-		expect(readPanelDrag(data)).toBeUndefined();
-		expect(readPanelDrag(transfer())).toBeUndefined();
+		expect(readPanelCarry("{not json")).toBeUndefined();
+		expect(readPanelCarry(undefined)).toBeUndefined();
 	});
 });
 
@@ -122,10 +108,8 @@ describe("a chat's trace", () => {
 	});
 
 	it("survives a drag as the same tab", () => {
-		const data = transfer();
-		startPanelDrag(data, { kind: "trace", chatId: "c1", title: "trace" });
-
-		expect(readPanelDrag(data)).toEqual({
+		const trace: PanelContent = { kind: "trace", chatId: "c1", title: "trace" };
+		expect(readPanelCarry(panelCarry(trace).payload)).toEqual({
 			id: "trace:c1",
 			content: { kind: "trace", chatId: "c1", title: "trace" },
 		});
@@ -144,22 +128,17 @@ describe("the trace beside the chat", () => {
 	});
 
 	it("travels with the chat tab, turn included", () => {
-		const data = transfer();
 		const traced: PanelContent = {
 			...chat,
 			trace: { shown: "open", turn: "h1" },
 		};
-		startPanelDrag(data, traced);
-		expect(readPanelDrag(data)?.content).toEqual(traced);
+		expect(readPanelCarry(panelCarry(traced).payload)?.content).toEqual(traced);
 	});
 
 	it("drops a trace state it cannot read", () => {
-		const data = transfer();
-		data.setData(
-			PANEL_DRAG,
-			JSON.stringify({ ...chat, trace: { shown: "x" } }),
+		expect(readPanelCarry({ ...chat, trace: { shown: "x" } })?.content).toEqual(
+			chat,
 		);
-		expect(readPanelDrag(data)?.content).toEqual(chat);
 	});
 
 	it("widens the chat tab's floor while open", () => {

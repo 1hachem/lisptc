@@ -12,24 +12,11 @@ import { DesktopZoom } from "./desktop-zoom.tsx";
 
 const TICK_MS = 15_000;
 
-const COLUMN_CLASS: readonly string[] = [
-	"col-start-1",
-	"col-start-2",
-	"col-start-3",
-	"col-start-4",
-	"col-start-5",
-	"col-start-6",
-	"col-start-7",
-	"col-start-8",
-	"col-start-9",
-];
-
 function placeClass(place: number): string {
-	const column = COLUMN_CLASS[place - 1] ?? "col-start-9";
 	const middle = (STATUS_BAR_SLOT_COUNT + 1) / 2;
-	if (place < middle) return `${column} justify-start`;
-	if (place > middle) return `${column} justify-end`;
-	return `${column} justify-center`;
+	if (place < middle) return "justify-start";
+	if (place > middle) return "justify-end";
+	return "justify-center";
 }
 
 function clockTime(at: Date): string {
@@ -73,9 +60,9 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 				onReorder={reorder}
 				motion={motion}
 				axis="horizontal"
-				className="grid h-full grid-cols-9 items-center"
+				className="h-full"
 				entryClassName={(item) =>
-					`row-start-1 flex h-full w-full min-w-0 items-center overflow-hidden ${placeClass(placeOf(order, item))}`
+					`flex h-full w-full min-w-0 items-center overflow-hidden ${placeClass(placeOf(order, item))}`
 				}
 			>
 				{(slot) => (isGap(slot) || !shown.includes(slot) ? null : drawn[slot])}

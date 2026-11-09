@@ -1,8 +1,8 @@
 import { SplitView } from "@repo/components";
 import { LeadChatProvider } from "../lib/lead-chat.tsx";
 import {
-	PANEL_DRAG,
-	readPanelDrag,
+	PANEL_CARRY,
+	readPanelCarry,
 	tabLabel,
 	tabMinWidth,
 } from "../lib/panel-ops.ts";
@@ -12,7 +12,7 @@ import { IdleWorkspace } from "./idle-workspace.tsx";
 import { PanelTab } from "./panel-tab.tsx";
 import { StatusBar } from "./status-bar.tsx";
 
-const EXTERNAL = { type: PANEL_DRAG, read: readPanelDrag };
+const EXTERNAL = { kind: PANEL_CARRY, read: readPanelCarry };
 
 export function PanelSplit() {
 	const { layout, arrange } = usePanels();

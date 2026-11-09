@@ -31,7 +31,7 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
-import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
+import { NEW_CHAT, type PanelContent, panelCarry } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { writeBoolPref } from "../lib/prefs.ts";
 import {
@@ -153,7 +153,7 @@ function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 			name={memory.key}
 			depth={1}
 			selected={shown(page)}
-			onDragStart={dragsAs(page)}
+			carry={panelCarry(page)}
 			trailing={
 				<FileMenu
 					name={memory.key}
@@ -192,7 +192,7 @@ function PermissionFiles({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 						name={rule.name}
 						depth={1}
 						selected={shown(page)}
-						onDragStart={dragsAs(page)}
+						carry={panelCarry(page)}
 						trailing={
 							<FileMenu
 								name={rule.name}
