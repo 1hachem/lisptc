@@ -35,6 +35,7 @@ const SORTABLE = {
 type Axis = "vertical" | "horizontal";
 type Ordered<Id extends string> = { order: Id[] };
 type Box = { x: number; y: number; width: number; height: number };
+type Size = { width: number; height: number };
 
 function boxes<Id extends string>(
 	order: readonly Id[],
@@ -134,6 +135,183 @@ function MeasuredEntry<Id extends string>({
 	);
 }
 
+function stepOf(code: string, axis: Axis): number {
+	const back = axis === "vertical" ? "ArrowUp" : "ArrowLeft";
+	const forth = axis === "vertical" ? "ArrowDown" : "ArrowRight";
+	if (code === back) return -1;
+	if (code === forth) return 1;
+	return 0;
+}
+
+function useKeyboardReorder<Id extends string>(
+	settled: readonly Id[],
+	axis: Axis,
+	settle: (next: readonly Id[]) => void,
+	onPickUp: ((id: Id) => void) | undefined,
+) {
+	const [held, setHeld] = useState<{ id: Id; order: Id[] }>();
+	const onKeyDown = useCallback(
+		(id: Id) => (event: KeyboardEvent<HTMLDivElement>) => {
+			if (event.code === "Space" || event.code === "Enter") {
+				event.preventDefault();
+				setHeld(held ? undefined : { id, order: [...settled] });
+				if (held) settle(held.order);
+				else onPickUp?.(id);
+				return;
+			}
+			if (event.code === "Escape") {
+				setHeld(undefined);
+				return;
+			}
+			const step = stepOf(event.code, axis);
+			if (!held || held.id !== id || step === 0) return;
+			event.preventDefault();
+			const from = held.order.indexOf(id);
+			const to = Math.max(0, Math.min(held.order.length - 1, from + step));
+			setHeld({ id, order: arrayMoved(held.order, from, to) });
+		},
+		[axis, held, settled, settle, onPickUp],
+	);
+	return { held, onKeyDown };
+}
+
+function useHeights<Id extends string>() {
+	const [heights, setHeights] = useState<ReadonlyMap<Id, number>>(new Map());
+	const onHeight = useCallback((id: Id, height: number) => {
+		setHeights((last) =>
+			last.get(id) === height ? last : new Map(last).set(id, height),
+		);
+	}, []);
+	return { heights, onHeight };
+}
+
+function useSettledOrder<Id extends string>(
+	given: readonly Id[],
+	onReorder: (next: Id[]) => void,
+) {
+	const [dropped, setDropped] = useState<{
+		next: readonly Id[];
+		over: readonly Id[];
+	}>();
+	const settled = awaitingOrder(given, dropped);
+	const settle = useCallback(
+		(next: readonly Id[]) => {
+			if (next.join("\0") === settled.join("\0")) return;
+			setDropped({ next, over: given });
+			onReorder([...next]);
+		},
+		[settled, given, onReorder],
+	);
+	return { settled, settle };
+}
+
+function useStableOrder<Id extends string>(order: readonly Id[]): Ordered<Id> {
+	const key = order.join("\0");
+	return useMemo(
+		() => ({ order: key ? (key.split("\0") as Id[]) : [] }),
+		[key],
+	);
+}
+
+function usePickUpReport<Id extends string>(
+	settled: readonly Id[],
+	layerId: (id: Id) => string,
+	onPickUp: ((id: Id) => void) | undefined,
+) {
+	const picked = useRef<string | null>(null);
+	return useCallback(
+		(status: DragStatus<Ordered<Id>>) => {
+			const now =
+				status.type === "dragging" ? status.behaviorCtx.draggedId : null;
+			if (now !== null && now !== picked.current) {
+				const id = settled.find((candidate) => layerId(candidate) === now);
+				if (id) onPickUp?.(id);
+			}
+			picked.current = now;
+		},
+		[settled, layerId, onPickUp],
+	);
+}
+
+function extentOf(boxes: readonly Box[], axis: Axis, frame: Size): Size {
+	return boxes.reduce(
+		(far, box) => ({
+			width: Math.max(far.width, box.x + box.width),
+			height: Math.max(far.height, box.y + box.height),
+		}),
+		{ width: frame.width, height: axis === "horizontal" ? frame.height : 0 },
+	);
+}
+
+interface ListDrawing<Id extends string> {
+	axis: Axis;
+	frame: Size;
+	heights: ReadonlyMap<Id, number>;
+	layerId: (id: Id) => string;
+	heldId: Id | undefined;
+	motion: MotionId;
+	entryClassName: ((id: Id, index: number) => string) | undefined;
+	onHeight: (id: Id, height: number) => void;
+	onKeyDown: (id: Id) => (event: KeyboardEvent<HTMLDivElement>) => void;
+	children: (id: Id) => ReactNode;
+}
+
+function listDraggable<Id extends string>(
+	drawing: ListDrawing<Id>,
+): Draggable<Ordered<Id>> {
+	return ({ state, d, draggedId }) => {
+		const placed = boxes(
+			state.order,
+			drawing.axis,
+			drawing.frame,
+			drawing.heights,
+		);
+		return (
+			<g>
+				{state.order.map((id, index) => {
+					const box = placed[index] ?? { x: 0, y: 0, width: 0, height: 0 };
+					const layer = drawing.layerId(id);
+					const dragged = draggedId === layer || drawing.heldId === id;
+					return (
+						// biome-ignore lint/correctness/useJsxKeyInIterable: dragology reconciles layers by id and rejects a key
+						<g
+							id={layer}
+							transform={translate(box.x, box.y)}
+							dragologyZIndex={dragged ? 1 : 0}
+							dragologyOnDrag={() =>
+								reorderSpec(
+									d,
+									state.order.map((_, to) => ({
+										order: arrayMoved(state.order, index, to),
+									})),
+									drawing.motion,
+								)
+							}
+						>
+							<rect width={box.width} height={box.height} fill="none" />
+							<foreignObject
+								width={box.width}
+								height={box.height}
+								overflow="visible"
+							>
+								<MeasuredEntry
+									id={id}
+									dragged={dragged}
+									className={drawing.entryClassName?.(id, index) ?? ""}
+									onHeight={drawing.onHeight}
+									onKeyDown={drawing.onKeyDown(id)}
+								>
+									{drawing.children(id)}
+								</MeasuredEntry>
+							</foreignObject>
+						</g>
+					);
+				})}
+			</g>
+		);
+	};
+}
+
 export function SortableTree<Id extends string>({
 	order: given,
 	onReorder,
@@ -148,7 +326,7 @@ export function SortableTree<Id extends string>({
 	onReorder: (next: Id[]) => void;
 	onPickUp?: (id: Id) => void;
 	motion?: MotionId;
-	axis?: Axis;
+	axis?: "vertical" | "horizontal";
 	className?: string;
 	entryClassName?: (id: Id, index: number) => string;
 	children: (id: Id) => ReactNode;
@@ -156,126 +334,40 @@ export function SortableTree<Id extends string>({
 	const reduced = usePrefersReducedMotion();
 	const shown: MotionId = reduced ? "none" : motion;
 	const prefix = useId().replaceAll(/[^a-zA-Z0-9]/g, "");
-	const [dropped, setDropped] = useState<{
-		next: readonly Id[];
-		over: readonly Id[];
-	}>();
-	const [held, setHeld] = useState<{ id: Id; order: Id[] }>();
-	const settled = awaitingOrder(given, dropped);
-	const order = held?.order ?? settled;
-	const orderKey = order.join("\0");
-	const state = useMemo<Ordered<Id>>(
-		() => ({ order: orderKey ? (orderKey.split("\0") as Id[]) : [] }),
-		[orderKey],
-	);
-	const [frameElement, setFrameElement] = useState<HTMLDivElement | null>(null);
-	const frame = useSize(frameElement);
-	const [heights, setHeights] = useState<ReadonlyMap<Id, number>>(new Map());
-	const onHeight = useCallback((id: Id, height: number) => {
-		setHeights((last) =>
-			last.get(id) === height ? last : new Map(last).set(id, height),
-		);
-	}, []);
 	const layerId = useCallback(
 		(id: Id) => `${prefix}-${encodeURIComponent(id).replaceAll("%", "_")}`,
 		[prefix],
 	);
-	const settle = useCallback(
-		(next: readonly Id[]) => {
-			const changed = next.join("\0") !== settled.join("\0");
-			if (!changed) return;
-			setDropped({ next, over: given });
-			onReorder([...next]);
-		},
-		[settled, given, onReorder],
+	const { settled, settle } = useSettledOrder(given, onReorder);
+	const { held, onKeyDown } = useKeyboardReorder(
+		settled,
+		axis,
+		settle,
+		onPickUp,
 	);
-	const onKeyDown = useCallback(
-		(id: Id) => (event: KeyboardEvent<HTMLDivElement>) => {
-			if (event.code === "Space" || event.code === "Enter") {
-				event.preventDefault();
-				if (!held) {
-					setHeld({ id, order: [...settled] });
-					onPickUp?.(id);
-					return;
-				}
-				setHeld(undefined);
-				settle(held.order);
-				return;
-			}
-			if (event.code === "Escape" && held) {
-				setHeld(undefined);
-				return;
-			}
-			const step =
-				event.code === (axis === "vertical" ? "ArrowUp" : "ArrowLeft")
-					? -1
-					: event.code === (axis === "vertical" ? "ArrowDown" : "ArrowRight")
-						? 1
-						: 0;
-			if (!held || held.id !== id || step === 0) return;
-			event.preventDefault();
-			const from = held.order.indexOf(id);
-			const to = Math.max(0, Math.min(held.order.length - 1, from + step));
-			setHeld({ id, order: arrayMoved(held.order, from, to) });
-		},
-		[axis, held, settled, settle, onPickUp],
+	const state = useStableOrder(held?.order ?? settled);
+	const [frameElement, setFrameElement] = useState<HTMLDivElement | null>(null);
+	const frame = useSize(frameElement);
+	const { heights, onHeight } = useHeights<Id>();
+	const extent = extentOf(
+		boxes(state.order, axis, frame, heights),
+		axis,
+		frame,
 	);
-	const laidOut = boxes(state.order, axis, frame, heights);
-	const extent = laidOut.reduce(
-		(far, box) => ({
-			width: Math.max(far.width, box.x + box.width),
-			height: Math.max(far.height, box.y + box.height),
-		}),
-		{ width: frame.width, height: axis === "horizontal" ? frame.height : 0 },
-	);
-	const draggable = useMemo<Draggable<Ordered<Id>>>(
+	const draggable = useMemo(
 		() =>
-			({ state: drawn, d, draggedId }) => {
-				const placed = boxes(drawn.order, axis, frame, heights);
-				return (
-					<g>
-						{drawn.order.map((id, index) => {
-							const box = placed[index] ?? { x: 0, y: 0, width: 0, height: 0 };
-							const layer = layerId(id);
-							const dragged = draggedId === layer || held?.id === id;
-							return (
-								// biome-ignore lint/correctness/useJsxKeyInIterable: dragology reconciles layers by id and rejects a key
-								<g
-									id={layer}
-									transform={translate(box.x, box.y)}
-									dragologyZIndex={dragged ? 1 : 0}
-									dragologyOnDrag={() =>
-										reorderSpec(
-											d,
-											drawn.order.map((_, to) => ({
-												order: arrayMoved(drawn.order, index, to),
-											})),
-											shown,
-										)
-									}
-								>
-									<rect width={box.width} height={box.height} fill="none" />
-									<foreignObject
-										width={box.width}
-										height={box.height}
-										overflow="visible"
-									>
-										<MeasuredEntry
-											id={id}
-											dragged={dragged}
-											className={entryClassName?.(id, index) ?? ""}
-											onHeight={onHeight}
-											onKeyDown={onKeyDown(id)}
-										>
-											{children(id)}
-										</MeasuredEntry>
-									</foreignObject>
-								</g>
-							);
-						})}
-					</g>
-				);
-			},
+			listDraggable({
+				axis,
+				frame,
+				heights,
+				layerId,
+				heldId: held?.id,
+				motion: shown,
+				entryClassName,
+				onHeight,
+				onKeyDown,
+				children,
+			}),
 		[
 			axis,
 			frame,
@@ -289,19 +381,7 @@ export function SortableTree<Id extends string>({
 			children,
 		],
 	);
-	const picked = useRef<string | null>(null);
-	const onDragStatus = useCallback(
-		(status: DragStatus<Ordered<Id>>) => {
-			const now =
-				status.type === "dragging" ? status.behaviorCtx.draggedId : null;
-			if (now !== picked.current && now !== null) {
-				const id = settled.find((candidate) => layerId(candidate) === now);
-				if (id) onPickUp?.(id);
-			}
-			picked.current = now;
-		},
-		[settled, layerId, onPickUp],
-	);
+	const onDragStatus = usePickUpReport(settled, layerId, onPickUp);
 	const onDropState = useCallback(
 		(next: Ordered<Id>) => settle(next.order),
 		[settle],

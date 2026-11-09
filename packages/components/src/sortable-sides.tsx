@@ -90,14 +90,14 @@ interface Dropped<Side extends string, Id extends string> {
 
 export function stillAwaiting<Side extends string, Id extends string>(
 	given: Sides<Side, Id>,
-	dropped: Dropped<Side, Id> | undefined,
-): Dropped<Side, Id> | undefined {
+	dropped: { next: Sides<Side, Id>; over: Sides<Side, Id> } | undefined,
+): { next: Sides<Side, Id>; over: Sides<Side, Id> } | undefined {
 	return dropped && sameSides(dropped.over, given) ? dropped : undefined;
 }
 
 export function awaitingSides<Side extends string, Id extends string>(
 	given: Sides<Side, Id>,
-	dropped: Dropped<Side, Id> | undefined,
+	dropped: { next: Sides<Side, Id>; over: Sides<Side, Id> } | undefined,
 ): Sides<Side, Id> {
 	return stillAwaiting(given, dropped)?.next ?? given;
 }
