@@ -7,7 +7,6 @@ import {
 	type DragStatus,
 	translate,
 } from "@repo/dragology";
-import type { MotionId } from "@repo/ui/motions.ts";
 import {
 	type KeyboardEvent,
 	type ReactNode,
@@ -71,13 +70,11 @@ function arrayMoved<Id>(order: readonly Id[], from: number, to: number): Id[] {
 function reorderSpec<Id extends string>(
 	d: Parameters<Draggable<Ordered<Id>>>[0]["d"],
 	orders: Ordered<Id>[],
-	motion: MotionId,
+	still: boolean,
 ): DragSpec<Ordered<Id>> {
-	if (motion === "slide") return d.between(orders);
-	if (motion === "none") return d.closest(orders).withDropTransition(false);
-	return d
-		.closest(orders)
-		.withFloating(motion === "overlay" ? { ghost: true } : {});
+	return still
+		? d.closest(orders).withDropTransition(false)
+		: d.between(orders);
 }
 
 function useSize(element: HTMLElement | null) {
@@ -249,7 +246,7 @@ interface ListDrawing<Id extends string> {
 	heights: ReadonlyMap<Id, number>;
 	layerId: (id: Id) => string;
 	heldId: Id | undefined;
-	motion: MotionId;
+	still: boolean;
 	entryClassName: ((id: Id, index: number) => string) | undefined;
 	onHeight: (id: Id, height: number) => void;
 	onKeyDown: (id: Id) => (event: KeyboardEvent<HTMLDivElement>) => void;
@@ -284,7 +281,7 @@ function listDraggable<Id extends string>(
 									state.order.map((_, to) => ({
 										order: arrayMoved(state.order, index, to),
 									})),
-									drawing.motion,
+									drawing.still,
 								)
 							}
 						>
@@ -316,7 +313,6 @@ export function SortableTree<Id extends string>({
 	order: given,
 	onReorder,
 	onPickUp,
-	motion = "slide",
 	axis = "vertical",
 	className = "",
 	entryClassName,
@@ -325,14 +321,12 @@ export function SortableTree<Id extends string>({
 	order: readonly Id[];
 	onReorder: (next: Id[]) => void;
 	onPickUp?: (id: Id) => void;
-	motion?: MotionId;
 	axis?: "vertical" | "horizontal";
 	className?: string;
 	entryClassName?: (id: Id, index: number) => string;
 	children: (id: Id) => ReactNode;
 }) {
-	const reduced = usePrefersReducedMotion();
-	const shown: MotionId = reduced ? "none" : motion;
+	const still = usePrefersReducedMotion();
 	const prefix = useId().replaceAll(/[^a-zA-Z0-9]/g, "");
 	const layerId = useCallback(
 		(id: Id) => `${prefix}-${encodeURIComponent(id).replaceAll("%", "_")}`,
@@ -362,7 +356,7 @@ export function SortableTree<Id extends string>({
 				heights,
 				layerId,
 				heldId: held?.id,
-				motion: shown,
+				still,
 				entryClassName,
 				onHeight,
 				onKeyDown,
@@ -374,7 +368,7 @@ export function SortableTree<Id extends string>({
 			heights,
 			layerId,
 			held,
-			shown,
+			still,
 			entryClassName,
 			onHeight,
 			onKeyDown,
@@ -387,11 +381,7 @@ export function SortableTree<Id extends string>({
 		[settle],
 	);
 	return (
-		<div
-			ref={setFrameElement}
-			data-motion={shown}
-			className={`relative ${className}`}
-		>
+		<div ref={setFrameElement} className={`relative ${className}`}>
 			<DraggableRenderer
 				draggable={draggable}
 				state={state}

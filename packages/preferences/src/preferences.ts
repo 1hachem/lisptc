@@ -30,7 +30,6 @@ const SET_KEYS = [
 	"hidden",
 	"status-bar",
 	"status-bar-hidden",
-	"motion",
 	"panel-motion",
 	"trace-beside-chat",
 	"trace-link",
@@ -92,13 +91,6 @@ const SET_ARGS = [
 			'every bottom bar item to hide, as ("name" ...); an item not named is shown, so \'() shows them all',
 	},
 	{
-		name: "motion",
-		type: "string",
-		required: false,
-		description:
-			"how the sidebar animates a drag, a motion id from (motions); the system's reduced-motion setting still wins",
-	},
-	{
 		name: "panel-motion",
 		type: "boolean",
 		required: false,
@@ -146,7 +138,6 @@ export function preferencesList(preferences: Preferences): List {
 			"status-bar-hidden",
 			arrayToList([...(preferences.statusBarHidden ?? [])]),
 		],
-		["motion", preferences.motion ?? null],
 		["panel-motion", preferences.panelMotion === false ? null : true],
 		["trace-beside-chat", preferences.traceBesideChat === true ? true : null],
 		["trace-link", preferences.traceLink === false ? null : true],
@@ -158,7 +149,7 @@ function choices(offered: readonly Choice[]): List {
 }
 
 function chosen(
-	kind: "font" | "motion",
+	kind: "font",
 	value: unknown,
 	offered: readonly Choice[],
 ): string {
@@ -273,7 +264,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return this workspace\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). Each workspace keeps its own, as it keeps its theme, and the app applies them live. The theme itself is read with (settings).',
+		'Return this workspace\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :panel-motion t :trace-beside-chat nil :trace-link t). Each workspace keeps its own, as it keeps its theme, and the app applies them live. The theme itself is read with (settings).',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -283,14 +274,14 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:sidebar-right ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
+		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:sidebar-right ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
 		"Change this workspace's preferences. Only the keys given change, and other workspaces keep theirs; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :font :metadata :input :sidebar :sidebar-right :hidden :status-bar :status-bar-hidden :motion :panel-motion :trace-beside-chat :trace-link",
+					"nothing to set, give one of :font :metadata :input :sidebar :sidebar-right :hidden :status-bar :status-bar-hidden :panel-motion :trace-beside-chat :trace-link",
 					null,
 				);
 			const current = yield* settled(store.read());
@@ -338,8 +329,6 @@ export function registerPreferences(
 					options.get("status-bar-hidden"),
 					statusBarSlots(current.statusBar),
 				);
-			if (options.has("motion"))
-				change.motion = chosen("motion", options.get("motion"), host.motions);
 			if (options.has("panel-motion"))
 				change.panelMotion = options.get("panel-motion") !== null;
 			if (options.has("trace-beside-chat"))
@@ -407,15 +396,6 @@ export function registerPreferences(
 		"Return an alist of (id . name) for every font the app offers.",
 		z.tuple([]),
 		() => choices(host.fonts),
-	);
-
-	interp.def(
-		"motions",
-		0,
-		"(motions)",
-		"Return an alist of (id . description) for every way the sidebar can animate a drag.",
-		z.tuple([]),
-		() => choices(host.motions),
 	);
 }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import type { MotionId } from "@repo/ui/motions.ts";
 import {
 	createContext,
 	type ReactNode,
@@ -128,7 +127,7 @@ type Carrying = { kind: string; payload: unknown };
 interface SidesState {
 	sides: Sides<string, string>;
 	kind: string;
-	motion: MotionId;
+	still: boolean;
 	ghost: (id: string) => ReactNode;
 	also?: (id: string) => Carrying | undefined;
 	onPickUp?: (id: string) => void;
@@ -192,7 +191,6 @@ export function SortableSides<Side extends string, Id extends string>({
 	sides: given,
 	onMove,
 	onPickUp,
-	motion = "slide",
 	overlay,
 	also,
 	children,
@@ -200,20 +198,18 @@ export function SortableSides<Side extends string, Id extends string>({
 	sides: Sides<Side, Id>;
 	onMove: (next: Sides<Side, Id>) => void;
 	onPickUp?: (id: Id) => void;
-	motion?: MotionId;
 	overlay: (id: Id) => ReactNode;
 	also?: (id: Id) => { kind: string; payload: unknown } | undefined;
 	children: ReactNode;
 }) {
 	const kind = `sides${useId()}`;
-	const reduced = usePrefersReducedMotion();
+	const still = usePrefersReducedMotion();
 	const [dropped, setDropped] = useState<Dropped<Side, Id>>();
 	const held = stillAwaiting(given, dropped);
 	if (held !== dropped) setDropped(held);
 	const settled = awaitingSides(given, held);
 	const [live, setLive] = useState<Sides<Side, Id>>();
 	const sides = live ?? settled;
-	const shown: MotionId = reduced ? "none" : motion;
 	const settle = useCallback(
 		(next: Sides<Side, Id>) => {
 			setLive(undefined);
@@ -230,7 +226,7 @@ export function SortableSides<Side extends string, Id extends string>({
 					kind,
 					carried.payload as Id,
 					settle,
-					shown === "none" ? undefined : setLive,
+					still ? undefined : setLive,
 				)
 			: [],
 	);
@@ -239,7 +235,7 @@ export function SortableSides<Side extends string, Id extends string>({
 			value={{
 				sides,
 				kind,
-				motion: shown,
+				still,
 				ghost: (id) => overlay(id as Id),
 				also: also && ((id) => also(id as Id)),
 				onPickUp: onPickUp && ((id) => onPickUp(id as Id)),
@@ -275,7 +271,7 @@ function SideEntry({
 			{...source}
 			data-entry={id}
 			data-dragging={dragged}
-			className={`outline-none ${className} ${dragged && context.motion !== "none" ? "opacity-40" : ""}`}
+			className={`outline-none ${className} ${dragged && !context.still ? "opacity-40" : ""}`}
 		>
 			<EntryDragged value={dragged}>{children}</EntryDragged>
 		</div>

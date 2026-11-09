@@ -5,7 +5,7 @@ helpers chat input runs, sidebar, bottom bar. Each workspace keeps own set,
 like theme; change here leaves other workspaces alone. App applies change at
 once, while user watches.
 
-- (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t).
+- (preferences) gives (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :panel-motion t :trace-beside-chat nil :trace-link t).
 - (preferences/set :font "geist") changes only keys you give.
   Toggles merge: (preferences/set :metadata '(:tokens t)) turns tokens on,
   leaves others as they were.
@@ -31,9 +31,6 @@ once, while user watches.
   on bar or in preferences.
 - :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
   (preferences/set :status-bar-hidden '("clock")) hides clock. '() shows all.
-- :motion is how sidebar animates that drag. (motions) gives alist of
-  (id . description) to choose from. System asks for reduced motion: nothing
-  animates, whatever :motion says.
 - :panel-motion t animates panels as they open, split, switch tab; nil keeps
   them still: (preferences/set :panel-motion nil). Reduced motion wins here too.
 - :trace-beside-chat t opens chat's trace in tab right of chat whenever chat

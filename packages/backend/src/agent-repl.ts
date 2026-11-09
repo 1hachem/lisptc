@@ -33,7 +33,6 @@ import { secretsHost } from "@repo/secrets-extension/host";
 import { semanticExtension } from "@repo/semantic-extension";
 import { semanticHost } from "@repo/semantic-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
-import { motions } from "@repo/ui/motions.ts";
 import { defaultThemeId, themes } from "@repo/ui/themes";
 import { uiExtension } from "@repo/ui-extension";
 import { uiHostFor } from "@repo/ui-extension/host";
@@ -147,7 +146,6 @@ export async function workspaceExtensions(
 		preferencesHostFor({
 			store: new ConvexPreferencesStore(workspaceId, connect),
 			fonts,
-			motions,
 			...(desktop === undefined
 				? {}
 				: { desktop: { apply: (change) => desktop.settings(change) } }),

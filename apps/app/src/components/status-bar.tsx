@@ -4,7 +4,6 @@ import {
 	type StatusBarItem,
 } from "@repo/shared/status-bar";
 import { type ReactNode, useEffect, useState } from "react";
-import { useSidebarMotion } from "../lib/sidebar.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
 import { isGap, placeOf } from "../lib/status-bar-order.ts";
 import { DesktopStatus } from "./desktop-status.tsx";
@@ -41,7 +40,6 @@ function Clock() {
 }
 
 export function StatusBar({ indicator }: { indicator: ReactNode }) {
-	const { motion } = useSidebarMotion();
 	const { order, shown, reorder } = useStatusBarOrder();
 	const drawn: Record<StatusBarItem, ReactNode> = {
 		panes: indicator,
@@ -58,7 +56,6 @@ export function StatusBar({ indicator }: { indicator: ReactNode }) {
 			<SortableTree
 				order={order}
 				onReorder={reorder}
-				motion={motion}
 				axis="horizontal"
 				className="h-full"
 				entryClassName={(item) =>

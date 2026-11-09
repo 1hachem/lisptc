@@ -7,7 +7,6 @@ import {
 } from "@repo/components";
 import type { StatusBarItem } from "@repo/shared/status-bar";
 import { fonts } from "@repo/ui";
-import { motions } from "@repo/ui/motions.ts";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { inDesktopShell, useDesktopSettings } from "../lib/desktop-shell.ts";
@@ -18,7 +17,7 @@ import {
 	useTraceBesideChat,
 	useTraceLink,
 } from "../lib/preferences.ts";
-import { useSidebarMotion, useSidebarSides } from "../lib/sidebar.ts";
+import { useSidebarSides } from "../lib/sidebar.ts";
 import type { SidebarEntry } from "../lib/sidebar-order.ts";
 import { useStatusBarOrder } from "../lib/status-bar.ts";
 import { isGap } from "../lib/status-bar-order.ts";
@@ -79,10 +78,9 @@ function EmptySlot() {
 
 function StatusBarList() {
 	const { order, shown, reorder, toggle } = useStatusBarOrder();
-	const { motion } = useSidebarMotion();
 	return (
 		<div className="px-4 text-[11.5px]">
-			<SortableTree order={order} onReorder={reorder} motion={motion}>
+			<SortableTree order={order} onReorder={reorder}>
 				{(item) =>
 					isGap(item) ? (
 						<EmptySlot />
@@ -130,13 +128,11 @@ function SidebarRow({ entry, on }: { entry: SidebarEntry; on: boolean }) {
 
 function SidebarList() {
 	const { sides, hidden, move, toggle } = useSidebarSides();
-	const { motion } = useSidebarMotion();
 	const on = (entry: SidebarEntry) => !hidden.includes(entry);
 	return (
 		<SortableSides
 			sides={sides}
 			onMove={move}
-			motion={motion}
 			overlay={(entry) => <EntryDragged entry={entry} />}
 		>
 			<div className="grid grid-cols-2 gap-4 px-4 text-[11.5px]">
@@ -313,32 +309,6 @@ function DesktopToggles() {
 	);
 }
 
-function MotionList() {
-	const { motion, chooseMotion } = useSidebarMotion();
-	return (
-		<div className="flex flex-col gap-1.5 px-4 text-[11.5px]">
-			{motions.map((candidate) => {
-				const chosen = candidate.id === motion;
-				return (
-					<button
-						key={candidate.id}
-						type="button"
-						aria-pressed={chosen}
-						title={candidate.name}
-						onClick={() => chooseMotion(candidate.id)}
-						className="flex w-full cursor-pointer items-baseline gap-2 text-left"
-					>
-						<span className={`flex-1 ${chosen ? "text-fg" : "text-dim"}`}>
-							{candidate.id}
-						</span>
-						{chosen && <span className="flex-none text-dim">on</span>}
-					</button>
-				);
-			})}
-		</div>
-	);
-}
-
 export function PreferenceSections() {
 	return (
 		<>
@@ -374,10 +344,6 @@ export function PreferenceSections() {
 				font
 			</div>
 			<FontList />
-			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
-				drag motion
-			</div>
-			<MotionList />
 			<div className="px-4 text-[11px] text-dim uppercase tracking-[0.14em]">
 				panel motion
 			</div>

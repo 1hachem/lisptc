@@ -31,37 +31,6 @@ describe("SortableTree", () => {
 		expect(entries.map((entry) => entry.textContent)).toEqual(["b", "a", "c"]);
 	});
 
-	it("moves the way it is asked to", async () => {
-		const host = await mounted(
-			<SortableTree order={["a"]} onReorder={() => {}} motion="lift">
-				{(id) => <span>{id}</span>}
-			</SortableTree>,
-		);
-		expect(
-			host.querySelector("[data-motion]")?.getAttribute("data-motion"),
-		).toBe("lift");
-	});
-
-	it("drops every animation when the user asks for reduced motion", async () => {
-		const matchMedia = vi.spyOn(window, "matchMedia").mockImplementation(
-			(query) =>
-				({
-					matches: query === "(prefers-reduced-motion: reduce)",
-					addEventListener: () => {},
-					removeEventListener: () => {},
-				}) as unknown as MediaQueryList,
-		);
-		const host = await mounted(
-			<SortableTree order={["a"]} onReorder={() => {}} motion="overlay">
-				{(id) => <span>{id}</span>}
-			</SortableTree>,
-		);
-		expect(
-			host.querySelector("[data-motion]")?.getAttribute("data-motion"),
-		).toBe("none");
-		matchMedia.mockRestore();
-	});
-
 	it("collapses an open folder while it is being dragged", async () => {
 		const host = await mounted(
 			<SortableTree order={["chat", "memories"]} onReorder={() => {}}>

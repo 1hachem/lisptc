@@ -1,7 +1,5 @@
-import type { MotionId } from "@repo/ui/motions.ts";
 import { useCallback, useEffect, useMemo } from "react";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
-import { motionOf } from "./resolved-preferences.ts";
 import {
 	type SidebarEntry,
 	type SidebarSides,
@@ -34,14 +32,4 @@ export function useSidebarSides() {
 	);
 
 	return { ...view, move, toggle };
-}
-
-export function useSidebarMotion() {
-	const stored = usePreferences();
-	const put = usePutPreferences();
-	const chooseMotion = useCallback(
-		(id: MotionId) => put({ motion: id }),
-		[put],
-	);
-	return { motion: motionOf(stored), chooseMotion };
 }
