@@ -23,6 +23,7 @@ WORKDIR /app/apps/app
 CMD ["pnpm", "run", "dev", "--host", "127.0.0.1"]
 
 FROM base AS builder
+ENV NODE_OPTIONS=--max-old-space-size=6144
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile
