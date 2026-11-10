@@ -31,7 +31,8 @@ async function printed(repl: MemoryRepl, code: string): Promise<string> {
 	return (await repl.evalOutput(`(echo ${code})`)).user;
 }
 
-const REMEMBER = '(memory/remember "k" "a zebra note")';
+const REMEMBER =
+	'(memory/remember "k" "a zebra note" :when "the test asks for it")';
 
 describe("permissions over the memory extension", () => {
 	it("holds forget-all for the user under a config that never names it", async () => {

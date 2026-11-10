@@ -52,7 +52,7 @@ const BROWSER = `
 (memory "internal/browser/local" :when "user wants to automate a web browser" :links ("internal/browser/flags")
   "load it with (load-mcp \\"playwright\\" :local t)")
 
-(memory "internal/browser/flags"
+(memory "internal/browser/flags" :on (recall "^internal/browser/local$")
   "pass :quiet t only when the row lists it")
 
 (memory "internal/deploy/notes" :on (user "^deploy")
@@ -182,7 +182,10 @@ describe("built-in memories", () => {
 
 	it("are listed and recalled beside the agent's own", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "mine" "a note of my own")');
+		await ev(
+			f,
+			'(memory/remember "mine" "a note of my own" :when "the test asks for it")',
+		);
 		const listed = await ev(f, "(memories)");
 		expect(listed).toContain('"internal/browser/flags"');
 		expect(listed).toContain('"mine"');
@@ -193,12 +196,17 @@ describe("built-in memories", () => {
 
 	it("are listed on their own, with the situation or trigger that fires each", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "mine" "a note of my own")');
+		await ev(
+			f,
+			'(memory/remember "mine" "a note of my own" :when "the test asks for it")',
+		);
 		const listed = await ev(f, "(memory/builtins)");
 		expect(listed).toContain(
 			'("internal/browser/local" "user wants to automate a web browser")',
 		);
-		expect(listed).toContain('("internal/browser/flags" nil)');
+		expect(listed).toContain(
+			'("internal/browser/flags" (recall "^internal/browser/local$"))',
+		);
 		expect(listed).toContain('("internal/deploy/notes" (user "^deploy"))');
 		expect(listed).not.toContain('"mine"');
 	});
@@ -215,7 +223,7 @@ describe("built-in memories", () => {
 	it("are read-only", async () => {
 		const f = fixture();
 		for (const code of [
-			'(memory/remember "internal/deploy/notes" "mine now")',
+			'(memory/remember "internal/deploy/notes" "mine now" :when "the test asks for it")',
 			'(memory/forget "internal/deploy/notes")',
 			'(memory/revise "internal/deploy/notes" "mine now")',
 		])
@@ -268,13 +276,16 @@ describe("built-in memories", () => {
 		const long = Array.from({ length: MAX_BUILTIN_WORDS + 1 }, () => "w").join(
 			" ",
 		);
-		const f = fixture({ memories: `(memory "internal/t/long" "${long}")` });
+		const f = fixture({
+			memories: `(memory "internal/t/long" :when "the test asks for it" "${long}")`,
+		});
 		expect(() => f.bank.builtins()).toThrow(/at most/);
 	});
 
 	it("refuse two built-ins under one key", () => {
 		const f = fixture({
-			memories: '(memory "internal/t/a" "one")\n(memory "internal/t/a" "two")',
+			memories:
+				'(memory "internal/t/a" :when "the test asks for it" "one")\n(memory "internal/t/a" :when "the test asks for it" "two")',
 		});
 		expect(() => f.bank.builtins()).toThrow(/share this key/);
 	});
@@ -282,7 +293,7 @@ describe("built-in memories", () => {
 	it("keep a body over several lines, as written", () => {
 		const f = fixture({
 			memories:
-				'(memory "internal/t/a"\n  "first line\n  (load-mcp \\"x\\")")\n',
+				'(memory "internal/t/a" :when "the test asks for it"\n  "first line\n  (load-mcp \\"x\\")")\n',
 		});
 		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
 			'first line\n  (load-mcp "x")',
@@ -297,13 +308,21 @@ describe("built-in memories", () => {
 	it("keep the internal namespace from the agent's own memories", async () => {
 		const f = fixture();
 		await expect(
-			ev(f, '(memory/remember "internal/mine/note" "a note of my own")'),
+			ev(
+				f,
+				'(memory/remember "internal/mine/note" "a note of my own" :when "the test asks for it")',
+			),
 		).rejects.toThrow(/built-in memories/);
 	});
 
 	it("refuse a body that is not a string", () => {
 		const f = fixture({ memories: '(memory "internal/t/a" one)' });
 		expect(() => f.bank.builtins()).toThrow(/needs a body string/);
+	});
+
+	it("refuse a memory with no hook", () => {
+		const f = fixture({ memories: '(memory "internal/t/a" "one")' });
+		expect(() => f.bank.builtins()).toThrow(/needs a hook/);
 	});
 
 	it("refuse a memory with no body", () => {
@@ -396,7 +415,10 @@ describe("the when trigger", () => {
 	it("refuses an :unless with no :when to narrow", async () => {
 		const f = fixture();
 		await expect(
-			ev(f, `(memory/remember "mine" "x" :unless "user only names a browser")`),
+			ev(
+				f,
+				`(memory/remember "mine" "x" :on '(user "go") :unless "user only names a browser")`,
+			),
 		).rejects.toThrow();
 	});
 

@@ -33,9 +33,8 @@ one when memory fired where it did not help:
 Start memory, trigger (start) : put role and goal there. Loads once; revision
 read only by next conversation.
 
-One trigger per memory: :when or :on, not both. Memory with neither never
-arrives by itself. It waits for a recall naming it. Unguessable key later
-means lost.")
+Every memory has key, body and one trigger: :when or :on, not both.
+Remember without trigger or body is refused.")
 
 (memory "internal/memory/call-triggers" :when "the agent is writing a memory that must fire on one particular call, such as one tool or one server, and not on every call"
   "For call the pattern is A FORM, written like the call, matched structurally:
@@ -141,12 +140,12 @@ after text leaves. Need one now? Recall by key or words.
   recalling IS reading. No echo after it.
 - (memories) every memory as key, score and trigger, strongest first.
 - Built-ins by area: internal/memory/writing.
-- (memory/remember key body) stores one.
+- (memory/remember key body :when \"situation\") stores one; :on (kind \"pattern\") in place of :when.
 - (memory/forget key) drops one for good. (memory/revise key body) corrects
   one inside its window: internal/memory/revising.")
 
 (memory "internal/memory/learning" :when "a step just failed and the agent worked out what works, or it found a solution worth keeping for later"
-  "Memory is for what you found out the hard way. Step failed, you worked out what works: rejected call, wrong name, backwards argument order. Store the fix with `memory/remember` before moving on, while the right answer is on screen. That moment is the only one you get. The solution is either kind of memory. A DECLARATIVE one is prose, what you now know: \"the tool is acme/get_widget, not acme/get\". A PROCEDURAL one is a quoted form, the thing that worked, a call or a `defun` you replay later: `(memory/remember \"widget-id\" '(defun widget-id (w) (cdr (assoc \"id\" w)))) `. Same slot, both kinds.
+  "Memory is for what you found out the hard way. Step failed, you worked out what works: rejected call, wrong name, backwards argument order. Store the fix with `memory/remember` before moving on, while the right answer is on screen. That moment is the only one you get. The solution is either kind of memory. A DECLARATIVE one is prose, what you now know: \"the tool is acme/get_widget, not acme/get\". A PROCEDURAL one is a quoted form, the thing that worked, a call or a `defun` you replay later: `(memory/remember \"widget-id\" '(defun widget-id (w) (cdr (assoc \"id\" w))) :when \"agent is about to read a widget's id\") `. Same slot, both kinds.
 SPEND THE REVISE WINDOW. Memory arrived vague, half-right, or missing the argument that mattered? Sharpen it with `(memory/revise key body) ` on the spot, while you see both what it said and what was true. Recall, use, revise: each use leaves the memory more useful than it was.")
 
 (memory "internal/memory/hooks" :when "the agent is about to give a memory a trigger, :when or :on, so a lesson fires before the mistake"

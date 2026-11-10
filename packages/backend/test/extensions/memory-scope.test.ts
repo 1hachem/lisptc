@@ -11,9 +11,11 @@ describe("what a repl remembers, and for whom", () => {
 		const repl = scoped();
 
 		expect(repl.hooks.filled(memorySlot)).toBeDefined();
-		expect(await repl.eval('(memory/remember "k" "a zebra note")')).toContain(
-			"k",
-		);
+		expect(
+			await repl.eval(
+				'(memory/remember "k" "a zebra note" :when "the test asks for it")',
+			),
+		).toContain("k");
 		expect(await repl.eval('(memory/recall "zebra")')).toContain(
 			"a zebra note",
 		);
@@ -21,7 +23,7 @@ describe("what a repl remembers, and for whom", () => {
 
 	it("carries what one conversation learned into the next", async () => {
 		await scoped("someone").eval(
-			'(memory/remember "k" "learned in the first conversation")',
+			'(memory/remember "k" "learned in the first conversation" :when "the test asks for it")',
 		);
 
 		expect(await scoped("someone").eval('(memory/recall "k")')).toContain(
@@ -30,7 +32,9 @@ describe("what a repl remembers, and for whom", () => {
 	});
 
 	it("keeps one person's memories out of another's", async () => {
-		await scoped("someone").eval('(memory/remember "secret" "mine")');
+		await scoped("someone").eval(
+			'(memory/remember "secret" "mine" :when "the test asks for it")',
+		);
 
 		expect(
 			await scoped("someone-else").eval('(memory/recall "secret")'),

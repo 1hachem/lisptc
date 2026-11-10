@@ -108,6 +108,7 @@ function plain(key: string, lastUsed = 0): MemoryWrite {
 	return written({
 		key,
 		body: "v",
+		on: { kind: "when", pattern: "the test asks for it" },
 		links: new Map(),
 		score: 1,
 		used: 0,
@@ -122,7 +123,10 @@ describe("remembering and recalling", () => {
 		const f = fixture();
 
 		expect(
-			await ev(f, '(memory/remember "linear-ids" "Ids look like ENG-12.")'),
+			await ev(
+				f,
+				'(memory/remember "linear-ids" "Ids look like ENG-12." :when "the test asks for it")',
+			),
 		).toBe('"linear-ids"');
 		expect(
 			await ev(f, '(cdr (assoc "body" (car (memory/recall "linear"))))'),
@@ -131,28 +135,37 @@ describe("remembering and recalling", () => {
 
 	it("matches on the body as well as the key", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "the deploy runs on friday")');
+		await ev(
+			f,
+			'(memory/remember "k" "the deploy runs on friday" :when "the test asks for it")',
+		);
 
 		expect(await ev(f, '(length (memory/recall "friday"))')).toBe("1");
 	});
 
 	it("forgives a misspelling in the query", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "eng-12" "an issue")');
+		await ev(
+			f,
+			'(memory/remember "eng-12" "an issue" :when "the test asks for it")',
+		);
 
 		expect(await ev(f, '(length (memory/recall "isue"))')).toBe("1");
 	});
 
 	it("takes a prefix of a word in the body", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "eng-12" "an issue")');
+		await ev(
+			f,
+			'(memory/remember "eng-12" "an issue" :when "the test asks for it")',
+		);
 
 		expect(await ev(f, '(length (memory/recall "iss"))')).toBe("1");
 	});
 
 	it("forgets on request", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "v")');
+		await ev(f, '(memory/remember "k" "v" :when "the test asks for it")');
 
 		expect(await ev(f, '(memory/forget "k")')).toBe("t");
 		expect(await ev(f, '(memory/forget "k")')).toBe("nil");
@@ -161,7 +174,7 @@ describe("remembering and recalling", () => {
 
 	it("forgets everything on request", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "a" "one")');
+		await ev(f, '(memory/remember "a" "one" :when "the test asks for it")');
 		await ev(f, `(memory/remember "b" "two" :on '(start))`);
 
 		expect(await ev(f, "(memory/forget-all)")).toBe("2");
@@ -175,7 +188,10 @@ describe("remembering and recalling", () => {
 
 	it("keeps a form as a form, not as its value", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "triage" \'(defun triage (i) (cdr i)))');
+		await ev(
+			f,
+			'(memory/remember "triage" \'(defun triage (i) (cdr i)) :when "the test asks for it")',
+		);
 
 		expect(
 			await ev(f, '(cdr (assoc "body" (car (memory/recall "triage"))))'),
@@ -185,16 +201,22 @@ describe("remembering and recalling", () => {
 	it("refuses a body that cannot be read back", async () => {
 		const f = fixture();
 
-		await expect(ev(f, '(memory/remember "k" (lambda (x) x))')).rejects.toThrow(
-			/reads back/,
-		);
+		await expect(
+			ev(
+				f,
+				'(memory/remember "k" (lambda (x) x) :when "the test asks for it")',
+			),
+		).rejects.toThrow(/reads back/);
 	});
 });
 
 describe("replay", () => {
 	it("evaluates a remembered form, installing what it defines", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "double" \'(defun double (x) (* x 2)))');
+		await ev(
+			f,
+			'(memory/remember "double" \'(defun double (x) (* x 2)) :when "the test asks for it")',
+		);
 
 		expect(await ev(f, '(memory/replay "double")')).toBe("double");
 		expect(await ev(f, "(double 21)")).toBe("42");
@@ -202,7 +224,10 @@ describe("replay", () => {
 
 	it("says a prose memory has nothing to run", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "just words")');
+		await ev(
+			f,
+			'(memory/remember "k" "just words" :when "the test asks for it")',
+		);
 
 		await expect(ev(f, '(memory/replay "k")')).rejects.toThrow(/prose/);
 	});
@@ -337,10 +362,13 @@ describe("triggers", () => {
 		expect(await drive(f.bank.beginStep("(+ 1 1)", f.interp))).toBe("");
 	});
 
-	it("hands over a memory with no trigger without a kind", async () => {
+	it("hands over a linked memory under its own trigger kind", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "h" "note" :on '(user "world go"))`);
-		await ev(f, '(memory/remember "plain" "linked note")');
+		await ev(
+			f,
+			'(memory/remember "plain" "linked note" :when "the test asks for it")',
+		);
 		const h = await remembered(f, "h");
 		h?.links.set("plain", LINKED_FIRES_AT);
 		if (h) await drive(f.bank.remember(h));
@@ -348,7 +376,7 @@ describe("triggers", () => {
 		said(f, "world go(done)");
 		expect(await drive(f.bank.hear(f.interp))).toEqual([
 			{ key: "h", body: "note", on: "user" },
-			{ key: "plain", body: "linked note" },
+			{ key: "plain", body: "linked note", on: "when" },
 		]);
 	});
 
@@ -371,21 +399,22 @@ describe("triggers", () => {
 		expect(await f.step("(+ 2 2)")).not.toContain("o: note");
 	});
 
-	it("never fires a memory that was stored without a trigger", async () => {
+	it("refuses a memory without a hook, so none is stored that never comes back", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "untriggered" "a note with no :on")');
-
-		expect(await f.step(`(string-join '("a") ",")`)).not.toContain(
-			"untriggered",
-		);
-		expect(await f.step("(+ 1 1)")).not.toContain("untriggered");
+		await expect(
+			ev(f, '(memory/remember "untriggered" "a note")'),
+		).rejects.toThrow(/needs a hook/);
+		expect(await ev(f, "(memories)")).not.toContain("untriggered");
 	});
 
-	it("reports a missing trigger as nil, so an inert memory is visible", async () => {
+	it("refuses a memory without a body", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "untriggered" "v")');
-
-		expect(await ev(f, "(memories)")).toContain("nil");
+		await expect(
+			ev(f, '(memory/remember "Call the user djaafer.")'),
+		).rejects.toThrow(/needs a body/);
+		await expect(
+			ev(f, '(memory/remember "k" "  " :when "the test asks for it")'),
+		).rejects.toThrow(/needs a body/);
 	});
 
 	it("fires only for the argument the trigger names", async () => {
@@ -489,8 +518,14 @@ describe("triggers", () => {
 describe("chaining", () => {
 	it("surfaces a linked memory alongside the one recalled", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "ids" "ENG-12")');
-		await ev(f, `(memory/remember "tools" "list first" :links '("ids"))`);
+		await ev(
+			f,
+			'(memory/remember "ids" "ENG-12" :when "the test asks for it")',
+		);
+		await ev(
+			f,
+			`(memory/remember "tools" "list first" :links '("ids") :when "the test asks for it")`,
+		);
 
 		const out = await f.step('(memory/recall "tools")');
 		expect(out).toContain("tools: list first");
@@ -499,7 +534,10 @@ describe("chaining", () => {
 
 	it("lets a memory hook another memory being recalled", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "tools" "list first")');
+		await ev(
+			f,
+			'(memory/remember "tools" "list first" :when "the test asks for it")',
+		);
 		await ev(f, `(memory/remember "ids" "ENG-12" :on '(recall "tools"))`);
 
 		expect(await f.step('(memory/recall "tools")')).toContain("ids: ENG-12");
@@ -536,7 +574,10 @@ describe("chaining", () => {
 				written({
 					key: `m${i}`,
 					body: `body ${i}`,
-					on: i === 0 ? undefined : { kind: "recall", pattern: `^m${i - 1}$` },
+					on:
+						i === 0
+							? { kind: "when", pattern: "the test asks for it" }
+							: { kind: "recall", pattern: `^m${i - 1}$` },
 					links: new Map(),
 					score: 1,
 					used: 0,
@@ -558,7 +599,7 @@ describe("chaining", () => {
 describe("strength, reinforcement and forgetting", () => {
 	it("starts every memory at the same strength", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "v")');
+		await ev(f, '(memory/remember "k" "v" :when "the test asks for it")');
 
 		const memory = await remembered(f, "k");
 		expect(memory).toBeDefined();
@@ -567,7 +608,7 @@ describe("strength, reinforcement and forgetting", () => {
 
 	it("strengthens a memory each time it is recalled", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "v")');
+		await ev(f, '(memory/remember "k" "v" :when "the test asks for it")');
 		const before = f.bank.strength((await remembered(f, "k")) as Memory);
 
 		await drive(f.bank.beginStep("", f.interp));
@@ -608,8 +649,14 @@ describe("strength, reinforcement and forgetting", () => {
 
 	it("ranks what recall returns by strength, strongest first", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "note-a" "alpha")');
-		await ev(f, '(memory/remember "note-b" "beta")');
+		await ev(
+			f,
+			'(memory/remember "note-a" "alpha" :when "the test asks for it")',
+		);
+		await ev(
+			f,
+			'(memory/remember "note-b" "beta" :when "the test asks for it")',
+		);
 
 		await drive(f.bank.beginStep("", f.interp));
 		await drive(f.bank.recall(f.interp, "note-b", 1));
@@ -624,7 +671,10 @@ describe("strength, reinforcement and forgetting", () => {
 describe("the plasticity window", () => {
 	it("lets a recalled memory be revised in the same step", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "the old note")');
+		await ev(
+			f,
+			'(memory/remember "k" "the old note" :when "the test asks for it")',
+		);
 
 		await drive(f.bank.beginStep("", f.interp));
 		await ev(f, '(memory/recall "k")');
@@ -636,7 +686,10 @@ describe("the plasticity window", () => {
 
 	it("keeps the window open across an image taken in the step", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "the old note")');
+		await ev(
+			f,
+			'(memory/remember "k" "the old note" :when "the test asks for it")',
+		);
 		await drive(f.bank.beginStep("", f.interp));
 		await ev(f, '(memory/recall "k")');
 
@@ -650,7 +703,7 @@ describe("the plasticity window", () => {
 
 	it("refuses to revise a memory that has not been recalled", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "v")');
+		await ev(f, '(memory/remember "k" "v" :when "the test asks for it")');
 
 		await expect(ev(f, '(memory/revise "k" "w")')).rejects.toThrow(
 			/recall it first/,
@@ -659,7 +712,7 @@ describe("the plasticity window", () => {
 
 	it("closes the window when the step ends", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "v")');
+		await ev(f, '(memory/remember "k" "v" :when "the test asks for it")');
 
 		await drive(f.bank.beginStep("", f.interp));
 		await ev(f, '(memory/recall "k")');
@@ -688,7 +741,10 @@ describe("the file store", () => {
 	it("writes a remembered memory as one memory form in a .ptc file", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const f = fixture(new MemoryBank(new FileMemoryStore(dir)));
-		await ev(f, '(memory/remember "triage" "keep the ids")');
+		await ev(
+			f,
+			'(memory/remember "triage" "keep the ids" :when "the test asks for it")',
+		);
 
 		expect(readdirSync(dir)).toEqual(["triage.ptc"]);
 		const text = readFileSync(join(dir, "triage.ptc"), "utf8");
@@ -719,7 +775,7 @@ describe("the file store", () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		await ev(
 			fixture(new MemoryBank(new FileMemoryStore(dir))),
-			'(memory/remember "k" "v")',
+			'(memory/remember "k" "v" :when "the test asks for it")',
 		);
 
 		const second = fixture(new MemoryBank(new FileMemoryStore(dir)));
@@ -742,7 +798,7 @@ describe("the file store", () => {
 		store.put(plain("k"));
 		const f = fixture(new MemoryBank(store));
 		await ev(f, "(memories)");
-		await ev(f, '(memory/remember "other" "w")');
+		await ev(f, '(memory/remember "other" "w" :when "the test asks for it")');
 		await ev(f, "(memories)");
 
 		expect(
@@ -767,13 +823,6 @@ describe("the file store", () => {
 		});
 	});
 
-	it("leaves an untriggered memory untriggered", async () => {
-		const f = fixture();
-		await ev(f, '(memory/remember "k" "v")');
-
-		expect((await remembered(f, "k"))?.on).toBeUndefined();
-	});
-
 	it("round-trips a call trigger, so its pattern still fires after a restart", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const first = fixture(new MemoryBank(new FileMemoryStore(dir)));
@@ -788,31 +837,32 @@ describe("the file store", () => {
 		expect(await second.step('(concat "playwright")')).toContain("pw: note");
 	});
 
-	it("keeps a stored record whose trigger no longer parses, rather than losing it", async () => {
+	it("drops a stored memory left without a hook or a body", async () => {
 		const store = new VolatileStore();
-		store.put({
-			record: {
-				key: "old",
-				body: '"from an older grammar"',
-				on: '(call "load-mcp")',
-				links: [],
-				score: 1,
-				used: 0,
-				lastUsed: 0,
-			},
-			source: "",
-		});
+		const stored = (key: string, body: string, on: string | undefined) =>
+			store.put({
+				record: { key, body, on, links: [], score: 1, used: 0, lastUsed: 0 },
+				source: "",
+			});
+		stored("unparsed", '"from an older grammar"', '(call "load-mcp")');
+		stored("unhooked", '"never comes back"', undefined);
+		stored("empty", '"  "', '(user "x")');
+		stored("kept", '"still here"', '(user "x")');
+		const f = fixture(new MemoryBank(store));
 
-		const back = await remembered(fixture(new MemoryBank(store)), "old");
-
-		expect(back?.body).toBe("from an older grammar");
-		expect(back?.on).toBeUndefined();
+		expect(await remembered(f, "unparsed")).toBeUndefined();
+		expect(await remembered(f, "unhooked")).toBeUndefined();
+		expect(await remembered(f, "empty")).toBeUndefined();
+		expect((await remembered(f, "kept"))?.body).toBe("still here");
 	});
 
 	it("round-trips a form body, which is what makes a recipe survive", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const first = fixture(new MemoryBank(new FileMemoryStore(dir)));
-		await ev(first, `(memory/remember "double" '(defun double (x) (* x 2)))`);
+		await ev(
+			first,
+			`(memory/remember "double" '(defun double (x) (* x 2)) :when "the test asks for it")`,
+		);
 
 		const second = fixture(new MemoryBank(new FileMemoryStore(dir)));
 		const back = await remembered(second, "double");
@@ -841,7 +891,10 @@ describe("the file store", () => {
 	it("outlives the interpreter that wrote it", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const first = fixture(new MemoryBank(new FileMemoryStore(dir)));
-		await ev(first, '(memory/remember "k" "survives")');
+		await ev(
+			first,
+			'(memory/remember "k" "survives" :when "the test asks for it")',
+		);
 
 		const second = fixture(new MemoryBank(new FileMemoryStore(dir)));
 
@@ -884,7 +937,10 @@ describe("the file store", () => {
 
 	it("shows a scope what was remembered in the shared base", async () => {
 		const shared = fixture(new MemoryBank(new FileMemoryStore(memoryDirFor())));
-		await ev(shared, '(memory/remember "common" "everyone should know this")');
+		await ev(
+			shared,
+			'(memory/remember "common" "everyone should know this" :when "the test asks for it")',
+		);
 
 		const scoped = fixture(new MemoryBank(scopedMemoryStore("someone")));
 
@@ -893,7 +949,10 @@ describe("the file store", () => {
 
 	it("writes a scope's own memories into its own layer", async () => {
 		const scoped = fixture(new MemoryBank(scopedMemoryStore("writer")));
-		await ev(scoped, '(memory/remember "private" "only mine")');
+		await ev(
+			scoped,
+			'(memory/remember "private" "only mine" :when "the test asks for it")',
+		);
 
 		const shared = fixture(new MemoryBank(new FileMemoryStore(memoryDirFor())));
 
@@ -907,7 +966,7 @@ describe("the file store", () => {
 		const yours = fixture(
 			new MemoryBank(new FileMemoryStore(memoryDirFor("b"))),
 		);
-		await ev(mine, '(memory/remember "k" "mine")');
+		await ev(mine, '(memory/remember "k" "mine" :when "the test asks for it")');
 
 		expect(await ev(yours, '(length (memory/recall "k"))')).toBe("0");
 	});
@@ -924,7 +983,7 @@ describe("the listing", () => {
 
 	it("strengthens nothing by being read", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "k" "v")');
+		await ev(f, '(memory/remember "k" "v" :when "the test asks for it")');
 		await ev(f, "(memories)");
 
 		expect((await remembered(f, "k"))?.used).toBe(0);
@@ -934,7 +993,10 @@ describe("the listing", () => {
 describe("the start of a conversation", () => {
 	it("says nothing when nothing fires on start", async () => {
 		const f = fixture();
-		await ev(f, '(memory/remember "note" "unrelated")');
+		await ev(
+			f,
+			'(memory/remember "note" "unrelated" :when "the test asks for it")',
+		);
 		said(f, "hello");
 
 		expect(await opening(f)).toBe("");

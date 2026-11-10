@@ -51,10 +51,10 @@ import { memorySearchEngine } from "./memory-search.ts";
 import {
 	areaFrom,
 	areaOf,
-	authoredTrigger,
 	builtinFrom,
 	combinatorIn,
 	formToMemory,
+	hookedTrigger,
 	INITIAL_SCORE,
 	INTERNAL,
 	LINKED_FIRES_AT,
@@ -66,6 +66,7 @@ import {
 	memoryToSource,
 	recognizeNothing,
 	recordToMemory,
+	refuseEmpty,
 	rememberedFrom,
 	type StoredMemory,
 	TRIGGER_KINDS,
@@ -1076,7 +1077,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	interp.defGen(
 		"memory/remember",
 		-1,
-		'(remember key body [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links (key...)])',
+		'(remember key body :when "situation" [:unless "situation"] | :on (kind "pattern") [:links (key...)])',
 		"Store a memory under `key`. Its body is either prose, which loads into your context when the memory fires, or a form, a recipe you run later with `(replay key)`. With `:when` it fires by itself once the situation it describes arises: the user's request, what you are doing, an error or a result you just got. `:unless` names a look-alike situation that must not fire it. With `:on` it fires on an exact event; `:on (start)` loads it once, on the user's first message, so it is the place for your role and your goal. Returns the key.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
@@ -1088,9 +1089,10 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			]);
 			const args = listToArray(values);
 			const key = args[0];
-			if (typeof key !== "string")
+			if (typeof key !== "string" || key.trim() === "")
 				throw new EvalException("memory key must be a string", key);
 			const body = args.length > 1 ? args[1] : null;
+			refuseEmpty(body, key);
 			if (unreadable(body))
 				throw new EvalException(
 					"a memory body must be prose or a form that reads back; this one holds a live value",
@@ -1105,10 +1107,11 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			yield* bank.remember({
 				key,
 				body,
-				on: authoredTrigger(
+				on: hookedTrigger(
 					opts.get("on"),
 					opts.get("when"),
 					opts.get("unless"),
+					key,
 				),
 				links,
 				score: existing?.score ?? INITIAL_SCORE,
@@ -1266,6 +1269,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 					key,
 					false,
 				);
+			refuseEmpty(body, key);
 			if (unreadable(body))
 				throw new EvalException(
 					"a memory body must be prose or a form that reads back; this one holds a live value",

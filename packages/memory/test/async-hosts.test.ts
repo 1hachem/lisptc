@@ -70,7 +70,7 @@ describe("a memory store that answers with promises", () => {
 
 		await runAsync(
 			interp,
-			'(memory/remember "port" "hosts declare what they need")',
+			'(memory/remember "port" "hosts declare what they need" :when "the test asks for it")',
 		);
 		const recalled = await runAsync(interp, '(memory/recall "port")');
 
@@ -82,7 +82,10 @@ describe("a memory store that answers with promises", () => {
 		const store = new PromisedStore();
 		const interp = interpWith(store);
 
-		await runAsync(interp, '(memory/remember "k" "v")');
+		await runAsync(
+			interp,
+			'(memory/remember "k" "v" :when "the test asks for it")',
+		);
 		expect(str((await runAsync(interp, "(memories)")).value)).toContain("k");
 		expect(str((await runAsync(interp, '(memory/forget "k")')).value)).toBe(
 			"t",
@@ -92,7 +95,10 @@ describe("a memory store that answers with promises", () => {
 
 	it("refuses to run under a synchronous driver rather than half-storing", () => {
 		expect(() =>
-			runSync(interpWith(new PromisedStore()), '(memory/remember "k" "v")'),
+			runSync(
+				interpWith(new PromisedStore()),
+				'(memory/remember "k" "v" :when "the test asks for it")',
+			),
 		).toThrow(/cannot suspend/);
 	});
 });
@@ -101,7 +107,10 @@ describe("a synchronous store still runs synchronously", () => {
 	it("takes the whole memory surface under runSync", () => {
 		const interp = interpWith(new VolatileStore());
 
-		runSync(interp, '(memory/remember "k" "a note")');
+		runSync(
+			interp,
+			'(memory/remember "k" "a note" :when "the test asks for it")',
+		);
 
 		expect(str(runSync(interp, '(memory/recall "k")'))).toContain("a note");
 		expect(str(runSync(interp, '(memory/forget "k")'))).toBe("t");

@@ -205,7 +205,7 @@ function exclusion(unless: unknown): string | undefined {
 	return unless;
 }
 
-export function authoredTrigger(
+function authoredTrigger(
 	on: unknown,
 	when: unknown,
 	unless?: unknown,
@@ -237,6 +237,29 @@ export function authoredTrigger(
 		throw new EvalException(
 			'a situation is written with :when, not :on: write :when "the agent is about to drive a web page"',
 			on,
+		);
+	return trigger;
+}
+
+export function refuseEmpty(body: unknown, key: string): void {
+	if (body === null || (typeof body === "string" && body.trim() === ""))
+		throw new EvalException(
+			"a memory needs a body: the prose it loads, or the form it replays",
+			key,
+		);
+}
+
+export function hookedTrigger(
+	on: unknown,
+	when: unknown,
+	unless: unknown,
+	key: string,
+): Trigger {
+	const trigger = authoredTrigger(on, when, unless);
+	if (trigger === undefined)
+		throw new EvalException(
+			'a memory needs a hook, so it comes back by itself: give :when "the situation that needs it" or :on (kind "pattern")',
+			key,
 		);
 	return trigger;
 }
@@ -415,7 +438,12 @@ export function builtinFrom(declared: unknown): Memory {
 	return {
 		key,
 		body: body.trim(),
-		on: authoredTrigger(opts.get("on"), opts.get("when"), opts.get("unless")),
+		on: hookedTrigger(
+			opts.get("on"),
+			opts.get("when"),
+			opts.get("unless"),
+			key,
+		),
 		links,
 		score: INITIAL_SCORE,
 		used: 0,
@@ -440,6 +468,7 @@ export function rememberedFrom(declared: unknown): Memory {
 	);
 	if (body === undefined)
 		throw new EvalException("a remembered memory needs a body", key);
+	refuseEmpty(body, key);
 	const links = new Map<string, number>();
 	for (const pair of listToArray((opts.get("links") ?? null) as List))
 		if (pair instanceof Cell && typeof pair.car === "string")
@@ -447,7 +476,12 @@ export function rememberedFrom(declared: unknown): Memory {
 	return {
 		key,
 		body,
-		on: authoredTrigger(opts.get("on"), opts.get("when"), opts.get("unless")),
+		on: hookedTrigger(
+			opts.get("on"),
+			opts.get("when"),
+			opts.get("unless"),
+			key,
+		),
 		links,
 		score: Number(opts.get("score") ?? INITIAL_SCORE),
 		used: Number(opts.get("used") ?? 0),
