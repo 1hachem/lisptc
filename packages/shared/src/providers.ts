@@ -32,6 +32,7 @@ export const PROVIDER_CATALOG = {
 				id: "deepseek/deepseek-v4.1-flash-1017",
 				name: "DeepSeek V4.1 Flash",
 			},
+			{ id: "meta/muse-ember", name: "Muse Ember" },
 		],
 	},
 } as const satisfies Record<
@@ -80,4 +81,20 @@ export function providerSpecFor(
 			`unknown provider "${name}", expected one of ${PROVIDER_NAMES.join(", ")}`,
 		);
 	return specs[name];
+}
+
+export function choiceFrom(
+	entry: string,
+	specs: Record<ProviderName, ProviderSpec>,
+): CataloguedChoice {
+	const at = entry.indexOf(":");
+	const provider = at === -1 ? entry : entry.slice(0, at);
+	const spec = providerSpecFor(provider, specs);
+	const model = (at === -1 ? "" : entry.slice(at + 1)) || spec.defaultModel;
+	const choice = { provider, model };
+	if (!isCatalogued(choice))
+		throw new Error(
+			`${provider}:${model} is not in the catalog, add it with: task model:add -- ${provider} ${model}`,
+		);
+	return choice;
 }

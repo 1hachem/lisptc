@@ -15,12 +15,12 @@ import type {
 	TranscriptEntry,
 } from "@repo/evals/runner";
 import { createEvalSuite, runCase as runEvalCase } from "@repo/evals/runner";
-import type { Target } from "@repo/evals/targets";
 import { systemPromptKind } from "@repo/journal-catalog/system";
 import type { AgentRepl } from "@repo/repl/repl";
+import type { CataloguedChoice } from "@repo/shared/providers";
 import type { ExtensionsFor } from "./harness.ts";
 import { tracedRepl } from "./harness.ts";
-import { type Judge, judgeFrom, judgeReachable, recapOf } from "./judge.ts";
+import { judgeFrom, judgeReachable, recapOf } from "./judge.ts";
 import type { MockSpec } from "./mocks.ts";
 
 export interface TraceViewerEvalSpec extends BaseEvalSpec {
@@ -30,10 +30,10 @@ export interface TraceViewerEvalSpec extends BaseEvalSpec {
 
 export type EvalSpec = TraceViewerEvalSpec;
 
-let judge: Judge | undefined;
+let judge: CataloguedChoice | undefined;
 let judgeChecked = false;
 
-function activeJudge(): Judge | undefined {
+function activeJudge(): CataloguedChoice | undefined {
 	if (!judgeChecked) {
 		judgeChecked = true;
 		const wanted = judgeFrom(evalsEnv.EVAL_JUDGE);
@@ -99,7 +99,7 @@ const runtime = {
 			options: {
 				repl: AgentRepl;
 				maxSteps: number;
-				target: Target;
+				target: CataloguedChoice;
 				system: string;
 			},
 		) {
@@ -152,6 +152,6 @@ const suite = createEvalSuite(runtime);
 
 export const evalCase = suite.evalCase;
 
-export function runCase(spec: TraceViewerEvalSpec, target: Target) {
+export function runCase(spec: TraceViewerEvalSpec, target: CataloguedChoice) {
 	return runEvalCase(runtime, spec, target);
 }

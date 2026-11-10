@@ -2,7 +2,12 @@ import { providerSpecs } from "@repo/env/providers";
 import type { CaseInfo, ReportRow } from "@repo/evals/report";
 import { langchainGenerate } from "@repo/llm-extension/client";
 import type { Generate } from "@repo/llm-extension/llm-extension";
-import { isProviderName, providerSpecFor } from "@repo/shared/providers";
+import {
+	type CataloguedChoice,
+	choiceFrom,
+	DEFAULT_CHOICE,
+	providerSpecFor,
+} from "@repo/shared/providers";
 
 const TIMEOUT_MS = 60_000;
 
@@ -19,25 +24,14 @@ const SYSTEM = [
 	"Do not restate the transcript, do not use bullet points, and do not repeat the verdicts you were given.",
 ].join(" ");
 
-export interface Judge {
-	provider: string;
-	model: string;
+export function judgeFrom(
+	raw: string | undefined,
+): CataloguedChoice | undefined {
+	if (raw === "none") return undefined;
+	return raw ? choiceFrom(raw, providerSpecs) : DEFAULT_CHOICE;
 }
 
-export function judgeFrom(raw: string | undefined): Judge | undefined {
-	if (!raw || raw === "none") return undefined;
-	const at = raw.indexOf(":");
-	const provider = at === -1 ? raw : raw.slice(0, at);
-	if (!isProviderName(provider))
-		throw new Error(`EVAL_JUDGE names an unknown provider: ${provider}`);
-	const model = at === -1 ? "" : raw.slice(at + 1);
-	return {
-		provider,
-		model: model || providerSpecFor(provider, providerSpecs).defaultModel,
-	};
-}
-
-export function judgeReachable(judge: Judge): boolean {
+export function judgeReachable(judge: CataloguedChoice): boolean {
 	return Boolean(providerSpecFor(judge.provider, providerSpecs).apiKey);
 }
 
@@ -71,7 +65,7 @@ function brief(info: CaseInfo | undefined, row: ReportRow): string {
 }
 
 export async function recapOf(
-	judge: Judge,
+	judge: CataloguedChoice,
 	info: CaseInfo | undefined,
 	row: ReportRow,
 	generate: Generate = langchainGenerate,

@@ -8,8 +8,8 @@ tasks:
   run:
     desc: run the agent eval suite against real models
     vars:
-      MATRIX: '{{.EVAL_MATRIX | default "digitalocean:gemma-4-31B-it"}}'
-      JUDGE: '{{.EVAL_JUDGE | default "digitalocean:gemma-4-31B-it"}}'
+      MATRIX: '{{.EVAL_MATRIX}}'
+      JUDGE: '{{.EVAL_JUDGE}}'
       CONCURRENCY: '{{.EVAL_CONCURRENCY | default "4"}}'
     cmds:
       - task: _infisical-run
