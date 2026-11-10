@@ -4,7 +4,7 @@ const REACHES: { pattern: RegExp; what: string }[] = [
 	{ pattern: /^node:/, what: "a node builtin" },
 	{ pattern: /^@repo\/env\//, what: "a typed env module" },
 	{ pattern: /^@modelcontextprotocol\/sdk/, what: "the MCP SDK" },
-	{ pattern: /^@langchain\//, what: "a langchain package" },
+	{ pattern: /^openai(\/|$)/, what: "the OpenAI SDK" },
 	{ pattern: /^@typesafe-ai\/sdk/, what: "the TypeSafe SDK" },
 	{ pattern: /^dotenv$/, what: "dotenv" },
 	{ pattern: /^unpdf$/, what: "the PDF parser" },
