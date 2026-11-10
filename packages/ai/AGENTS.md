@@ -14,8 +14,8 @@ events. `src/eval.ts` is the one-shot evaluation.
 `src/agent.ts` wraps the model call and yields deltas, on a chat provider from
 `@repo/models`. `src/prompts/lisp.ts` holds the
 system prompt and the step cap. `src/repl.ts` turns a transcript into model
-messages and an eval result into content. `src/telemetry.ts` is the PostHog
-side, and `src/turn-telemetry.ts` lays it over the turn's chains as their
+messages and an eval result into content. `src/tracer.ts` is the tracing
+port, and `src/turn-telemetry.ts` lays it over the turn's chains as their
 outermost layer, so no hook can drop a trace and the loop names no capture.
 `src/ui-action.ts` runs an action the browser sent back.
 
@@ -60,6 +60,11 @@ The loop interprets no journal entry, coming or going. Which entries a view
 shows is that view's choice, never the loop's. What the model reads is what an
 extension emits, the same live and after a reload. A payload that would need
 interpreting belongs below the seam.
+
+**No file here names a tracing vendor.** What a turn records goes to the
+`Tracer` it is handed, and privacy is applied once in `tracing`, before any
+tracer sees a record. The vendor adapters are built and wired by the product
+app. A test hands the turn a fake tracer, never a mocked module.
 
 A new kind of thing a turn can report is a new variant of the turn event union,
 not a side channel.

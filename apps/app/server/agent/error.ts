@@ -1,7 +1,7 @@
-import { captureException } from "@repo/ai";
 import { createMiddleware } from "@tanstack/react-start";
 import { ConvexError } from "convex/values";
 import { ZodError } from "zod";
+import { tracer } from "./tracer.ts";
 
 export class HttpError extends Error {
 	constructor(
@@ -28,12 +28,19 @@ function refusal(
 	return status === undefined ? undefined : { code: data.code, status };
 }
 
+function report(error: unknown, status: number): void {
+	tracer.exception({
+		error,
+		trace: {},
+		properties: { $response_status_code: status },
+	});
+}
+
 function answer(err: unknown, request: Request): Response {
 	if (err instanceof Response) return err;
 
 	if (err instanceof HttpError) {
-		if (err.status >= 500)
-			captureException(err, {}, { $response_status_code: err.status });
+		if (err.status >= 500) report(err, err.status);
 		return Response.json({ error: err.message }, { status: err.status });
 	}
 
@@ -50,7 +57,7 @@ function answer(err: unknown, request: Request): Response {
 
 	const { pathname } = new URL(request.url);
 	console.error(`Unhandled error on ${request.method} ${pathname}:`, err);
-	captureException(err, {}, { $response_status_code: 500 });
+	report(err, 500);
 	return Response.json({ error: "Internal server error" }, { status: 500 });
 }
 

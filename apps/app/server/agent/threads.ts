@@ -11,6 +11,7 @@ import { MAX_SPAWN_DEPTH } from "@repo/backend/limits";
 import { ThreadHost } from "@repo/backend/thread-host";
 import { desktops } from "../desktop/registry.ts";
 import { convexActingAs, convexAsServer } from "./convex.ts";
+import { tracer } from "./tracer.ts";
 
 export interface Identity {
 	readonly distinctId?: string;
@@ -33,6 +34,7 @@ export const threads = new Threads(
 		...supervised,
 		ports: {
 			...supervised.ports,
+			tracer,
 			setup: async (id) => ({
 				...(await supervised.ports.setup(id)),
 				identity: telemetry.get(id),

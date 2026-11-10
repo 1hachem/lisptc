@@ -50,14 +50,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	const { shutdownTelemetry } = await import("@repo/ai");
-	await shutdownTelemetry();
+	const { tracer } = await import("../../server/agent/tracer.ts");
+	await tracer.flush();
 	await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
 async function drain(): Promise<CapturedEvent[]> {
-	const { shutdownTelemetry } = await import("@repo/ai");
-	await shutdownTelemetry();
+	const { tracer } = await import("../../server/agent/tracer.ts");
+	await tracer.flush();
 	await new Promise((resolve) => setTimeout(resolve, 100));
 	return events;
 }

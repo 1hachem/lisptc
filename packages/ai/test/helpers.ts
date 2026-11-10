@@ -14,6 +14,14 @@ import {
 	streamTurn,
 	type TurnStreamOptions,
 } from "../src/stream.ts";
+import type {
+	ExceptionRecord,
+	GenerationRecord,
+	RequestContext,
+	SpanRecord,
+	Tracer,
+	TurnRecord,
+} from "../src/tracer.ts";
 import { runAgentTurn, type TurnOptions } from "../src/turn.ts";
 
 let recorded = 0;
@@ -198,4 +206,38 @@ export function printing(text: string): InterpExtension {
 			return next(ctx);
 		}),
 	);
+}
+
+export class FakeTracer implements Tracer {
+	readonly turns: TurnRecord[] = [];
+	readonly spans: SpanRecord[] = [];
+	readonly generations: GenerationRecord[] = [];
+	readonly exceptions: ExceptionRecord[] = [];
+	readonly requests: RequestContext[] = [];
+	flushes = 0;
+
+	turn(record: TurnRecord): void {
+		this.turns.push(record);
+	}
+
+	span(record: SpanRecord): void {
+		this.spans.push(record);
+	}
+
+	generation(record: GenerationRecord): void {
+		this.generations.push(record);
+	}
+
+	exception(record: ExceptionRecord): void {
+		this.exceptions.push(record);
+	}
+
+	withRequest<T>(context: RequestContext, run: () => T): T {
+		this.requests.push(context);
+		return run();
+	}
+
+	async flush(): Promise<void> {
+		this.flushes += 1;
+	}
 }

@@ -2,7 +2,6 @@ import type { ModelDelta } from "@repo/interpreter/session";
 import { getChatProvider } from "@repo/models/providers";
 import type { ChatMessage } from "@repo/shared/messages";
 import type { ProviderName } from "@repo/shared/providers";
-import { type TraceContext, tracedClient } from "./telemetry.ts";
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"You are the reasoning core of a neuro-symbolic agent. Think step by step and answer clearly and concisely.";
@@ -12,7 +11,6 @@ export interface AgentConfig {
 	model?: string;
 	system?: string;
 	instructions?: string;
-	trace?: TraceContext;
 }
 
 export class Agent {
@@ -24,7 +22,6 @@ export class Agent {
 	): AsyncGenerator<ModelDelta> {
 		const model = getChatProvider(this.config.provider)({
 			model: this.config.model,
-			client: this.config.trace ? tracedClient(this.config.trace) : undefined,
 		});
 		yield* model.stream(
 			[

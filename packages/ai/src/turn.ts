@@ -29,8 +29,8 @@ import {
 	toLlmMessages,
 	withItsResult,
 } from "./repl.ts";
-import type { TraceContext } from "./telemetry.ts";
 import type { ToolMessage } from "./tool-message.ts";
+import { type TraceContext, type Tracer, untraced } from "./tracer.ts";
 import { type TurnTelemetry, turnTelemetry } from "./turn-telemetry.ts";
 
 export interface TurnOptions {
@@ -39,6 +39,7 @@ export interface TurnOptions {
 	config?: AgentConfig;
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
+	tracer?: Tracer;
 	maxSteps?: number;
 	inbox?: () => Promise<Envelope[]>;
 	runsForms?: boolean;
@@ -216,7 +217,6 @@ async function* callModel(
 interface Turn {
 	readonly repl: AgentRepl;
 	readonly transcript: TranscriptEntry[];
-	readonly trace: TraceContext;
 	readonly ran: { provider: string; model: string };
 	readonly maxSteps: number;
 	readonly signal?: AbortSignal;
@@ -245,7 +245,7 @@ async function* openTurn(
 	turn: Turn,
 	config: AgentConfig | undefined,
 ): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
-	const { repl, transcript, trace, signal } = turn;
+	const { repl, transcript, telemetry, signal } = turn;
 	const withheld = repl.takeProseFeedback();
 	if (withheld)
 		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
@@ -265,14 +265,16 @@ async function* openTurn(
 		config?.system ?? withInstructions(systemPromptFor(repl.interp), config),
 	);
 	yield* recorded(entries);
-	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,
 		call: (request) =>
-			streamAgent(
-				[...request.messages],
-				{ ...traced, system: request.system },
-				{ signal },
+			telemetry.generation(
+				request,
+				streamAgent(
+					[...request.messages],
+					{ ...config, system: request.system },
+					{ signal },
+				),
 			),
 	};
 }
@@ -438,6 +440,7 @@ function ending(verdict: Ending, code: string, steps: number): TurnEvent {
 
 function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 	const { repl, threadId, config, signal, identity, inbox } = options;
+	const tracer = options.tracer ?? untraced;
 	const ran = resolveModel(config?.provider, config?.model);
 	const trace: TraceContext = {
 		threadId: threadId ?? crypto.randomUUID(),
@@ -450,7 +453,6 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 	return {
 		repl,
 		transcript: [...messages],
-		trace,
 		agent: {
 			get interp() {
 				return repl.interp;
@@ -461,7 +463,7 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 			provider: ran.provider,
 			model: ran.model,
 		},
-		telemetry: turnTelemetry(repl.hooks, trace),
+		telemetry: turnTelemetry(repl.hooks, tracer, trace),
 		ran,
 		maxSteps: options.maxSteps ?? MAX_STEPS,
 		signal,

@@ -22,13 +22,6 @@ export {
 } from "./stream.ts";
 export { renderSystemEvent, type SystemEvent } from "./system-event.ts";
 export {
-	captureException,
-	initTelemetry,
-	type RequestContext,
-	shutdownTelemetry,
-	withRequestContext,
-} from "./telemetry.ts";
-export {
 	type Posted,
 	type PostOptions,
 	Thread,
@@ -48,6 +41,15 @@ export {
 	type ThreadsHost,
 	type ThreadsOptions,
 } from "./threads.ts";
+export {
+	type GenerationRecord,
+	type RequestContext,
+	type SpanRecord,
+	type TraceContext,
+	type Tracer,
+	type TurnRecord,
+	tracing,
+} from "./tracer.ts";
 export {
 	runAgentTurn,
 	type TurnEvent,
