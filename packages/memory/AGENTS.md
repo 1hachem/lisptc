@@ -23,11 +23,9 @@ to hold under both drivers.
 
 A new trigger is a trigger, never a branch in what dispatches them.
 
-**The store is the only source of truth for remembered memories.** Built-ins
-are what the shipped `.memories.ptc` files declare: the interpreter evaluates
-them, the `memory` and `area` macros this extension defines put each form in a
-global, and the bank reads them from there. They are merged in when read, and
-are never copied.
+**The store is the only source of truth for remembered memories.** A built-in
+is never written to the store. It exists because the file that ships it was
+evaluated, and is read from what that evaluation left in the image.
 
 **The session's bookkeeping lives in the Lisp image**, as interpreter state,
 never in a field of the bank: what was heard, what fired and at which step. The

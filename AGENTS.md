@@ -318,13 +318,11 @@ extension's, and the loop keeps only what is about the loop. A memory about
 another surface written in the loop's file is moved to that extension's file.
 
 **A built-in memory lives in a `.memories.ptc` file, never in a TypeScript or
-JavaScript string.** The file is lisptc, evaluated by the interpreter: each
-`(memory ...)` and `(area ...)` form declares its data, so a malformed one fails
-when the file loads, and the editor checks it as it is written. A value the
-text needs from code, like a cap, is a {{name}} placeholder in the .ptc file,
-filled by the code that loads it, the way the UI extension fills its widget
-list. A test checks that no placeholder is left. A package that ships a new `.ptc` is
-added to what `apps/app` ships, by the rule in `apps/app/AGENTS.md`.
+JavaScript string.** The file is lisptc like any other, so a malformed memory
+fails when it loads and the editor flags it as it is written. A value the text
+needs from code is filled in by the code that loads it, never copied into the
+file, and a test fails on one left unfilled. A package that ships a new `.ptc`
+is added to what `apps/app` ships, by the rule in `apps/app/AGENTS.md`.
 
 The one exception is a memory whose source of truth is already code, one per
 entry of a catalog: it is generated, never copied into a `.ptc` file.
