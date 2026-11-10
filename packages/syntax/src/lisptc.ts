@@ -46,29 +46,17 @@ class Scanner {
 	private head = false;
 	private quoted = false;
 	private mark: "quote" | "unquote" | undefined;
-	private base = 0;
 	private quoteAt = -1;
 	private quoteEnd = -1;
 
 	constructor(private readonly prose: readonly FormSpan[]) {}
 
 	scan(text: string): Scan {
-		for (const line of text.split("\n")) {
-			this.line(line);
-			this.base += line.length + 1;
-			this.quoteAt = -1;
-			this.quoteEnd = -1;
-			this.mark = undefined;
-		}
-		return { ranges: this.ranges, heads: this.heads };
-	}
-
-	private line(line: string): void {
 		const token = this.token;
-		for (let m = token.exec(line); m !== null; m = token.exec(line)) {
+		for (let m = token.exec(text); m !== null; m = token.exec(text)) {
 			const word = m[1];
 			if (word === undefined) continue;
-			const start = this.base + m.index;
+			const start = m.index;
 			if (isQuoteToken(word)) {
 				this.quote(word, start);
 				continue;
@@ -78,10 +66,11 @@ class Scanner {
 			this.quoteAt = -1;
 			this.quoteEnd = -1;
 			if (word.startsWith('"')) {
-				if (this.string(word, line, m.index)) return;
+				if (this.string(word, text, start)) break;
 			} else this.atom(word, from, start);
 			this.mark = undefined;
 		}
+		return { ranges: this.ranges, heads: this.heads };
 	}
 
 	private push(start: number, end: number, className: TokenRange["className"]) {
@@ -97,16 +86,14 @@ class Scanner {
 		this.mark = QUOTES.has(word) ? "quote" : "unquote";
 	}
 
-	private string(word: string, line: string, index: number): boolean {
-		const start = this.base + index;
+	private string(word: string, text: string, start: number): boolean {
 		if (this.depth === 0) {
 			const paren = word.indexOf("(", 1);
-			if (paren >= 0) this.token.lastIndex = index + paren;
+			if (paren >= 0) this.token.lastIndex = start + paren;
 			return false;
 		}
 		if (word === '"') {
-			this.push(start, this.base + line.length, "string");
-			this.token.lastIndex = 0;
+			this.push(start, text.length, "string");
 			return true;
 		}
 		this.push(start, start + word.length, "string");
