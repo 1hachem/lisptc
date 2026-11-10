@@ -130,8 +130,7 @@ function isTextPattern(pattern: unknown): boolean {
 	return listToArray((pattern as Cell).cdr as List).every(isTextPattern);
 }
 
-function parseTrigger(value: unknown): Trigger | undefined {
-	if (value === null || value === undefined) return undefined;
+function triggerKind(value: unknown): TriggerKind {
 	if (!(value instanceof Cell) || !(value.car instanceof Sym))
 		throw new EvalException("trigger expected, as (kind pattern)", value);
 	const kind = value.car.name as TriggerKind;
@@ -140,7 +139,45 @@ function parseTrigger(value: unknown): Trigger | undefined {
 			`unknown trigger kind; expected one of ${TRIGGER_KINDS.join(" ")}`,
 			value.car,
 		);
-	const rest = value.cdr;
+	return kind;
+}
+
+const PATTERN_RULES: readonly {
+	readonly breaks: (kind: TriggerKind, pattern: unknown) => boolean;
+	readonly message: (kind: TriggerKind) => string;
+}[] = [
+	{
+		breaks: (kind) => kind === "start",
+		message: () =>
+			"a start trigger fires once, on the user's first message, and takes no pattern: write (start)",
+	},
+	{
+		breaks: (kind, pattern) => kind === "call" && typeof pattern === "string",
+		message: () =>
+			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',
+	},
+	{
+		breaks: (kind, pattern) => kind === "when" && typeof pattern !== "string",
+		message: () =>
+			"a when trigger is matched against the situation, so it is one string describing the situation that needs the memory",
+	},
+	{
+		breaks: (kind, pattern) => kind !== "call" && !isTextPattern(pattern),
+		message: (kind) =>
+			`a ${kind} trigger matches text, so its pattern must be a string or a combinator over strings`,
+	},
+];
+
+function checkPattern(kind: TriggerKind, pattern: unknown): void {
+	const broken = PATTERN_RULES.find((rule) => rule.breaks(kind, pattern));
+	if (broken !== undefined)
+		throw new EvalException(broken.message(kind), pattern);
+}
+
+function parseTrigger(value: unknown): Trigger | undefined {
+	if (value === null || value === undefined) return undefined;
+	const kind = triggerKind(value);
+	const rest = (value as Cell).cdr;
 	if (rest === null && kind === "when")
 		throw new EvalException(
 			'a when trigger describes in words the situation that needs the memory: write :when "the agent is about to drive a web page, or a page call just failed"',
@@ -150,26 +187,7 @@ function parseTrigger(value: unknown): Trigger | undefined {
 	if (!(rest instanceof Cell))
 		throw new EvalException("trigger pattern expected after the kind", rest);
 	const pattern = rest.car;
-	if (kind === "start")
-		throw new EvalException(
-			"a start trigger fires once, on the user's first message, and takes no pattern: write (start)",
-			pattern,
-		);
-	if (kind === "call" && typeof pattern === "string")
-		throw new EvalException(
-			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',
-			pattern,
-		);
-	if (kind === "when" && typeof pattern !== "string")
-		throw new EvalException(
-			"a when trigger is matched against the situation, so it is one string describing the situation that needs the memory",
-			pattern,
-		);
-	if (kind !== "call" && !isTextPattern(pattern))
-		throw new EvalException(
-			`a ${kind} trigger matches text, so its pattern must be a string or a combinator over strings`,
-			pattern,
-		);
+	checkPattern(kind, pattern);
 	if (kind !== "when" || rest.cdr === null) return { kind, pattern };
 	const unless = exclusion(
 		plistOptions(rest.cdr as List, ["unless"]).get("unless"),
