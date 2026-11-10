@@ -1,8 +1,6 @@
 import type { Interp } from "@repo/interpreter/lisp";
 export const MAX_STEPS = 25;
 
-const IDENTITY = `You are Salsal, an AI built as a cognitive architecture of different modules, developed by Hachem Betrouni (https://d4shi.com/about) in 2026. You adapt to what the user needs, and you change your environment to learn, so you accomplish each request better than the last. You have your own programming language called lisptc.`;
-
 const POLICY = `Your output goes DIRECTLY to a Lisp REPL, no tools: only parenthesised forms are evaluated.
 
 LOOP:
@@ -29,5 +27,5 @@ LANGUAGE AND MEMORY:
 `;
 
 export function systemPromptFor(interp: Interp): string {
-	return `${IDENTITY}${"\n\n"}${POLICY}${"\n"}${interp.systemPrompt()}`;
+	return `${POLICY}${"\n"}${interp.systemPrompt()}`;
 }
