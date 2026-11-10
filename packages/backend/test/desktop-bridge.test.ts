@@ -1,10 +1,7 @@
+import type { LocalServerSpec } from "@repo/desktop-protocol";
 import type { McpTransport, ServerReport } from "@repo/mcp-extension/ports";
 import { describe, expect, it } from "vitest";
-import {
-	BridgedHost,
-	type Desktop,
-	type LocalServer,
-} from "../src/desktop-bridge.ts";
+import { BridgedHost, type Desktop } from "../src/desktop-bridge.ts";
 
 function channel(): McpTransport & { end(error?: Error): void } {
 	const transport: McpTransport & { end(error?: Error): void } = {
@@ -22,10 +19,10 @@ function channel(): McpTransport & { end(error?: Error): void } {
 }
 
 function bridge(): Desktop & {
-	opened: LocalServer[];
+	opened: LocalServerSpec[];
 	channels: ReturnType<typeof channel>[];
 } {
-	const opened: LocalServer[] = [];
+	const opened: LocalServerSpec[] = [];
 	const channels: ReturnType<typeof channel>[] = [];
 	return {
 		opened,
@@ -61,7 +58,13 @@ describe("BridgedHost", () => {
 		await connected(host);
 
 		expect(desktop.opened).toEqual([
-			{ name: "fs", command: "npx", args: ["fs-mcp"], env: {} },
+			{
+				kind: "command",
+				name: "fs",
+				command: "npx",
+				args: ["fs-mcp"],
+				env: {},
+			},
 		]);
 		expect(host.status({ name: "fs" })).toBe("running");
 	});

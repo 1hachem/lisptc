@@ -1,6 +1,6 @@
 import type { DesktopPreferences } from "@repo/shared/desktop";
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 export const DESKTOP_USER_AGENT = "salsal-desktop";
 
@@ -12,6 +12,34 @@ export interface Machine {
 	readonly id: string;
 	readonly label: string;
 }
+
+export interface CommandServer {
+	readonly kind: "command";
+	readonly name: string;
+	readonly command: string;
+	readonly args: readonly string[];
+	readonly env: Readonly<Record<string, string>>;
+}
+
+export interface ImageServer {
+	readonly kind: "image";
+	readonly name: string;
+	readonly launch: {
+		image: string;
+		exposed: string;
+		path: string;
+		args: string[];
+	};
+	readonly app?: {
+		image: string;
+		args?: string[];
+		ports?: { name: string; port: number }[];
+		expose?: string[];
+	};
+	readonly env: Readonly<Record<string, string>>;
+}
+
+export type LocalServerSpec = CommandServer | ImageServer;
 
 export type DesktopMessage =
 	| { type: "auth"; token: string; version: number; machine: Machine }
@@ -30,14 +58,7 @@ export type ServerMessage =
 	| { type: "welcome" }
 	| { type: "pong" }
 	| { type: "upgrade"; version: number }
-	| {
-			type: "open";
-			id: string;
-			name: string;
-			command: string;
-			args: readonly string[];
-			env: Readonly<Record<string, string>>;
-	  }
+	| ({ type: "open"; id: string } & LocalServerSpec)
 	| { type: "rpc"; server: string; message: unknown }
 	| { type: "close"; name: string }
 	| {

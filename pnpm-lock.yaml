@@ -441,6 +441,9 @@ importers:
       '@repo/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@repo/containers':
+        specifier: workspace:*
+        version: link:../../packages/containers
       '@repo/desktop-protocol':
         specifier: workspace:*
         version: link:../../packages/desktop-protocol
@@ -868,6 +871,9 @@ importers:
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../compaction
+      '@repo/desktop-protocol':
+        specifier: workspace:*
+        version: link:../desktop-protocol
       '@repo/diagnostics-extension':
         specifier: workspace:*
         version: link:../diagnostics

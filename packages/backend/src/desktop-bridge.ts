@@ -1,3 +1,4 @@
+import type { LocalServerSpec } from "@repo/desktop-protocol";
 import type {
 	ConnConfig,
 	McpHost,
@@ -15,17 +16,10 @@ import {
 import type { DesktopPreferences } from "@repo/shared/desktop";
 import type { Id } from "../convex/_generated/dataModel.js";
 
-export interface LocalServer {
-	readonly name: string;
-	readonly command: string;
-	readonly args: readonly string[];
-	readonly env: Readonly<Record<string, string>>;
-}
-
 export interface Desktop {
 	connected(): boolean;
 	running(name: string): boolean;
-	open(server: LocalServer): Promise<McpTransport>;
+	open(server: LocalServerSpec): Promise<McpTransport>;
 	close(name: string): Promise<void>;
 	settings(
 		change: Partial<DesktopPreferences>,
@@ -54,6 +48,7 @@ export class BridgedHost implements McpHost {
 		let channel: McpTransport;
 		try {
 			channel = await this.desktop.open({
+				kind: "command",
 				name,
 				command: conf.command,
 				args: conf.args ?? [],

@@ -1,3 +1,4 @@
+import { DockerRunner } from "@repo/containers/docker";
 import {
 	type DesktopMessage,
 	type Machine,
@@ -9,6 +10,7 @@ import {
 import type { DesktopPreferences } from "@repo/shared/desktop";
 import { session } from "electron";
 import { LocalServer } from "./local-server.ts";
+import { openerFor } from "./openers.ts";
 
 const MIN_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
@@ -37,6 +39,7 @@ export type ConnectionState =
 
 export class DesktopBridge {
 	private readonly servers = new Map<string, LocalServer>();
+	private readonly runner = new DockerRunner();
 	private socket: WebSocket | undefined;
 	private retryMs = MIN_RETRY_MS;
 	private stopped = false;
@@ -85,6 +88,7 @@ export class DesktopBridge {
 		const servers = [...this.servers.values()];
 		this.servers.clear();
 		await Promise.all(servers.map((server) => server.stop()));
+		await this.runner.reap();
 	}
 
 	private retry(): void {
@@ -191,7 +195,7 @@ export class DesktopBridge {
 		const { id, ...spec } = message;
 		await this.servers.get(spec.name)?.stop();
 		this.servers.delete(spec.name);
-		const server = new LocalServer(spec, {
+		const server = new LocalServer(openerFor(spec, this.runner), {
 			message: (payload) =>
 				this.send({ type: "rpc", server: spec.name, message: payload }),
 			exited: (error) => this.exited(spec.name, error, server),
