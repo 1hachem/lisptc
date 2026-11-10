@@ -8,7 +8,7 @@ import {
 	SILENT_FOR_TOO_LONG_MS,
 } from "@repo/desktop-protocol";
 import type { DesktopPreferences } from "@repo/shared/desktop";
-import { session } from "electron";
+import { type Cookie, session } from "electron";
 import { LocalServer } from "./local-server.ts";
 import { openerFor } from "./openers.ts";
 
@@ -24,6 +24,13 @@ async function sessionToken(origin: string): Promise<string | undefined> {
 		token?: unknown;
 	} | null;
 	return typeof body?.token === "string" ? body.token : undefined;
+}
+
+function isSessionCookie(cookie: Cookie, origin: string): boolean {
+	return (
+		cookie.name.endsWith("session_token") &&
+		cookie.domain?.replace(/^\./, "") === new URL(origin).hostname
+	);
 }
 
 function socketUrl(origin: string): string {
@@ -47,6 +54,20 @@ export class DesktopBridge {
 	private heardAt = 0;
 	private pinging: ReturnType<typeof setInterval> | undefined;
 	private retrying: ReturnType<typeof setTimeout> | undefined;
+	private signedInAs: string | undefined;
+	private readonly sessionChanged = (
+		_event: unknown,
+		cookie: Cookie,
+		cause: string,
+		removed: boolean,
+	): void => {
+		if (!isSessionCookie(cookie, this.origin)) return;
+		if (removed && cause === "overwrite") return;
+		const value = removed ? undefined : cookie.value;
+		if (value === this.signedInAs) return;
+		this.signedInAs = value;
+		void this.renew();
+	};
 
 	constructor(
 		readonly origin: string,
@@ -57,6 +78,14 @@ export class DesktopBridge {
 	) {}
 
 	start(): void {
+		session.defaultSession.cookies.on("changed", this.sessionChanged);
+		void session.defaultSession.cookies
+			.get({ url: this.origin })
+			.then((cookies) => {
+				this.signedInAs = cookies.find((cookie) =>
+					isSessionCookie(cookie, this.origin),
+				)?.value;
+			});
 		void this.connect();
 	}
 
@@ -83,12 +112,28 @@ export class DesktopBridge {
 
 	async stop(): Promise<void> {
 		this.stopped = true;
+		session.defaultSession.cookies.off("changed", this.sessionChanged);
 		clearTimeout(this.retrying);
 		this.socket?.close();
 		const servers = [...this.servers.values()];
 		this.servers.clear();
 		await Promise.all(servers.map((server) => server.stop()));
 		await this.runner.reap();
+	}
+
+	private async renew(): Promise<void> {
+		if (this.stopped) return;
+		const socket = this.socket;
+		this.socket = undefined;
+		this.stopPinging();
+		socket?.close();
+		clearTimeout(this.retrying);
+		this.retrying = undefined;
+		this.retryMs = MIN_RETRY_MS;
+		const servers = [...this.servers.values()];
+		this.servers.clear();
+		await Promise.all(servers.map((server) => server.stop()));
+		if (!this.paused) void this.connect();
 	}
 
 	private retry(): void {
