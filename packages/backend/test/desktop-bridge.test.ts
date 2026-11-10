@@ -96,6 +96,34 @@ describe("BridgedHost", () => {
 		expect(host.status({ name: "browser" })).toBe("running");
 	});
 
+	it("opens an image of our own at the build this server was released with", async () => {
+		const desktop = bridge();
+		const host = new BridgedHost(desktop, () => {}, "pr-175-abc");
+
+		await host.ensure({
+			name: "browser",
+			image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+			internal: true,
+			port: 8931,
+			local: true,
+		});
+		await host.ensure({
+			name: "theirs",
+			image: "mcp/time:latest",
+			port: 8000,
+			local: true,
+		});
+
+		expect(
+			desktop.opened.map((server) =>
+				server.kind === "image" ? server.launch.image : undefined,
+			),
+		).toEqual([
+			"ghcr.io/1hachem/lisptc-mcp-playwright:pr-175-abc",
+			"mcp/time:latest",
+		]);
+	});
+
 	it("reports a bridged server stopped once the desktop no longer runs it", async () => {
 		const desktop = bridge();
 		const alive = { value: true };

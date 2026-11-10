@@ -34,7 +34,10 @@ export function desktopServer(conf: ConnConfig): conf is LocalConnConfig {
 	return conf.local === true;
 }
 
-function specOf(conf: LocalConnConfig): LocalServerSpec {
+function specOf(
+	conf: LocalConnConfig,
+	imageTag: string | undefined,
+): LocalServerSpec {
 	if (!("image" in conf))
 		return {
 			kind: "command",
@@ -43,7 +46,7 @@ function specOf(conf: LocalConnConfig): LocalServerSpec {
 			args: conf.args ?? [],
 			env: conf.env ?? {},
 		};
-	const run = runSpecFor(conf);
+	const run = runSpecFor(conf, imageTag);
 	return {
 		kind: "image",
 		name: run.name,
@@ -59,6 +62,7 @@ export class BridgedHost implements McpHost {
 	constructor(
 		private readonly desktop: Desktop,
 		private readonly report: ServerReporter = () => {},
+		private readonly imageTag?: string,
 	) {}
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle> {
@@ -67,7 +71,7 @@ export class BridgedHost implements McpHost {
 		const { name } = conf;
 		let channel: McpTransport;
 		try {
-			channel = await this.desktop.open(specOf(conf));
+			channel = await this.desktop.open(specOf(conf, this.imageTag));
 		} catch (ex) {
 			this.report({
 				server: name,

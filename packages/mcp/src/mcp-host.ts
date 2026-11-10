@@ -77,6 +77,10 @@ export function finishAuthorization(
 
 const everything = () => true;
 
+export function ownImageTag(): string | undefined {
+	return mcpEnv.LISPTC_MCP_IMAGE_TAG;
+}
+
 export function localHost(report?: ServerReporter): McpHost {
 	return new RoutedHost([
 		{ claims: remoteServer, host: new RemoteHost(report) },
@@ -107,7 +111,7 @@ export function containerHost(scope: string, report?: ServerReporter): McpHost {
 			new KubernetesHost({
 				scope,
 				namespace: mcpEnv.LISPTC_MCP_NAMESPACE ?? "",
-				imageTag: mcpEnv.LISPTC_MCP_IMAGE_TAG,
+				imageTag: ownImageTag(),
 			}),
 		required: inCluster,
 	};
