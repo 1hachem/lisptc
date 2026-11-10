@@ -15,6 +15,7 @@ import {
 	Watchers,
 	type WireMessage,
 } from "./stream.ts";
+import type { Tracer } from "./tracer.ts";
 import { runAgentTurn, type TurnEvent } from "./turn.ts";
 
 export interface TranscriptStore {
@@ -50,6 +51,7 @@ export interface ThreadPorts {
 	transcript: TranscriptStore;
 	status: ThreadStatus;
 	setup(threadId: string): Promise<TurnSetup>;
+	tracer?: Tracer;
 }
 
 export interface PostOptions {
@@ -290,6 +292,7 @@ export class Thread {
 						config: setup.config,
 						signal: aborted,
 						identity: setup.identity,
+						tracer: ports.tracer,
 						runsForms: setup.runsForms,
 						received,
 						...stepCap(budget.maxSteps, setup.maxSteps, left.steps),

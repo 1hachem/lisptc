@@ -17,16 +17,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@posthog/ai": "^8.9.3",
-    "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/models": "workspace:*",
     "@repo/repl": "workspace:*",
-    "@repo/shared": "workspace:*",
-    "openai": "^6.49.0",
-    "posthog-node": "^5.51.6"
+    "@repo/shared": "workspace:*"
   },
   "devDependencies": {
+    "@repo/env": "workspace:*",
     "@repo/journal-catalog": "workspace:*",
     "@repo/tsconfigs": "workspace:*",
     "@types/node": "^22.0.0",

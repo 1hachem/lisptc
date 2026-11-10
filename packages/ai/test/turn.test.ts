@@ -16,6 +16,7 @@ import {
 	asking,
 	concluding,
 	extension,
+	FakeTracer,
 	hearing,
 	noting,
 	receiving,
@@ -35,30 +36,6 @@ let script: ModelDelta[][] = [];
 let throws: string | undefined;
 let calls = 0;
 let onCall: (() => void) | undefined;
-
-const turns = vi.hoisted(
-	() => [] as { prompt: string; answer: string; halted: boolean }[],
-);
-const exceptions = vi.hoisted(() => [] as unknown[]);
-const exceptionProperties = vi.hoisted(() => [] as unknown[]);
-
-const spans = vi.hoisted(
-	() => [] as { step: number; source: string; error: boolean }[],
-);
-
-vi.mock("../src/telemetry.ts", () => ({
-	captureReplEval: (_ctx: unknown, span: (typeof spans)[number]) => {
-		spans.push(span);
-	},
-	captureTurn: (_ctx: unknown, turn: (typeof turns)[number]) => {
-		turns.push(turn);
-	},
-	captureLlmCall: () => {},
-	captureException: (error: unknown, _ctx: unknown, properties: unknown) => {
-		exceptions.push(error);
-		exceptionProperties.push(properties);
-	},
-}));
 
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (
@@ -96,6 +73,7 @@ class CountingRepl extends AgentRepl {
 
 describe("the agent turn", () => {
 	let runAgentTurn: typeof import("../src/turn.ts").runAgentTurn;
+	let traced: FakeTracer;
 
 	beforeAll(async () => {
 		({ runAgentTurn } = await import("../src/turn.ts"));
@@ -103,10 +81,7 @@ describe("the agent turn", () => {
 
 	beforeEach(() => {
 		seen.length = 0;
-		spans.length = 0;
-		turns.length = 0;
-		exceptions.length = 0;
-		exceptionProperties.length = 0;
+		traced = new FakeTracer();
 		script = [];
 		throws = undefined;
 		calls = 0;
@@ -120,6 +95,7 @@ describe("the agent turn", () => {
 		const events: TurnEvent[] = [];
 		for await (const event of runAgentTurn(transcript, {
 			repl: testRepl(),
+			tracer: traced,
 			...options,
 		}))
 			events.push(event);
@@ -133,8 +109,11 @@ describe("the agent turn", () => {
 
 		await drain(ask);
 
-		expect(spans[0]).toMatchObject({ step: 1, error: true });
-		expect(spans[0].source).toBe("(car 5)");
+		expect(traced.spans[0]).toMatchObject({
+			failed: true,
+			attributes: { step: 1 },
+			content: { input: "(car 5)" },
+		});
 	});
 
 	test("a step that evaluates cleanly is not an error span", async () => {
@@ -142,7 +121,10 @@ describe("the agent turn", () => {
 
 		await drain(ask);
 
-		expect(spans[0]).toMatchObject({ step: 1, error: false });
+		expect(traced.spans[0]).toMatchObject({
+			failed: false,
+			attributes: { step: 1 },
+		});
 	});
 
 	test("the finishing step is captured as a span", async () => {
@@ -150,7 +132,10 @@ describe("the agent turn", () => {
 
 		await drain(ask);
 
-		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
+		expect(traced.spans.map((s) => s.content?.input)).toEqual([
+			"(+ 1 2)",
+			"three.",
+		]);
 	});
 
 	test("a prose reply ends the loop and reports the answer", async () => {
@@ -687,7 +672,10 @@ describe("the agent turn", () => {
 
 		await drain(ask, { repl });
 
-		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
+		expect(traced.spans.map((s) => s.content?.input)).toEqual([
+			"(+ 1 2)",
+			"three.",
+		]);
 	});
 
 	test("the turn is traced with its prompt and answer once it settles", async () => {
@@ -695,25 +683,54 @@ describe("the agent turn", () => {
 
 		await drain(ask);
 
-		expect(turns).toEqual([
+		expect(traced.turns).toEqual([
 			expect.objectContaining({
-				prompt: "what is 1 + 2?",
-				answer: "three.",
-				halted: true,
+				content: { prompt: "what is 1 + 2?", answer: "three." },
+				attributes: expect.objectContaining({ halted: true }),
 			}),
+		]);
+	});
+
+	test("each model call is traced as a generation with what it was sent, what it said and its usage", async () => {
+		script = [[{ text: "three." }, { usage: { input: 12, output: 3 } }]];
+
+		await drain(ask);
+
+		expect(traced.generations).toHaveLength(1);
+		const [generation] = traced.generations;
+		expect(generation).toMatchObject({
+			failed: false,
+			usage: { input: 12, output: 3 },
+			content: { output: "three." },
+		});
+		expect(generation.content?.input.map((m) => m.role)).toEqual([
+			"system",
+			"user",
+		]);
+		expect(generation.content?.input.at(-1)?.content).toBe("what is 1 + 2?");
+		expect(generation.trace.turnId).toBe(traced.turns[0].trace.turnId);
+	});
+
+	test("a model call that throws is traced as a failed generation", async () => {
+		throws = "upstream exploded";
+
+		await drain(ask);
+
+		expect(traced.generations).toEqual([
+			expect.objectContaining({ failed: true, error: "upstream exploded" }),
 		]);
 	});
 
 	test("a failed turn is traced as an exception, an aborted one is not", async () => {
 		throws = "upstream exploded";
 		await drain(ask);
-		expect(exceptions).toHaveLength(1);
+		expect(traced.exceptions).toHaveLength(1);
 
-		exceptions.length = 0;
+		traced = new FakeTracer();
 		const abort = new AbortController();
 		onCall = () => abort.abort();
 		await drain(ask, { signal: abort.signal });
-		expect(exceptions).toHaveLength(0);
+		expect(traced.exceptions).toHaveLength(0);
 	});
 
 	test("a hook that throws as the turn settles loses neither the trace nor the turn", async () => {
@@ -730,8 +747,8 @@ describe("the agent turn", () => {
 		const events = await drain(ask, { repl });
 
 		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "three." });
-		expect(turns).toHaveLength(1);
-		expect(exceptions).toEqual([broken]);
+		expect(traced.turns).toHaveLength(1);
+		expect(traced.exceptions.map((e) => e.error)).toEqual([broken]);
 	});
 
 	test("a hook that throws on what the message carried is traced with the keys it carried, never their values", async () => {
@@ -747,8 +764,10 @@ describe("the agent turn", () => {
 
 		await drain(ask, { repl, received: { said: "a secret" } });
 
-		expect(exceptions[0]).toBe(broken);
-		expect(exceptionProperties[0]).toEqual({ received: ["said"] });
-		expect(JSON.stringify(exceptionProperties)).not.toContain("a secret");
+		expect(traced.exceptions[0].error).toBe(broken);
+		expect(traced.exceptions[0].properties).toEqual({ received: ["said"] });
+		expect(
+			JSON.stringify(traced.exceptions.map((e) => e.properties)),
+		).not.toContain("a secret");
 	});
 });

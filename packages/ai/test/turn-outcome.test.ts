@@ -14,13 +14,6 @@ const model = vi.hoisted(() => ({
 	systems: [] as (string | undefined)[],
 }));
 
-vi.mock("../src/telemetry.ts", () => ({
-	captureReplEval: () => {},
-	captureTurn: () => {},
-	captureLlmCall: () => {},
-	captureException: () => {},
-}));
-
 vi.mock("../src/agent.ts", () => ({
 	streamAgent: async function* (
 		_messages: unknown,

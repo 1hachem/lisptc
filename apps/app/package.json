@@ -76,6 +76,7 @@
     "jose": "^6.2.12",
     "lexical": "^0.49.0",
     "posthog-js": "^1.425.1",
+    "posthog-node": "^5.51.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "use-stick-to-bottom": "^1.1.6",

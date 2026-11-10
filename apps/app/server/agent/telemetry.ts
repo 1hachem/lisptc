@@ -1,6 +1,6 @@
-import { initTelemetry, withRequestContext } from "@repo/ai";
 import { createMiddleware } from "@tanstack/react-start";
 import { withLogContext } from "../logs.ts";
+import { tracer } from "./tracer.ts";
 
 function clientIp(forwarded: string | null, real: string | null) {
 	return forwarded?.split(",")[0]?.trim() || real || undefined;
@@ -8,7 +8,6 @@ function clientIp(forwarded: string | null, real: string | null) {
 
 export const telemetry = createMiddleware({ type: "request" }).server(
 	({ request, next }) => {
-		initTelemetry();
 		const header = (name: string) => request.headers.get(name) ?? undefined;
 		const ip = clientIp(
 			request.headers.get("x-forwarded-for"),
@@ -18,7 +17,7 @@ export const telemetry = createMiddleware({ type: "request" }).server(
 		const distinctId =
 			header("x-distinct-id") ?? header("x-posthog-distinct-id");
 		const sessionId = header("x-posthog-session-id");
-		return withRequestContext(
+		return tracer.withRequest(
 			{
 				distinctId,
 				sessionId,
