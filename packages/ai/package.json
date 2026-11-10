@@ -17,13 +17,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.9",
     "@posthog/ai": "^8.9.3",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/models": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
+    "openai": "^6.49.0",
     "posthog-node": "^5.51.6"
   },
   "devDependencies": {

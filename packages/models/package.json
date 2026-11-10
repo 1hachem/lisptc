@@ -19,11 +19,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.9",
-    "@langchain/openai": "^1.5.10",
     "@repo/env": "workspace:*",
     "@repo/shared": "workspace:*",
-    "@typesafe-ai/sdk": "^0.7.0"
+    "@typesafe-ai/sdk": "^0.7.0",
+    "openai": "^6.49.0"
   },
   "devDependencies": {
     "@repo/tsconfigs": "workspace:*",

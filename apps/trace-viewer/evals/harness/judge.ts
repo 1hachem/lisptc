@@ -1,6 +1,6 @@
 import { providerSpecs } from "@repo/env/providers";
 import type { CaseInfo, ReportRow } from "@repo/evals/report";
-import { langchainGenerate } from "@repo/llm-extension/client";
+import { chatGenerate } from "@repo/llm-extension/client";
 import type { Generate } from "@repo/llm-extension/llm-extension";
 import { isProviderName, providerSpecFor } from "@repo/shared/providers";
 
@@ -74,7 +74,7 @@ export async function recapOf(
 	judge: Judge,
 	info: CaseInfo | undefined,
 	row: ReportRow,
-	generate: Generate = langchainGenerate,
+	generate: Generate = chatGenerate,
 ): Promise<string> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
