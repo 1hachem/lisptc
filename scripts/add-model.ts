@@ -22,7 +22,7 @@ interface Offered {
 
 function usage(): never {
 	console.error(
-		`usage: task model:add -- <${PROVIDER_NAMES.join("|")}> <model-id> [display name] [--commit]`,
+		`usage: task model:add -- <${PROVIDER_NAMES.join("|")}> <model-id> [display name]`,
 	);
 	process.exit(2);
 }
@@ -111,9 +111,7 @@ function insert(provider: ProviderName, id: string, name: string): void {
 }
 
 async function main(): Promise<void> {
-	const args = process.argv.slice(2);
-	const commit = args.includes("--commit");
-	const [provider, id, ...rest] = args.filter((a) => a !== "--commit");
+	const [provider, id, ...rest] = process.argv.slice(2);
 	if (!provider || !id) usage();
 	if (!isProviderName(provider)) usage();
 
@@ -133,19 +131,6 @@ async function main(): Promise<void> {
 	const name = rest.join(" ") || displayName(match, id);
 	insert(provider, id, name);
 	console.log(`added ${provider}:${id} as "${name}"`);
-
-	if (commit) {
-		execFileSync("git", ["add", CATALOG_FILE], { stdio: "inherit" });
-		execFileSync(
-			"git",
-			[
-				"commit",
-				"-m",
-				`feat(shared): add ${name.toLowerCase()} to the ${PROVIDER_CATALOG[provider].label.toLowerCase()} catalog`,
-			],
-			{ stdio: "inherit" },
-		);
-	}
 }
 
 await main();

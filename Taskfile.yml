@@ -16,7 +16,7 @@ tasks:
     cmd: task -l
 
   model:add:
-    desc: 'add a model to the catalog once its vendor serves it: task model:add -- <provider> <model-id> [name] [--commit]'
+    desc: 'add a model to the catalog once its vendor serves it: task model:add -- <provider> <model-id> [name]'
     cmds:
       - task: _infisical-run
         vars:
