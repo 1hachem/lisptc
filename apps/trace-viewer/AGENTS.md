@@ -8,7 +8,8 @@ Turbo tag: `product`.
 
 `src/app/` is the viewer: the home page lists reports, `r/[file]/` shows one
 run with its setup and transcript. `src/lib/reports.ts` loads and scores them,
-`src/lib/reviews.ts` and `src/lib/analytics.ts` carry a review back out.
+`src/lib/reviews.ts` and `src/lib/analytics.ts` carry a review back out, and
+`src/lib/posthog-tracer.ts` is the tracer port adapter they send a run through.
 `src/components/` holds the presentation. `src/middleware.ts` proxies analytics
 ingest.
 

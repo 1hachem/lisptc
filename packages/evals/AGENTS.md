@@ -13,10 +13,11 @@ It is handed a REPL, a check evaluator, trace hooks and an optional reviewer.
 `src/targets.ts` reads the matrix of models to run against. `src/report.ts` is
 the contract: every schema a report is parsed with, the verdict and outcome
 shapes included, so a run and everything that reads one agree on a single
-vocabulary. `src/review.ts` turns a run into trace events and review
-properties. `src/storage.ts` reads and writes reports to disk or R2.
-`src/shards.ts` holds the shard paths a running suite writes into, and
-`src/global-setup.ts` prepares a run and merges those shards at the end.
+vocabulary. `src/review.ts` turns a run into tracer port records and review
+properties, and the app hands it the tracer. `src/storage.ts` reads and writes
+reports to disk or R2. `src/shards.ts` holds the shard paths a running suite
+writes into, and `src/global-setup.ts` prepares a run and merges those shards
+at the end.
 
 ## Rules
 
