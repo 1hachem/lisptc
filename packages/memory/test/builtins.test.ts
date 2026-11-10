@@ -15,6 +15,13 @@ import { openSession } from "@repo/interpreter/session";
 import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { type Entry, view } from "@repo/shared/journal";
+import type {
+	Area,
+	Cue,
+	Recognize,
+	Situation,
+	Turn,
+} from "@repo/shared/recognition";
 import { describe, expect, it } from "vitest";
 import {
 	HALF_LIFE_MS,
@@ -27,12 +34,7 @@ import {
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
 import {
-	type Area,
-	type Cue,
-	type Recognize,
 	recognizeNothing,
-	type Situation,
-	type Turn,
 	VolatileStore,
 	WHEN_FIRES_AT,
 } from "../src/ports.ts";

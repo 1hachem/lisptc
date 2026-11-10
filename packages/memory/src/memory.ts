@@ -37,16 +37,21 @@ import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
 import type { SearchEngine } from "@repo/shared/search";
+import type {
+	Area,
+	AreaGate,
+	Cue,
+	Recognize,
+	Situation,
+	Turn,
+} from "@repo/shared/recognition";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
-	type Area,
-	type AreaGate,
 	areaFrom,
 	areaOf,
 	authoredTrigger,
 	builtinFrom,
-	type Cue,
 	combinatorIn,
 	formToMemory,
 	INITIAL_SCORE,
@@ -58,16 +63,13 @@ import {
 	memoryToForm,
 	memoryToRecord,
 	memoryToSource,
-	type Recognize,
 	recognizeNothing,
 	recordToMemory,
 	rememberedFrom,
-	type Situation,
 	type StoredMemory,
 	TRIGGER_KINDS,
 	type Trigger,
 	type TriggerKind,
-	type Turn,
 	triggerToForm,
 	VolatileStore,
 	WHEN_FIRES_AT,

@@ -1,3 +1,4 @@
+import type { Area } from "@repo/shared/recognition";
 import type {
 	JudgeRequest,
 	Judgment,
@@ -5,11 +6,7 @@ import type {
 	Verdict,
 } from "@repo/shared/system-one";
 import { describe, expect, it } from "vitest";
-import {
-	type Area,
-	memorySystem,
-	RECOGNITION_TIMEOUT_MS,
-} from "../src/memory-system.ts";
+import { memorySystem, RECOGNITION_TIMEOUT_MS } from "../src/memory-system.ts";
 
 type Answer = (question: Judgment, request: JudgeRequest) => Verdict;
 

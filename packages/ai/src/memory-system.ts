@@ -1,3 +1,4 @@
+import type { Area, Cue, Situation, Turn } from "@repo/shared/recognition";
 import type { SystemOneModel, Verdict } from "@repo/shared/system-one";
 import {
 	AREA_LACKS,
@@ -12,29 +13,6 @@ import {
 } from "./prompts/recognition.ts";
 
 export const RECOGNITION_TIMEOUT_MS = 2_000;
-
-export interface Turn {
-	readonly role: string;
-	readonly content: string;
-}
-
-export interface Situation {
-	readonly conversation: readonly Turn[];
-}
-
-export interface Cue {
-	readonly key: string;
-	readonly situation: string;
-	readonly unless?: string;
-	readonly gist: string;
-	readonly area?: string;
-}
-
-export interface Area {
-	readonly name: string;
-	readonly situation: string;
-	readonly open: boolean;
-}
 
 export type MemorySystem = (
 	situation: Situation,

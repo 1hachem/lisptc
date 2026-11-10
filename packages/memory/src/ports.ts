@@ -12,6 +12,7 @@ import {
 import { plistOptions } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
+import type { AreaGate, Recognize } from "@repo/shared/recognition";
 import type { SearchEngine } from "@repo/shared/search";
 
 export const INITIAL_SCORE = 1;
@@ -320,11 +321,6 @@ export function recordToMemory(
 	};
 }
 
-export interface AreaGate {
-	readonly name: string;
-	readonly situation: string;
-}
-
 export function areaFrom(declared: unknown): AreaGate {
 	const name = declared instanceof Cell ? declared.car : undefined;
 	const situation =
@@ -469,33 +465,6 @@ export function memoryToSource(memory: Memory): unknown {
 		memory.body,
 	]);
 }
-
-export interface Turn {
-	readonly role: string;
-	readonly content: string;
-}
-
-export interface Situation {
-	readonly conversation: readonly Turn[];
-}
-
-export interface Cue {
-	readonly key: string;
-	readonly situation: string;
-	readonly unless?: string;
-	readonly gist: string;
-	readonly area?: string;
-}
-
-export interface Area extends AreaGate {
-	readonly open: boolean;
-}
-
-export type Recognize = (
-	situation: Situation,
-	cues: readonly Cue[],
-	areas?: readonly Area[],
-) => Awaitable<ReadonlyMap<string, number>>;
 
 export const recognizeNothing: Recognize = () => new Map();
 
