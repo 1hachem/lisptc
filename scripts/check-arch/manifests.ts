@@ -28,9 +28,9 @@ const RULES: ManifestRule[] = [
 		manifest: "packages/interpreter/package.json",
 		fields: ["dependencies", "devDependencies"],
 		forbidden: (name) =>
-			name === "@modelcontextprotocol/sdk" || name === "@langchain/openai",
+			name === "@modelcontextprotocol/sdk" || name === "openai",
 		reason:
-			"@repo/mcp and @repo/llm carry those SDKs so the interpreter never does.",
+			"@repo/mcp and @repo/models carry those SDKs so the interpreter never does.",
 	},
 ];
 

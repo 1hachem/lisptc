@@ -78,7 +78,7 @@ function clientInterp(): Interp {
 	return interp;
 }
 
-describe("the langchain client against a stubbed fetch", () => {
+describe("the chat client against a stubbed fetch", () => {
 	it("sends the prompt, the model and the token budget", async () => {
 		stubFetch(answers);
 		const interp = clientInterp();

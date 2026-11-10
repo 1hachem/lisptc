@@ -1,8 +1,8 @@
 # @repo/models
 
 How the code reaches a model vendor: the chat providers and the System One
-models. It carries langchain and `@typesafe-ai/sdk` so that every caller shares
-one implementation of each.
+models. It carries the `openai` SDK and `@typesafe-ai/sdk` so that every caller
+shares one implementation of each.
 
 Turbo tag: `platform`.
 
@@ -33,5 +33,5 @@ A new vendor is a new file beside the others and an entry in
 
 ## Tests
 
-`test/`. A provider is tested through what it builds, and a System One or
-embedding model through a stubbed `fetch`. Neither calls a vendor.
+`test/`. A chat, System One or embedding model is tested through a stubbed
+`fetch`. None calls a vendor.

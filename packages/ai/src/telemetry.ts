@@ -1,7 +1,7 @@
-import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
-import { LangChainCallbackHandler } from "@posthog/ai/langchain";
+import { PostHogOpenAI } from "@posthog/ai/openai";
 import { analyticsEnv } from "@repo/env/analytics";
 import type { LlmCall } from "@repo/interpreter/observe";
+import type { ChatClient } from "@repo/models/chat";
 import { PostHog } from "posthog-node";
 
 const PRIVACY_MODE = analyticsEnv.POSTHOG_PRIVACY_MODE;
@@ -83,18 +83,21 @@ function identify(ctx: { threadId: string; distinctId?: string }): {
 	};
 }
 
-export function traceCallbacks(ctx: TraceContext): BaseCallbackHandler[] {
+export function tracedClient(ctx: TraceContext): ChatClient | undefined {
 	const ph = posthog();
-	if (!ph) return [];
-	return [
-		new LangChainCallbackHandler({
-			client: ph,
-			traceId: ctx.threadId,
-			distinctId: ctx.distinctId,
-			privacyMode: PRIVACY_MODE,
-			properties: { ...common(ctx), $ai_parent_id: ctx.turnId },
-		}),
-	];
+	if (!ph) return undefined;
+	return {
+		open: (options) =>
+			new PostHogOpenAI({ ...options, posthog: ph }) as unknown as ReturnType<
+				ChatClient["open"]
+			>,
+		body: {
+			posthogTraceId: ctx.threadId,
+			posthogDistinctId: ctx.distinctId,
+			posthogPrivacyMode: PRIVACY_MODE,
+			posthogProperties: { ...common(ctx), $ai_parent_id: ctx.turnId },
+		},
+	};
 }
 
 export function captureReplEval(
