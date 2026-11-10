@@ -7,7 +7,6 @@ import {
 	type Interp,
 	runAsync,
 	runSync,
-	runUnhooked,
 } from "../src/lisp.ts";
 import { Cell, Keyword, listToArray, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
@@ -318,22 +317,6 @@ describe("runAsync", () => {
 	it("resolves to the value of the last form", async () => {
 		const { value } = await runAsync(freshInterp(), "(+ 1 2) (list 3 4)");
 		expect(str(value)).toBe("(3 4)");
-	});
-});
-
-describe("runUnhooked", () => {
-	it("evaluates every form, across lines, without the session chains", () => {
-		const interp = freshInterp();
-		const seen: unknown[] = [];
-		interp.hooks.evalForm.use(function* (i, form, next) {
-			seen.push(form);
-			return yield* next(i, form);
-		});
-		interp.hooks.readSource.use(() => "");
-		expect(str(runUnhooked(interp, '(setq a "one\ntwo")\n(list a)'))).toBe(
-			'("one\\ntwo")',
-		);
-		expect(seen).toEqual([]);
 	});
 });
 

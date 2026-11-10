@@ -827,19 +827,6 @@ export function* runGen(interp: Interp, text: string): Eval {
 	return result;
 }
 
-export function* runUnhookedGen(interp: Interp, text: string): Eval {
-	const tokens = new Reader();
-	tokens.push(text);
-	let result: unknown = Unspecified;
-	while (!tokens.isEmpty())
-		result = yield* evalTopLevel(interp, tokens.read(), result);
-	return result;
-}
-
-export function runUnhooked(interp: Interp, text: string): unknown {
-	return driveSync(runUnhookedGen(interp, text));
-}
-
 export function runSync(interp: Interp, text: string): unknown {
 	return driveSync(runGen(interp, text));
 }

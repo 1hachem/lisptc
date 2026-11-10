@@ -6,7 +6,7 @@ import { record } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
-	runUnhooked,
+	runSync,
 	type State,
 	type StateCodec,
 } from "@repo/interpreter/lisp";
@@ -19,6 +19,7 @@ import {
 	newLispKeyword,
 	newSym,
 	Sym,
+	Unspecified,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
@@ -36,7 +37,6 @@ import {
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
-import type { SearchEngine } from "@repo/shared/search";
 import type {
 	Area,
 	AreaGate,
@@ -45,6 +45,7 @@ import type {
 	Situation,
 	Turn,
 } from "@repo/shared/recognition";
+import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
@@ -182,16 +183,29 @@ const LIST = "memory/list";
 const DECLARED_MEMORIES = "*memories*";
 const DECLARED_AREAS = "*areas*";
 
+const DECLARED = "memory/declared";
 const DECLARE = `
 (setq memory
   (macro (key &rest declared)
-    (list 'setq '${DECLARED_MEMORIES}
-          (list 'cons (list 'quote (cons key declared)) '${DECLARED_MEMORIES}))))
+    (list 'progn
+          (list 'setq '${DECLARED_MEMORIES}
+                (list 'cons (list 'quote (cons key declared)) '${DECLARED_MEMORIES}))
+          '${DECLARED})))
 (setq area
   (macro (name &rest declared)
-    (list 'setq '${DECLARED_AREAS}
-          (list 'cons (list 'quote (cons name declared)) '${DECLARED_AREAS}))))
+    (list 'progn
+          (list 'setq '${DECLARED_AREAS}
+                (list 'cons (list 'quote (cons name declared)) '${DECLARED_AREAS}))
+          '${DECLARED})))
 `;
+
+function isDeclaration(form: unknown): boolean {
+	return (
+		form instanceof Cell &&
+		form.car instanceof Sym &&
+		(form.car.name === "memory" || form.car.name === "area")
+	);
+}
 
 function declaredIn(interp: Interp, name: string): unknown[] {
 	const declared = interp.getGlobal(newSym(name));
@@ -463,7 +477,7 @@ export class MemoryBank {
 		if (interp === undefined) return { memories: new Map(), areas: [] };
 		interp.defineGlobal(newSym(DECLARED_MEMORIES), null);
 		interp.defineGlobal(newSym(DECLARED_AREAS), null);
-		for (const source of interp.builtinMemories()) runUnhooked(interp, source);
+		for (const source of interp.builtinMemories()) runSync(interp, source);
 		const memories = new Map<string, Memory>();
 		for (const declared of declaredIn(interp, DECLARED_MEMORIES)) {
 			const memory = builtinFrom(declared);
@@ -529,7 +543,7 @@ export class MemoryBank {
 				form.car.name !== "memory"
 			)
 				return undefined;
-			runUnhooked(interp, source);
+			runSync(interp, source);
 			const entry = (interp.getGlobal(declared) as Cell).car;
 			const memory = rememberedFrom(entry);
 			const others = (before instanceof Cell ? listToArray(before) : []).filter(
@@ -1028,7 +1042,12 @@ function situationOf(memory: Memory): unknown {
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.channels);
-	runUnhooked(interp, DECLARE);
+	interp.defineGlobal(newSym(DECLARED), Unspecified);
+	interp.setDoc(DECLARED, {
+		signature: DECLARED,
+		doc: "What a memory or area declaration returns: nothing, so declaring one reports nothing.",
+	});
+	runSync(interp, DECLARE);
 	interp.setDoc("memory", {
 		signature:
 			'(memory "key" [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links ("key"...)] "body")',
@@ -1042,6 +1061,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.declareIn(interp);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
+		if (isDeclaration(form)) return yield* next(i, form);
 		yield* bank.onCall(i, form);
 		try {
 			const value = yield* next(i, form);
