@@ -28,6 +28,7 @@
     "fallow:dupes": "fallow dupes",
     "boundaries": "turbo boundaries",
     "check:agents": "check-agents-md --checks rules",
+    "add:model": "node --no-warnings --experimental-transform-types ./scripts/add-model.ts",
     "check:arch": "node --no-warnings --experimental-transform-types ./scripts/check-arch.ts",
     "check:comments": "no-comments",
     "fix:comments": "no-comments --fix",
