@@ -6,7 +6,7 @@ import type {
 	TurnRecord,
 } from "@repo/ai";
 
-export interface Capturing {
+interface Capturing {
 	capture(event: string, properties: Record<string, unknown>): unknown;
 	captureException(
 		error: unknown,
