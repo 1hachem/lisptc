@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { gunzipSync } from "node:zlib";
 import type { TraceContext, Tracer } from "@repo/ai";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -9,7 +10,6 @@ interface CapturedEvent {
 	properties: Record<string, unknown>;
 }
 
-const PORT = 9933;
 const events: CapturedEvent[] = [];
 let server: Server;
 let tracer: Tracer;
@@ -33,10 +33,11 @@ beforeAll(async () => {
 			res.end("{}");
 		});
 	});
-	await new Promise<void>((resolve) => server.listen(PORT, resolve));
+	await new Promise<void>((resolve) => server.listen(0, resolve));
+	const { port } = server.address() as AddressInfo;
 
 	process.env.POSTHOG_API_KEY = "phc_test";
-	process.env.POSTHOG_HOST = `http://127.0.0.1:${PORT}`;
+	process.env.POSTHOG_HOST = `http://127.0.0.1:${port}`;
 	process.env.POSTHOG_ENVIRONMENT = "test";
 
 	({ tracer } = await import("../../server/agent/tracer.ts"));
@@ -58,7 +59,6 @@ const TRACE: TraceContext = {
 
 async function drain(): Promise<CapturedEvent[]> {
 	await tracer.flush();
-	await new Promise((resolve) => setTimeout(resolve, 100));
 	return events;
 }
 

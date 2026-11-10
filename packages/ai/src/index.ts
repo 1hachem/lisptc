@@ -42,11 +42,9 @@ export {
 	type ThreadsOptions,
 } from "./threads.ts";
 export {
-	type ExceptionRecord,
 	type GenerationRecord,
 	type RequestContext,
 	type SpanRecord,
-	type TokenUsage,
 	type TraceContext,
 	type Tracer,
 	type TurnRecord,

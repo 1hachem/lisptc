@@ -31,11 +31,7 @@ import {
 } from "./repl.ts";
 import type { ToolMessage } from "./tool-message.ts";
 import { type TraceContext, type Tracer, untraced } from "./tracer.ts";
-import {
-	type TurnTelemetry,
-	tracedGeneration,
-	turnTelemetry,
-} from "./turn-telemetry.ts";
+import { type TurnTelemetry, turnTelemetry } from "./turn-telemetry.ts";
 
 export interface TurnOptions {
 	repl: AgentRepl;
@@ -221,8 +217,6 @@ async function* callModel(
 interface Turn {
 	readonly repl: AgentRepl;
 	readonly transcript: TranscriptEntry[];
-	readonly trace: TraceContext;
-	readonly tracer: Tracer;
 	readonly ran: { provider: string; model: string };
 	readonly maxSteps: number;
 	readonly signal?: AbortSignal;
@@ -251,7 +245,7 @@ async function* openTurn(
 	turn: Turn,
 	config: AgentConfig | undefined,
 ): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
-	const { repl, transcript, trace, tracer, signal } = turn;
+	const { repl, transcript, telemetry, signal } = turn;
 	const withheld = repl.takeProseFeedback();
 	if (withheld)
 		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
@@ -274,9 +268,7 @@ async function* openTurn(
 	return {
 		system,
 		call: (request) =>
-			tracedGeneration(
-				tracer,
-				trace,
+			telemetry.generation(
 				request,
 				streamAgent(
 					[...request.messages],
@@ -461,8 +453,6 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 	return {
 		repl,
 		transcript: [...messages],
-		trace,
-		tracer,
 		agent: {
 			get interp() {
 				return repl.interp;

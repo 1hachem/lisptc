@@ -1,3 +1,4 @@
+import type { ModelUsage } from "@repo/interpreter/session";
 import type { ChatMessage } from "@repo/shared/messages";
 
 export interface TraceContext {
@@ -32,16 +33,10 @@ export interface SpanRecord extends Timed {
 	content?: { input: string; output: string };
 }
 
-export interface TokenUsage {
-	input?: number;
-	output?: number;
-	cachedInput?: number;
-}
-
 export interface GenerationRecord extends Timed {
 	provider?: string;
 	model?: string;
-	usage?: TokenUsage;
+	usage?: Partial<ModelUsage>;
 	content?: { input: readonly ChatMessage[]; output: string };
 }
 
@@ -60,7 +55,7 @@ export interface Tracer {
 	flush(): Promise<void>;
 }
 
-export interface TracingOptions {
+interface TracingOptions {
 	privacy: boolean;
 }
 
@@ -92,13 +87,16 @@ export function tracing(
 		privacy ? contentless(record) : record;
 	return {
 		turn(record) {
-			for (const tracer of tracers) tracer.turn(shown(record));
+			const seen = shown(record);
+			for (const tracer of tracers) tracer.turn(seen);
 		},
 		span(record) {
-			for (const tracer of tracers) tracer.span(shown(record));
+			const seen = shown(record);
+			for (const tracer of tracers) tracer.span(seen);
 		},
 		generation(record) {
-			for (const tracer of tracers) tracer.generation(shown(record));
+			const seen = shown(record);
+			for (const tracer of tracers) tracer.generation(seen);
 		},
 		exception(record) {
 			const seen = privacy

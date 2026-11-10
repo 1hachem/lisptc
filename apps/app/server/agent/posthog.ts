@@ -94,84 +94,86 @@ function usageOf(record: GenerationRecord): Record<string, unknown> {
 	};
 }
 
-export function posthogTracer(): Tracer {
+function childOf(trace: TraceContext): Record<string, unknown> {
 	return {
-		turn(record) {
-			const { trace, content } = record;
-			capture("$ai_trace", trace, {
-				...turnCommon(trace),
-				...modelOf(trace.provider, trace.model),
-				$ai_span_id: trace.turnId,
-				...timed(record),
-				...(content
-					? {
-							$ai_input_state: content.prompt,
-							$ai_output_state: content.answer,
-						}
-					: {}),
-			});
-		},
-		span(record) {
-			const { trace, content } = record;
-			capture("$ai_span", trace, {
-				...turnCommon(trace),
-				...modelOf(trace.provider, trace.model),
-				$ai_span_id: crypto.randomUUID(),
-				$ai_parent_id: trace.turnId,
-				...timed(record),
-				...(content
-					? { $ai_input_state: content.input, $ai_output_state: content.output }
-					: {}),
-			});
-		},
-		generation(record) {
-			const { trace, content } = record;
-			capture("$ai_generation", trace, {
-				...turnCommon(trace),
-				...modelOf(record.provider, record.model),
-				$ai_span_id: crypto.randomUUID(),
-				$ai_parent_id: trace.turnId,
-				...timed(record),
-				...usageOf(record),
-				...(content
-					? {
-							$ai_input: content.input,
-							$ai_output_choices: [
-								{ role: "assistant", content: content.output },
-							],
-						}
-					: {}),
-			});
-		},
-		exception({ error, trace, properties }) {
-			const ph = posthog();
-			if (!ph) return;
-			ph.captureException(error, trace.distinctId, {
-				environment: environment(),
-				...(trace.sessionId ? { $session_id: trace.sessionId } : {}),
-				...(trace.threadId
-					? { $ai_trace_id: trace.threadId, thread_id: trace.threadId }
-					: {}),
-				...(trace.turnId ? { $ai_span_id: trace.turnId } : {}),
-				...properties,
-			});
-		},
-		withRequest<T>(context: RequestContext, run: () => T): T {
-			const ph = posthog();
-			return ph ? ph.withContext(context, run) : run();
-		},
-		async flush() {
-			const client = globals.__lisptcPosthog;
-			if (!client) return;
-			const startedAt = Date.now();
-			try {
-				await client.shutdown(FLUSH_TIMEOUT_MS);
-				console.log(
-					`[telemetry] flushed pending events (${Date.now() - startedAt}ms)`,
-				);
-			} catch (err) {
-				console.warn("[telemetry] flush failed:", err);
-			}
-		},
+		...turnCommon(trace),
+		$ai_span_id: crypto.randomUUID(),
+		$ai_parent_id: trace.turnId,
 	};
 }
+
+export const posthogTracer: Tracer = {
+	turn(record) {
+		const { trace, content } = record;
+		capture("$ai_trace", trace, {
+			...turnCommon(trace),
+			...modelOf(trace.provider, trace.model),
+			$ai_span_id: trace.turnId,
+			...timed(record),
+			...(content
+				? {
+						$ai_input_state: content.prompt,
+						$ai_output_state: content.answer,
+					}
+				: {}),
+		});
+	},
+	span(record) {
+		const { trace, content } = record;
+		capture("$ai_span", trace, {
+			...childOf(trace),
+			...modelOf(trace.provider, trace.model),
+			...timed(record),
+			...(content
+				? { $ai_input_state: content.input, $ai_output_state: content.output }
+				: {}),
+		});
+	},
+	generation(record) {
+		const { trace, content } = record;
+		capture("$ai_generation", trace, {
+			...childOf(trace),
+			...modelOf(record.provider, record.model),
+			...timed(record),
+			...usageOf(record),
+			...(content
+				? {
+						$ai_input: content.input,
+						$ai_output_choices: [
+							{ role: "assistant", content: content.output },
+						],
+					}
+				: {}),
+		});
+	},
+	exception({ error, trace, properties }) {
+		const ph = posthog();
+		if (!ph) return;
+		ph.captureException(error, trace.distinctId, {
+			environment: environment(),
+			...(trace.sessionId ? { $session_id: trace.sessionId } : {}),
+			...(trace.threadId
+				? { $ai_trace_id: trace.threadId, thread_id: trace.threadId }
+				: {}),
+			...(trace.turnId ? { $ai_span_id: trace.turnId } : {}),
+			...properties,
+		});
+	},
+	withRequest<T>(context: RequestContext, run: () => T): T {
+		const ph = posthog();
+		return ph ? ph.withContext(context, run) : run();
+	},
+	async flush() {
+		const client = globals.__lisptcPosthog;
+		if (!client) return;
+		const startedAt = Date.now();
+		try {
+			await client.shutdown(FLUSH_TIMEOUT_MS);
+			console.log(
+				`[telemetry] flushed pending events (${Date.now() - startedAt}ms)`,
+			);
+		} catch (err) {
+			console.warn("[telemetry] flush failed:", err);
+		}
+	},
+};

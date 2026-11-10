@@ -1,4 +1,5 @@
 import type { Eval } from "@repo/interpreter/drive";
+import { messageOf } from "@repo/interpreter/errors";
 import type { Middleware } from "@repo/interpreter/hooks";
 import { type LlmCall, llmSlot } from "@repo/interpreter/observe";
 import type {
@@ -7,17 +8,13 @@ import type {
 	AgentTurn,
 	ModelDelta,
 	ModelRequest,
+	ModelUsage,
 	SessionHooks,
 	StepVerdict,
 	TurnContext,
 } from "@repo/interpreter/session";
 import type { Received } from "@repo/shared/journal";
-import type {
-	GenerationRecord,
-	TokenUsage,
-	TraceContext,
-	Tracer,
-} from "./tracer.ts";
+import type { GenerationRecord, TraceContext, Tracer } from "./tracer.ts";
 
 export interface TurnTelemetry {
 	readonly turnStart: Middleware<[TurnContext], Eval<void>>;
@@ -27,10 +24,14 @@ export interface TurnTelemetry {
 		StepVerdict
 	>;
 	readonly settled: Middleware<[AgentTurn, AgentEnd], void>;
+	generation(
+		request: ModelRequest,
+		deltas: AsyncIterable<ModelDelta>,
+	): AsyncGenerator<ModelDelta>;
 }
 
 function llmGeneration(trace: TraceContext, call: LlmCall): GenerationRecord {
-	const usage: TokenUsage = {
+	const usage: Partial<ModelUsage> = {
 		...(call.inputTokens === undefined ? {} : { input: call.inputTokens }),
 		...(call.outputTokens === undefined ? {} : { output: call.outputTokens }),
 	};
@@ -48,7 +49,7 @@ function llmGeneration(trace: TraceContext, call: LlmCall): GenerationRecord {
 	};
 }
 
-export async function* tracedGeneration(
+async function* tracedGeneration(
 	tracer: Tracer,
 	trace: TraceContext,
 	request: ModelRequest,
@@ -56,7 +57,7 @@ export async function* tracedGeneration(
 ): AsyncGenerator<ModelDelta> {
 	const startedAt = Date.now();
 	let output = "";
-	let usage: TokenUsage | undefined;
+	let usage: ModelUsage | undefined;
 	let error: string | undefined;
 	try {
 		for await (const delta of deltas) {
@@ -65,7 +66,7 @@ export async function* tracedGeneration(
 			yield delta;
 		}
 	} catch (err) {
-		error = err instanceof Error ? err.message : String(err);
+		error = messageOf(err);
 		throw err;
 	} finally {
 		tracer.generation({
@@ -94,6 +95,8 @@ export function turnTelemetry(
 	trace: TraceContext,
 ): TurnTelemetry {
 	return {
+		generation: (request, deltas) =>
+			tracedGeneration(tracer, trace, request, deltas),
 		turnStart: function* (ctx, next) {
 			const observed = hooks.filled(llmSlot);
 			if (observed)
