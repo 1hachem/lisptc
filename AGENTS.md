@@ -431,14 +431,27 @@ without being asked.
 
 ## When to verify
 
-**Do not run the tests or the typecheck after every step.** While the work is
-still moving, edit and keep going. A run per edit costs time and context and
-tells you little the next edit will not change.
+**Do not run the typecheck or the test suites yourself.** CI runs both on every
+push. The machine the work runs on is small, and a run competes with everything
+else on it. Edit and keep going.
 
-Verify once a milestone is reached and the user asks to wrap it up in commits.
-Then run the tests and the typecheck of the packages the change touches, and
-nothing wider, fix what fails, and commit. Run them earlier only when the user
-asks, or when a step cannot go on without knowing whether the last one works.
+Run the typecheck only when you are stuck: a step cannot go on without knowing
+whether the last one compiles, or something is broken and the type errors are
+the lead you need. Filter it to the one package in question.
+
+Run a test only to answer a question about the code in front of you: a bug you
+are debugging, new logic you need to see work, or whether a change broke what
+it touches. Run the test file or the test name that answers it, inside the
+package that owns it, never a whole package's suite when one file will do.
+
+Either one goes through `script`, and never across the repo: no root
+`pnpm test` or `pnpm typecheck`, and no `task test`.
+
+After a push, the verdict is read off CI. Wait for the run in the background
+(`gh pr checks --watch`, or `gh run watch` for a branch with no pull request),
+and once it finishes, have `script` pull the failed logs (`gh run view
+--log-failed`). Fix every test and type error it reports and push again without
+being asked.
 
 ## Commits
 
