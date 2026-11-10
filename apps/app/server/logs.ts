@@ -48,8 +48,14 @@ function contextAttributes(): Record<string, string> {
 	};
 }
 
-function provider(token: string): LoggerProvider {
+function endpoint(): string {
+	if (analyticsEnv.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT)
+		return analyticsEnv.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT;
 	const host = analyticsEnv.POSTHOG_HOST ?? "https://us.i.posthog.com";
+	return new URL("/i/v1/logs", host).toString();
+}
+
+function provider(token: string): LoggerProvider {
 	return new LoggerProvider({
 		resource: resourceFromAttributes({
 			[ATTR_SERVICE_NAME]: SERVICE_NAME,
@@ -63,7 +69,7 @@ function provider(token: string): LoggerProvider {
 		processors: [
 			new BatchLogRecordProcessor({
 				exporter: new OTLPLogExporter({
-					url: new URL("/i/v1/logs", host).toString(),
+					url: endpoint(),
 					headers: { Authorization: `Bearer ${token}` },
 				}),
 			}),

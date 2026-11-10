@@ -47,7 +47,7 @@ const withdrawRequestSchema = steerRequestSchema.pick({
 function identityOf(request: Request) {
 	return {
 		distinctId: request.headers.get("x-distinct-id") ?? undefined,
-		sessionId: request.headers.get("x-posthog-session-id") ?? undefined,
+		sessionId: request.headers.get("x-session-id") ?? undefined,
 	};
 }
 

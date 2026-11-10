@@ -24,9 +24,6 @@ const OPTIONS: Partial<PostHogConfig> = {
 				capture_performance: false,
 			}
 		: { capture_exceptions: true }),
-	...(typeof location === "undefined"
-		? {}
-		: { tracing_headers: [location.hostname] }),
 	before_send: (event) => {
 		if (event)
 			event.properties = { ...event.properties, environment: ENVIRONMENT };
@@ -58,6 +55,10 @@ function whenIdle(run: () => void): void {
 
 export function distinctId(): string | undefined {
 	return client?.get_distinct_id();
+}
+
+export function sessionId(): string | undefined {
+	return client?.get_session_id();
 }
 
 export function reportIssue(

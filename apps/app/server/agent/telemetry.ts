@@ -14,9 +14,8 @@ export const telemetry = createMiddleware({ type: "request" }).server(
 			request.headers.get("x-real-ip"),
 		);
 		const userAgent = header("user-agent");
-		const distinctId =
-			header("x-distinct-id") ?? header("x-posthog-distinct-id");
-		const sessionId = header("x-posthog-session-id");
+		const distinctId = header("x-distinct-id");
+		const sessionId = header("x-session-id");
 		return tracer.withRequest(
 			{
 				distinctId,

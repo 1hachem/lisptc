@@ -68,7 +68,7 @@ describe("the telemetry middleware", () => {
 			new Request("http://api.test/api/boom?q=1", {
 				headers: {
 					"x-distinct-id": "web-7",
-					"x-posthog-session-id": "session-9",
+					"x-session-id": "session-9",
 					"user-agent": "a browser",
 					"x-forwarded-for": "203.0.113.7, 10.0.0.1",
 				},
