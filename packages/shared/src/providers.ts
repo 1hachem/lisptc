@@ -32,6 +32,7 @@ export const PROVIDER_CATALOG = {
 				id: "deepseek/deepseek-v4.1-flash-1017",
 				name: "DeepSeek V4.1 Flash",
 			},
+			{ id: "meta/muse-ember", name: "Muse Ember" },
 		],
 	},
 } as const satisfies Record<
