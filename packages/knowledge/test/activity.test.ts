@@ -72,7 +72,6 @@ describe("a knowledge file read or write", () => {
 				state: "done",
 				id: "file-1",
 				startedAt: 1000,
-				endedAt: 1025,
 				ms: 25,
 			},
 			{
@@ -83,7 +82,6 @@ describe("a knowledge file read or write", () => {
 				state: "done",
 				id: "file-2",
 				startedAt: 1050,
-				endedAt: 1075,
 				ms: 25,
 			},
 		]);

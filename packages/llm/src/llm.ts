@@ -31,11 +31,9 @@ import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { type Phase, timed } from "@repo/interpreter/timed";
 import { withTimeout } from "@repo/interpreter/timeout";
-import {
-	type ActivityEntry,
-	activityKind,
-} from "@repo/journal-catalog/activity";
+import { activityKind } from "@repo/journal-catalog/activity";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
@@ -47,20 +45,15 @@ const callSeqCodec: StateCodec<number> = {
 	fromLisp: (x) => Number(x),
 };
 
-type Announce = (
-	id: string,
-	builtin: string,
-	state: ActivityEntry["state"],
-	error?: unknown,
-) => void;
+type Announce = (id: string, builtin: string, phase: Phase) => void;
 
 function announcer(interp: Interp): Announce {
-	return (id, builtin, state, error) =>
+	return (id, builtin, { error, ...phase }) =>
 		record(interp.channels, activityKind, {
 			kind: "llm",
 			icon: "model",
 			label: builtin,
-			state,
+			...phase,
 			...(error === undefined ? {} : { error: messageOf(error) }),
 			id,
 		});
@@ -451,28 +444,19 @@ function caller(
 		const n = calls.get() + 1;
 		calls.set(n);
 		const id = `llm-${n}`;
-		const startedAt = clock().now();
-		announce(id, builtin, "started");
 		const controller = new AbortController();
-		return withTimeout(
-			generate(req, controller.signal),
-			timeoutMs,
-			builtin,
-		).then(
-			(res) => {
-				const ms = clock().now() - startedAt;
-				announce(id, builtin, "done");
-				report(traceOf(builtin, req, ms, res, undefined));
-				return res;
+		return timed(
+			clock(),
+			() => withTimeout(generate(req, controller.signal), timeoutMs, builtin),
+			(phase, res) => {
+				announce(id, builtin, phase);
+				if (phase.ms !== undefined)
+					report(traceOf(builtin, req, phase.ms, res, phase.error));
 			},
-			(ex) => {
-				const ms = clock().now() - startedAt;
-				announce(id, builtin, "failed", ex);
-				controller.abort();
-				report(traceOf(builtin, req, ms, undefined, ex));
-				throw ex;
-			},
-		);
+		).catch((ex: unknown) => {
+			controller.abort();
+			throw ex;
+		});
 	};
 }
 

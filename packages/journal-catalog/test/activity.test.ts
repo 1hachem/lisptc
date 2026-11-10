@@ -47,26 +47,6 @@ describe("activityOf", () => {
 		).toEqual([{ ...started("a"), state: "failed", startedAt: 1000, ms: 40 }]);
 	});
 
-	test("times a call from when it started to when it last ended, through a hold", () => {
-		const stamp = activityKind.stamp;
-		if (stamp === undefined) throw new Error("activity is stamped");
-		expect(
-			of(
-				stamp(started("a"), 1000),
-				stamp({ ...started("a"), state: "held" }, 1200),
-				stamp({ ...started("a"), state: "done" }, 1500),
-			),
-		).toEqual([
-			{
-				...started("a"),
-				state: "done",
-				startedAt: 1000,
-				endedAt: 1500,
-				ms: 500,
-			},
-		]);
-	});
-
 	test("skips a malformed entry and an entry of another kind", () => {
 		expect(
 			foldActivity([

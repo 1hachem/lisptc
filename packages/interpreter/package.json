@@ -30,6 +30,7 @@
     "./schema": "./src/schema.ts",
     "./session": "./src/session.ts",
     "./source": "./src/source.ts",
+    "./timed": "./src/timed.ts",
     "./timeout": "./src/timeout.ts",
     "./topics": "./src/topics.ts",
     "./types": "./src/types.ts"

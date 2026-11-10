@@ -130,7 +130,6 @@ describe("a tool call from lisp", () => {
 				state: "done",
 				id: "mcp-1",
 				startedAt: 1050,
-				endedAt: 1075,
 				ms: 25,
 			},
 		]);
@@ -147,7 +146,6 @@ describe("a tool call from lisp", () => {
 				error: "boom",
 				id: "mcp-1",
 				startedAt: 1050,
-				endedAt: 1075,
 				ms: 25,
 			},
 		]);
@@ -199,7 +197,6 @@ describe("loading a server", () => {
 				state: "done",
 				id: "mcp-load-1",
 				startedAt: 1000,
-				endedAt: 1025,
 				ms: 25,
 			},
 		]);

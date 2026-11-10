@@ -14,11 +14,9 @@ import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
+import { type Phase, timed } from "@repo/interpreter/timed";
 import { withTimeout } from "@repo/interpreter/timeout";
-import {
-	type ActivityEntry,
-	activityKind,
-} from "@repo/journal-catalog/activity";
+import { activityKind } from "@repo/journal-catalog/activity";
 import type { EmbeddingModel } from "@repo/shared/embedding";
 import type { PromptSource } from "@repo/shared/host";
 import type {
@@ -84,28 +82,24 @@ function tracker(interp: Interp): Track {
 		const n = calls.get() + 1;
 		calls.set(n);
 		const id = `semantic-${n}`;
-		const announce = (state: ActivityEntry["state"], error?: unknown): void =>
+		const announce = ({ error, ...phase }: Phase): void =>
 			record(interp.channels, activityKind, {
 				kind: "semantic",
 				icon: "meaning",
 				label: form,
-				state,
+				...phase,
 				...(error === undefined ? {} : { error: messageOf(error) }),
 				id,
 			});
-		announce("started");
 		const controller = new AbortController();
-		return withTimeout(run(controller.signal), timeoutOf(opts), form).then(
-			(res) => {
-				announce("done");
-				return res;
-			},
-			(ex) => {
-				announce("failed", ex);
-				controller.abort();
-				throw ex;
-			},
-		);
+		return timed(
+			interp.channels.clock,
+			() => withTimeout(run(controller.signal), timeoutOf(opts), form),
+			announce,
+		).catch((ex: unknown) => {
+			controller.abort();
+			throw ex;
+		});
 	};
 }
 

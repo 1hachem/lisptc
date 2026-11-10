@@ -57,9 +57,8 @@ describe("a model call from lisp", () => {
 				label: "write",
 				state: "done",
 				id: "llm-1",
-				startedAt: 1025,
-				endedAt: 1075,
-				ms: 50,
+				startedAt: 1000,
+				ms: 25,
 			},
 		]);
 	});
@@ -79,8 +78,8 @@ describe("a model call from lisp", () => {
 				a.error,
 			]),
 		).toEqual([
-			["llm-1", "write", "done", 1025, 50, undefined],
-			["llm-2", "write", "failed", 1125, 50, "down"],
+			["llm-1", "write", "done", 1000, 25, undefined],
+			["llm-2", "write", "failed", 1050, 25, "down"],
 		]);
 	});
 });
