@@ -56,7 +56,6 @@ export interface ChatReply {
 }
 
 export interface ChatModel {
-	model: string;
 	stream(messages: ChatMessage[], call?: ChatCall): AsyncGenerator<ChatDelta>;
 	complete(messages: ChatMessage[], call?: ChatCall): Promise<ChatReply>;
 }
@@ -138,30 +137,23 @@ export function defineChatProvider(config: ChatProviderConfig): ChatProvider {
 			baseURL: config.baseUrl,
 			maxRetries: MAX_RETRIES,
 		};
-		const open = () =>
-			merged.client
-				? merged.client.open(clientOptions)
-				: new OpenAI(clientOptions);
+		const client = merged.client
+			? merged.client.open(clientOptions)
+			: new OpenAI(clientOptions);
 		const request = (messages: ChatMessage[]) => ({
 			...config.body,
 			...bodyOf(merged),
 			...merged.client?.body,
 			model,
 			messages,
-			...(merged.temperature === undefined
-				? {}
-				: { temperature: merged.temperature }),
-			...(merged.maxTokens === undefined
-				? {}
-				: { max_tokens: merged.maxTokens }),
+			temperature: merged.temperature,
+			max_tokens: merged.maxTokens,
 		});
 		return {
-			model,
 			async *stream(messages, call = {}) {
-				const chunks = await open().chat.completions.create(
+				const chunks = await client.chat.completions.create(
 					{
 						...request(messages),
-						...formatOf(call.schema),
 						stream: true,
 						stream_options: { include_usage: true },
 					} as OpenAI.ChatCompletionCreateParamsStreaming,
@@ -178,7 +170,7 @@ export function defineChatProvider(config: ChatProviderConfig): ChatProvider {
 				}
 			},
 			async complete(messages, call = {}) {
-				const reply = await open().chat.completions.create(
+				const reply = await client.chat.completions.create(
 					{
 						...request(messages),
 						...formatOf(call.schema),

@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
 	type ChatDelta,
+	type ChatOptions,
+	type ChatProvider,
 	defineChatProvider,
 	suffixVariant,
 } from "../src/chat.ts";
@@ -68,8 +70,8 @@ function chunk(delta: object, usage: object | null = null): object {
 }
 
 async function sentBy(
-	provider: ReturnType<typeof defineChatProvider>,
-	options?: Parameters<ReturnType<typeof defineChatProvider>>[0],
+	provider: ChatProvider,
+	options?: ChatOptions,
 ): Promise<Record<string, unknown>> {
 	answer(() => completion("ok"));
 	await provider(options).complete([{ role: "user", content: "hi" }]);
@@ -81,23 +83,23 @@ afterEach(() => {
 });
 
 describe("defineChatProvider", () => {
-	test("a provider without a variant asks for the model as named", () => {
-		expect(defineChatProvider(spec)({ model: "vendor/other" }).model).toBe(
-			"vendor/other",
-		);
+	test("a provider without a variant asks for the model as named", async () => {
+		expect(
+			(await sentBy(defineChatProvider(spec), { model: "vendor/other" })).model,
+		).toBe("vendor/other");
 	});
 
-	test("a default variant is applied to a pinned model and to the default", () => {
-		expect(openRouterLike({ model: "vendor/other" }).model).toBe(
-			"vendor/other:nitro",
-		);
-		expect(openRouterLike().model).toBe("vendor/model:nitro");
+	test("a default variant is applied to a pinned model and to the default", async () => {
+		expect(
+			(await sentBy(openRouterLike, { model: "vendor/other" })).model,
+		).toBe("vendor/other:nitro");
+		expect((await sentBy(openRouterLike)).model).toBe("vendor/model:nitro");
 	});
 
-	test("a variant already on the model is not added twice", () => {
-		expect(openRouterLike({ model: "vendor/other:nitro" }).model).toBe(
-			"vendor/other:nitro",
-		);
+	test("a variant already on the model is not added twice", async () => {
+		expect(
+			(await sentBy(openRouterLike, { model: "vendor/other:nitro" })).model,
+		).toBe("vendor/other:nitro");
 	});
 
 	test("a caller turns a default off with null", async () => {

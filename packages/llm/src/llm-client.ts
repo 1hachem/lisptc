@@ -20,8 +20,8 @@ export const chatGenerate: Generate = async (req, signal) => {
 		schema: req.schema,
 	});
 	return {
-		text: reply.value === undefined ? reply.text : JSON.stringify(reply.value),
-		...(reply.value === undefined ? {} : { value: reply.value }),
+		text: reply.text,
+		value: reply.value,
 		provider,
 		model: name,
 		...(reply.usage

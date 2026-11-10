@@ -2,7 +2,6 @@ import { PostHogOpenAI } from "@posthog/ai/openai";
 import { analyticsEnv } from "@repo/env/analytics";
 import type { LlmCall } from "@repo/interpreter/observe";
 import type { ChatClient } from "@repo/models/chat";
-import type OpenAI from "openai";
 import { PostHog } from "posthog-node";
 
 const PRIVACY_MODE = analyticsEnv.POSTHOG_PRIVACY_MODE;
@@ -89,7 +88,9 @@ export function tracedClient(ctx: TraceContext): ChatClient | undefined {
 	if (!ph) return undefined;
 	return {
 		open: (options) =>
-			new PostHogOpenAI({ ...options, posthog: ph }) as unknown as OpenAI,
+			new PostHogOpenAI({ ...options, posthog: ph }) as unknown as ReturnType<
+				ChatClient["open"]
+			>,
 		body: {
 			posthogTraceId: ctx.threadId,
 			posthogDistinctId: ctx.distinctId,
