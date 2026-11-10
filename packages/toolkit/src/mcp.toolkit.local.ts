@@ -59,4 +59,24 @@ export const machineEntries: readonly MachineEntry[] = [
 			headless: ["--headless"],
 		},
 	},
+	{
+		name: "playwright-docker",
+		description:
+			"Drive a headless Chromium browser in a container on the user's own docker: navigate, click, type, snapshot the accessibility tree, screenshot, and read network requests.",
+		keywords: [
+			"browser",
+			"chromium",
+			"playwright",
+			"web",
+			"navigate",
+			"screenshot",
+			"docker",
+			"container",
+			"local",
+			"machine",
+		],
+		image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+		internal: true,
+		port: 8931,
+	},
 ];
