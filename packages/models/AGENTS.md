@@ -9,8 +9,7 @@ Turbo tag: `platform`.
 ## Shape
 
 `src/chat.ts` builds a chat provider from a provider spec and its default
-options. The model it builds streams and completes over the `openai` SDK, and a
-caller that traces hands it the client to open. `src/system-one.ts` is the OpenRouter `SystemOneModel`, against the
+options. `src/system-one.ts` is the OpenRouter `SystemOneModel`, against the
 contract in `@repo/shared/system-one`. `src/embedding.ts` is the OpenRouter
 `EmbeddingModel`, against `@repo/shared/embedding`. `src/providers.ts` binds
 them to the environment: the chat provider registry, `jev` and the embedder.
