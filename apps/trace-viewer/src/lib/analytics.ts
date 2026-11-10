@@ -1,7 +1,8 @@
 "use client";
 
-import type { TraceEvent } from "@repo/evals/review";
+import type { Tracer } from "@repo/ai";
 import posthog from "posthog-js";
+import { posthogTracer } from "@/lib/posthog-tracer.ts";
 import type { ReviewTarget } from "@/lib/reviews.ts";
 import { PROXY_PATH } from "@/lib/reviews.ts";
 
@@ -37,15 +38,14 @@ export function captureReview(
 	target: ReviewTarget,
 	review: {
 		runId: string;
-		trace: TraceEvent[];
+		trace: (tracer: Tracer) => void;
 		properties: Record<string, unknown>;
 	},
 ): void {
 	const ph = client(target);
 	if (!traced.has(review.runId)) {
 		traced.add(review.runId);
-		for (const { event, properties } of review.trace)
-			ph.capture(event, properties);
+		review.trace(posthogTracer(ph));
 	}
 	ph.capture("survey sent", {
 		$survey_id: target.surveyId,

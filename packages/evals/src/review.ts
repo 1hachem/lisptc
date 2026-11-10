@@ -1,3 +1,5 @@
+import type { TraceContext, Tracer } from "@repo/ai";
+import type { ChatMessage } from "@repo/shared/messages";
 import type { ReportRow, TranscriptLine } from "./report.ts";
 
 export const TRACE_BUDGET = 100_000;
@@ -13,11 +15,6 @@ export interface FittedTrace {
 	lines: TranscriptLine[];
 	from: number;
 	dropped: number;
-}
-
-export interface TraceEvent {
-	event: string;
-	properties: Record<string, unknown>;
 }
 
 export function runId(identity: RunIdentity, row: ReportRow): string {
@@ -90,79 +87,91 @@ function identityOf(
 	};
 }
 
-export function traceEvents(
+function asked(line: TranscriptLine): ChatMessage {
+	return {
+		role: line.role === "assistant" ? "assistant" : "user",
+		content: line.content,
+	};
+}
+
+export function traceRun(
+	tracer: Tracer,
 	identity: RunIdentity,
 	row: ReportRow,
 	budget = TRACE_BUDGET,
-): TraceEvent[] {
-	const trace = runId(identity, row);
-	const root = `${trace}/run`;
+): void {
+	const id = runId(identity, row);
 	const failed = row.checks.filter((check) => check.verdict !== "true");
-	const shared = {
-		$ai_trace_id: trace,
-		$ai_provider: row.provider,
-		$ai_model: row.model,
-		...identityOf(identity, row),
+	const trace: TraceContext = {
+		threadId: id,
+		turnId: `${id}/run`,
+		provider: row.provider,
+		model: row.model,
 	};
+	const shared = identityOf(identity, row);
 
-	const events: TraceEvent[] = [
-		{
-			event: "$ai_trace",
-			properties: {
-				...shared,
-				$ai_span_id: root,
-				$ai_span_name: `eval ${row.case}`,
-				$ai_latency: row.durationMs / 1000,
-				$ai_is_error: !row.halted,
-				$ai_input_state:
-					row.transcript.find((line) => line.role === "user")?.content ?? "",
-				$ai_output_state: row.answer,
-				$ai_input_tokens: row.inputTokens,
-				$ai_output_tokens: row.outputTokens,
-				eval_grade: row.grade,
-				eval_steps: row.steps,
-				eval_halted: row.halted,
-				eval_checks_passed: row.checks.length - failed.length,
-				eval_checks_total: row.checks.length,
-				eval_checks_failed: failed.map((check) => check.name),
-			},
+	tracer.turn({
+		trace,
+		name: `eval ${row.case}`,
+		latencyMs: row.durationMs,
+		failed: !row.halted,
+		attributes: {
+			...shared,
+			eval_grade: row.grade,
+			eval_steps: row.steps,
+			eval_halted: row.halted,
+			eval_input_tokens: row.inputTokens,
+			eval_output_tokens: row.outputTokens,
+			eval_checks_passed: row.checks.length - failed.length,
+			eval_checks_total: row.checks.length,
+			eval_checks_failed: failed.map((check) => check.name),
 		},
-	];
+		content: {
+			prompt:
+				row.transcript.find((line) => line.role === "user")?.content ?? "",
+			answer: row.answer,
+		},
+	});
 
 	let step = 0;
 	row.transcript.forEach((line, i) => {
+		const attributes = {
+			...shared,
+			message_index: i,
+			message_span_id: `${id}/${i}`,
+		};
 		if (line.role === "assistant") {
 			step += 1;
-			events.push({
-				event: "$ai_generation",
-				properties: {
-					...shared,
-					$ai_span_id: `${trace}/${i}`,
-					$ai_parent_id: root,
-					$ai_span_name: `step ${step}`,
-					$ai_input: fitTrace(row.transcript.slice(0, i), i - 1, budget).lines,
-					$ai_output_choices: [{ role: "assistant", content: line.content }],
-					step,
+			tracer.generation({
+				trace,
+				name: `step ${step}`,
+				latencyMs: 0,
+				failed: false,
+				provider: row.provider,
+				model: row.model,
+				attributes: { ...attributes, step },
+				content: {
+					input: fitTrace(row.transcript.slice(0, i), i - 1, budget).lines.map(
+						asked,
+					),
+					output: line.content,
 				},
 			});
 		}
 		if (line.role === "tool") {
-			events.push({
-				event: "$ai_span",
-				properties: {
-					...shared,
-					$ai_span_id: `${trace}/${i}`,
-					$ai_parent_id: root,
-					$ai_span_name: `repl eval ${step}`,
-					$ai_input_state: row.transcript[i - 1]?.content ?? "",
-					$ai_output_state: clamp(line, budget).content,
-					step,
+			tracer.span({
+				trace,
+				name: `repl eval ${step}`,
+				latencyMs: 0,
+				failed: false,
+				attributes: { ...attributes, step },
+				content: {
+					input: row.transcript[i - 1]?.content ?? "",
+					output: clamp(line, budget).content,
 				},
 			});
 		}
 	});
-
-	return events;
 }
 
 export function reviewProperties(
