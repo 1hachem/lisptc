@@ -1,15 +1,16 @@
 # @repo/models
 
 How the code reaches a model vendor: the chat providers and the System One
-models. It carries langchain and `@typesafe-ai/sdk` so that every caller shares
-one implementation of each.
+models. It carries the `openai` SDK and `@typesafe-ai/sdk` so that every caller
+shares one implementation of each.
 
 Turbo tag: `platform`.
 
 ## Shape
 
 `src/chat.ts` builds a chat provider from a provider spec and its default
-options. `src/system-one.ts` is the OpenRouter `SystemOneModel`, against the
+options. The model it builds streams and completes over the `openai` SDK, and a
+caller that traces hands it the client to open. `src/system-one.ts` is the OpenRouter `SystemOneModel`, against the
 contract in `@repo/shared/system-one`. `src/embedding.ts` is the OpenRouter
 `EmbeddingModel`, against `@repo/shared/embedding`. `src/providers.ts` binds
 them to the environment: the chat provider registry, `jev` and the embedder.
@@ -33,5 +34,5 @@ A new vendor is a new file beside the others and an entry in
 
 ## Tests
 
-`test/`. A provider is tested through what it builds, and a System One or
-embedding model through a stubbed `fetch`. Neither calls a vendor.
+`test/`. A chat, System One or embedding model is tested through a stubbed
+`fetch`. None calls a vendor.

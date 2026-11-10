@@ -1,7 +1,7 @@
 # @repo/llm
 
 The language-model extension. It reaches a model through a chat provider from
-`@repo/models`, so the interpreter never carries langchain, which is a rule
+`@repo/models`, so the interpreter never carries the OpenAI SDK, which is a rule
 `pnpm check:arch` enforces on the interpreter's manifest.
 
 Turbo tag: `extension`.
@@ -15,12 +15,11 @@ is the prompt.
 
 `@repo/interpreter/observe` is the observation contract and the slot it hands
 over. It is a module separate from the extension on purpose: a consumer reads
-the slot without importing what fills it. `src/llm-client.ts` and
-`src/langchain.ts` are the vendor-facing implementations, and they are the only
-files that speak langchain.
+the slot without importing what fills it. `src/llm-client.ts` is the
+vendor-facing implementation, and the only file that reaches `@repo/models`.
 
 `check:arch` treats `src/llm.ts` as an extension module, so it imports no
-`node:` builtin, no typed env module, no langchain package and no
+`node:` builtin, no typed env module, no OpenAI SDK and no
 `process.env`.
 
 ## Rules

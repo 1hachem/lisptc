@@ -4,9 +4,9 @@ The core language and the seams extensions plug into. It ships no extension and
 names none: every language surface past the core dialect lives in its own
 package above this one. Everything in the repo sits above this package. It
 depends on no workspace package that depends on it, and it carries no vendor
-SDK: `@repo/mcp-extension` and `@repo/llm-extension` hold theirs so this one
-never has to. `pnpm check:arch` fails if the MCP SDK or a langchain package
-appears in this manifest.
+SDK: `@repo/mcp-extension` and `@repo/models` hold theirs so this one never
+has to. `pnpm check:arch` fails if the MCP SDK or the OpenAI SDK appears in
+this manifest.
 
 Turbo tag: `language`.
 
