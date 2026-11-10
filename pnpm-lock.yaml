@@ -1132,6 +1132,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.700.0
         version: 3.1131.0
+      '@repo/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@repo/env':
         specifier: workspace:*
         version: link:../env

@@ -4,7 +4,7 @@ import { MessageFeedback } from "@repo/components/message-feedback.tsx";
 import { MessageMemories } from "@repo/components/message-memories.tsx";
 import type { EntryLine, ReportRow } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
-import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
+import { reviewProperties, runId, traceRun } from "@repo/evals/review";
 import { memoryKind } from "@repo/journal-catalog/memory";
 import { view } from "@repo/shared/journal";
 import type { ReactNode } from "react";
@@ -67,7 +67,7 @@ export function Transcript({
 									capture={(properties) =>
 										captureReview(target, {
 											runId: run,
-											trace: traceEvents(identity, row),
+											trace: (tracer) => traceRun(tracer, identity, row),
 											properties: {
 												...properties,
 												...reviewProperties(identity, row, i),

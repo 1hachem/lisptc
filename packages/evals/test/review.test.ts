@@ -1,17 +1,38 @@
+import type {
+	GenerationRecord,
+	SpanRecord,
+	Tracer,
+	TurnRecord,
+} from "@repo/ai";
 import { describe, expect, test } from "vitest";
 import type { ReportRow, TranscriptLine } from "../src/report.ts";
-import {
-	fitTrace,
-	reviewProperties,
-	runId,
-	traceEvents,
-} from "../src/review.ts";
+import { fitTrace, reviewProperties, runId, traceRun } from "../src/review.ts";
 
 const IDENTITY = {
 	file: "2026-09-12T10-00-00.json",
 	startedAt: "2026-09-12T10:00:00.000Z",
 	sha: "deadbee",
 };
+
+interface Traced {
+	turns: TurnRecord[];
+	spans: SpanRecord[];
+	generations: GenerationRecord[];
+}
+
+function traced(subject: ReportRow, budget?: number): Traced {
+	const seen: Traced = { turns: [], spans: [], generations: [] };
+	const tracer: Tracer = {
+		turn: (record) => seen.turns.push(record),
+		span: (record) => seen.spans.push(record),
+		generation: (record) => seen.generations.push(record),
+		exception: () => {},
+		withRequest: (_context, run) => run(),
+		flush: async () => {},
+	};
+	traceRun(tracer, IDENTITY, subject, budget);
+	return seen;
+}
 
 function line(
 	role: Exclude<TranscriptLine["role"], "entry">,
@@ -103,9 +124,12 @@ describe("the review payload", () => {
 
 	test("joins the trace the vote is sent with", () => {
 		const properties = reviewProperties(IDENTITY, subject, 1);
-		const [root] = traceEvents(IDENTITY, subject);
+		const { turns, generations } = traced(subject);
 		expect(properties.$ai_trace_id).toBe(runId(IDENTITY, subject));
-		expect(root.properties.$ai_trace_id).toBe(properties.$ai_trace_id);
+		expect(turns[0].trace.threadId).toBe(properties.$ai_trace_id);
+		expect(generations[0].attributes?.message_span_id).toBe(
+			properties.message_span_id,
+		);
 	});
 });
 
@@ -117,53 +141,70 @@ describe("the run as a trace", () => {
 		line("assistant", "found it, the token refresh races"),
 	]);
 
-	test("opens with one $ai_trace carrying the run's own numbers", () => {
-		const [root] = traceEvents(IDENTITY, subject);
-		expect(root.event).toBe("$ai_trace");
-		expect(root.properties.$ai_span_name).toBe("eval connect-and-query");
-		expect(root.properties.$ai_input_state).toBe("find the auth bug");
-		expect(root.properties.$ai_output_state).toBe("done");
-		expect(root.properties.$ai_latency).toBe(1.2);
-		expect(root.properties.$ai_is_error).toBe(false);
-		expect(root.properties.$ai_input_tokens).toBe(10);
-		expect(root.properties.eval_checks_failed).toEqual(["answers"]);
+	test("opens with one turn carrying the run's own numbers", () => {
+		const { turns } = traced(subject);
+		expect(turns).toHaveLength(1);
+		const [root] = turns;
+		expect(root.name).toBe("eval connect-and-query");
+		expect(root.content).toEqual({
+			prompt: "find the auth bug",
+			answer: "done",
+		});
+		expect(root.latencyMs).toBe(1200);
+		expect(root.failed).toBe(false);
+		expect(root.trace.provider).toBe("openrouter");
+		expect(root.trace.model).toBe("kimi-k2");
+		expect(root.attributes?.eval_input_tokens).toBe(10);
+		expect(root.attributes?.eval_checks_failed).toEqual(["answers"]);
+	});
+
+	test("a run that never halted is a failed turn", () => {
+		const { turns } = traced({ ...subject, halted: false });
+		expect(turns[0].failed).toBe(true);
 	});
 
 	test("makes a generation of every agent turn, under the run", () => {
-		const events = traceEvents(IDENTITY, subject);
-		const generations = events.filter((e) => e.event === "$ai_generation");
+		const { turns, generations, spans } = traced(subject);
 		expect(generations).toHaveLength(2);
-		expect(generations[0].properties.$ai_span_name).toBe("step 1");
-		expect(generations[0].properties.$ai_input).toEqual([
+		expect(generations[0].name).toBe("step 1");
+		expect(generations[0].model).toBe("kimi-k2");
+		expect(generations[0].content).toEqual({
+			input: [{ role: "user", content: "find the auth bug" }],
+			output: '(await (load-mcp "linear"))',
+		});
+		expect(generations[1].content?.input).toEqual([
 			{ role: "user", content: "find the auth bug" },
-		]);
-		expect(generations[0].properties.$ai_output_choices).toEqual([
 			{ role: "assistant", content: '(await (load-mcp "linear"))' },
+			{ role: "user", content: '{"output":"loaded"}' },
 		]);
-		expect(generations[1].properties.$ai_input).toHaveLength(3);
-		for (const event of events.slice(1))
-			expect(event.properties.$ai_parent_id).toBe(
-				`${runId(IDENTITY, subject)}/run`,
-			);
+		for (const record of [...generations, ...spans])
+			expect(record.trace).toEqual(turns[0].trace);
 	});
 
 	test("makes a span of every repl result", () => {
-		const spans = traceEvents(IDENTITY, subject).filter(
-			(e) => e.event === "$ai_span",
-		);
+		const { spans } = traced(subject);
 		expect(spans).toHaveLength(1);
-		expect(spans[0].properties.$ai_span_name).toBe("repl eval 1");
-		expect(spans[0].properties.$ai_input_state).toBe(
-			'(await (load-mcp "linear"))',
-		);
-		expect(spans[0].properties.$ai_output_state).toBe('{"output":"loaded"}');
+		expect(spans[0].name).toBe("repl eval 1");
+		expect(spans[0].content).toEqual({
+			input: '(await (load-mcp "linear"))',
+			output: '{"output":"loaded"}',
+		});
 	});
 
-	test("gives every event of one run the same trace id, and its own span id", () => {
-		const events = traceEvents(IDENTITY, subject);
-		const ids = events.map((e) => e.properties.$ai_span_id);
-		expect(new Set(ids).size).toBe(events.length);
-		for (const event of events)
-			expect(event.properties.$ai_trace_id).toBe(runId(IDENTITY, subject));
+	test("clamps a repl result to the budget", () => {
+		const { spans } = traced(
+			row([line("assistant", "(big)"), line("tool", "z".repeat(5000))]),
+			200,
+		);
+		expect(spans[0].content?.output.length).toBeLessThan(200);
+	});
+
+	test("names every turn of one run under the same trace, each with its own message", () => {
+		const { turns, generations, spans } = traced(subject);
+		expect(turns[0].trace.threadId).toBe(runId(IDENTITY, subject));
+		const messages = [...generations, ...spans].map(
+			(record) => record.attributes?.message_span_id,
+		);
+		expect(new Set(messages).size).toBe(3);
 	});
 });
