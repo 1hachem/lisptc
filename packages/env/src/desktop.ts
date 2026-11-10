@@ -27,11 +27,20 @@ export const desktopEnv = createEnv({
 			.default("https://lisptc.taild4910a.ts.net/"),
 		APPIMAGE: z.string().optional(),
 		XDG_CONFIG_HOME: z.string().optional(),
+		SHELL: z.string().optional(),
 		...localServerSchema,
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
 });
+
+export function adoptPath(login: string): void {
+	const entries = [
+		...login.split(":"),
+		...(process.env.PATH ?? "").split(":"),
+	].filter((entry) => entry !== "");
+	process.env.PATH = [...new Set(entries)].join(":");
+}
 
 export const localServerEnv: Readonly<Record<string, string>> =
 	Object.fromEntries(

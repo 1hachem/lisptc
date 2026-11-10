@@ -23,6 +23,11 @@ stdio, an image as a container on the user's docker.
 opener's, and a container runs through `@repo/containers`'s runner, the one the
 MCP hosts run theirs through, never a docker call of the shell's own.
 
+**A local server finds its command as it would in a terminal.** The shell
+adopts the login shell's `PATH` at start, through `@repo/env/desktop`, and no
+server opens before it has, since an app started from the Finder inherits
+almost none.
+
 The window loads the served app and draws nothing of its own, except the
 loading screen shown while the app cannot be reached yet. A screen belongs
 in `apps/app`, which every desktop user gets on the next load without a

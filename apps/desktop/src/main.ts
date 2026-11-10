@@ -17,6 +17,7 @@ import {
 	Tray,
 } from "electron";
 import { type ConnectionState, DesktopBridge } from "./bridge.ts";
+import { loginPathAdopted } from "./login-path.ts";
 import {
 	applyOpenAtLogin,
 	machine,
@@ -361,6 +362,7 @@ const macMenu = () =>
 	Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }]);
 
 app.whenReady().then(() => {
+	void loginPathAdopted();
 	session.defaultSession.setUserAgent(
 		`${session.defaultSession.getUserAgent()} ${DESKTOP_USER_AGENT}/${app.getVersion()}`,
 	);
