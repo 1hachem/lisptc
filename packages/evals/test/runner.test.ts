@@ -1,3 +1,4 @@
+import type { CataloguedChoice } from "@repo/shared/providers";
 import { describe, expect, test } from "vitest";
 import type { EvalTurnEvent } from "../src/runner.ts";
 import {
@@ -56,7 +57,10 @@ function runtimeFor(events: EvalTurnEvent[]): EvalRuntime<EvalSpec, object> {
 }
 
 const spec: EvalSpec = { min: 1, max: 5, checks: "" };
-const target = { provider: "digitalocean", model: "stub" } as const;
+const target: CataloguedChoice = {
+	provider: "digitalocean",
+	model: "glm-5.3-flash",
+};
 
 describe("entries land where they were recorded", () => {
 	test("each entry is a line of its own, in the order it arrived", async () => {
