@@ -26,6 +26,10 @@ export class LocalServer {
 	async start(): Promise<void> {
 		const opened = await this.open((error) => this.end(error));
 		this.opened = opened;
+		if (this.stopping) {
+			await opened.release().catch(() => {});
+			throw new Error("it was stopped before it finished starting");
+		}
 		opened.transport.onmessage = (message) => this.events.message(message);
 		opened.transport.onerror = (error) => {
 			this.failure = String(error);

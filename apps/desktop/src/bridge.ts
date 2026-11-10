@@ -245,11 +245,13 @@ export class DesktopBridge {
 				this.send({ type: "rpc", server: spec.name, message: payload }),
 			exited: (error) => this.exited(spec.name, error, server),
 		});
+		this.servers.set(spec.name, server);
 		try {
 			await server.start();
-			this.servers.set(spec.name, server);
 			this.send({ type: "opened", id, ok: true });
 		} catch (error) {
+			if (this.servers.get(spec.name) === server)
+				this.servers.delete(spec.name);
 			await server.stop();
 			this.send({
 				type: "opened",
