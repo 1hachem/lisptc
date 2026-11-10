@@ -4,6 +4,7 @@ import type {
 	V1Pod,
 	V1Service,
 } from "@kubernetes/client-node";
+import { runSpecFor } from "@repo/containers/launch";
 import {
 	KIND,
 	type McpServer,
@@ -12,7 +13,6 @@ import {
 	specFor,
 	VERSION,
 } from "@repo/mcp-extension/kubernetes";
-import { launchFor } from "@repo/mcp-extension/launch";
 import type { ContainerConnConfig } from "@repo/mcp-extension/ports";
 import type { Cluster, Located, Probe, Servers } from "../src/cluster.ts";
 import type { Deps } from "../src/reconcile.ts";
@@ -41,8 +41,8 @@ export function server(
 	conf: ContainerConnConfig = browser,
 	now = 1000,
 ): McpServer {
-	const launch = launchFor(conf);
-	if (!launch) throw new Error("no launch");
+	const run = runSpecFor(conf);
+	if (!run) throw new Error("no launch");
 	return {
 		apiVersion: `lisptc.io/${VERSION}`,
 		kind: KIND,
@@ -53,7 +53,7 @@ export function server(
 			generation: 1,
 			finalizers: [],
 		},
-		spec: specFor(conf, launch, WORKSPACE, now),
+		spec: specFor(run, WORKSPACE, now),
 	};
 }
 

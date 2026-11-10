@@ -5,9 +5,15 @@ import {
 	PatchStrategy,
 	setHeaderOptions,
 } from "@kubernetes/client-node";
+import { runSpecFor } from "@repo/containers/launch";
+import {
+	START_LIMITS,
+	type StartCheck,
+	type StartGaveUp,
+	type StartLimits,
+	waitForStart,
+} from "@repo/containers/start-wait";
 import type { RemoteEntry } from "@repo/toolkit";
-import { launchFor } from "./launch.ts";
-import { remoteServer } from "./remote-host.ts";
 import {
 	GROUP,
 	KIND,
@@ -16,7 +22,6 @@ import {
 	type McpServerStatus,
 	PLURAL,
 	remoteSpecFor,
-	retagged,
 	serverName,
 	specFor,
 	VERSION,
@@ -30,13 +35,7 @@ import {
 	type ServerState,
 	type StartWatch,
 } from "./ports.ts";
-import {
-	START_LIMITS,
-	type StartCheck,
-	type StartGaveUp,
-	type StartLimits,
-	waitForStart,
-} from "./start-wait.ts";
+import { remoteServer } from "./remote-host.ts";
 
 const TOUCH_SECONDS = 60;
 const PROBE_TIMEOUT_MS = 3_000;
@@ -333,24 +332,16 @@ export class KubernetesHost implements McpHost {
 		conf: ConnConfig,
 		watch: StartWatch,
 	): Promise<ServerHandle> {
-		const launch = launchFor(conf);
-		if (!launch) throw new Error(`${conf.name}: has no container to run.`);
+		const run = runSpecFor(conf, this.options.imageTag);
+		if (!run) throw new Error(`${conf.name}: has no container to run.`);
 		const { scope } = this.options;
-		if (Object.keys(("env" in conf && conf.env) || {}).length > 0)
+		if (Object.keys(run.env ?? {}).length > 0)
 			throw new Error(
 				`${conf.name}: sets env, which a server on the cluster cannot take.`,
 			);
 		const instance = instanceOf(conf);
 		const name = serverName(scope, conf.name, instance);
-		const wanted = specFor(
-			conf,
-			"internal" in conf && conf.internal
-				? { ...launch, image: retagged(launch.image, this.options.imageTag) }
-				: launch,
-			scope,
-			this.clock(),
-			instance,
-		);
+		const wanted = specFor(run, scope, this.clock(), instance);
 
 		const live = await this.store.get(name);
 		const server = live

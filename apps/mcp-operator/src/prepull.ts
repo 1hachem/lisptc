@@ -1,5 +1,5 @@
 import type { V1DaemonSet } from "@kubernetes/client-node";
-import { imagesOf } from "@repo/mcp-extension/kubernetes";
+import { imagesOf } from "@repo/containers/launch";
 import type { ConnConfig } from "@repo/mcp-extension/ports";
 import { bundledEntries } from "@repo/toolkit";
 import type { Cluster } from "./cluster.ts";

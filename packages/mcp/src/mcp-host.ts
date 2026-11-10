@@ -1,10 +1,11 @@
+import { dockerAnswers } from "@repo/containers/docker";
+import { launchFor } from "@repo/containers/launch";
 import { mcpEnv } from "@repo/env/mcp";
 import { oauthEnv } from "@repo/env/oauth";
 import { systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
-import { DockerHost, dockerAnswers } from "./docker-host.ts";
+import { DockerHost } from "./docker-host.ts";
 import { clusterServes, KubernetesHost } from "./kubernetes-host.ts";
-import { launchFor } from "./launch.ts";
 import { LocalProcessHost } from "./local-host.ts";
 import { cachedMachine } from "./machine.ts";
 import type { McpExtensionHost } from "./mcp.ts";

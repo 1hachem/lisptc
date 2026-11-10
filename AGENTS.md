@@ -146,6 +146,7 @@ Everything else:
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/models` (`@repo/models`) — how the code reaches a model vendor: the chat providers and the System One models.
+- `packages/containers` (`@repo/containers`) — how a toolkit entry runs as a container, and the docker runner the MCP hosts and the desktop share.
 - `packages/desktop-protocol` (`@repo/desktop-protocol`) — the wire between the desktop app and the app server.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/ui-catalog` (`@repo/ui-catalog`) — the widgets a view may hold, which the UI extension builds against and the frontend draws against.

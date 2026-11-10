@@ -8,7 +8,6 @@
     "./client": "./src/mcp-client.ts",
     "./docker-host": "./src/docker-host.ts",
     "./kubernetes": "./src/mcp-server-resource.ts",
-    "./launch": "./src/launch.ts",
     "./kubernetes-host": "./src/kubernetes-host.ts",
     "./mcp-host": "./src/mcp-host.ts",
     "./local-host": "./src/local-host.ts",
@@ -30,6 +29,7 @@
   "dependencies": {
     "@kubernetes/client-node": "1.3.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@repo/containers": "workspace:*",
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/journal-catalog": "workspace:*",

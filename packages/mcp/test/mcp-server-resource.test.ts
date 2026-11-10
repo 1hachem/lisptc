@@ -1,5 +1,5 @@
+import { runSpecFor } from "@repo/containers/launch";
 import { describe, expect, it } from "vitest";
-import { launchFor } from "../src/launch.ts";
 import {
 	containerOf,
 	NAME_MAX,
@@ -25,9 +25,9 @@ const browser: ContainerConnConfig = {
 };
 
 function spec(conf: ContainerConnConfig | StdioConnConfig) {
-	const launch = launchFor(conf);
-	if (!launch) throw new Error("no launch");
-	return specFor(conf, launch, "ws1", 1000);
+	const run = runSpecFor(conf);
+	if (!run) throw new Error("no launch");
+	return specFor(run, "ws1", 1000);
 }
 
 describe("the spec a server is created from", () => {

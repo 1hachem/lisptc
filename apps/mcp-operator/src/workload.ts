@@ -7,13 +7,13 @@ import type {
 	V1Pod,
 	V1Service,
 } from "@kubernetes/client-node";
+import { retagged } from "@repo/containers/launch";
 import {
 	containerOf,
 	dnsLabel,
 	type McpServer,
 	type McpServerSpec,
 	type ResourceRequirements,
-	retagged,
 	workloadHash,
 } from "@repo/mcp-extension/kubernetes";
 import type { RowOwner } from "./status-sink.ts";

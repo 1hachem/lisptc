@@ -1,5 +1,9 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import type { StartWatch } from "./ports.ts";
+
+export interface Watch {
+	signal?: AbortSignal;
+	progress?: (note: string) => void;
+}
 
 export interface StartLimits {
 	pollMs: number;
@@ -39,7 +43,7 @@ export async function waitForStart<T>(
 	check: () => Promise<StartCheck<T>>,
 	limits: StartLimits,
 	gaveUp: (why: StartGaveUp) => Error,
-	watch: StartWatch = {},
+	watch: Watch = {},
 ): Promise<T> {
 	const began = Date.now();
 	let note = "";

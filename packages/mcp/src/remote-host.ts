@@ -1,3 +1,4 @@
+import { reachable } from "@repo/containers/start-wait";
 import type { RemoteEntry } from "@repo/toolkit";
 import {
 	type ConnConfig,
@@ -10,7 +11,6 @@ import {
 	type ServerState,
 	subjectOf,
 } from "./ports.ts";
-import { reachable } from "./start-wait.ts";
 
 export function remoteServer(conf: ConnConfig): conf is RemoteEntry {
 	return "url" in conf && !("command" in conf);

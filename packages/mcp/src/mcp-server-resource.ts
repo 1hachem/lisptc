@@ -1,12 +1,11 @@
 import { createHash } from "node:crypto";
+import type { RunSpec } from "@repo/containers/launch";
 import type {
 	AppContainer,
 	NamedPort,
 	RemoteEntry,
 	Resources,
 } from "@repo/toolkit";
-import type { Launch } from "./launch.ts";
-import type { ConnConfig } from "./ports.ts";
 
 export const GROUP = "lisptc.io";
 export const VERSION = "v1alpha1";
@@ -93,17 +92,6 @@ export interface McpServer {
 	status?: McpServerStatus;
 }
 
-export function retagged(image: string, tag: string | undefined): string {
-	if (!tag || image.includes("@")) return image;
-	return `${image.replace(/:[^:/]+$/, "")}:${tag}`;
-}
-
-export function imagesOf(conf: ConnConfig, tag?: string): string[] {
-	if (!("image" in conf)) return [];
-	const own = conf.internal ? retagged(conf.image, tag) : conf.image;
-	return conf.app ? [own, conf.app.image] : [own];
-}
-
 export function dnsLabel(value: string, max = NAME_MAX): string {
 	return value
 		.toLowerCase()
@@ -160,24 +148,24 @@ function appSlot(app: AppContainer): AppSlot {
 }
 
 export function specFor(
-	conf: ConnConfig,
-	launch: Launch,
+	run: RunSpec,
 	workspace: string,
 	now: number,
 	instance?: string,
 ): McpServerSpec {
+	const { launch } = run;
 	const mcp: McpSlot = {
 		image: launch.image,
 		args: launch.args,
 		port: Number(launch.exposed),
 		path: launch.path,
-		resources: resourcesFor("resources" in conf ? conf.resources : undefined),
-		...("secret" in conf && conf.secret ? { secret: conf.secret.name } : {}),
+		resources: resourcesFor(run.resources),
+		...(run.secret ? { secret: run.secret.name } : {}),
 	};
-	const app = "app" in conf && conf.app ? appSlot(conf.app) : undefined;
+	const app = run.app ? appSlot(run.app) : undefined;
 	return {
 		workspace,
-		server: conf.name,
+		server: run.name,
 		...(instance === undefined ? {} : { instance }),
 		mcp,
 		...(app ? { app } : {}),
