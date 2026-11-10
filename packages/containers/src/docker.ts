@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
+import { type DockerTrouble, DockerUnavailable } from "./docker-trouble.ts";
 import type { RunSpec } from "./launch.ts";
 import {
 	reachable,
@@ -36,15 +37,21 @@ function whyItDied(tail: Tail): string {
 	return last ? `\n${last}` : "";
 }
 
-export async function dockerAnswers(): Promise<boolean> {
+export async function dockerTrouble(): Promise<DockerTrouble | undefined> {
 	try {
 		await exec("docker", ["info", "--format", "{{.ServerVersion}}"], {
 			timeout: PROBE_TIMEOUT_MS,
 		});
-		return true;
-	} catch {
-		return false;
+		return undefined;
+	} catch (ex) {
+		return (ex as NodeJS.ErrnoException).code === "ENOENT"
+			? "missing"
+			: "stopped";
 	}
+}
+
+export async function dockerAnswers(): Promise<boolean> {
+	return (await dockerTrouble()) === undefined;
 }
 
 export class DockerRunner {
@@ -56,6 +63,8 @@ export class DockerRunner {
 		watch?: Watch,
 	): Promise<RunningContainer> {
 		const { name, launch, app } = spec;
+		const trouble = await dockerTrouble();
+		if (trouble !== undefined) throw new DockerUnavailable(name, trouble);
 		const exposed = (app?.ports ?? []).filter((port) =>
 			app?.expose?.includes(port.name),
 		);

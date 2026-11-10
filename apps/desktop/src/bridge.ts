@@ -210,7 +210,7 @@ export class DesktopBridge {
 				type: "opened",
 				id,
 				ok: false,
-				error: `could not start "${spec.name}": ${String(error)}`,
+				error: `could not start "${spec.name}": ${error instanceof Error ? error.message : String(error)}`,
 			});
 		}
 	}
