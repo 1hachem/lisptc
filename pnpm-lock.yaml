@@ -871,6 +871,9 @@ importers:
       '@repo/compaction-extension':
         specifier: workspace:*
         version: link:../compaction
+      '@repo/containers':
+        specifier: workspace:*
+        version: link:../containers
       '@repo/desktop-protocol':
         specifier: workspace:*
         version: link:../desktop-protocol

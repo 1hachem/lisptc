@@ -69,6 +69,33 @@ describe("BridgedHost", () => {
 		expect(host.status({ name: "fs" })).toBe("running");
 	});
 
+	it("opens a :local image server as a container on the owner's desktop", async () => {
+		const desktop = bridge();
+		const host = new BridgedHost(desktop);
+
+		await host.ensure({
+			name: "browser",
+			image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+			port: 8931,
+			local: true,
+		});
+
+		expect(desktop.opened).toEqual([
+			{
+				kind: "image",
+				name: "browser",
+				launch: {
+					image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+					exposed: "8931",
+					path: "/mcp",
+					args: [],
+				},
+				env: {},
+			},
+		]);
+		expect(host.status({ name: "browser" })).toBe("running");
+	});
+
 	it("reports a bridged server stopped once the desktop no longer runs it", async () => {
 		const desktop = bridge();
 		const alive = { value: true };

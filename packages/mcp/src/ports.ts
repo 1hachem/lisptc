@@ -38,9 +38,14 @@ export interface Tool {
 	icons?: Icon[];
 }
 
-export type ContainerConnConfig = ImageEntry & { instance?: string };
+export type ContainerConnConfig = ImageEntry & {
+	instance?: string;
+	local?: boolean;
+};
 
 export type StdioConnConfig = CommandEntry & { local?: boolean };
+
+export type LocalConnConfig = StdioConnConfig | ContainerConnConfig;
 
 export type ConnConfig =
 	| RemoteEntry
@@ -179,7 +184,7 @@ export interface UserMachine {
 
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
-	local?(name: string): StdioConnConfig | undefined;
+	local?(name: string): LocalConnConfig | undefined;
 }
 
 export interface McpMount {

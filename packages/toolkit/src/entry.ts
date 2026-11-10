@@ -97,4 +97,6 @@ export type ToolkitEntry =
 
 export type ProductionEntry = Only<RemoteEntry> | Only<ImageEntry>;
 
-export type MachineEntry = Only<CommandEntry>;
+export type MachineEntry =
+	| Only<CommandEntry>
+	| Only<Omit<ImageEntry, "oauth" | "secret">>;

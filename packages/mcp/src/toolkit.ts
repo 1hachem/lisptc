@@ -9,7 +9,7 @@ import {
 import type {
 	ConnConfig,
 	EnvLookup,
-	StdioConnConfig,
+	LocalConnConfig,
 	ToolkitRegistry,
 } from "./ports.ts";
 
@@ -57,8 +57,8 @@ export function machineToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
 }
 
 export interface Bridged {
-	readonly own: StdioConnConfig[];
-	readonly variants: StdioConnConfig[];
+	readonly own: LocalConnConfig[];
+	readonly variants: LocalConnConfig[];
 }
 
 export function bridgedEntries(
@@ -68,8 +68,8 @@ export function bridgedEntries(
 	const taken = new Set(bundled.all().map((conf) => conf.name));
 	const commands = local
 		.all()
-		.flatMap((conf): StdioConnConfig[] =>
-			"url" in conf || "image" in conf ? [] : [{ ...conf, local: true }],
+		.flatMap((conf): LocalConnConfig[] =>
+			"url" in conf ? [] : [{ ...conf, local: true }],
 		);
 	return {
 		own: commands.filter((conf) => !taken.has(conf.name)),

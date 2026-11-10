@@ -1,13 +1,14 @@
+import { runSpecFor } from "@repo/containers/launch";
 import type { LocalServerSpec } from "@repo/desktop-protocol";
 import type {
 	ConnConfig,
+	LocalConnConfig,
 	McpHost,
 	McpTransport,
 	ServerHandle,
 	ServerRef,
 	ServerReporter,
 	ServerState,
-	StdioConnConfig,
 } from "@repo/mcp-extension/ports";
 import {
 	type ReportedTransport,
@@ -28,9 +29,28 @@ export interface Desktop {
 
 export type DesktopFor = (userId: Id<"users">) => Desktop;
 
-export function desktopServer(conf: ConnConfig): conf is StdioConnConfig {
-	if ("url" in conf || "image" in conf) return false;
+export function desktopServer(conf: ConnConfig): conf is LocalConnConfig {
+	if ("url" in conf) return false;
 	return conf.local === true;
+}
+
+function specOf(conf: LocalConnConfig): LocalServerSpec {
+	if (!("image" in conf))
+		return {
+			kind: "command",
+			name: conf.name,
+			command: conf.command,
+			args: conf.args ?? [],
+			env: conf.env ?? {},
+		};
+	const run = runSpecFor(conf);
+	return {
+		kind: "image",
+		name: run.name,
+		launch: run.launch,
+		...(run.app ? { app: run.app } : {}),
+		env: run.env ?? {},
+	};
 }
 
 export class BridgedHost implements McpHost {
@@ -47,13 +67,7 @@ export class BridgedHost implements McpHost {
 		const { name } = conf;
 		let channel: McpTransport;
 		try {
-			channel = await this.desktop.open({
-				kind: "command",
-				name,
-				command: conf.command,
-				args: conf.args ?? [],
-				env: conf.env ?? {},
-			});
+			channel = await this.desktop.open(specOf(conf));
 		} catch (ex) {
 			this.report({
 				server: name,
