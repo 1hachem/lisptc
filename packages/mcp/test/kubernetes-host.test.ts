@@ -179,6 +179,19 @@ describe("the kubernetes host", () => {
 		expect(fake.servers.size).toBe(0);
 	});
 
+	it("refuses a server a local command starts, and records nothing", async () => {
+		const fake = fakeStore();
+
+		await expect(
+			host(fake.store).ensure({
+				name: "sheets",
+				url: "http://localhost:8911/mcp",
+				command: "task",
+			}),
+		).rejects.toThrow("sheets: has no container to run.");
+		expect(fake.servers.size).toBe(0);
+	});
+
 	it("reuses a server another process asked for", async () => {
 		const fake = fakeStore();
 		await host(fake.store).ensure(browser);

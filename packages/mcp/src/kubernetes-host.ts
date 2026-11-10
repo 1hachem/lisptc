@@ -7,6 +7,7 @@ import {
 } from "@kubernetes/client-node";
 import type { RemoteEntry } from "@repo/toolkit";
 import { launchFor } from "./launch.ts";
+import { remoteServer } from "./remote-host.ts";
 import {
 	GROUP,
 	KIND,
@@ -224,7 +225,7 @@ export class KubernetesHost implements McpHost {
 		conf: ConnConfig,
 		watch: StartWatch = {},
 	): Promise<ServerHandle> {
-		if ("url" in conf) return await this.remote(conf);
+		if (remoteServer(conf)) return await this.remote(conf);
 		const start = this.starting.get(refKey(conf)) ?? this.begin(conf);
 		return await this.join(start, watch);
 	}
