@@ -178,9 +178,7 @@ export class DockerRunner {
 				ex instanceof Error && "stderr" in ex
 					? String((ex as { stderr: unknown }).stderr).trim()
 					: String(ex);
-			throw new Error(
-				`${name}: docker ${args[0]} failed. Is the daemon reachable?\n${detail}`,
-			);
+			throw new Error(`${name}: docker ${args[0]} failed.\n${detail}`);
 		}
 	}
 }
