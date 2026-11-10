@@ -10,6 +10,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import type { CataloguedChoice } from "@repo/shared/providers";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { playwright } from "./fixtures/server.ts";
 import { mockedMcpExtension, tracedSecretsExtension } from "./mocks.ts";
@@ -57,6 +58,11 @@ let turn = 0;
 const sent: string[] = [];
 let server: Server;
 let runCase: typeof import("./runner.ts").runCase;
+
+const TARGET: CataloguedChoice = {
+	provider: "digitalocean",
+	model: "glm-5.3-flash",
+};
 
 function chunk(content: string): string {
 	return `data: ${JSON.stringify({
@@ -137,7 +143,7 @@ describe("a case runs against a scripted model", () => {
 				checks: CHECKS,
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(result.halted).toBe(true);
@@ -154,7 +160,7 @@ describe("a case runs against a scripted model", () => {
 		expect(result.grade).toBe("degraded");
 		expect(result.outputTokens).toBe(100);
 		expect(result.inputTokens).toBe(100);
-		expect(result.model).toBe("stub");
+		expect(result.model).toBe(TARGET.model);
 		expect(result.provider).toBe("digitalocean");
 	});
 
@@ -172,7 +178,7 @@ describe("a case runs against a scripted model", () => {
 					'(defcheck prelude-ran (eventually (called "memory/remember")))',
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(result.checks[0]).toMatchObject({
@@ -199,7 +205,7 @@ describe("a case runs against a scripted model", () => {
 					checks: "(defcheck stops (within 6 (halted)))",
 					system: "answer in lisptc.",
 				},
-				{ provider: "digitalocean", model: "stub" },
+				TARGET,
 			),
 		).rejects.toThrow(/prelude/);
 	});
@@ -221,7 +227,7 @@ describe("a case runs against a scripted model", () => {
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(sent[0]).toContain("browser_navigate, not navigate");
@@ -243,7 +249,7 @@ describe("a case runs against a scripted model", () => {
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		const fired = entriesAt(result, "memory");
@@ -273,7 +279,7 @@ describe("a case runs against a scripted model", () => {
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(result.halted).toBe(true);
@@ -305,7 +311,7 @@ describe("a case runs against a scripted model", () => {
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		const [fired] = entriesAt(result, "memory");
@@ -327,7 +333,7 @@ describe("a case runs against a scripted model", () => {
 				checks: '(defcheck never-searches (never (called "search-mcps")))',
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(result.checks[0]).toMatchObject({

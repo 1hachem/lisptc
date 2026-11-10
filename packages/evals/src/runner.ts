@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { evalsEnv } from "@repo/env/evals";
-import type { ProviderName } from "@repo/shared/providers";
+import type { CataloguedChoice, ProviderName } from "@repo/shared/providers";
 import { test } from "vitest";
 import type {
 	CaseInfo,
@@ -15,7 +15,7 @@ import type {
 } from "./report.ts";
 import { reportSchema } from "./report.ts";
 import { shardPath } from "./shards.ts";
-import { evalMatrix, reachable, type Target } from "./targets.ts";
+import { evalMatrix, reachable } from "./targets.ts";
 
 export type SeedEntry = { user: string } | { assistant: string };
 
@@ -62,7 +62,7 @@ export interface AgentDriver<Repl> {
 		options: {
 			repl: Repl;
 			maxSteps: number;
-			target: Target;
+			target: CataloguedChoice;
 			system: string;
 		},
 	): AsyncIterable<EvalTurnEvent>;
@@ -400,7 +400,7 @@ async function followTurn(
 export async function runCase<Spec extends EvalSpec, Repl>(
 	runtime: EvalRuntime<Spec, Repl>,
 	spec: Spec,
-	target: Target,
+	target: CataloguedChoice,
 ): Promise<RunResult> {
 	const { repl, trace, checks } = runtime.open(spec);
 	const transcript: TranscriptEntry[] = [];

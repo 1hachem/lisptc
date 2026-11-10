@@ -82,3 +82,19 @@ export function providerSpecFor(
 		);
 	return specs[name];
 }
+
+export function choiceFrom(
+	entry: string,
+	specs: Record<ProviderName, ProviderSpec>,
+): CataloguedChoice {
+	const at = entry.indexOf(":");
+	const provider = at === -1 ? entry : entry.slice(0, at);
+	const spec = providerSpecFor(provider, specs);
+	const model = (at === -1 ? "" : entry.slice(at + 1)) || spec.defaultModel;
+	const choice = { provider, model };
+	if (!isCatalogued(choice))
+		throw new Error(
+			`${provider}:${model} is not in the catalog, add it with: task model:add -- ${provider} ${model}`,
+		);
+	return choice;
+}
