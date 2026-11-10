@@ -182,9 +182,6 @@ importers:
       '@repo/syntax':
         specifier: workspace:*
         version: link:../../packages/syntax
-      '@repo/toolkit':
-        specifier: workspace:*
-        version: link:../../packages/toolkit
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui

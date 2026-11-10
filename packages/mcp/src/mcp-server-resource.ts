@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import type { Launch } from "./launch.ts";
 import type {
 	AppContainer,
-	ConnConfig,
-	HttpConnConfig,
 	NamedPort,
+	RemoteEntry,
 	Resources,
-} from "./ports.ts";
+} from "@repo/toolkit";
+import type { Launch } from "./launch.ts";
+import type { ConnConfig } from "./ports.ts";
 
 export const GROUP = "lisptc.io";
 export const VERSION = "v1alpha1";
@@ -188,7 +188,7 @@ export function specFor(
 }
 
 export function remoteSpecFor(
-	conf: HttpConnConfig,
+	conf: RemoteEntry,
 	workspace: string,
 	now: number,
 ): McpServerSpec {

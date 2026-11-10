@@ -4,6 +4,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import type { LaunchedEntry, RemoteEntry } from "@repo/toolkit";
 import {
 	afterAll,
 	afterEach,
@@ -15,16 +16,16 @@ import {
 } from "vitest";
 import { DockerHost } from "../src/docker-host.ts";
 import { launchFor } from "../src/launch.ts";
-import type { ConnConfig, HttpConnConfig, ServerReport } from "../src/ports.ts";
+import type { ConnConfig, ServerReport } from "../src/ports.ts";
 
-const locallyLaunched: HttpConnConfig = {
+const locallyLaunched: LaunchedEntry = {
 	name: "sheets",
 	url: "http://localhost:8911/mcp",
 	command: "task",
 	args: ["--dir", "../..", "mcp:sheets"],
 };
 
-const remote: HttpConnConfig = {
+const remote: RemoteEntry = {
 	name: "linear",
 	url: "https://mcp.linear.app/mcp",
 	oauth: true,

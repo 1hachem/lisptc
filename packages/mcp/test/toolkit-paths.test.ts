@@ -111,7 +111,7 @@ describe("local toolkit commands resolve against the manifest", () => {
 			" :local t :headless",
 			bundledToolkit,
 		);
-		expect(conf.args?.at(-1)).toBe("--headless");
+		expect("args" in conf && conf.args?.at(-1)).toBe("--headless");
 	});
 
 	it("refuses :headless for a server without a headless mode", () => {

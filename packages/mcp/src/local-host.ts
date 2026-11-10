@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import type { LaunchedEntry, RemoteEntry } from "@repo/toolkit";
 import {
 	type ConnConfig,
-	type HttpConnConfig,
 	type McpHost,
 	type McpTransport,
 	refKey,
@@ -29,15 +29,13 @@ interface LocalServer {
 	ready: boolean;
 }
 
-type LaunchedConf = HttpConnConfig & { command: string };
-
 interface Piped {
 	readonly key: string;
 	readonly reported: ReportedTransport;
 }
 
-function launched(conf: ConnConfig): conf is LaunchedConf {
-	return "url" in conf && conf.command !== undefined;
+function launched(conf: ConnConfig): conf is LaunchedEntry {
+	return "url" in conf && "command" in conf;
 }
 
 function whyItDied(server: LocalServer): string {
@@ -78,7 +76,7 @@ export class LocalProcessHost implements McpHost {
 	}
 
 	private async start(
-		conf: LaunchedConf,
+		conf: LaunchedEntry,
 		handle: ServerHandle,
 		watch?: StartWatch,
 	): Promise<ServerHandle> {
@@ -114,7 +112,7 @@ export class LocalProcessHost implements McpHost {
 		return handle;
 	}
 
-	private pipe(conf: Exclude<ConnConfig, HttpConnConfig>): ServerHandle {
+	private pipe(conf: Exclude<ConnConfig, RemoteEntry>): ServerHandle {
 		if (conf.command === undefined)
 			throw new Error(
 				`${conf.name}: runs as a container image and the host started none`,
@@ -193,7 +191,7 @@ export class LocalProcessHost implements McpHost {
 		return false;
 	}
 
-	private spawn({ name, command, args, env }: LaunchedConf): LocalServer {
+	private spawn({ name, command, args, env }: LaunchedEntry): LocalServer {
 		const child = spawn(command, args ?? [], {
 			detached: true,
 			stdio: ["ignore", "ignore", "pipe"],

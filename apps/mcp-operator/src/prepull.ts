@@ -1,26 +1,22 @@
 import type { V1DaemonSet } from "@kubernetes/client-node";
 import { imagesOf } from "@repo/mcp-extension/kubernetes";
 import type { ConnConfig } from "@repo/mcp-extension/ports";
-import toolkit from "@repo/toolkit/mcp.toolkit.json" with { type: "json" };
+import { bundledEntries } from "@repo/toolkit";
 import type { Cluster } from "./cluster.ts";
 import { pullStalled } from "./state.ts";
 import { PREPULL_SELECTOR, repositoryOf } from "./workload.ts";
 
 export function toolkitImages(
 	tag?: string,
-	entries: readonly unknown[] = toolkit,
+	entries: readonly ConnConfig[] = bundledEntries,
 ): string[] {
-	return [
-		...new Set(
-			(entries as ConnConfig[]).flatMap((conf) => imagesOf(conf, tag)),
-		),
-	];
+	return [...new Set(entries.flatMap((conf) => imagesOf(conf, tag)))];
 }
 
 export function ownRepositories(
-	entries: readonly unknown[] = toolkit,
+	entries: readonly ConnConfig[] = bundledEntries,
 ): string[] {
-	return (entries as ConnConfig[]).flatMap((conf) =>
+	return entries.flatMap((conf) =>
 		"image" in conf && conf.internal ? [repositoryOf(conf.image)] : [],
 	);
 }

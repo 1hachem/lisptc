@@ -23,8 +23,8 @@ state is the root's to keep**: every root hands the client an `OAuthStore`. The 
 that run on the user's own machine, never for the served agent. The served
 agent keeps it in Convex, whichever container host it runs.
 
-**A server that only runs on the user's machine goes in
-`mcp.toolkit.local.json`, never in `mcp.toolkit.json`.** The bundled manifest
+**A server that only runs on the user's machine goes in `@repo/toolkit`'s
+`mcp.toolkit.local.ts`, never in its `mcp.toolkit.ts`.** The bundled manifest
 holds only what a server-side host can run. A local entry is a command. A local
 entry that reuses a bundled name is that server's local setup: it is loaded only
 by `:local t`, so the agent never has to write the command line itself.
@@ -55,7 +55,7 @@ a status written beside it.
 server carries the chat as its instance from the moment it is loaded, and every
 host keys, names and reports it by both. The extension stamps the instance, so
 no host is told which chat it serves. Read the modalities off the entry shapes in
-`src/toolkit.ts`, not from prose.
+`@repo/toolkit`, not from prose.
 
 **An entry that names an `image` carries a `port` and never a `url`.** The
 `port` is the one its server listens on inside the container, because where it
@@ -63,10 +63,10 @@ is reachable from outside is the host's to decide, not the manifest's. A `url`
 is an address a client dials as written, so only a remote server, or one a
 `command` starts on a fixed local port, carries one.
 
-**`mcp.toolkit.json` is what the cluster and docker hosts read, and it holds
+**`mcp.toolkit.ts` is what the cluster and docker hosts read, and it holds
 only servers that work in production**: each runs from its own image or is a
 remote url. A `command` beside an `image` is that server's
-local setup, run only by `:local t` on the user's machine. `mcp.toolkit.dev.json` is what the local
+local setup, run only by `:local t` on the user's machine. `mcp.toolkit.dev.ts` is what the local
 process host reads, commands included. A server's image is built from
 `docker/mcp/<name>.Dockerfile`; CI and `task mcp:images:build` build every file
 there.

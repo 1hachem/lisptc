@@ -36,12 +36,12 @@ import {
 import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import type { SearchDocument, SearchEngine } from "@repo/shared/search";
+import type { RemoteEntry } from "@repo/toolkit";
 import { z } from "zod";
 import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
-	type HttpConnConfig,
 	type Icon,
 	type JsonSchema,
 	type McpClient,
@@ -1063,7 +1063,7 @@ export function registerMcp(
 	function mountOf(conf: ConnConfig, tools: readonly Tool[]): McpMount {
 		return toolkit.all().includes(conf)
 			? { server: conf.name, tools }
-			: { server: conf.name, conf: conf as HttpConnConfig, tools };
+			: { server: conf.name, conf: conf as RemoteEntry, tools };
 	}
 
 	function connect(

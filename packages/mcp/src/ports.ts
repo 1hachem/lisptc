@@ -2,6 +2,13 @@ import type {
 	OAuthClientInformationFull,
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import type {
+	CommandEntry,
+	ImageEntry,
+	IssuerOAuth,
+	LaunchedEntry,
+	RemoteEntry,
+} from "@repo/toolkit";
 
 export interface JsonSchema {
 	type?: string;
@@ -31,91 +38,17 @@ export interface Tool {
 	icons?: Icon[];
 }
 
-export interface ConnMeta {
-	description?: string;
-	keywords?: string[];
-	icon?: string;
-}
+export type ContainerConnConfig = ImageEntry & { instance?: string };
 
-export interface ResourceAmounts {
-	cpu?: string;
-	memory?: string;
-}
+export type StdioConnConfig = CommandEntry & { local?: boolean };
 
-export interface Resources {
-	requests?: ResourceAmounts;
-	limits?: ResourceAmounts;
-}
+export type ConnConfig =
+	| RemoteEntry
+	| LaunchedEntry
+	| ContainerConnConfig
+	| StdioConnConfig;
 
-export interface IssuerOAuth {
-	issuer: string;
-	authorize: string;
-	token: string;
-	client: string;
-	params?: Record<string, string>;
-}
-
-export type HttpConnConfig = ConnMeta & {
-	name: string;
-	url: string;
-	headers?: Record<string, string>;
-	oauth?: boolean | IssuerOAuth;
-	scopes?: string[];
-	command?: string;
-	args?: string[];
-	env?: Record<string, string>;
-};
-
-export interface NamedPort {
-	name: string;
-	port: number;
-}
-
-export interface AppContainer {
-	image: string;
-	args?: string[];
-	ports?: NamedPort[];
-	expose?: string[];
-	resources?: Resources;
-}
-
-export interface SecretRef {
-	name: string;
-	keys: string[];
-}
-
-export type ContainerConnConfig = ConnMeta & {
-	name: string;
-	image: string;
-	instance?: string;
-	internal?: boolean;
-	port: number;
-	path?: string;
-	command?: string;
-	args?: string[];
-	headers?: Record<string, string>;
-	env?: Record<string, string>;
-	secret?: SecretRef;
-	oauth?: IssuerOAuth;
-	scopes?: string[];
-	resources?: Resources;
-	app?: AppContainer;
-	flags?: Record<string, string[]>;
-};
-
-export type StdioConnConfig = ConnMeta & {
-	name: string;
-	command: string;
-	args?: string[];
-	env?: Record<string, string>;
-	resources?: Resources;
-	local?: boolean;
-	flags?: Record<string, string[]>;
-};
-
-export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
-
-export type OAuthConnConfig = HttpConnConfig | ContainerConnConfig;
+export type OAuthConnConfig = RemoteEntry | LaunchedEntry | ContainerConnConfig;
 
 export function oauthKey(conf: OAuthConnConfig, serverUrl: string): string {
 	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
@@ -251,7 +184,7 @@ export interface ToolkitRegistry {
 
 export interface McpMount {
 	readonly server: string;
-	readonly conf?: HttpConnConfig;
+	readonly conf?: RemoteEntry;
 	readonly tools: readonly Tool[];
 }
 

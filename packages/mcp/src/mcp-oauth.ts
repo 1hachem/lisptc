@@ -13,8 +13,8 @@ import type {
 	OAuthMetadata,
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import type { IssuerOAuth } from "@repo/toolkit";
 import type {
-	IssuerOAuth,
 	OAuthClient,
 	OAuthClients,
 	OAuthRecord,

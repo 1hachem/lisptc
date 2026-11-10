@@ -115,10 +115,9 @@ export class DockerHost implements McpHost {
 	private envFlags(conf: ConnConfig): string[] {
 		const passed = "secret" in conf && conf.secret ? conf.secret.keys : [];
 		return [
-			...Object.entries(conf.env ?? {}).flatMap(([name, value]) => [
-				"--env",
-				`${name}=${value}`,
-			]),
+			...Object.entries(("env" in conf && conf.env) || {}).flatMap(
+				([name, value]) => ["--env", `${name}=${value}`],
+			),
 			...passed.flatMap((name) => ["--env", name]),
 		];
 	}

@@ -5,11 +5,12 @@ import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import type { SearchDocument, SearchEngine } from "@repo/shared/search";
+import type { ToolkitEntry } from "@repo/toolkit";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import type { ConnConfig } from "../src/ports.ts";
-import { jsonToolkit } from "../src/toolkit.ts";
+import { entriesToolkit } from "../src/toolkit.ts";
 import {
 	countingHost,
 	FIXTURE,
@@ -229,7 +230,7 @@ describe("MCP search engine", () => {
 			}));
 		},
 	};
-	const toolkitJson = JSON.stringify([
+	const toolkitEntries: ToolkitEntry[] = [
 		{
 			name: "search-fixture",
 			description: "search description",
@@ -237,14 +238,14 @@ describe("MCP search engine", () => {
 			command: "node",
 			args: ["--no-warnings", "--experimental-transform-types", FIXTURE],
 		},
-	]);
+	];
 	const interp = new Interp({
 		extensions: [
 			mcpExtension({
 				...mcpHost,
 				commands: true,
 				search,
-				toolkit: jsonToolkit(toolkitJson),
+				toolkit: entriesToolkit(toolkitEntries),
 			}),
 		],
 	});
@@ -298,20 +299,20 @@ describe("mcp-shutdown undefines tool bindings", () => {
 });
 
 describe("loading a toolkit server by name", () => {
-	const toolkitJson = JSON.stringify([
+	const toolkitEntries: ToolkitEntry[] = [
 		{
 			name: "tk",
 			description: "toolkit fixture",
 			command: "node",
 			args: ["--no-warnings", "--experimental-transform-types", FIXTURE],
 		},
-	]);
+	];
 	const interp = new Interp({
 		extensions: [
 			mcpExtension({
 				...mcpHost,
 				commands: true,
-				toolkit: jsonToolkit(toolkitJson),
+				toolkit: entriesToolkit(toolkitEntries),
 			}),
 		],
 	});
@@ -358,7 +359,7 @@ describe("an ad-hoc command server", () => {
 });
 
 describe("a url server the interpreter starts for you", () => {
-	const toolkitJson = JSON.stringify([
+	const toolkitEntries: ToolkitEntry[] = [
 		{
 			name: "managed",
 			description: "an http server with a start command",
@@ -366,13 +367,13 @@ describe("a url server the interpreter starts for you", () => {
 			command: "node",
 			args: ["-e", "console.error('no secrets for you'); process.exit(3)"],
 		},
-	]);
+	];
 	const interp = new Interp({
 		extensions: [
 			mcpExtension({
 				...mcpHost,
 				commands: true,
-				toolkit: jsonToolkit(toolkitJson),
+				toolkit: entriesToolkit(toolkitEntries),
 			}),
 		],
 	});
@@ -390,7 +391,7 @@ describe("a url server the interpreter starts for you", () => {
 });
 
 describe("a toolkit server bundled with the repo", () => {
-	const toolkitJson = JSON.stringify([
+	const toolkitEntries: ToolkitEntry[] = [
 		{
 			name: "bundled",
 			description: "reached by a path relative to the toolkit file",
@@ -401,16 +402,16 @@ describe("a toolkit server bundled with the repo", () => {
 				"./test/fixture-mcp-server.ts",
 			],
 		},
-	]);
+	];
 	const interp = new Interp({
 		extensions: [
 			mcpExtension({
 				...mcpHost,
 				commands: true,
-				toolkit: jsonToolkit(
-					toolkitJson,
+				toolkit: entriesToolkit(
+					toolkitEntries,
 					undefined,
-					new URL("../package.json", import.meta.url),
+					new URL("../", import.meta.url),
 				),
 			}),
 		],

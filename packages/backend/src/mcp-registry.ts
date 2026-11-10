@@ -1,5 +1,4 @@
 import type {
-	HttpConnConfig,
 	McpMount,
 	McpRegistry,
 	McpServerInfo,
@@ -25,7 +24,7 @@ export class ConvexMcpRegistry implements McpRegistry {
 			server,
 			...(conf === undefined
 				? {}
-				: { conf: JSON.parse(conf) as HttpConnConfig }),
+				: { conf: JSON.parse(conf) as McpMount["conf"] }),
 			tools: JSON.parse(tools) as Tool[],
 		}));
 	}

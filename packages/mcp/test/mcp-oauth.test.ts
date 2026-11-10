@@ -1,6 +1,7 @@
 import { mkdtempSync, statSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
+import type { IssuerOAuth } from "@repo/toolkit";
 import { describe, expect, it, vi } from "vitest";
 import {
 	CallbackServer,
@@ -10,7 +11,7 @@ import {
 	sharedAuthCallback,
 } from "../src/mcp-oauth.ts";
 import { FileOAuthStore } from "../src/oauth-host.ts";
-import type { IssuerOAuth, OAuthRecord, OAuthStore } from "../src/ports.ts";
+import type { OAuthRecord, OAuthStore } from "../src/ports.ts";
 
 const REDIRECT = "http://127.0.0.1:8991/callback";
 

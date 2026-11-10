@@ -1,13 +1,14 @@
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { RemoteEntry } from "@repo/toolkit";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { HttpConnConfig, ServerReport } from "../src/ports.ts";
+import type { ServerReport } from "../src/ports.ts";
 import { RemoteHost } from "../src/remote-host.ts";
 
 describe("what the remote host reports about the servers it dials", () => {
 	let server: Server;
-	let answering: HttpConnConfig;
+	let answering: RemoteEntry;
 
 	beforeAll(async () => {
 		server = createServer((_, res) => res.end()).listen(0, "127.0.0.1");

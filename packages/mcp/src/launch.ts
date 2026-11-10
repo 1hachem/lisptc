@@ -18,9 +18,8 @@ function shellQuote(word: string): string {
 }
 
 function stdioCommand(conf: ConnConfig): string {
-	const command = "command" in conf ? conf.command : undefined;
-	if (command === undefined) return "";
-	return [command, ...(conf.args ?? [])].map(shellQuote).join(" ");
+	if (!("command" in conf) || conf.command === undefined) return "";
+	return [conf.command, ...(conf.args ?? [])].map(shellQuote).join(" ");
 }
 
 export function launchFor(conf: ConnConfig): Launch | undefined {

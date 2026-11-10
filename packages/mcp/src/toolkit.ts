@@ -1,6 +1,11 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { TOOLKIT_URL } from "@repo/toolkit";
+import {
+	bundledEntries,
+	devEntries,
+	machineEntries,
+	TOOLKIT_ROOT,
+	type ToolkitEntry,
+} from "@repo/toolkit";
 import type {
 	ConnConfig,
 	EnvLookup,
@@ -8,19 +13,8 @@ import type {
 	ToolkitRegistry,
 } from "./ports.ts";
 
-function packageFile(name: string): URL {
-	return new URL(
-		import.meta.url.endsWith(".ts") ? `../${name}` : `./${name}`,
-		import.meta.url,
-	);
-}
-
-const DEV_TOOLKIT_URL = packageFile("mcp.toolkit.dev.json");
-
-const MACHINE_TOOLKIT_URL = packageFile("mcp.toolkit.local.json");
-
 export const processEnv: EnvLookup = {
-	// biome-ignore lint/style/noProcessEnv: mcp.toolkit.json names the variable, so it is only known at runtime
+	// biome-ignore lint/style/noProcessEnv: a toolkit entry names the variable, so it is only known at runtime
 	get: (name) => process.env[name],
 };
 
@@ -28,50 +22,38 @@ function expandEnv(s: string, env: EnvLookup): string {
 	return s.replace(/\$\{(\w+)\}/g, (_, name) => env.get(name) ?? "");
 }
 
-function resolveAgainst(s: string, manifest: URL): string {
+function resolveAgainst(s: string, root: URL): string {
 	return s.startsWith("./") || s.startsWith("../")
-		? fileURLToPath(new URL(s, manifest))
+		? fileURLToPath(new URL(s, root))
 		: s;
 }
 
-export function jsonToolkit(
-	raw: string,
+export function entriesToolkit(
+	entries: readonly ToolkitEntry[],
 	env: EnvLookup = processEnv,
-	manifest: URL = TOOLKIT_URL,
+	root: URL = TOOLKIT_ROOT,
 ): ToolkitRegistry {
-	let configs: ConnConfig[];
-	try {
-		const parsed = JSON.parse(raw) as ConnConfig[];
-		configs = parsed.filter((conf) => Boolean(conf?.name));
-		for (const conf of configs)
-			if ("args" in conf && conf.args)
-				conf.args = conf.args.map((a) =>
-					resolveAgainst(expandEnv(a, env), manifest),
-				);
-	} catch {
-		configs = [];
-	}
+	const configs: ConnConfig[] = entries.map((conf) =>
+		conf.args === undefined
+			? conf
+			: {
+					...conf,
+					args: conf.args.map((a) => resolveAgainst(expandEnv(a, env), root)),
+				},
+	);
 	return { all: () => configs };
 }
 
-function fileToolkit(url: URL, env: EnvLookup): ToolkitRegistry {
-	try {
-		return jsonToolkit(readFileSync(url, "utf8"), env);
-	} catch {
-		return { all: () => [] };
-	}
-}
-
 export function bundledToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
-	return fileToolkit(TOOLKIT_URL, env);
+	return entriesToolkit(bundledEntries, env);
 }
 
 export function localToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
-	return fileToolkit(DEV_TOOLKIT_URL, env);
+	return entriesToolkit(devEntries, env);
 }
 
 export function machineToolkit(env: EnvLookup = processEnv): ToolkitRegistry {
-	return fileToolkit(MACHINE_TOOLKIT_URL, env);
+	return entriesToolkit(machineEntries, env);
 }
 
 export interface Bridged {

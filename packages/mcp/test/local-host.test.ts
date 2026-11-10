@@ -1,8 +1,9 @@
 import { once } from "node:events";
 import { createServer } from "node:net";
+import type { LaunchedEntry } from "@repo/toolkit";
 import { describe, expect, it, vi } from "vitest";
 import { LocalProcessHost } from "../src/local-host.ts";
-import type { HttpConnConfig, ServerReport } from "../src/ports.ts";
+import type { ServerReport } from "../src/ports.ts";
 
 async function freePort(): Promise<number> {
 	const probe = createServer().listen(0, "127.0.0.1");
@@ -14,7 +15,7 @@ async function freePort(): Promise<number> {
 	return address.port;
 }
 
-function serving(port: number, script: string): HttpConnConfig {
+function serving(port: number, script: string): LaunchedEntry {
 	return {
 		name: "notes",
 		url: `http://127.0.0.1:${port}/mcp`,

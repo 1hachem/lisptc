@@ -1,6 +1,6 @@
+import type { RemoteEntry } from "@repo/toolkit";
 import {
 	type ConnConfig,
-	type HttpConnConfig,
 	type McpHost,
 	refKey,
 	refOf,
@@ -12,8 +12,8 @@ import {
 } from "./ports.ts";
 import { reachable } from "./start-wait.ts";
 
-export function remoteServer(conf: ConnConfig): conf is HttpConnConfig {
-	return "url" in conf && conf.command === undefined;
+export function remoteServer(conf: ConnConfig): conf is RemoteEntry {
+	return "url" in conf && !("command" in conf);
 }
 
 export class RemoteHost implements McpHost {

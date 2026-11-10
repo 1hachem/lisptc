@@ -5,6 +5,7 @@ import {
 	PatchStrategy,
 	setHeaderOptions,
 } from "@kubernetes/client-node";
+import type { RemoteEntry } from "@repo/toolkit";
 import { launchFor } from "./launch.ts";
 import {
 	GROUP,
@@ -21,7 +22,6 @@ import {
 } from "./mcp-server-resource.ts";
 import {
 	type ConnConfig,
-	type HttpConnConfig,
 	type McpHost,
 	refKey,
 	type ServerHandle,
@@ -377,7 +377,7 @@ export class KubernetesHost implements McpHost {
 		return headers ? { url, headers } : { url };
 	}
 
-	private async remote(conf: HttpConnConfig): Promise<ServerHandle> {
+	private async remote(conf: RemoteEntry): Promise<ServerHandle> {
 		const name = serverName(this.options.scope, conf.name);
 		const wanted = remoteSpecFor(conf, this.options.scope, this.clock());
 		const live = await this.store.get(name);
