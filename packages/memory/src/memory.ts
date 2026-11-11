@@ -405,16 +405,21 @@ const stepCodec: StateCodec<Step> = {
 	},
 };
 
+interface Cascade {
+	readonly depth: number;
+	readonly record: boolean;
+}
+
+const TOP: Cascade = { depth: 0, record: true };
+
 export class MemoryBank {
 	private channels?: Channels;
-	private depth = 0;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
 	private recalled: State<ReadonlyMap<string, number>> = detachedState(
 		new Map(),
 	);
 	private declaredIn: Interp | undefined;
-	private firing: FiredMemory[] | undefined;
 	private declarations:
 		| { memories: ReadonlyMap<string, Memory>; areas: readonly AreaGate[] }
 		| undefined;
@@ -602,7 +607,6 @@ export class MemoryBank {
 	}
 
 	reset(): void {
-		this.depth = 0;
 		this.step.set(QUIET);
 	}
 
@@ -697,17 +701,14 @@ export class MemoryBank {
 			error = ex instanceof Error ? ex.message : String(ex);
 		}
 		if (scores.size === 0 && error === undefined) return;
-		const fired: FiredMemory[] = [];
-		this.firing = fired;
-		try {
-			if (scores.size > 0)
-				yield* this.dispatch(
-					{ kind: "when", text: seen.message, recognized: scores },
-					interp,
-				);
-		} finally {
-			this.firing = undefined;
-		}
+		const before = this.step.get().surfaced.length;
+		if (scores.size > 0)
+			yield* this.dispatch(
+				{ kind: "when", text: seen.message, recognized: scores },
+				interp,
+				{ depth: 0, record: false },
+			);
+		const fired = this.step.get().surfaced.slice(before);
 		record(this.channels, recognizedKind, {
 			...seen,
 			scores: Object.fromEntries(scores),
@@ -790,14 +791,14 @@ export class MemoryBank {
 			.filter((m) => hit.has(m.key))
 			.sort((a, b) => this.strength(b) - this.strength(a))
 			.slice(0, limit);
-		for (const memory of found) yield* this.fire(memory, interp);
+		for (const memory of found) yield* this.fire(memory, interp, TOP);
 		return found;
 	}
 
-	*fire(memory: Memory, interp: Interp): Eval<void> {
+	private *fire(memory: Memory, interp: Interp, at: Cascade): Eval<void> {
 		const { fired, open, builtinSpent } = this.step.get();
 		if (fired.includes(memory.key)) return;
-		if (this.depth >= MAX_CASCADE_DEPTH) return;
+		if (at.depth >= MAX_CASCADE_DEPTH) return;
 		const builtin = this.isBuiltin(memory);
 		if (builtin && this.resting(memory.key, interp)) return;
 		if (
@@ -813,17 +814,13 @@ export class MemoryBank {
 			new Map([...this.recalled.get(), [memory.key, stepsTaken(interp)]]),
 		);
 		if (!builtin) yield* this.reinforce(memory);
-		this.surface(memory, builtin);
-		this.depth++;
-		try {
-			yield* this.dispatch({ kind: "recall", text: memory.key }, interp);
-			for (const [key, weight] of memory.links) {
-				if (weight < LINKED_FIRES_AT) continue;
-				const linked = yield* this.lookup(key);
-				if (linked !== undefined) yield* this.fire(linked, interp);
-			}
-		} finally {
-			this.depth--;
+		this.surface(memory, builtin, at);
+		const deeper = { ...at, depth: at.depth + 1 };
+		yield* this.dispatch({ kind: "recall", text: memory.key }, interp, deeper);
+		for (const [key, weight] of memory.links) {
+			if (weight < LINKED_FIRES_AT) continue;
+			const linked = yield* this.lookup(key);
+			if (linked !== undefined) yield* this.fire(linked, interp, deeper);
 		}
 	}
 
@@ -853,18 +850,22 @@ export class MemoryBank {
 				yield* this.forget(memory.key);
 	}
 
-	private *dispatch(event: MemoryEvent, interp: Interp): Eval<void> {
+	private *dispatch(
+		event: MemoryEvent,
+		interp: Interp,
+		at: Cascade = TOP,
+	): Eval<void> {
 		if (!this.step.get().stepping) return;
 		for (const memory of yield* this.everything()) {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
 			if (!fires(memory.key, on, event)) continue;
 			if (event.kind === "when" && this.resting(memory.key, interp)) continue;
-			yield* this.fire(memory, interp);
+			yield* this.fire(memory, interp, at);
 		}
 	}
 
-	private surface(memory: Memory, builtin: boolean): void {
+	private surface(memory: Memory, builtin: boolean, at: Cascade): void {
 		const key = memory.key;
 		const body = bodyText(memory.body);
 		const line = surfacedLine(memory);
@@ -884,8 +885,7 @@ export class MemoryBank {
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
-		if (this.firing !== undefined) this.firing.push(surfaced);
-		else record(this.channels, memoryKind, surfaced);
+		if (at.record) record(this.channels, memoryKind, surfaced);
 	}
 }
 
