@@ -19,14 +19,14 @@ carry it.
 Button INSIDE a form gets the same alist, if its action takes one argument.")
 
 (memory "internal/ui/actions" :when "a button in a view must keep working after a redraw, or an old view's controls must be dropped, or a click just reached a stale view"
-  "Actions close over their environment. REPL persistent, so
+  (format nil "Actions close over their environment. REPL persistent, so
 (setq counter (+ counter 1)) in a handler sticks; a later step reads it like
 any global. They die with the REPL: clearing conversation drops every action.
 
 Action may be a quoted call to a global function instead: '(refresh-dashboard)
 or '(set-filter \"open\") . Args passed as written, not evaluated. Field alist
 appended when the function takes one more argument. Function looked up by name
-on click, so redefine it to change what click does. Never dropped past 500
+on click, so redefine it to change what click does. Never dropped past ~d
 handlers, kept across REPL restart. Prefer it for long-lived views:
 
 (defun set-filter (f) (ui/render (panel f)))
@@ -34,7 +34,7 @@ handlers, kept across REPL restart. Prefer it for long-lived views:
 
 (ui/forget view) drops actions behind view's controls; view shows expired,
 clicks run nothing. Use on a view you replaced or closed. Returns count
-dropped.")
+dropped." *ui-max-handlers*))
 
 (memory "internal/ui/send" :when "a view needs a control that hands a request back to the agent along with what the user entered"
   "(ui/send text...) arguments join as echo joins them. The result joins
@@ -53,13 +53,14 @@ you already take a turn. Write a request, \"search the issues for auth\", not a
 note, \"user clicked search\".")
 
 (memory "internal/ui/panels" :when "a file or view must open beside the chat, or a tab must be shown, moved, focused or closed"
-  "Panel beside chat: tabs in splits, up to 3 across, 3 down. Folder is
-\"attachments\" or \"knowledge\". :split is \"here\" (focused split, default) ,
-\"right\" or \"down\" (new split beside focused one) .
-- (ui/open-file folder name [:split \"right\" ]) opens file preview in tab.
+  (format nil "Panel beside chat: tabs in splits, any number across, up to ~d
+  stacked down. Folder is one of ~{~s~^ ~}. :split is one of ~{~s~^ ~};
+  ~s (default) adds tab to focused split, others open new split
+  beside it, across or down.
+- (ui/open-file folder name [:split ~s ]) opens file preview in tab.
   List folder first: unknown name opens tab saying so. Open file gets focus,
   no second tab. Returns tab id.
-- (ui/open-view title view [:split \"down\" ]) widget in tab, not under message.
+- (ui/open-view title view [:split ~s ]) widget in tab, not under message.
   Controls run in this REPL as usual. Same title replaces that tab. Returns
   tab id.
 - (ui/close tab) · (ui/focus tab) by id open returned. ui/close gives t if tab
@@ -70,10 +71,13 @@ note, \"user clicked search\".")
 - (ui/file-link text folder name) widget; click opens file in tab. List
   files user can open:
 
-(ui/render (ui/stack (ui/file-link \"Q3 report\" \"knowledge\" \"q3.pdf\")
-    (ui/file-link \"photo\" \"attachments\" \"cat.png\")))
+(ui/render (ui/stack (ui/file-link \"Q3 report\" ~s \"q3.pdf\")
+    (ui/file-link \"photo\" ~s \"cat.png\")))
 
-Open for user when they ask to see file; link when offering several.")
+Open for user when they ask to see file; link when offering several."
+    *ui-max-splits* *ui-folders* *ui-splits* *ui-default-split*
+    (car (cdr *ui-splits*)) (car (cdr (cdr *ui-splits*)))
+    (car (cdr *ui-folders*)) (car *ui-folders*)))
 
 (memory "internal/ui/build" :when "the agent is about to build a visual view, dashboard, chart or interactive page"
   "Build ui view and test it without rendering. ui/render only once it works.")

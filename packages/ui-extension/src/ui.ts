@@ -22,6 +22,7 @@ import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { viewKind } from "@repo/journal-catalog/view";
 import type { PromptSource } from "@repo/shared/host";
+import { MAX_SPLITS } from "@repo/shared/split-layout";
 import { ACTION_PROPS, FOLDERS, TAGS, type Tag } from "@repo/ui-catalog";
 import { z } from "zod";
 import {
@@ -32,6 +33,7 @@ import {
 	UiElement,
 } from "./element.ts";
 import {
+	DEFAULT_SPLIT,
 	type Folder,
 	fileTab,
 	type PanelOp,
@@ -385,7 +387,7 @@ function folderOf(folder: string): Folder {
 }
 
 function splitOf(opts: Map<string, unknown>): Split {
-	const split = stringOption(opts, "split") ?? "here";
+	const split = stringOption(opts, "split") ?? DEFAULT_SPLIT;
 	if (!(SPLITS as readonly string[]).includes(split))
 		throw new EvalException(
 			`unknown split; expected one of ${SPLITS.join(" ")}`,
@@ -446,6 +448,26 @@ function registerUi(
 ): void {
 	surface.bind(interp, views);
 	surface.reset();
+	interp.defineGlobal(newSym("*ui-max-handlers*"), BigInt(MAX_HANDLERS), {
+		signature: "*ui-max-handlers*",
+		doc: "How many view actions are kept before the oldest are dropped.",
+	});
+	interp.defineGlobal(newSym("*ui-max-splits*"), BigInt(MAX_SPLITS), {
+		signature: "*ui-max-splits*",
+		doc: "How many panel splits can stack down.",
+	});
+	interp.defineGlobal(newSym("*ui-folders*"), arrayToList([...FOLDERS]), {
+		signature: "*ui-folders*",
+		doc: "The folders ui/open-file opens from.",
+	});
+	interp.defineGlobal(newSym("*ui-splits*"), arrayToList([...SPLITS]), {
+		signature: "*ui-splits*",
+		doc: "Where a panel can open: the focused split, or a new one right or down.",
+	});
+	interp.defineGlobal(newSym("*ui-default-split*"), DEFAULT_SPLIT, {
+		signature: "*ui-default-split*",
+		doc: "Where a panel opens when given no :split.",
+	});
 	const widgets = newSym("ui-widgets");
 	interp.defineGlobal(widgets, arrayToList([...WIDGET_NAMES]), {
 		signature: "ui-widgets",
