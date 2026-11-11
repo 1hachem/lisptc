@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { Cell, listToArray, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
@@ -9,6 +8,9 @@ import {
 	STATUS_BAR_SLOT_COUNT,
 } from "@repo/shared/status-bar";
 import { describe, expect, it } from "vitest";
+import { preferencesExtension } from "../src/preferences.ts";
+import { preferencesHostFor } from "../src/preferences-host.ts";
+import { HOST_CHOICES } from "./helpers.ts";
 
 function memoryBodies(source: string): string {
 	const interp = new Interp();
@@ -25,10 +27,7 @@ function memoryBodies(source: string): string {
 }
 
 const prompt = memoryBodies(
-	readFileSync(
-		new URL("../src/preferences.memories.ptc", import.meta.url),
-		"utf8",
-	),
+	preferencesExtension(preferencesHostFor(HOST_CHOICES)).memories ?? "",
 ).replace(/\s+/g, " ");
 
 describe("the memory's bottom bar", () => {
