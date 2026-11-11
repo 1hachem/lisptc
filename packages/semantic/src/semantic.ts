@@ -9,6 +9,7 @@ import {
 	type List,
 	lispToJson,
 	listToArray,
+	newSym,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
@@ -60,31 +61,12 @@ const NONE_LABEL = "none";
 
 const DEFAULT_LEVELS = ["very low", "low", "moderate", "high", "very high"];
 
-function filledMemories(host: SemanticHost): string {
-	const fills: Record<string, string> = {
-		"timeout-ms": String(SEMANTIC_TIMEOUT_MS),
-		"top-level": String(DEFAULT_LEVELS.length - 1),
-		"lowest-level": DEFAULT_LEVELS[0] ?? "",
-		"highest-level": DEFAULT_LEVELS.at(-1) ?? "",
-		min: String(DEFAULT_MIN),
-		"duplicate-similarity": String(DUPLICATE_SIMILARITY),
-		"cluster-similarity": String(CLUSTER_SIMILARITY),
-		"outlier-similarity": String(OUTLIER_SIMILARITY),
-	};
-	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
-		const fill = fills[name];
-		if (fill === undefined)
-			throw new Error(`no value fills {{${name}}} in the semantic memories`);
-		return fill;
-	});
-}
-
 export function semanticExtension(host: SemanticHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerSemantic(interp, host),
 		{
 			prompt: host.prompt(),
-			memories: filledMemories(host),
+			memories: host.memories(),
 		},
 	);
 }
@@ -485,6 +467,50 @@ const SUBJECTS: Subject[] = [
 ];
 
 export function registerSemantic(interp: Interp, host: SemanticHost): void {
+	interp.defineGlobal(
+		newSym("*semantic-timeout-ms*"),
+		BigInt(SEMANTIC_TIMEOUT_MS),
+		{
+			signature: "*semantic-timeout-ms*",
+			doc: "How long a % call waits, in milliseconds, when it is given no :timeout.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*semantic-levels*"),
+		arrayToList(DEFAULT_LEVELS),
+		{
+			signature: "*semantic-levels*",
+			doc: "The levels %score rates on when it is given none, lowest first.",
+		},
+	);
+	interp.defineGlobal(newSym("*semantic-min*"), DEFAULT_MIN, {
+		signature: "*semantic-min*",
+		doc: "The probability a % predicate needs for t when it is given no :min.",
+	});
+	interp.defineGlobal(
+		newSym("*semantic-duplicate-similarity*"),
+		DUPLICATE_SIMILARITY,
+		{
+			signature: "*semantic-duplicate-similarity*",
+			doc: "The similarity at which %remove-duplicates counts two elements the same, when it is given no :min.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*semantic-cluster-similarity*"),
+		CLUSTER_SIMILARITY,
+		{
+			signature: "*semantic-cluster-similarity*",
+			doc: "The similarity %cluster groups elements at, when it is given no :min.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*semantic-outlier-similarity*"),
+		OUTLIER_SIMILARITY,
+		{
+			signature: "*semantic-outlier-similarity*",
+			doc: "The similarity below which %outliers counts an element alone, when it is given no :min.",
+		},
+	);
 	const track = tracker(interp, host);
 	const ask = asker(track, host);
 	const embed = embedder(track, host);
