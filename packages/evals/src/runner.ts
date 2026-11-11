@@ -42,6 +42,7 @@ export type EvalTurnEvent =
 			meta: { inputTokens?: number; outputTokens?: number };
 	  }
 	| { type: "entry"; entry: EvalEntry }
+	| { type: "noted"; content: string; source?: string }
 	| { type: "result"; output: string }
 	| { type: "halt"; answer: string }
 	| { type: "silent" }
@@ -159,6 +160,7 @@ function grade(
 function speaker(line: TranscriptLine): string {
 	if (line.role === "entry") return line.kind;
 	if (line.role === "user") return "user";
+	if (line.role === "system") return line.source ?? "system";
 	return line.role === "assistant" ? "agent" : "repl";
 }
 
@@ -341,6 +343,12 @@ async function replaySeed<Repl>(
 		see({ role: "assistant", content: entry.assistant });
 		for (const recorded of entries) see(entryLine(recorded));
 		see({ role: "tool", content: output });
+		for (const { content, source } of notes)
+			see({
+				role: "system",
+				content,
+				...(source === undefined ? {} : { source }),
+			});
 	}
 }
 
@@ -394,6 +402,13 @@ async function followTurn(
 				break;
 			case "entry":
 				see(entryLine(event.entry));
+				break;
+			case "noted":
+				see({
+					role: "system",
+					content: event.content,
+					...(event.source === undefined ? {} : { source: event.source }),
+				});
 				break;
 			case "result":
 				see({ role: "tool", content: event.output });

@@ -323,6 +323,31 @@ describe("a case runs against a scripted model", () => {
 		expect(entriesAt(result, "memory")).toEqual([]);
 	});
 
+	test("a fired memory lands in the transcript as the developer message the model read", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions: recognizingExtensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "headline" "the headline is on the page" :when "the user wants the headline")`,
+				seed: [{ user: "open hyko.ai and tell me the headline" }],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			TARGET,
+		);
+
+		const noted = result.transcript.findIndex(
+			(line) => line.role === "system" && line.source === "memory:headline",
+		);
+		expect(result.transcript[noted]).toMatchObject({
+			content: expect.stringContaining("the headline is on the page"),
+		});
+		expect(noted).toBeLessThan(firstAssistant(result));
+	});
+
 	test("a failed recognition lands in the transcript with its error", async () => {
 		turn = 0;
 		const result = await runCase(

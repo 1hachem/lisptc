@@ -120,6 +120,14 @@ const runtime = {
 							value: { text: event.prompt, tokens: event.tokens },
 						},
 					};
+				else if (event.type === "noted")
+					yield {
+						type: "noted" as const,
+						content: event.note.content,
+						...(event.note.source === undefined
+							? {}
+							: { source: event.note.source }),
+					};
 				else if (
 					event.type === "assistant" ||
 					event.type === "entry" ||

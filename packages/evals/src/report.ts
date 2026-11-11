@@ -18,6 +18,12 @@ const messageLineSchema = z.object({
 	content: z.string(),
 });
 
+const noteLineSchema = z.object({
+	role: z.literal("system"),
+	content: z.string(),
+	source: z.string().optional(),
+});
+
 const entryLineSchema = z.object({
 	role: z.literal("entry"),
 	kind: z.string(),
@@ -27,6 +33,7 @@ const entryLineSchema = z.object({
 
 export const transcriptLineSchema = z.discriminatedUnion("role", [
 	messageLineSchema,
+	noteLineSchema,
 	entryLineSchema,
 ]);
 
