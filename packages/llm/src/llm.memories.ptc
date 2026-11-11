@@ -21,7 +21,7 @@ content. Any value works: list or alist goes in printed. No (string …)
 needed.")
 
 (memory "internal/llm/extract" :when "the agent holds a text, page, comment or mail and must pull fields or structured data out of it, or an extract call just failed or returned the wrong shape"
-  "(extract text shape) gives data shape describes, as Lisp data. Answer is
+  (format nil "(extract text shape) gives data shape describes, as Lisp data. Answer is
 constrained to shape: no parsing, no prose to strip. Turns page, comment or
 mail into fields read with assoc.
 
@@ -34,7 +34,7 @@ extract-1: alist, keys \"title\" \"stars\" \"state\" \"links\"
 
 Shape is alist of (key . field) , written by (shape (name spec...) ...)
 : no quote, no dotted pairs. Field is:
-  {{scalars}}, :any; plain string = string field
+  ~{~s~^, ~}, :any; plain string = string field
   described by its text;
 (:string \"what it means\") and same for other scalars;
 (:enum \"a\" \"b\") ; (:list field) ; (:optional field) , only field answer may
@@ -43,7 +43,7 @@ returns list. :instructions \"...\" says what to pull out.
   Nested group = nested object; (:list …) and (:optional …) take groups too:
 (shape (items (:list (id :number) (title :string))))
 is list of objects. Shape is literal, built at compile time: computed enum
-  needs hand-written alist.")
+  needs hand-written alist." *llm-scalars*))
 
 (memory "internal/llm/macros" :when "the agent holds a long text or many records that must be summarized, or a question must be answered from a given text or data, or answer just returned nil"
   "Three macros over write carry prompt for you; (doc 'summarize) and expansion
@@ -81,8 +81,8 @@ options, one call each:
   alternatives. (one-of x y) states exactly one holds.")
 
 (memory "internal/llm/options" :when "a writing call needs a length cap, a temperature, a system line or a timeout, defaults must change for many calls, or a writing call just timed out"
-  "Options, all optional, every call: :system · :max-tokens · :temperature ·
-:reasoning-effort, :low, :medium or :high · :timeout ms, default {{timeout-ms}}.
+  (format nil "Options, all optional, every call: :system · :max-tokens · :temperature ·
+:reasoning-effort, :low, :medium or :high · :timeout ms, default ~d.
 Timed-out call raises.
 
 Global *writing-defaults* = keyword list every call starts from; call-site
@@ -90,4 +90,4 @@ option wins. (with-writing (option...) body...) extends it for one block,
 restores after:
 
 (with-writing (:max-tokens 120)
-  (summarize-each (head pages-1 3)))")
+  (summarize-each (head pages-1 3)))" *llm-timeout-ms*))

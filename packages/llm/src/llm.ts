@@ -137,21 +137,6 @@ const SCALARS: Record<string, string> = {
 	boolean: "boolean",
 };
 
-function filledMemories(host: LlmHost): string {
-	const fills: Record<string, string> = {
-		"timeout-ms": String(LLM_TIMEOUT_MS),
-		scalars: Object.keys(SCALARS)
-			.map((name) => `:${name}`)
-			.join(", "),
-	};
-	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
-		const fill = fills[name];
-		if (fill === undefined)
-			throw new Error(`no value fills {{${name}}} in the llm memories`);
-		return fill;
-	});
-}
-
 const FIELD_TYPES =
 	":string :number :integer :boolean :any :enum :list :optional";
 
@@ -170,7 +155,7 @@ export function llmExtension(
 		},
 		{
 			prompt: host.prompt(),
-			memories: filledMemories(host),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {
@@ -526,6 +511,18 @@ export function registerLlm(
 		announcer(interp),
 	);
 
+	interp.defineGlobal(newSym("*llm-timeout-ms*"), BigInt(LLM_TIMEOUT_MS), {
+		signature: "*llm-timeout-ms*",
+		doc: "How long a writing call waits, in milliseconds, when it is given no :timeout.",
+	});
+	interp.defineGlobal(
+		newSym("*llm-scalars*"),
+		arrayToList(Object.keys(SCALARS).map((name) => newLispKeyword(name))),
+		{
+			signature: "*llm-scalars*",
+			doc: "The scalar field kinds an extract shape takes, as keywords.",
+		},
+	);
 	interp.defineGlobal(newSym(DEFAULTS_VAR), null, {
 		signature: DEFAULTS_VAR,
 		doc: "The options every write, converse and extract call starts from, as a keyword list, e.g. `(setq *writing-defaults* (list :max-tokens 300 :temperature 0.2))`. An option given at the call site wins over it. `with-writing` binds it for one block and restores it after.",
