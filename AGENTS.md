@@ -319,9 +319,13 @@ another surface written in the loop's file is moved to that extension's file.
 
 **A built-in memory lives in a `.memories.ptc` file, never in a TypeScript or
 JavaScript string.** The file is lisptc like any other, so a malformed memory
-fails when it loads and the editor flags it as it is written. A value the text
-needs from code is filled in by the code that loads it, never copied into the
-file, and a test fails on one left unfilled. A package that ships a new `.ptc`
+fails when it loads and the editor flags it as it is written. A body is an
+expression the memory extension evaluates as it loads it. Any value the text
+shares with code, one that could drift from what the code holds, is a global
+the extension sets, and the body reads it in lisptc:
+`(format nil "... ~a ..." *ext-thing*)`. It is never copied into the file,
+and no foreign syntax or text substitution is added to a `.ptc`. A global left
+unset fails when the built-ins load. A package that ships a new `.ptc`
 is added to what `apps/app` ships, by the rule in `apps/app/AGENTS.md`.
 
 The one exception is a memory whose source of truth is already code, one per

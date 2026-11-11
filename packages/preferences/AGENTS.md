@@ -25,9 +25,8 @@ What can be chosen comes in through the host: the fonts, the metadata
 fields and the input helpers as data, and what the store already holds is
 what a change is checked against. This package names none of them.
 
-The memories name no value code holds. Each one is a `{{placeholder}}` the
-extension fills from the host or from its own constants when it loads them,
-and a test fails on one left unfilled.
+The memories name no value code holds. Each one is a global the extension
+sets from the host or from its own constants, read by the body in lisptc.
 
 Every preference the app lets the user set is one this package exposes. Read
 the Preferences section in `apps/app/AGENTS.md` before adding one.
