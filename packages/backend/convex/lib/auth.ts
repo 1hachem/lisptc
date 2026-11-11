@@ -1,7 +1,8 @@
+import type { UserIdentity } from "convex/server";
 import { ConvexError } from "convex/values";
+import { components } from "../_generated/api.js";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "../_generated/server.js";
-import { authComponent } from "../auth.js";
 import { ACTING_ISSUER } from "./acting.ts";
 
 interface Caller {
@@ -23,7 +24,8 @@ async function requireCaller(ctx: QueryCtx | MutationCtx): Promise<Caller> {
 			throw new ConvexError({ code: "UNAUTHENTICATED" });
 		return { user, scope };
 	}
-	return { user: await requireAccountUser(ctx) };
+	if (identity === null) throw new ConvexError({ code: "UNAUTHENTICATED" });
+	return { user: await requireAccountUser(ctx, identity) };
 }
 
 function inScope(caller: Caller, workspaceId: Id<"workspaces">): boolean {
@@ -44,16 +46,29 @@ export async function requireUserOrThread(
 	return (await requireCaller(ctx)).user;
 }
 
+async function requireLiveSession(
+	ctx: QueryCtx | MutationCtx,
+	identity: UserIdentity,
+): Promise<void> {
+	const session = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+		model: "session",
+		where: [
+			{ field: "_id", value: String(identity.sessionId) },
+			{ field: "userId", value: identity.subject },
+			{ field: "expiresAt", operator: "gt", value: Date.now() },
+		],
+	});
+	if (session === null) throw new ConvexError({ code: "UNAUTHENTICATED" });
+}
+
 async function requireAccountUser(
 	ctx: QueryCtx | MutationCtx,
+	identity: UserIdentity,
 ): Promise<Doc<"users">> {
-	const account = await authComponent.safeGetAuthUser(ctx);
-	if (account === undefined) {
-		throw new ConvexError({ code: "UNAUTHENTICATED" });
-	}
+	await requireLiveSession(ctx, identity);
 	const user = await ctx.db
 		.query("users")
-		.withIndex("by_auth", (q) => q.eq("authId", account._id))
+		.withIndex("by_auth", (q) => q.eq("authId", identity.subject))
 		.unique();
 	if (user === null) {
 		throw new ConvexError({ code: "NOT_PROVISIONED" });
