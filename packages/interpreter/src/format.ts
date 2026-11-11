@@ -50,64 +50,63 @@ function listed(value: unknown): unknown[] {
 	return items;
 }
 
+const PLAIN: Readonly<Record<string, (args: Args, control: string) => string>> =
+	{
+		a: (args, control) => str(take(control, args), false),
+		s: (args, control) => str(take(control, args)),
+		d: (args, control) => decimal(take(control, args)),
+		"%": () => "\n",
+		"~": () => "~",
+	};
+
+function looped(body: string, value: unknown): string {
+	const inner: Args = { items: listed(value), next: 0 };
+	let text = "";
+	while (inner.next < inner.items.length) {
+		const before = inner.next;
+		const pass = run(body, inner);
+		text += pass.text;
+		if (pass.escaped || inner.next === before) break;
+	}
+	return text;
+}
+
+function directiveAt(control: string, at: number): string {
+	const directive = control[at + 1];
+	if (directive === undefined)
+		throw new EvalException("format: a ~ ends the template", control);
+	return directive.toLowerCase();
+}
+
 function run(control: string, args: Args): Run {
 	let text = "";
 	for (let i = 0; i < control.length; i++) {
-		const char = control[i];
-		if (char !== "~") {
-			text += char;
+		if (control[i] !== "~") {
+			text += control[i];
 			continue;
 		}
-		if (i + 1 >= control.length)
-			throw new EvalException("format: a ~ ends the template", control);
-		const directive = control[i + 1]?.toLowerCase();
+		const directive = directiveAt(control, i);
 		i += 1;
-		switch (directive) {
-			case "a":
-				text += str(take(control, args), false);
-				break;
-			case "s":
-				text += str(take(control, args));
-				break;
-			case "d":
-				text += decimal(take(control, args));
-				break;
-			case "%":
-				text += "\n";
-				break;
-			case "&":
-				if (text !== "" && !text.endsWith("\n")) text += "\n";
-				break;
-			case "~":
-				text += "~";
-				break;
-			case "^":
-				if (args.next >= args.items.length) return { text, escaped: true };
-				break;
-			case "{": {
-				const end = closing(control, i + 1);
-				const body = control.slice(i + 1, end);
-				const inner: Args = {
-					items: listed(take(control, args)),
-					next: 0,
-				};
-				while (inner.next < inner.items.length) {
-					const before = inner.next;
-					const pass = run(body, inner);
-					text += pass.text;
-					if (pass.escaped || inner.next === before) break;
-				}
-				i = end + 1;
-				break;
-			}
-			default:
-				throw new EvalException(
-					`format: unknown directive ~${control[i] ?? ""}`,
-					control,
-				);
-		}
+		const plain = PLAIN[directive];
+		if (plain !== undefined) text += plain(args, control);
+		else if (directive === "&") text += freshLine(text);
+		else if (directive === "^") {
+			if (args.next >= args.items.length) return { text, escaped: true };
+		} else if (directive === "{") {
+			const end = closing(control, i + 1);
+			text += looped(control.slice(i + 1, end), take(control, args));
+			i = end + 1;
+		} else
+			throw new EvalException(
+				`format: unknown directive ~${control[i] ?? ""}`,
+				control,
+			);
 	}
 	return { text, escaped: false };
+}
+
+function freshLine(text: string): string {
+	return text !== "" && !text.endsWith("\n") ? "\n" : "";
 }
 
 export function formatText(control: string, items: readonly unknown[]): string {
