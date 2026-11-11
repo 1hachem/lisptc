@@ -10,11 +10,17 @@ export interface AgentDefinition {
 	readonly budget?: number;
 }
 
-export type ReplSeed =
-	| { readonly from: "fresh" }
-	| { readonly from: "fork"; readonly image: Image };
+export const FRESH = "fresh";
 
-export type ChatSeed = { readonly from: "fresh" } | { readonly from: "fork" };
+export const FORK = "fork";
+
+export type ReplSeed =
+	| { readonly from: typeof FRESH }
+	| { readonly from: typeof FORK; readonly image: Image };
+
+export type ChatSeed =
+	| { readonly from: typeof FRESH }
+	| { readonly from: typeof FORK };
 
 export interface Spawn {
 	readonly definition: AgentDefinition;
@@ -27,14 +33,18 @@ export interface Message {
 	readonly maxSteps: number;
 }
 
-export type JobState =
-	| "idle"
-	| "pending"
-	| "held"
-	| "done"
-	| "failed"
-	| "cancelled"
-	| "lost";
+export const IDLE = "idle";
+
+export const SENT_STATES = [
+	"pending",
+	"held",
+	"done",
+	"failed",
+	"cancelled",
+	"lost",
+] as const;
+
+export type JobState = typeof IDLE | (typeof SENT_STATES)[number];
 
 export type Outcome = { readonly reply: string } | { readonly failure: string };
 

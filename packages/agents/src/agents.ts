@@ -34,9 +34,13 @@ import {
 	type AgentDefinition,
 	type AgentThreads,
 	type ChatSeed,
+	FORK,
+	FRESH,
+	IDLE,
 	type Outcome,
 	PARENT_NAME,
 	type ReplSeed,
+	SENT_STATES,
 } from "./ports.ts";
 
 export interface AgentsHost {
@@ -71,6 +75,34 @@ export const TAKE = "agent-take";
 
 export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
+}
+
+function defineMemoryGlobals(interp: Interp): void {
+	interp.defineGlobal(newSym("*agents-parent*"), PARENT_NAME, {
+		signature: "*agents-parent*",
+		doc: "The name a sub-agent calls the agent that started it.",
+	});
+	interp.defineGlobal(newSym("*agents-folder*"), AGENT_FOLDER, {
+		signature: "*agents-folder*",
+		doc: "The knowledge folder saved sub-agent definitions are written to.",
+	});
+	interp.defineGlobal(newSym("*agents-fresh*"), newLispKeyword(FRESH), {
+		signature: "*agents-fresh*",
+		doc: "The keyword that starts a sub-agent's REPL or chat empty.",
+	});
+	interp.defineGlobal(newSym("*agents-fork*"), newLispKeyword(FORK), {
+		signature: "*agents-fork*",
+		doc: "The keyword that starts a sub-agent's REPL or chat as a copy of the parent's.",
+	});
+	interp.defineGlobal(
+		newSym("*agents-states*"),
+		arrayToList([IDLE, ...SENT_STATES].map((state) => newLispKeyword(state))),
+		{ signature: "*agents-states*", doc: "Every state a sub-agent can be in." },
+	);
+	interp.defineGlobal(newSym("*agents-first-delegate*"), delegateName([]), {
+		signature: "*agents-first-delegate*",
+		doc: "The name the first sub-agent started without a name gets.",
+	});
 }
 
 export function agentsExtension(host: AgentsHost): AgentsExtension {
@@ -112,6 +144,7 @@ function symbolName(form: string, value: unknown): string {
 }
 
 function registerExports(interp: Interp): void {
+	defineMemoryGlobals(interp);
 	const exports = interp.state(
 		EXPORTS_STATE,
 		exportsCodec,
@@ -184,16 +217,16 @@ function countOf(form: string, what: string, value: unknown): number {
 }
 
 function seedOf(interp: Interp, value: unknown): ReplSeed {
-	const from = value === undefined ? "fresh" : nameOf("spawn", value);
-	if (from === "fresh") return { from };
-	if (from === "fork") return { from, image: snapshot(interp) };
-	throw new EvalException("spawn: :repl is :fresh or :fork", value);
+	const from = value === undefined ? FRESH : nameOf("spawn", value);
+	if (from === FRESH) return { from };
+	if (from === FORK) return { from, image: snapshot(interp) };
+	throw new EvalException(`spawn: :repl is :${FRESH} or :${FORK}`, value);
 }
 
 function chatOf(value: unknown): ChatSeed {
-	const from = value === undefined ? "fresh" : nameOf("spawn", value);
-	if (from === "fresh" || from === "fork") return { from };
-	throw new EvalException("spawn: :chat is :fresh or :fork", value);
+	const from = value === undefined ? FRESH : nameOf("spawn", value);
+	if (from === FRESH || from === FORK) return { from };
+	throw new EvalException(`spawn: :chat is :${FRESH} or :${FORK}`, value);
 }
 
 function definitionFrom(
@@ -229,6 +262,7 @@ function definitionFrom(
 const DEFINE_KEYS = ["prompt", "budget"];
 
 export function registerAgents(interp: Interp, host: AgentsHost): void {
+	defineMemoryGlobals(interp);
 	const handles = new Handles(
 		interp.state(
 			"agents/spawned",
@@ -531,7 +565,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			await port.spawn({
 				definition: { name, prompt: DELEGATE_PROMPT },
 				seed,
-				chat: { from: "fresh" },
+				chat: { from: FRESH },
 			});
 			handles.adopt({ name });
 			await port.send(name, { text, maxSteps });
@@ -598,7 +632,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"agent-state",
 		1,
 		'(agent-state "name")',
-		"Return where the last message sent to that agent stands: :pending, :held, :done, :failed, :cancelled or :lost, or :idle when it was sent nothing since the runtime started.",
+		`Return where the last message sent to that agent stands: ${SENT_STATES.map((state) => `:${state}`).join(", ")}, or :${IDLE} when it was sent nothing since the runtime started.`,
 		z.tuple([zString]),
 		async ([target]) => {
 			const name = spawnedName("agent-state", target);
