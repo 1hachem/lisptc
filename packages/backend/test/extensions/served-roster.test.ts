@@ -85,6 +85,31 @@ describe("the agent the app serves", () => {
 		expect(await ev("(length (memory/areas :when))")).not.toBe("0");
 	});
 
+	it("hands back every built-in memory's body as formatted text", async () => {
+		const ev = await served();
+		const keys = (
+			await ev("(mapcar (lambda (entry) (car entry)) (memory/builtins))")
+		)
+			.slice(1, -1)
+			.split(" ")
+			.map((key) => JSON.parse(key) as string);
+		const bodyOf = (key: string) =>
+			ev(
+				`(cdr (assoc "body" (car (filter (lambda (m) (equal (cdr (assoc "key" m)) ${JSON.stringify(key)})) (memory/recall ${JSON.stringify(key)} :limit 500)))))`,
+			);
+		for (const key of keys) {
+			const body = await bodyOf(key);
+			expect(body, key).not.toBe("nil");
+			expect(body, key).not.toMatch(/^\(format /);
+		}
+		expect(await bodyOf("internal/memory/triggers")).toContain(
+			"rests 100 steps",
+		);
+		expect(await bodyOf("internal/preferences/metadata")).toContain(
+			":input input tokens",
+		);
+	});
+
 	it("teaches the model the workspace, its knowledge and its preferences", async () => {
 		const interp = new Interp({
 			extensions: await workspaceExtensions(WORKSPACE, offline),
