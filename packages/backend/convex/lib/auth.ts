@@ -50,10 +50,13 @@ async function requireLiveSession(
 	ctx: QueryCtx | MutationCtx,
 	identity: UserIdentity,
 ): Promise<void> {
+	const { sessionId } = identity;
+	if (typeof sessionId !== "string")
+		throw new ConvexError({ code: "UNAUTHENTICATED" });
 	const session = await ctx.runQuery(components.betterAuth.adapter.findOne, {
 		model: "session",
 		where: [
-			{ field: "_id", value: String(identity.sessionId) },
+			{ field: "_id", value: sessionId },
 			{ field: "userId", value: identity.subject },
 			{ field: "expiresAt", operator: "gt", value: Date.now() },
 		],

@@ -12,6 +12,8 @@ const HOUR = 60 * 60 * 1000;
 export interface Signed {
 	user: Id<"users">;
 	workspace: Id<"workspaces">;
+	authId: string;
+	sessionId: string;
 	as: TestConvex<typeof schema>;
 }
 
@@ -78,6 +80,8 @@ export async function signIn(
 	return {
 		user,
 		workspace,
+		authId,
+		sessionId,
 		as: t.withIdentity({ subject: authId, sessionId }) as TestConvex<
 			typeof schema
 		>,

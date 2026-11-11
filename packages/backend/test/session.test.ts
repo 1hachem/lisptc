@@ -14,9 +14,11 @@ describe("an account's session", () => {
 		expect(listed.map((w) => w._id)).toEqual([alice.workspace]);
 	});
 
-	it("rejects a caller with no identity", async () => {
+	it("rejects an identity that names no session", async () => {
 		const t = testDeployment();
-		await expect(t.query(api.workspaces.list, {})).rejects.toThrow(
+		const alice = await signIn(t, "alice@example.com");
+		const sessionless = t.withIdentity({ subject: alice.authId });
+		await expect(sessionless.query(api.workspaces.list, {})).rejects.toThrow(
 			/UNAUTHENTICATED/,
 		);
 	});
@@ -48,10 +50,10 @@ describe("an account's session", () => {
 	it("rejects an identity naming a session that never existed", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
-		const authId = await t.run(
-			async (ctx) => (await ctx.db.get(alice.user))?.authId,
-		);
-		const forged = t.withIdentity({ subject: authId, sessionId: "forged" });
+		const forged = t.withIdentity({
+			subject: alice.authId,
+			sessionId: "forged",
+		});
 		await expect(forged.query(api.workspaces.list, {})).rejects.toThrow(
 			/UNAUTHENTICATED/,
 		);
@@ -59,26 +61,11 @@ describe("an account's session", () => {
 
 	it("rejects an identity pairing one account with another account's session", async () => {
 		const t = testDeployment();
-		await signIn(t, "alice@example.com");
+		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
-		const { bobAuthId, aliceSessionId } = await t.run(async (ctx) => {
-			const bobUser = await ctx.db.get(bob.user);
-			const sessions = (await ctx.runQuery(
-				components.betterAuth.adapter.findMany,
-				{
-					model: "session",
-					where: [{ field: "token", value: "token-alice@example.com" }],
-					paginationOpts: { cursor: null, numItems: 1 },
-				},
-			)) as { page: { _id: string }[] };
-			return {
-				bobAuthId: bobUser?.authId,
-				aliceSessionId: sessions.page[0]?._id,
-			};
-		});
 		const mixed = t.withIdentity({
-			subject: bobAuthId,
-			sessionId: aliceSessionId,
+			subject: bob.authId,
+			sessionId: alice.sessionId,
 		});
 		await expect(mixed.query(api.workspaces.list, {})).rejects.toThrow(
 			/UNAUTHENTICATED/,
