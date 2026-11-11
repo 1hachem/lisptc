@@ -1,8 +1,9 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks, type SessionHooks } from "@repo/interpreter/session";
@@ -32,7 +33,7 @@ export interface StepRun {
 }
 
 export interface Session {
-	interp: Interp;
+	interp: ConversationInterpreter;
 	extension: PermissionsExtension;
 	hooks: SessionHooks;
 	host: PermissionsHost;
@@ -58,7 +59,7 @@ export function session(
 		...(bounds === undefined ? {} : { bounds }),
 	};
 	const extension = permissionsExtension(host);
-	const interp = new Interp({ extensions: [extension] });
+	const interp = new ConversationInterpreter({ extensions: [extension] });
 	runSync(interp, prelude);
 	const hooks = newSessionHooks();
 	extension.session?.(hooks);
@@ -106,7 +107,7 @@ export function session(
 					async () => {
 						value = (await runAsync(interp, code)).value;
 					},
-					{ interp, code, emit: () => {} },
+					{ interp, code },
 				);
 				return value;
 			});
@@ -123,10 +124,7 @@ export function session(
 		turnStart: () =>
 			within(async () => {
 				await driveAsync(
-					hooks.turnStart.run(() => settled(undefined), {
-						interp,
-						emit: () => {},
-					}),
+					hooks.turnStart.run(() => settled(undefined), { interp }),
 				);
 				return undefined;
 			}),
