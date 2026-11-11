@@ -16,6 +16,10 @@ import { z } from "zod";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
 
+const EVERY_REJECTED = "every promise rejected";
+
+const REJECTIONS_JOINED = "; ";
+
 const zPromise = z.custom<LispPromise>(
 	(x) => x instanceof LispPromise,
 	"promise expected",
@@ -55,6 +59,20 @@ function unawaited(error: EvalException): string | undefined {
 	return `${String(error)}\n${where}${of} is a job, not its value. Wrap it in (await ...) first.`;
 }
 
+function filledMemories(host: PromisesHost): string {
+	const fills: Record<string, string> = {
+		"await-seconds": String(AWAIT_TIMEOUT_MS / 1000),
+		"every-rejected": EVERY_REJECTED,
+		"rejections-joined": REJECTIONS_JOINED,
+	};
+	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
+		const fill = fills[name];
+		if (fill === undefined)
+			throw new Error(`no value fills {{${name}}} in the promises memories`);
+		return fill;
+	});
+}
+
 export function promisesExtension(host: PromisesHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => {
@@ -65,7 +83,7 @@ export function promisesExtension(host: PromisesHost): InterpExtension {
 				return { reported };
 			});
 		},
-		{ prompt: host.prompt(), memories: host.memories() },
+		{ prompt: host.prompt(), memories: filledMemories(host) },
 	);
 }
 
@@ -120,8 +138,10 @@ export function registerPromises(interp: Interp): void {
 			Promise.any(toPromises(interp, list)).catch((ex) => {
 				const errors = (ex as { errors?: unknown[] }).errors;
 				throw new EvalException(
-					"every promise rejected",
-					Array.isArray(errors) ? errors.map(message).join("; ") : message(ex),
+					EVERY_REJECTED,
+					Array.isArray(errors)
+						? errors.map(message).join(REJECTIONS_JOINED)
+						: message(ex),
 					false,
 				);
 			}),

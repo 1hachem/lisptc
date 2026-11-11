@@ -2,13 +2,13 @@
 
 (memory "internal/promises/waiting" :when "several slow jobs could run at once, a wait needs a time limit, only the first of several results matters, or a background job must stop"
   "Waiting on promises:
-- (await promise) with no timeout-ms waits 50 seconds, then fails \"await timed out\".
+- (await promise) with no timeout-ms waits {{await-seconds}} seconds, then fails \"await timed out\".
   The promise keeps running. Wait again, or (cancel promise) to stop it.
 - (await promise 600000) waits up to timeout-ms milliseconds. Same failure past it.
   A settled promise returns at once.
 - (promise-all promises) : values in order. First rejection rejects all. Use when every value is needed.
 - (promise-all-settled promises) : one (:fulfilled value) or (:rejected \"message\") per promise. Never rejects, so one failure keeps siblings. Use when some may fail and the rest still count, e.g. when loading several servers.
-- (promise-any promises) : first success wins. When all fail: \"every promise rejected\", with each message joined by \"; \".
+- (promise-any promises) : first success wins. When all fail: \"{{every-rejected}}\", with each message joined by \"{{rejections-joined}}\".
 - (promise-race promises) : first to settle wins, success or failure.
 - (promise-state promise) reads progress without waiting: :pending, :fulfilled or :rejected. (promises) lists what still runs.
 - (cancel promise) aborts the request behind one promise; returns t if there was something to abort. Promise-all and friends have nothing of their own to abort: nil.")
