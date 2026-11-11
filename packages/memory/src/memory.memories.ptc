@@ -1,13 +1,13 @@
 (area "memory" :when "the agent is about to remember, recall, revise or forget something, or a step just failed and the fix is now known")
 
 (memory "internal/memory/triggers" :when "the agent is about to remember something that should come back on its own when a situation, a command, an error, a result or certain words show up" :links ("internal/memory/call-triggers")
-  "Two ways to fire by itself.
+  (format nil "Two ways to fire by itself.
 
 :when \"situation\" is the usual one: one string describing the situation that
 needs the memory. Recognized by meaning before every step, not regex, against
 whole conversation, latest step weighed most: what user said, your last code,
 its result or its error. Recognizer also reads memory key and start of body.
-Once fired, rests {{rest-steps}} steps before it can fire again. Describe the whole situation, not only a request:
+Once fired, rests ~d steps before it can fire again. Describe the whole situation, not only a request:
 what user asks, what you are about to do, an error or a result that just came back.
 
   :when \"agent is about to drive a web page, or a page call failed with a missing browser\"
@@ -17,7 +17,7 @@ one when memory fired where it did not help:
 
   :when \"agent is about to drive a web page\" :unless \"agent only reads a page's text with fetch\"
 
-:on is a quoted form of kind and pattern, for an exact event. Eight kinds:
+:on is a quoted form of kind and pattern, for an exact event. ~d kinds:
 
   call     a form about to be evaluated, at any depth, so it catches a call
            nested inside a setq or a let
@@ -34,7 +34,7 @@ Start memory, trigger (start) : put role and goal there. Loads once; revision
 read only by next conversation.
 
 Every memory has key, body and one trigger: :when or :on, not both.
-Remember without trigger or body is refused.")
+Remember without trigger or body is refused." *memory-rest-steps* (length *memory-hooks*)))
 
 (memory "internal/memory/call-triggers" :when "the agent is writing a memory that must fire on one particular call, such as one tool or one server, and not on every call"
   "For call the pattern is A FORM, written like the call, matched structurally:
@@ -73,13 +73,13 @@ Triggers watch code you write into the REPL. A form evaluated inside a replay or
 step and fires nothing.")
 
 (memory "internal/memory/fading" :when "the agent cannot find something it remembered, or the user asks why it forgot or how long a memory lasts"
-  "STRENGTH AND FORGETTING
+  (format nil "STRENGTH AND FORGETTING
 
 Every memory has a score. Recall strengthens it. Unused, it fades, half its
-strength a week, and below a floor it is swept away. No hand tidying needed.
+strength every ~d days, and below a floor it is swept away. No hand tidying needed.
 memory/forget exists for what is wrong, not for what is merely old.
 
-Built-in memories never fade.")
+Built-in memories never fade." *memory-half-life-days*))
 
 (memory "internal/memory/revising" :when "a memory that just fired or was recalled turned out wrong or vague, or the user says the agent got something wrong and wants it fixed for next time"
   "THE WINDOW

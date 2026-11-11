@@ -87,6 +87,8 @@ export const MAX_BUILTIN_WORDS = 300;
 export const MAX_BUILTIN_STEP_WORDS = 3000;
 export const RECALLED_RESTS_STEPS = 100;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function matches(pattern: string, text: string): boolean {
 	try {
 		return new RegExp(pattern, "i").test(text);
@@ -207,6 +209,13 @@ function isDeclaration(form: unknown): boolean {
 		form.car instanceof Sym &&
 		(form.car.name === "memory" || form.car.name === "area")
 	);
+}
+
+function withBody(interp: Interp, declared: unknown): unknown {
+	const parts = listToArray(declared as List);
+	const body = parts.at(-1);
+	if (parts.length < 2 || !(body instanceof Cell)) return declared;
+	return arrayToList([...parts.slice(0, -1), runSync(interp, str(body))]);
 }
 
 function declaredIn(interp: Interp, name: string): unknown[] {
@@ -487,7 +496,7 @@ export class MemoryBank {
 		for (const source of interp.builtinMemories()) runSync(interp, source);
 		const memories = new Map<string, Memory>();
 		for (const declared of declaredIn(interp, DECLARED_MEMORIES)) {
-			const memory = builtinFrom(declared);
+			const memory = builtinFrom(withBody(interp, declared));
 			if (memories.has(memory.key))
 				throw new EvalException(
 					"two built-in memories share this key",
@@ -966,9 +975,7 @@ export function memoryExtension(
 		bank,
 		asks: [FORGET_ALL],
 		prompt: host.prompt(),
-		memories: host
-			.memories()
-			.replaceAll("{{rest-steps}}", String(RECALLED_RESTS_STEPS)),
+		memories: host.memories(),
 		session: memorySession(bank),
 	});
 }
@@ -1054,6 +1061,30 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		signature: DECLARED,
 		doc: "What a memory or area declaration returns: nothing, so declaring one reports nothing.",
 	});
+	interp.defineGlobal(
+		newSym("*memory-rest-steps*"),
+		BigInt(RECALLED_RESTS_STEPS),
+		{
+			signature: "*memory-rest-steps*",
+			doc: "How many steps a memory rests after it fires before it can fire again.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*memory-half-life-days*"),
+		BigInt(HALF_LIFE_MS / DAY_MS),
+		{
+			signature: "*memory-half-life-days*",
+			doc: "How many days an unused memory takes to lose half its strength.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*memory-hooks*"),
+		arrayToList(TRIGGER_KINDS.filter((kind) => kind !== "when")),
+		{
+			signature: "*memory-hooks*",
+			doc: "The kinds of event an :on trigger can name.",
+		},
+	);
 	runSync(interp, DECLARE);
 	interp.setDoc("memory", {
 		signature:

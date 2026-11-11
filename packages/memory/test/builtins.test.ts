@@ -316,7 +316,7 @@ describe("built-in memories", () => {
 	});
 
 	it("refuse a body that is not a string", () => {
-		const f = fixture({ memories: '(memory "internal/t/a" one)' });
+		const f = fixture({ memories: `(memory "internal/t/a" '(one))` });
 		expect(() => f.bank.builtins()).toThrow(/needs a body string/);
 	});
 
@@ -513,10 +513,14 @@ describe("the when trigger", () => {
 		);
 	});
 
-	it("ships its memories with the rest length filled in", () => {
-		const { memories } = memoryExtension(memoryHost);
-		expect(memories).not.toMatch(/\{\{[^}]*\}\}/);
-		expect(memories).toContain(`rests ${RECALLED_RESTS_STEPS} steps`);
+	it("builds a built-in body from the globals the extension sets", () => {
+		const f = fixture({
+			memories:
+				'(memory "internal/t/a" :when "x" (format nil "rests ~d steps" *memory-rest-steps*))',
+		});
+		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
+			`rests ${RECALLED_RESTS_STEPS} steps`,
+		);
 	});
 
 	it("lists the gate each area declares", async () => {
