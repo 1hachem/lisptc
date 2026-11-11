@@ -103,6 +103,38 @@ describe("a memory store that answers with promises", () => {
 	});
 });
 
+describe("built-ins loading on the first message, over a store that answers with promises", () => {
+	it("evaluates a body built with format without suspending the loader, when memories are already stored", async () => {
+		const store = new PromisedStore();
+		const builtin = Object.assign(() => {}, {
+			prompt: "",
+			memories:
+				'(memory "internal/t/formatted" :when "the test asks for it" (format nil "~d steps" 3))',
+		});
+		const fresh = () => {
+			const bank = new MemoryBank(store);
+			const interp = new MemoryInterp({
+				extensions: [
+					memoryExtension({ ...bareHost, store, prompt: () => "" }, { bank }),
+					builtin,
+				],
+			});
+			runSync(interp, prelude);
+			return { bank, interp };
+		};
+		await runAsync(
+			fresh().interp,
+			'(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")',
+		);
+		const { bank, interp } = fresh();
+		interp.seed([{ role: "user", content: "hello" }]);
+
+		await driveAsync(bank.hear(interp));
+
+		expect(bank.builtins().get("internal/t/formatted")?.body).toBe("3 steps");
+	});
+});
+
 describe("a synchronous store still runs synchronously", () => {
 	it("takes the whole memory surface under runSync", () => {
 		const interp = interpWith(new VolatileStore());

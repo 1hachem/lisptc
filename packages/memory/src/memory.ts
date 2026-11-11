@@ -883,7 +883,7 @@ export class MemoryBank {
 		interp: Interp,
 		at: Cascade = TOP,
 	): Eval<void> {
-		if (!this.step.get().stepping) return;
+		if (!this.step.get().stepping || this.loadingBuiltins) return;
 		const shown = event.kind === "when" ? notedKeys(interp) : undefined;
 		for (const memory of yield* this.everything()) {
 			const on = memory.on;
