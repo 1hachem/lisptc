@@ -13,6 +13,13 @@ the CLI, the repo's dev URLs and the recipes. `reference.md` beside it has the
 gotchas: instance globs, tab targeting, React inputs. `chrome-agent help
 [Domain[.method]]` reads the live protocol out of the running browser.
 
+## Logging in
+
+The app on the dev stack (`task up`) is at `http://localhost:3000`. Every
+deploy of that stack seeds one account, `charts/lisptc/values-dev.yaml` under
+`dev.seed`: `test@gmail.com`, password `crptx123`. When a page needs a session,
+sign in with it at `/login`. Never sign up a new account.
+
 ## The loop
 
 Sense, act, sense again. Never trust what a command returned. A `Page.navigate`
