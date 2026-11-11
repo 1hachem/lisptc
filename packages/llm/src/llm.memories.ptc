@@ -34,7 +34,7 @@ extract-1: alist, keys \"title\" \"stars\" \"state\" \"links\"
 
 Shape is alist of (key . field) , written by (shape (name spec...) ...)
 : no quote, no dotted pairs. Field is:
-  :string, :number, :integer, :boolean, :any; plain string = string field
+  {{scalars}}, :any; plain string = string field
   described by its text;
 (:string \"what it means\") and same for other scalars;
 (:enum \"a\" \"b\") ; (:list field) ; (:optional field) , only field answer may
@@ -82,7 +82,7 @@ options, one call each:
 
 (memory "internal/llm/options" :when "a writing call needs a length cap, a temperature, a system line or a timeout, defaults must change for many calls, or a writing call just timed out"
   "Options, all optional, every call: :system · :max-tokens · :temperature ·
-:reasoning-effort, :low, :medium or :high · :timeout ms, default 60000.
+:reasoning-effort, :low, :medium or :high · :timeout ms, default {{timeout-ms}}.
 Timed-out call raises.
 
 Global *writing-defaults* = keyword list every call starts from; call-site

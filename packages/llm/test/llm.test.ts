@@ -645,3 +645,9 @@ describe("the observer", () => {
 		expect(str((await runAsync(interp, '(write "hi")')).value)).toBe('"fine"');
 	});
 });
+
+describe("the memories", () => {
+	it("fill every value they take from code", () => {
+		expect(llmExtension(llmHost).memories).not.toMatch(/\{\{|\}\}/);
+	});
+});

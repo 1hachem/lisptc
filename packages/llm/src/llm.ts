@@ -137,6 +137,21 @@ const SCALARS: Record<string, string> = {
 	boolean: "boolean",
 };
 
+function filledMemories(host: LlmHost): string {
+	const fills: Record<string, string> = {
+		"timeout-ms": String(LLM_TIMEOUT_MS),
+		scalars: Object.keys(SCALARS)
+			.map((name) => `:${name}`)
+			.join(", "),
+	};
+	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
+		const fill = fills[name];
+		if (fill === undefined)
+			throw new Error(`no value fills {{${name}}} in the llm memories`);
+		return fill;
+	});
+}
+
 const FIELD_TYPES =
 	":string :number :integer :boolean :any :enum :list :optional";
 
@@ -155,7 +170,7 @@ export function llmExtension(
 		},
 		{
 			prompt: host.prompt(),
-			memories: host.memories(),
+			memories: filledMemories(host),
 			session(hooks: SessionHooks): void {
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {
