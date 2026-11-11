@@ -94,7 +94,7 @@ describe("a REPL built from a list of its own", () => {
 		const { model, entries, notes } = await r.evalOutput("(+ 1 1)");
 
 		expect(notes).toEqual([
-			expect.objectContaining({ role: "system", source: "memory" }),
+			expect.objectContaining({ role: "system", source: "memory:k" }),
 		]);
 		expect(notes[0]?.content).toContain("k: the note");
 		expect(view(entries, memoryKind)).toEqual([

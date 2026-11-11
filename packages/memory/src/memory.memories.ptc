@@ -7,7 +7,7 @@
 needs the memory. Recognized by meaning before every step, not regex, against
 whole conversation, latest step weighed most: what user said, your last code,
 its result or its error. Recognizer also reads memory key and start of body.
-Once fired, rests ~d steps before it can fire again. Describe the whole situation, not only a request:
+Once fired, it does not fire again while its text is in the conversation. Describe the whole situation, not only a request:
 what user asks, what you are about to do, an error or a result that just came back.
 
   :when \"agent is about to drive a web page, or a page call failed with a missing browser\"
@@ -34,7 +34,7 @@ Start memory, trigger (start) : put role and goal there. Loads once; revision
 read only by next conversation.
 
 Every memory has key, body and one trigger: :when or :on, not both.
-Remember without trigger or body is refused." *memory-rest-steps* (length *memory-hooks*)))
+Remember without trigger or body is refused." (length *memory-hooks*)))
 
 (memory "internal/memory/call-triggers" :when "the agent is writing a memory that must fire on one particular call, such as one tool or one server, and not on every call"
   "For call the pattern is A FORM, written like the call, matched structurally:

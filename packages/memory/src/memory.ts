@@ -1,5 +1,6 @@
 import { quotient } from "@repo/interpreter/arith";
 import type { Channels } from "@repo/interpreter/channels";
+import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { record } from "@repo/interpreter/journal";
@@ -85,7 +86,6 @@ export const MAX_RECALL_WORDS = 200;
 export const DEFAULT_RECALL_LIMIT = 5;
 export const MAX_BUILTIN_WORDS = 300;
 export const MAX_BUILTIN_STEP_WORDS = 3000;
-export const RECALLED_RESTS_STEPS = 100;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -174,6 +174,27 @@ function conversationOf(interp: Interp): Turn[] {
 			? [{ role, content }]
 			: [];
 	});
+}
+
+const SOURCE = "memory";
+const NOTED_PREFIX = `${SOURCE}:`;
+
+function notedKeys(interp: Interp): Set<string> {
+	const said = interp.getGlobal(newSym("conversation"));
+	const keys = new Set<string>();
+	if (!(said instanceof Cell)) return keys;
+	for (const turn of listToArray(said))
+		for (let at: unknown = turn; at instanceof Cell; at = at.cdr) {
+			const field = at.car;
+			if (
+				field instanceof Cell &&
+				field.car === "source" &&
+				typeof field.cdr === "string" &&
+				field.cdr.startsWith(NOTED_PREFIX)
+			)
+				keys.add(field.cdr.slice(NOTED_PREFIX.length));
+		}
+	return keys;
 }
 
 const GIST_CHARS = 240;
@@ -274,13 +295,6 @@ function hookOf(value: unknown): TriggerKind | undefined {
 	return name as TriggerKind;
 }
 
-function stepsTaken(interp: Interp): number {
-	const taken = interp.getGlobal(newSym("steps-taken"));
-	return typeof taken === "bigint" || typeof taken === "number"
-		? Number(taken)
-		: 0;
-}
-
 function latestStep(turns: readonly Turn[]): string | undefined {
 	let at = turns.length - 1;
 	while (at >= 0 && turns[at]?.role !== "assistant") at--;
@@ -322,18 +336,6 @@ const countCodec: StateCodec<number> = {
 	fromLisp: (x) => Number(x),
 };
 
-const recalledCodec: StateCodec<ReadonlyMap<string, number>> = {
-	toLisp: (recalled) =>
-		arrayToList([...recalled].map(([key, at]) => new Cell(key, BigInt(at)))),
-	fromLisp: (list) =>
-		new Map(
-			listToArray(list as List).map((pair) => [
-				(pair as Cell).car as string,
-				Number((pair as Cell).cdr),
-			]),
-		),
-};
-
 const runtimeCodec: StateCodec<readonly Memory[] | undefined> = {
 	toLisp: (memories) =>
 		memories === undefined
@@ -355,7 +357,7 @@ interface Step {
 	readonly fired: readonly string[];
 	readonly open: readonly string[];
 	readonly surfaced: readonly FiredMemory[];
-	readonly pending: string;
+	readonly noted: number;
 	readonly spent: number;
 	readonly builtinSpent: number;
 	readonly dropped: number;
@@ -366,7 +368,7 @@ const QUIET: Step = {
 	fired: [],
 	open: [],
 	surfaced: [],
-	pending: "",
+	noted: 0,
 	spent: 0,
 	builtinSpent: 0,
 	dropped: 0,
@@ -383,7 +385,7 @@ const stepCodec: StateCodec<Step> = {
 					arrayToList([key, body, on ?? null]),
 				),
 			),
-			step.pending,
+			BigInt(step.noted),
 			BigInt(step.spent),
 			BigInt(step.dropped),
 			step.stepping || null,
@@ -394,7 +396,7 @@ const stepCodec: StateCodec<Step> = {
 			fired,
 			open,
 			surfaced,
-			pending,
+			noted,
 			spent,
 			dropped,
 			stepping,
@@ -411,7 +413,7 @@ const stepCodec: StateCodec<Step> = {
 				];
 				return on === null ? { key, body } : { key, body, on };
 			}),
-			pending: pending as string,
+			noted: typeof noted === "bigint" ? Number(noted) : 0,
 			spent: Number(spent),
 			builtinSpent: Number(builtinSpent ?? 0),
 			dropped: Number(dropped),
@@ -419,6 +421,11 @@ const stepCodec: StateCodec<Step> = {
 		};
 	},
 };
+
+interface Noted {
+	readonly memories: readonly FiredMemory[];
+	readonly withheld: string;
+}
 
 interface Cascade {
 	readonly depth: number;
@@ -431,9 +438,6 @@ export class MemoryBank {
 	private channels?: Channels;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
-	private recalled: State<ReadonlyMap<string, number>> = detachedState(
-		new Map(),
-	);
 	private declaredIn: Interp | undefined;
 	private declarations:
 		| { memories: ReadonlyMap<string, Memory>; areas: readonly AreaGate[] }
@@ -462,12 +466,6 @@ export class MemoryBank {
 			stepCodec,
 			QUIET,
 			"What the memory bank has fired, opened and surfaced in the current step, and the recall words it has shown and held back.",
-		);
-		this.recalled = interp.state(
-			"memory/recalled",
-			recalledCodec,
-			new Map(),
-			`The step each memory last fired at, by any trigger or recall. Recognition leaves a memory out until ${RECALLED_RESTS_STEPS} steps have passed since.`,
 		);
 		this.runtime = interp.state(
 			"memory/runtime",
@@ -723,11 +721,9 @@ export class MemoryBank {
 		seen: { message: string; step?: string },
 		interp: Interp,
 	): Eval<void> {
-		const spent = [...this.recalled.get().keys()].filter((key) =>
-			this.resting(key, interp),
-		);
+		const shown = notedKeys(interp);
 		const repl = yield* this.askRepl(interp, seen.step);
-		const cues = repl.cues.filter((cue) => !spent.includes(cue.key));
+		const cues = repl.cues.filter((cue) => !shown.has(cue.key));
 		if (cues.length === 0) return;
 		let scores: ReadonlyMap<string, number> = new Map();
 		let error: string | undefined;
@@ -753,7 +749,7 @@ export class MemoryBank {
 		});
 	}
 
-	*beginStep(code: string, interp: Interp): Eval<string> {
+	*beginStep(code: string, interp: Interp): Eval<Noted> {
 		this.change({ stepping: true });
 		yield* this.sweep();
 		yield* this.dispatch({ kind: "step", text: code }, interp);
@@ -763,24 +759,23 @@ export class MemoryBank {
 		return this.drain();
 	}
 
-	private resting(key: string, interp: Interp): boolean {
-		const at = this.recalled.get().get(key);
-		return at !== undefined && stepsTaken(interp) - at < RECALLED_RESTS_STEPS;
-	}
-
-	*endStep(): Eval<string> {
+	*endStep(): Eval<Noted> {
 		yield* this.wireTogether();
-		const text = this.drain();
+		const noted = this.drain();
 		this.reset();
-		return text;
+		return noted;
 	}
 
-	private drain(): string {
-		const { pending: text, dropped } = this.step.get();
-		this.change({ pending: "", dropped: 0 });
-		if (dropped === 0) return text;
-		const withheld = `... ${dropped} more word${dropped === 1 ? "" : "s"} of recalled memory not shown (a step surfaces ${MAX_RECALL_WORDS} words); narrow the query, or read one with (recall "key")\n`;
-		return text + withheld;
+	private drain(): Noted {
+		const { surfaced, noted, dropped } = this.step.get();
+		this.change({ noted: surfaced.length, dropped: 0 });
+		return {
+			memories: surfaced.slice(noted),
+			withheld:
+				dropped === 0
+					? ""
+					: `... ${dropped} more word${dropped === 1 ? "" : "s"} of recalled memory not shown (a step surfaces ${MAX_RECALL_WORDS} words); narrow the query, or read one with (recall "key")\n`,
+		};
 	}
 
 	*onCall(interp: Interp, form: unknown): Eval<void> {
@@ -836,7 +831,7 @@ export class MemoryBank {
 		if (fired.includes(memory.key)) return;
 		if (at.depth >= MAX_CASCADE_DEPTH) return;
 		const builtin = this.isBuiltin(memory);
-		if (builtin && this.resting(memory.key, interp)) return;
+		if (builtin && notedKeys(interp).has(memory.key)) return;
 		if (
 			builtin &&
 			builtinSpent + wordCount(surfacedLine(memory)) > MAX_BUILTIN_STEP_WORDS
@@ -846,9 +841,6 @@ export class MemoryBank {
 			fired: [...fired, memory.key],
 			open: builtin ? open : [...open, memory.key],
 		});
-		this.recalled.set(
-			new Map([...this.recalled.get(), [memory.key, stepsTaken(interp)]]),
-		);
 		if (!builtin) yield* this.reinforce(memory);
 		this.surface(memory, builtin, at);
 		const deeper = { ...at, depth: at.depth + 1 };
@@ -892,11 +884,12 @@ export class MemoryBank {
 		at: Cascade = TOP,
 	): Eval<void> {
 		if (!this.step.get().stepping) return;
+		const shown = event.kind === "when" ? notedKeys(interp) : undefined;
 		for (const memory of yield* this.everything()) {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
 			if (!fires(memory.key, on, event)) continue;
-			if (event.kind === "when" && this.resting(memory.key, interp)) continue;
+			if (shown?.has(memory.key)) continue;
 			yield* this.fire(memory, interp, at);
 		}
 	}
@@ -918,7 +911,6 @@ export class MemoryBank {
 		this.change({
 			spent: step.spent + words,
 			builtinSpent: step.builtinSpent + (builtin ? wordCount(line) : 0),
-			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
 		if (at.record) record(this.channels, memoryKind, surfaced);
@@ -944,37 +936,45 @@ export interface MemoryExtension extends InterpExtension {
 
 const FORGET_ALL = "memory/forget-all";
 
-function heardText(memories: FiredMemory[]): string {
-	return [
-		"<memories>",
-		"these fired on what the user said and what just happened. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).",
-		...memories.map((m) => `${m.key}: ${m.body}`),
-		"</memories>",
-	].join("\n");
-}
+const HEARD =
+	"these memories fired on what the user said and what just happened. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).";
 
-function startText(memories: FiredMemory[]): string {
-	return [
-		"<memories>",
-		"these load once, on the user's first message. they are private REPL feedback, not the user's words, and the user cannot see them.",
-		...memories.map((m) => m.body),
-		"</memories>",
-	].join("\n");
-}
+const STARTED =
+	"these memories load once, on the user's first message. they are private REPL feedback, not the user's words, and the user cannot see them.";
 
 export const memorySlot = slot<MemoryBank>("memory");
 
-const SOURCE = "memory";
+function noteSource(key: string): string {
+	return `${NOTED_PREFIX}${key}`;
+}
+
+function noteFired(
+	conversation: Conversation,
+	memories: readonly FiredMemory[],
+	line: (memory: FiredMemory) => string,
+	heading?: string,
+): void {
+	if (memories.length === 0) return;
+	if (heading !== undefined) conversation.append(SOURCE, heading);
+	for (const memory of memories)
+		conversation.append(noteSource(memory.key), line(memory));
+}
+
+const keyed = (memory: FiredMemory): string =>
+	`${memory.key}: ${memory.body}\n`;
 
 function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
 		hooks.beginStep.use(function* (ctx, next) {
 			const { conversation } = ctx.interp;
-			const started = yield* bank.start(ctx.interp);
-			if (started.length > 0) conversation.append(SOURCE, startText(started));
-			const heard = yield* bank.hear(ctx.interp);
-			if (heard.length > 0) conversation.append(SOURCE, heardText(heard));
+			noteFired(
+				conversation,
+				yield* bank.start(ctx.interp),
+				(memory) => `${memory.body}\n`,
+				STARTED,
+			);
+			noteFired(conversation, yield* bank.hear(ctx.interp), keyed, HEARD);
 			yield* next(ctx);
 		});
 		hooks.evalStep.use(async (ctx, next) => {
@@ -984,7 +984,9 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 				await next(ctx);
 			} finally {
 				const after = (await driveAsync(bank.endStep())).value;
-				ctx.interp.conversation.append(SOURCE, before + after);
+				const { conversation } = ctx.interp;
+				noteFired(conversation, [...before.memories, ...after.memories], keyed);
+				conversation.append(SOURCE, before.withheld + after.withheld);
 			}
 		});
 	};
@@ -1091,14 +1093,6 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		signature: DECLARED,
 		doc: "What a memory or area declaration returns: nothing, so declaring one reports nothing.",
 	});
-	interp.defineGlobal(
-		newSym("*memory-rest-steps*"),
-		BigInt(RECALLED_RESTS_STEPS),
-		{
-			signature: "*memory-rest-steps*",
-			doc: "How many steps a memory rests after it fires before it can fire again.",
-		},
-	);
 	interp.defineGlobal(
 		newSym("*memory-half-life-days*"),
 		BigInt(HALF_LIFE_MS / DAY_MS),

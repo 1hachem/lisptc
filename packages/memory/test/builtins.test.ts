@@ -30,7 +30,6 @@ import {
 	MAX_RECALL_WORDS,
 	MemoryBank,
 	memoryExtension,
-	RECALLED_RESTS_STEPS,
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
 import {
@@ -93,6 +92,7 @@ interface Fixture {
 	bank: MemoryBank;
 	hear(text: string): Promise<string[]>;
 	step(code: string, result: string): Promise<string[]>;
+	forgetNotes(): void;
 	entries(): Entry[];
 }
 
@@ -114,7 +114,7 @@ function fixture(
 	openSession([extension]);
 	const buffer = bufferTransport();
 	interp.channels.pipe(buffer);
-	const conversation: Turn[] = [];
+	const conversation: (Turn & { source?: string })[] = [];
 	const say = (...turns: Turn[]) => {
 		conversation.push(...turns);
 		interp.defineGlobal(newSym("conversation"), jsonToLisp(conversation));
@@ -123,6 +123,14 @@ function fixture(
 			BigInt(conversation.filter((turn) => turn.role === "assistant").length),
 		);
 	};
+	const noted = (fired: readonly { key: string; body: unknown }[]) =>
+		say(
+			...fired.map((m) => ({
+				role: "system" as const,
+				content: `${m.key}: ${String(m.body)}\n`,
+				source: `memory:${m.key}`,
+			})),
+		);
 	return {
 		interp,
 		bank,
@@ -136,7 +144,13 @@ function fixture(
 			say({ role: "user", content: text });
 			const fired = await drive(bank.hear(interp));
 			await drive(bank.endStep());
+			noted(fired);
 			return fired.map((m) => m.key);
+		},
+		forgetNotes() {
+			const kept = conversation.filter((turn) => turn.source === undefined);
+			conversation.length = 0;
+			say(...kept);
 		},
 		async step(code, result) {
 			say(
@@ -145,6 +159,7 @@ function fixture(
 			);
 			const fired = await drive(bank.hear(interp));
 			await drive(bank.endStep());
+			noted(fired);
 			return fired.map((m) => m.key);
 		},
 	};
@@ -516,10 +531,10 @@ describe("the when trigger", () => {
 	it("builds a built-in body from the globals the extension sets", () => {
 		const f = fixture({
 			memories:
-				'(memory "internal/t/a" :when "x" (format nil "rests ~d steps" *memory-rest-steps*))',
+				'(memory "internal/t/a" :when "x" (format nil "halves every ~d days" *memory-half-life-days*))',
 		});
 		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
-			`rests ${RECALLED_RESTS_STEPS} steps`,
+			"halves every 7 days",
 		);
 	});
 
@@ -601,7 +616,7 @@ describe("the when trigger", () => {
 		]);
 	});
 
-	it("leaves a fired memory out of recognition until its rest is over, across user messages", async () => {
+	it("leaves a memory out of recognition while its note is in the conversation, across user messages", async () => {
 		const { recognize, calls } = recognizing({
 			"user asks about billing": 0.9,
 		});
@@ -614,9 +629,8 @@ describe("the when trigger", () => {
 		expect(await f.step("(invoices)", "3 invoices")).toEqual([]);
 		expect(calls.at(-1)).not.toContain("user asks about billing");
 		expect(await f.hear("and the one from march")).toEqual([]);
-		for (let step = 1; step < RECALLED_RESTS_STEPS - 1; step++)
-			await f.step("(invoices)", "3 invoices");
-		expect(await f.step("(invoices)", "3 invoices")).toEqual(["billing"]);
+		f.forgetNotes();
+		expect(await f.hear("and the one from april")).toEqual(["billing"]);
 	});
 
 	it("fires a built-in when memory once per user message, however many steps follow", async () => {
@@ -643,7 +657,7 @@ describe("the when trigger", () => {
 describe("a loaded built-in", () => {
 	const ASK = "user wants to automate a web browser";
 
-	it("loads once, and not again while its rest lasts", async () => {
+	it("loads once, and not again while its note is in the conversation", async () => {
 		const { recognize, calls } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
 		expect(await f.hear("open my browser")).toContain("internal/browser/local");
@@ -651,13 +665,12 @@ describe("a loaded built-in", () => {
 		expect(calls).toHaveLength(1);
 	});
 
-	it("loads again once its rest is over", async () => {
+	it("loads again once its note has left the conversation", async () => {
 		const { recognize } = recognizing({ [ASK]: 0.9 });
 		const f = fixture({ recognize });
 		await f.hear("open my browser");
 		expect(await f.hear("open the browser again")).toEqual([]);
-		for (let step = 1; step < RECALLED_RESTS_STEPS; step++)
-			await f.step("(open)", "opened");
+		f.forgetNotes();
 		expect(await f.step("(open)", "opened")).toContain(
 			"internal/browser/local",
 		);

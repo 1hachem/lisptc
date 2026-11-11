@@ -39,6 +39,16 @@ function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
 }
 
+function shown(noted: {
+	memories: readonly { key: string; body: unknown }[];
+	withheld: string;
+}): string {
+	return (
+		noted.memories.map((m) => `${m.key}: ${String(m.body)}\n`).join("") +
+		noted.withheld
+	);
+}
+
 interface Fixture {
 	interp: MemoryInterp;
 	bank: MemoryBank;
@@ -59,9 +69,9 @@ function fixture(
 		async step(code: string): Promise<string> {
 			const fired = await drive(bank.hear(interp));
 			const heard = fired.map((m) => `${m.key}: ${m.body}\n`).join("");
-			const before = await drive(bank.beginStep(code, interp));
+			const before = shown(await drive(bank.beginStep(code, interp)));
 			await runAsync(interp, code);
-			return heard + before + (await drive(bank.endStep()));
+			return heard + before + shown(await drive(bank.endStep()));
 		},
 	};
 }
@@ -276,7 +286,9 @@ describe("triggers", () => {
 		await drive(f.bank.beginStep("(nope)", f.interp));
 		await expect(runAsync(f.interp, "(nope)")).rejects.toThrow(/undefined/);
 
-		expect(await drive(f.bank.endStep())).toContain("voids: define it first");
+		expect(shown(await drive(f.bank.endStep()))).toContain(
+			"voids: define it first",
+		);
 	});
 
 	it("matches what the user said by regular expression", async () => {
@@ -351,7 +363,7 @@ describe("triggers", () => {
 		expect(await drive(f.bank.hear(f.interp))).toEqual([
 			{ key: "h", body: "note", on: "user" },
 		]);
-		expect(await drive(f.bank.beginStep("(+ 1 1)", f.interp))).toBe("");
+		expect(shown(await drive(f.bank.beginStep("(+ 1 1)", f.interp)))).toBe("");
 	});
 
 	it("hands over a linked memory under its own trigger kind", async () => {
@@ -503,7 +515,7 @@ describe("triggers", () => {
 		});
 		runSync(quiet, prelude);
 
-		expect(await drive(bank.endStep())).toBe("");
+		expect(shown(await drive(bank.endStep()))).toBe("");
 	});
 });
 
@@ -578,10 +590,10 @@ describe("chaining", () => {
 			);
 		const f = fixture(bank);
 
-		const fired = await drive(f.bank.beginStep("", f.interp));
+		const fired = shown(await drive(f.bank.beginStep("", f.interp)));
 		expect(fired).toBe("");
 		await drive(f.bank.recall(f.interp, "m0", 1));
-		const out = await drive(f.bank.endStep());
+		const out = shown(await drive(f.bank.endStep()));
 
 		expect(out).toContain("m0: body 0");
 		expect(out).not.toContain(`m${depth - 1}:`);
@@ -979,6 +991,31 @@ describe("the listing", () => {
 		await ev(f, "(memories)");
 
 		expect((await remembered(f, "k"))?.used).toBe(0);
+	});
+});
+
+describe("what the conversation already holds", () => {
+	it("keeps a memory the session noted out of the next recognition", async () => {
+		const offered: string[][] = [];
+		const bank = new MemoryBank(
+			new VolatileStore(),
+			undefined,
+			undefined,
+			(_situation, cues) => {
+				offered.push(cues.map((cue) => cue.key));
+				return new Map(cues.map((cue) => [cue.key, 0.9]));
+			},
+		);
+		const f = fixture(bank);
+		await ev(
+			f,
+			'(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")',
+		);
+		said(f, "where is my invoice");
+		expect(await opening(f)).toContain("billing: invoices live in stripe");
+		said(f, "and the one from march");
+		expect(await opening(f)).toBe("");
+		expect(offered.flat().filter((key) => key === "billing")).toHaveLength(1);
 	});
 });
 

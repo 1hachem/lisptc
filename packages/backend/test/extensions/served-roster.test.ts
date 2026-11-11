@@ -91,8 +91,8 @@ describe("the agent the app serves", () => {
 			ev(
 				`(cdr (assoc "body" (car (filter (lambda (m) (equal (cdr (assoc "key" m)) ${JSON.stringify(key)})) (memory/recall ${JSON.stringify(key)})))))`,
 			);
-		expect(await bodyOf("internal/memory/triggers")).toContain(
-			"rests 100 steps",
+		expect(await bodyOf("internal/memory/fading")).toContain(
+			"strength every 7 days",
 		);
 		expect(await bodyOf("internal/preferences/metadata")).toContain(
 			":input input tokens",
