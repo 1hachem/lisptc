@@ -7,7 +7,7 @@ import {
 } from "@repo/interpreter/arith";
 import { EvalException } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
-import { Cell, type List } from "@repo/interpreter/objects";
+import { Cell, type List, newSym } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { zList } from "@repo/interpreter/schema";
 import {
@@ -17,7 +17,11 @@ import {
 } from "@repo/interpreter/session";
 import type { ToJson } from "@repo/interpreter/types";
 import { z } from "zod";
-import type { SecretsHost, SecretsStore } from "./ports.ts";
+import {
+	SECRET_ENV_PREFIX,
+	type SecretsHost,
+	type SecretsStore,
+} from "./ports.ts";
 
 const zString = z.custom<string>(
 	(x) => typeof x === "string",
@@ -126,6 +130,10 @@ function imageSecrets(interp: Interp, store: SecretsStore): void {
 
 export function registerSecrets(interp: Interp, store: SecretsStore): void {
 	imageSecrets(interp, store);
+	interp.defineGlobal(newSym("*secrets-env-prefix*"), SECRET_ENV_PREFIX, {
+		signature: "*secrets-env-prefix*",
+		doc: "The prefix every secret's environment key must start with.",
+	});
 	interp.def(
 		"secrets",
 		0,
