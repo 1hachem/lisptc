@@ -46,6 +46,10 @@ export function workspaceRepl(workspaceId: Id<"workspaces">) {
 	return host.workspace(workspaceId);
 }
 
+export function chatRepl(chatId: Id<"chats">) {
+	return threads.repl(chatId);
+}
+
 export function post(
 	chatId: Id<"chats">,
 	envelope: Envelope,

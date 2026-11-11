@@ -246,6 +246,7 @@ const zName = z
 
 interface ServerEntry {
 	readonly name: string;
+	readonly server?: string;
 	readonly serverId: string;
 	readonly state: "loaded" | "dormant" | "failed";
 	readonly reason?: string;
@@ -261,6 +262,27 @@ const TOOL_TAG = "mcp/tool";
 interface ToolRef {
 	readonly server: string;
 	readonly tool: string;
+	readonly bound?: string;
+}
+
+const OWN_SUFFIX = "-own";
+
+function bindingOf(conf: ConnConfig): string {
+	return "instance" in conf && conf.instance !== undefined
+		? `${conf.name}${OWN_SUFFIX}`
+		: conf.name;
+}
+
+function serverOfEntry(entry: ServerEntry): string {
+	return entry.server ?? entry.name;
+}
+
+function isOwn(entry: ServerEntry): boolean {
+	return entry.server !== undefined;
+}
+
+function boundOf(ref: ToolRef): string {
+	return ref.bound ?? ref.server;
 }
 
 function field(alist: unknown, key: string): unknown {
@@ -280,6 +302,7 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 						new Cell("args", entry.args),
 						jsonToLisp({
 							name: entry.name,
+							server: entry.server ?? null,
 							"server-id": entry.serverId,
 							state: entry.state,
 							reason: entry.reason ?? null,
@@ -293,8 +316,10 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 		listToArray(list as List).map((alist) => {
 			const reason = field(alist, "reason");
 			const icons = field(alist, "icons");
+			const server = field(alist, "server");
 			return {
 				name: field(alist, "name") as string,
+				...(typeof server === "string" ? { server } : {}),
 				serverId: field(alist, "server-id") as string,
 				state: field(alist, "state") as ServerEntry["state"],
 				reason: typeof reason === "string" ? reason : undefined,
@@ -329,6 +354,7 @@ export interface McpExtensionHost {
 	registry?: McpRegistry;
 	machine?: UserMachine;
 	commands?: boolean;
+	instance?: string;
 }
 
 function extractAuthCode(raw: string): string {
@@ -440,6 +466,7 @@ function connConfigFromArgs(
 	predefined: Map<string, ConnConfig>,
 	local: LocalVariant,
 	commands: boolean,
+	instance: string | undefined,
 ): ConnConfig {
 	const args = listToArray(rest);
 	if (args.length === 1) return lookupPredefined(predefined, asName(args[0]));
@@ -459,10 +486,31 @@ function connConfigFromArgs(
 	const conf = isLocal(opts)
 		? lookupLocal(predefined, local, name)
 		: lookupPredefined(predefined, name);
-	return withFlags(conf, opts);
+	return dedicated(withFlags(conf, opts), opts, instance);
 }
 
-const LOAD_KEYS = new Set(["name", "local"]);
+const LOAD_KEYS = new Set(["name", "local", "dedicated"]);
+
+function dedicated(
+	conf: ConnConfig,
+	opts: Plist,
+	instance: string | undefined,
+): ConnConfig {
+	if (!opts.has("dedicated") || opts.get("dedicated") === null) return conf;
+	if (!("image" in conf))
+		throw new EvalException(
+			`${conf.name} runs no container of its own, so it cannot be :dedicated`,
+			conf.name,
+			false,
+		);
+	if (instance === undefined)
+		throw new EvalException(
+			`${conf.name} cannot be :dedicated here: this session belongs to no chat of its own`,
+			conf.name,
+			false,
+		);
+	return { ...conf, instance };
+}
 
 function flagsOf(conf: ConnConfig): Record<string, string[]> {
 	return "flags" in conf && conf.flags !== undefined ? conf.flags : {};
@@ -595,6 +643,13 @@ const LOAD_MCP_OPTIONS: DocArg[] = [
 			"Run a toolkit server marked :also-local on the user's machine, through their desktop app.",
 	},
 	{
+		name: "dedicated",
+		type: "boolean",
+		required: false,
+		description:
+			"Run a server of this chat's own instead of the workspace's shared one. It binds as name-own, so both can be loaded side by side; (unload-mcp \"name-own\") drops only it.",
+	},
+	{
 		name: "url",
 		type: "string",
 		required: false,
@@ -685,8 +740,9 @@ function admitServer(policy: McpPolicy, name: string): void {
 }
 
 function shownTools(entry: ServerEntry, policy: McpPolicy): readonly Tool[] {
-	if (policy.server(entry.name).access !== "open") return [];
-	return entry.tools.filter((tool) => policy.tool(entry.name, tool.name));
+	const server = serverOfEntry(entry);
+	if (policy.server(server).access !== "open") return [];
+	return entry.tools.filter((tool) => policy.tool(server, tool.name));
 }
 
 interface Wiring {
@@ -704,13 +760,14 @@ function callTool(
 	ref: ToolRef,
 	f: unknown[],
 ): Promise<unknown> {
-	const name = `${ref.server}/${ref.tool}`;
-	const entry = entryOf(servers, ref.server);
+	const bound = boundOf(ref);
+	const name = `${bound}/${ref.tool}`;
+	const entry = entryOf(servers, bound);
 	if (entry === undefined)
-		throw new EvalException("MCP server not loaded", ref.server, false);
+		throw new EvalException("MCP server not loaded", bound, false);
 	if (entry.state !== "loaded")
 		throw new EvalException(
-			`${ref.server} is not connected (${entry.reason ?? "failed"}); load it again with (load-mcp "${ref.server}")`,
+			`${bound} is not connected (${entry.reason ?? "failed"}); load it again with (load-mcp "${ref.server}"${isOwn(entry) ? " :dedicated t" : ""})`,
 			name,
 			false,
 		);
@@ -729,7 +786,7 @@ function callTool(
 		record(interp.channels, activityKind, {
 			kind: "mcp",
 			icon,
-			label: toolLabel(ref.server, tool),
+			label: toolLabel(bound, tool),
 			...(detail === undefined ? {} : { detail }),
 			state,
 			...(error === undefined ? {} : { error: messageOf(error) }),
@@ -776,18 +833,19 @@ function timeoutOf(name: string, given: unknown): number {
 }
 
 function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
+	const bound = boundOf(ref);
 	return wiring.interp.makeBuiltIn(
-		`${ref.server}/${ref.tool}`,
+		`${bound}/${ref.tool}`,
 		-1,
 		(f: unknown[]) => {
 			admitServer(wiring.policy, ref.server);
 			if (!wiring.policy.tool(ref.server, ref.tool))
 				throw new EvalException(
 					"unknown MCP tool",
-					`${ref.server}/${ref.tool}`,
+					`${bound}/${ref.tool}`,
 					false,
 				);
-			const entry = entryOf(wiring.servers, ref.server);
+			const entry = entryOf(wiring.servers, bound);
 			return entry?.state === "dormant"
 				? wiring.reconnect(entry).then(() => callTool(wiring, ref, f))
 				: callTool(wiring, ref, f);
@@ -800,12 +858,17 @@ function defineTools(
 	wiring: Wiring,
 	name: string,
 	tools: readonly Tool[],
+	server: string = name,
 ): readonly Tool[] {
 	const { interp } = wiring;
 	for (const tool of tools)
 		interp.defineGlobal(
 			newSym(`${name}/${tool.name}`),
-			toolBuiltIn(wiring, { server: name, tool: tool.name }),
+			toolBuiltIn(wiring, {
+				server,
+				tool: tool.name,
+				...(server === name ? {} : { bound: name }),
+			}),
 			{
 				signature: toolSignature(`${name}/${tool.name}`, tool),
 				doc: toolDocBody(tool) || "MCP tool (no description provided).",
@@ -822,14 +885,16 @@ function putEntry(servers: Servers, entry: ServerEntry): void {
 function installServer(
 	wiring: Wiring,
 	name: string,
+	server: string,
 	res: ConnectResult,
 	args: List,
 ): List {
 	const entry: ServerEntry = {
 		name,
+		...(server === name ? {} : { server }),
 		serverId: res.serverId,
 		state: "loaded",
-		tools: defineTools(wiring, name, res.tools),
+		tools: defineTools(wiring, name, res.tools, server),
 		...(res.icons === undefined ? {} : { icons: res.icons }),
 		args,
 	};
@@ -946,6 +1011,7 @@ export function registerMcp(
 		| "clock"
 		| "machine"
 		| "commands"
+		| "instance"
 	> & {
 		registry: McpRegistry;
 	},
@@ -986,11 +1052,13 @@ export function registerMcp(
 				.map((conf) => [conf.name, conf]),
 		);
 	const configOf = (args: List): ConnConfig =>
-		connConfigFromArgs(args, shown(), toolkit.local, commands);
+		connConfigFromArgs(args, shown(), toolkit.local, commands, host.instance);
 	const loaded = (): ServerEntry[] =>
 		servers
 			.get()
-			.filter((entry) => policy.server(entry.name).access !== "hidden");
+			.filter(
+				(entry) => policy.server(serverOfEntry(entry)).access !== "hidden",
+			);
 
 	function mountOf(conf: ConnConfig, tools: readonly Tool[]): McpMount {
 		return toolkit.all().includes(conf)
@@ -1004,13 +1072,15 @@ export function registerMcp(
 		progress?: Progress,
 	): Promise<List> {
 		const conf = configOf(args);
+		const bound = bindingOf(conf);
 		admitServer(policy, conf.name);
 		return client.connect(conf, { signal, progress }).then(
 			async (res) => {
 				try {
 					if (signal.aborted)
 						throw new EvalException("MCP load cancelled", conf.name, false);
-					await registry.mount(mountOf(conf, res.tools));
+					if (bound === conf.name)
+						await registry.mount(mountOf(conf, res.tools));
 					await registry.describe(infoOf(conf, res));
 				} catch (error) {
 					void client.disconnect(res.serverId).catch(() => {});
@@ -1018,6 +1088,7 @@ export function registerMcp(
 				}
 				return installServer(
 					wiring,
+					bound,
 					conf.name,
 					{ ...res, icons: res.icons ?? manifestIcons(conf) },
 					args,
@@ -1031,8 +1102,8 @@ export function registerMcp(
 
 	function startLoad(args: List): LispPromise {
 		const conf = configOf(args);
-		const { name } = conf;
-		admitServer(policy, name);
+		const name = bindingOf(conf);
+		admitServer(policy, conf.name);
 		const n = loads.get() + 1;
 		loads.set(n);
 		const startedAt = clock.now();
@@ -1128,8 +1199,8 @@ export function registerMcp(
 			const conf = configOf(rest);
 			if ("local" in conf && conf.local === true)
 				yield* interp.guard(`${LOCAL_GATE}${conf.name}`, []);
-			if (entryOf(servers, conf.name))
-				doUnload(interp, client, servers, conf.name);
+			const bound = bindingOf(conf);
+			if (entryOf(servers, bound)) doUnload(interp, client, servers, bound);
 			return startLoad(rest);
 		},
 		loadMcpArgs(shown),
@@ -1142,9 +1213,10 @@ export function registerMcp(
 		"Unload an MCP server and remove its `server/tool` bindings.",
 		z.tuple([zName]),
 		([name]) => {
-			if (entryOf(servers, name) === undefined)
+			const entry = entryOf(servers, name);
+			if (entry === undefined)
 				throw new EvalException("MCP server not loaded", name, false);
-			return settle(registry.unmount(name), () =>
+			return settle(isOwn(entry) ? undefined : registry.unmount(name), () =>
 				arrayToList(
 					entryOf(servers, name) === undefined
 						? []
@@ -1176,8 +1248,9 @@ export function registerMcp(
 			const conf =
 				entry === undefined ? shown().get(name) : configOf(entry.args);
 			if (conf === undefined) return forgetUnresolved(name);
-			return Promise.resolve(registry.unmount(name))
-				.then(() => registry.forget(name))
+			const own = entry !== undefined && isOwn(entry);
+			return Promise.resolve(own ? undefined : registry.unmount(name))
+				.then(() => (own ? undefined : registry.forget(name)))
 				.then(() => {
 					const loadedEntry = entryOf(servers, name);
 					if (loadedEntry === undefined) return;
@@ -1442,9 +1515,8 @@ export function registerMcp(
 		"Disconnect every loaded MCP server and unload its bindings.",
 		z.tuple([]),
 		() => {
-			const unmounted = servers
-				.get()
-				.map((entry) => registry.unmount(entry.name));
+			const shared = servers.get().filter((entry) => !isOwn(entry));
+			const unmounted = shared.map((entry) => registry.unmount(entry.name));
 			return settle(
 				unmounted.some((done) => done instanceof Promise)
 					? Promise.all(unmounted)
@@ -1541,6 +1613,7 @@ export function registerMcp(
 		);
 		const dropped = servers
 			.get()
+			.filter((entry) => !isOwn(entry))
 			.map((entry) => entry.name)
 			.filter((name) => !mounts.has(name));
 		for (const name of dropped) doUnload(interp, client, servers, name);

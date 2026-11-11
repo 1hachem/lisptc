@@ -1,5 +1,4 @@
 import { runSpecFor } from "@repo/containers/launch";
-import type { ImageEntry } from "@repo/toolkit";
 import { describe, expect, it } from "vitest";
 import {
 	containerOf,
@@ -8,9 +7,9 @@ import {
 	specFor,
 	workloadHash,
 } from "../src/mcp-server-resource.ts";
-import type { StdioConnConfig } from "../src/ports.ts";
+import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
 
-const browser: ImageEntry = {
+const browser: ContainerConnConfig = {
 	name: "playwright",
 	image: "playwright-mcp",
 	port: 8931,
@@ -25,7 +24,7 @@ const browser: ImageEntry = {
 	},
 };
 
-function spec(conf: ImageEntry | StdioConnConfig) {
+function spec(conf: ContainerConnConfig | StdioConnConfig) {
 	const run = runSpecFor(conf);
 	if (!run) throw new Error("no launch");
 	return specFor(run, "ws1", 1000);
@@ -78,6 +77,15 @@ describe("naming in the cluster", () => {
 		const prefix = "s".repeat(40);
 		expect(serverName("ws1", `${prefix}-one`)).not.toBe(
 			serverName("ws1", `${prefix}-two`),
+		);
+	});
+
+	it("gives each instance of a server its own name", () => {
+		expect(serverName("ws1", "playwright", "chat-a")).not.toBe(
+			serverName("ws1", "playwright"),
+		);
+		expect(serverName("ws1", "playwright", "chat-a")).not.toBe(
+			serverName("ws1", "playwright", "chat-b"),
 		);
 	});
 });

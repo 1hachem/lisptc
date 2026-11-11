@@ -1,4 +1,3 @@
-import type { ImageEntry } from "@repo/toolkit";
 import { describe, expect, it } from "vitest";
 import { KubernetesHost, type ServerStore } from "../src/kubernetes-host.ts";
 import {
@@ -6,10 +5,10 @@ import {
 	type McpServerStatus,
 	serverName,
 } from "../src/mcp-server-resource.ts";
-import type { StdioConnConfig } from "../src/ports.ts";
+import type { ContainerConnConfig, StdioConnConfig } from "../src/ports.ts";
 import { bundledToolkit } from "../src/toolkit.ts";
 
-const browser: ImageEntry = {
+const browser: ContainerConnConfig = {
 	name: "playwright",
 	image: "playwright-mcp",
 	port: 8931,
@@ -79,6 +78,10 @@ function host(store: ServerStore, clock = () => 1000, imageTag?: string) {
 		clock,
 		imageTag,
 	});
+}
+
+function ownOf(chat: string) {
+	return { ...browser, instance: chat };
 }
 
 function ticking() {
@@ -199,13 +202,14 @@ describe("the kubernetes host", () => {
 		expect(fake.patches).toHaveLength(1);
 	});
 
-	it("runs one server per workspace however often it is ensured", async () => {
+	it("shares one server between every chat of the workspace", async () => {
 		const fake = fakeStore();
 
 		await host(fake.store).ensure(browser);
 		await host(fake.store).ensure(browser);
 
 		expect([...fake.servers.keys()]).toEqual([NAME]);
+		expect(fake.servers.get(NAME)?.spec.instance).toBeUndefined();
 	});
 
 	it("deletes the server it was asked to remove", async () => {
@@ -226,6 +230,36 @@ describe("the kubernetes host", () => {
 		await host(fake.store).remove(browser);
 
 		expect(fake.removed).toEqual([NAME]);
+	});
+
+	it("deletes only this chat's own instance of a dedicated server", async () => {
+		const fake = fakeStore();
+		await host(fake.store).ensure(ownOf("chat-a"));
+		await host(fake.store).ensure(browser);
+
+		await host(fake.store).remove(ownOf("chat-a"));
+
+		expect(fake.removed).toEqual([serverName("ws1", "playwright", "chat-a")]);
+		expect(fake.servers.has(NAME)).toBe(true);
+	});
+
+	it("runs a dedicated server once per chat, apart from the shared one", async () => {
+		const fake = fakeStore();
+		await host(fake.store).ensure(ownOf("chat-a"));
+		await host(fake.store).ensure(ownOf("chat-a"));
+		await host(fake.store).ensure(ownOf("chat-b"));
+		await host(fake.store).ensure(browser);
+
+		expect([...fake.servers.keys()].sort()).toEqual(
+			[
+				NAME,
+				serverName("ws1", "playwright", "chat-a"),
+				serverName("ws1", "playwright", "chat-b"),
+			].sort(),
+		);
+		expect(
+			fake.servers.get(serverName("ws1", "playwright", "chat-b"))?.spec,
+		).toMatchObject({ server: "playwright", instance: "chat-b" });
 	});
 
 	it("raises restarts on a failed server instead of recreating it", async () => {
@@ -472,6 +506,23 @@ describe("the kubernetes host", () => {
 
 		expect(fake.patches.map((patch) => patch.lastUsed)).toEqual([1090]);
 		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(1090);
+	});
+
+	it("keeps a chat's own server awake apart from the shared one beside it", async () => {
+		const fake = fakeStore();
+		const time = ticking();
+		const kube = host(fake.store, time.clock);
+		await kube.ensure(browser);
+		await kube.ensure(ownOf("chat-a"));
+
+		time.pass(90);
+		kube.used({ name: "playwright", instance: "chat-a" });
+
+		expect(fake.servers.get(NAME)?.spec.lastUsed).toBe(1000);
+		expect(
+			fake.servers.get(serverName("ws1", "playwright", "chat-a"))?.spec
+				.lastUsed,
+		).toBe(1090);
 	});
 
 	it("tells a server went to sleep once the operator slept it", async () => {

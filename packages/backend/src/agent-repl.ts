@@ -198,6 +198,7 @@ export async function workspaceExtensions(
 			}),
 			policy: permissions.rules,
 			registry: new ConvexMcpRegistry(workspaceId, connect),
+			...(chatId === undefined ? {} : { instance: chatId }),
 		}),
 		llmExtension(llmHost),
 		semanticExtension(semanticHost),

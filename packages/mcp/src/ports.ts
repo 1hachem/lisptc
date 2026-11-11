@@ -38,15 +38,17 @@ export interface Tool {
 	icons?: Icon[];
 }
 
+export type ContainerConnConfig = ImageEntry & { instance?: string };
+
 export type StdioConnConfig = CommandEntry & { local?: boolean };
 
 export type ConnConfig =
 	| RemoteEntry
 	| LaunchedEntry
-	| ImageEntry
+	| ContainerConnConfig
 	| StdioConnConfig;
 
-export type OAuthConnConfig = RemoteEntry | LaunchedEntry | ImageEntry;
+export type OAuthConnConfig = RemoteEntry | LaunchedEntry | ContainerConnConfig;
 
 export function oauthKey(conf: OAuthConnConfig, serverUrl: string): string {
 	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
@@ -120,12 +122,33 @@ export type ServerState = "running" | "stopped" | "unknown";
 
 export interface ServerRef {
 	name: string;
+	instance?: string;
+}
+
+export function refOf(ref: ServerRef): ServerRef {
+	return ref.instance === undefined
+		? { name: ref.name }
+		: { name: ref.name, instance: ref.instance };
+}
+
+export function refKey(ref: ServerRef): string {
+	return ref.instance === undefined ? ref.name : `${ref.name}\0${ref.instance}`;
+}
+
+export function subjectOf(ref: ServerRef): {
+	server: string;
+	instance?: string;
+} {
+	return ref.instance === undefined
+		? { server: ref.name }
+		: { server: ref.name, instance: ref.instance };
 }
 
 export type ServerPhase = "starting" | "ready" | "sleeping" | "failed" | "gone";
 
 export interface ServerReport {
 	server: string;
+	instance?: string;
 	phase: ServerPhase;
 	reason?: string;
 }

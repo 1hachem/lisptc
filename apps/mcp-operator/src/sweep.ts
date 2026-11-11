@@ -14,6 +14,7 @@ export interface SweepDeps {
 	prefix: string;
 	servers: readonly McpServer[];
 	existing(workspaces: readonly string[]): Promise<ReadonlySet<string>>;
+	existingChats(chats: readonly string[]): Promise<ReadonlySet<string>>;
 	removeServer(name: string): Promise<void>;
 	now: number;
 }
@@ -52,13 +53,36 @@ async function goneWorkspaces(
 	return new Set([...named].filter((workspace) => !existing.has(workspace)));
 }
 
+async function goneChats(deps: SweepDeps): Promise<ReadonlySet<string>> {
+	const named = new Set(
+		deps.servers.flatMap(({ spec }) =>
+			spec.instance === undefined ? [] : [spec.instance],
+		),
+	);
+	if (named.size === 0) return new Set();
+	const existing = await deps.existingChats([...named]);
+	return new Set([...named].filter((chat) => !existing.has(chat)));
+}
+
+function orphaned(
+	server: McpServer,
+	gone: ReadonlySet<string>,
+	chatsGone: ReadonlySet<string>,
+): boolean {
+	const { workspace, instance } = server.spec;
+	return (
+		gone.has(workspace) || (instance !== undefined && chatsGone.has(instance))
+	);
+}
+
 async function retireServers(
 	deps: SweepDeps,
 	gone: ReadonlySet<string>,
+	chatsGone: ReadonlySet<string>,
 ): Promise<void> {
 	for (const server of deps.servers)
 		if (
-			gone.has(server.spec.workspace) &&
+			orphaned(server, gone, chatsGone) &&
 			server.metadata.deletionTimestamp === undefined
 		)
 			await deps.removeServer(server.metadata.name);
@@ -94,10 +118,11 @@ export async function sweep(deps: SweepDeps): Promise<void> {
 		namespace.name.startsWith(prefix),
 	);
 	const gone = await goneWorkspaces(deps, namespaces);
-	await retireServers(deps, gone);
+	const chatsGone = await goneChats(deps);
+	await retireServers(deps, gone, chatsGone);
 	const inUse = new Set(
 		servers
-			.filter((server) => !gone.has(server.spec.workspace))
+			.filter((server) => !orphaned(server, gone, chatsGone))
 			.filter((server) => awake(server, now))
 			.map((server) => namespaceFor(prefix, server.spec.workspace)),
 	);

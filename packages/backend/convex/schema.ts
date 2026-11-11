@@ -350,13 +350,19 @@ export default defineSchema({
 	mcpServers: defineTable({
 		workspaceId: v.id("workspaces"),
 		server: v.string(),
+		instance: v.optional(v.string()),
 		phase: mcpServerPhase,
 		reason: v.optional(v.string()),
 		reporter: v.optional(v.string()),
 		observedAt: v.number(),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_workspace_server", ["workspaceId", "server"])
+		.index("by_workspace_server_instance", [
+			"workspaceId",
+			"server",
+			"instance",
+		])
+		.index("by_instance", ["instance"])
 		.index("by_reporter", ["reporter"]),
 
 	mcpReporters: defineTable({

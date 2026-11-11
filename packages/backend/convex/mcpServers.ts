@@ -26,14 +26,19 @@ export const OPERATOR = "operator";
 const serverRow = v.object({
 	workspaceId: v.id("workspaces"),
 	server: v.string(),
+	instance: v.optional(v.string()),
 	phase: v.union(mcpServerPhase, v.literal("gone")),
 	reason: v.optional(v.string()),
 });
 
 type ServerRow = Infer<typeof serverRow>;
 
-function ownerKey(row: { workspaceId: string; server: string }): string {
-	return `${row.workspaceId}\0${row.server}`;
+function ownerKey(row: {
+	workspaceId: string;
+	server: string;
+	instance?: string;
+}): string {
+	return `${row.workspaceId}\0${row.server}\0${row.instance ?? ""}`;
 }
 export const list = query({
 	args: { workspaceId: v.id("workspaces") },
@@ -41,6 +46,8 @@ export const list = query({
 		servers: v.array(
 			v.object({
 				server: v.string(),
+				instance: v.optional(v.string()),
+				chatTitle: v.optional(v.string()),
 				phase: mcpServerPhase,
 				reason: v.optional(v.string()),
 				observedAt: v.number(),
@@ -54,34 +61,70 @@ export const list = query({
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.take(LIST_LIMIT);
 		return {
-			servers: servers.map(({ server, phase, reason, observedAt }) => ({
-				server,
-				phase,
-				...(reason === undefined ? {} : { reason }),
-				observedAt,
-			})),
+			servers: await Promise.all(
+				servers.map(async ({ server, instance, phase, reason, observedAt }) => {
+					const chatTitle =
+						instance === undefined
+							? undefined
+							: await titleOfChat(ctx, instance);
+					return {
+						server,
+						...(instance === undefined ? {} : { instance }),
+						...(chatTitle === undefined ? {} : { chatTitle }),
+						phase,
+						...(reason === undefined ? {} : { reason }),
+						observedAt,
+					};
+				}),
+			),
 		};
 	},
 });
 
+async function titleOfChat(
+	ctx: QueryCtx,
+	instance: string,
+): Promise<string | undefined> {
+	const chatId = ctx.db.normalizeId("chats", instance);
+	if (chatId === null) return undefined;
+	return (await ctx.db.get(chatId))?.title;
+}
+
+async function heldByChat(
+	ctx: MutationCtx,
+	workspaceId: Id<"workspaces">,
+	instance: string,
+): Promise<boolean> {
+	const chatId = ctx.db.normalizeId("chats", instance);
+	if (chatId === null) return false;
+	return (await ctx.db.get(chatId))?.workspaceId === workspaceId;
+}
+
 async function putServer(
 	ctx: MutationCtx,
-	{ workspaceId, server, phase, reason }: ServerRow,
+	{ workspaceId, server, instance, phase, reason }: ServerRow,
 	reporter: string,
 ): Promise<void> {
 	const existing = await ctx.db
 		.query("mcpServers")
-		.withIndex("by_workspace_server", (q) =>
-			q.eq("workspaceId", workspaceId).eq("server", server),
+		.withIndex("by_workspace_server_instance", (q) =>
+			q
+				.eq("workspaceId", workspaceId)
+				.eq("server", server)
+				.eq("instance", instance),
 		)
 		.unique();
-	if (phase === "gone") {
+	if (
+		phase === "gone" ||
+		(instance !== undefined && !(await heldByChat(ctx, workspaceId, instance)))
+	) {
 		if (existing !== null) await ctx.db.delete(existing._id);
 		return;
 	}
 	const next = {
 		workspaceId,
 		server,
+		...(instance === undefined ? {} : { instance }),
 		phase,
 		...(reason === undefined ? {} : { reason }),
 		reporter,
@@ -113,6 +156,7 @@ export const observeServer = internalMutation({
 
 const reported = v.object({
 	server: v.string(),
+	instance: v.optional(v.string()),
 	phase: v.union(mcpServerPhase, v.literal("gone")),
 	reason: v.optional(v.string()),
 });
@@ -424,6 +468,23 @@ export const purge = internalMutation({
 		)
 			await ctx.scheduler.runAfter(0, internal.mcpServers.purge, {
 				workspaceId,
+			});
+		return null;
+	},
+});
+
+export const purgeInstance = internalMutation({
+	args: { instance: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { instance }) => {
+		const servers = await ctx.db
+			.query("mcpServers")
+			.withIndex("by_instance", (q) => q.eq("instance", instance))
+			.take(PURGE_BATCH);
+		for (const row of servers) await ctx.db.delete(row._id);
+		if (servers.length === PURGE_BATCH)
+			await ctx.scheduler.runAfter(0, internal.mcpServers.purgeInstance, {
+				instance,
 			});
 		return null;
 	},
