@@ -81,7 +81,12 @@ identities by hand. `test/access.test.ts` and `test/removal.test.ts` are where
 the ownership and cascade rules are pinned, and a new resource needs a case in
 both.
 
-`test/extensions/` is the other project in `vitest.config.ts`, and it runs on
+`test/bundles/` is a project of its own on node. It bundles every function
+module the way the deployment does and fails when one reaches an auth library
+or outgrows its budget, because a fresh isolate pays for every byte before the
+handler runs. `convex/lib/` stays free of `convex/auth.ts` for that reason.
+
+`test/extensions/` is another project in `vitest.config.ts`, and it runs on
 node rather than the deployment's runtime. This is the only package that may
 name an extension in a test, so a case that needs a real one lives here: what
 the composed roster teaches the model, what the model-facing REPL reports back,
