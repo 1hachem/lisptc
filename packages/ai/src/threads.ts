@@ -1,9 +1,15 @@
+import type { Said } from "@repo/interpreter/conversation";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import { envelopeOf } from "@repo/shared/messages";
 import { Budget, type Limits } from "./budget.ts";
 import type { Envelope } from "./mailbox.ts";
-import { entryMessage, type TurnOutcome, type WireMessage } from "./stream.ts";
+import {
+	entryMessage,
+	systemEventMessage,
+	type TurnOutcome,
+	type WireMessage,
+} from "./stream.ts";
 import { type PostOptions, Thread, type ThreadPorts } from "./thread.ts";
 import { type UiActionResult, uiActionOn } from "./ui-action.ts";
 
@@ -232,18 +238,43 @@ export class Threads {
 			ask === undefined ? { thread: root } : await this.asker(root, ask);
 		if (asker === undefined) return OUTSIDE;
 		const target = asker.thread;
-		const result = await uiActionOn(await this.repl(target), action, values);
+		const { notes, ...result } = await uiActionOn(
+			await this.repl(target),
+			action,
+			values,
+		);
 		if (asker.asked !== undefined)
 			for (const entry of result.entries)
 				await this.get(target).place(entryMessage(entry));
-		if (result.message !== undefined && !result.error)
-			await this.followUp(target, {
+		if (!result.error) await this.tell(target, action, notes, result.message);
+		return result;
+	}
+
+	private async tell(
+		target: string,
+		action: string,
+		notes: readonly Said[],
+		message: string | undefined,
+	): Promise<void> {
+		const told: Extract<Envelope, { kind: "event" }>[] = notes.map((note) => ({
+			kind: "event",
+			id: crypto.randomUUID(),
+			source: note.source ?? action,
+			text: note.content,
+			noted: true,
+		}));
+		if (message !== undefined)
+			told.push({
 				kind: "event",
 				id: crypto.randomUUID(),
 				source: action,
-				text: result.message,
+				text: message,
 			});
-		return result;
+		const waking = told.pop();
+		if (waking === undefined) return;
+		for (const envelope of told)
+			await this.get(target).place(systemEventMessage(envelope, envelope.id));
+		await this.followUp(target, waking);
 	}
 
 	private async asker(

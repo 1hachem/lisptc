@@ -146,6 +146,15 @@ export function holding(): InterpExtension {
 	);
 }
 
+export function approvingByNote(): InterpExtension {
+	return extension((hooks) =>
+		hooks.invoke.use(async (ctx, next) => {
+			if (ctx.action !== "approve") return next(ctx);
+			ctx.interp.conversation.append("approver", "approved, carry on");
+		}),
+	);
+}
+
 export type ChatStreamOptions = Omit<TurnOptions, "received"> &
 	TurnStreamOptions;
 

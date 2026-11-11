@@ -3,7 +3,7 @@ import { record } from "@repo/interpreter/journal";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
 import { resolveApproval } from "./approvals.ts";
-import { decided, lapsed, settled } from "./channel.ts";
+import { lapsed, settled } from "./channel.ts";
 import type { ApprovalRequest, Approvals, Approver, Scope } from "./ports.ts";
 
 export const DECIDE_ACTION = "permissions/decide";
@@ -110,11 +110,7 @@ export const uiApprover: Approver = {
 					label: accepted ? DONE[decidedScope] : DONE.denied,
 				}),
 			);
-			decided.emit(ctx.interp.channels, { user: resolution.message });
-		});
-		hooks.message.use((buffer, next) => {
-			const messages = buffer.collect(decided);
-			return messages.length === 0 ? next(buffer) : messages.join("\n\n");
+			ctx.interp.conversation.append("permissions", resolution.message);
 		});
 	},
 };

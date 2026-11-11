@@ -87,6 +87,7 @@ export function systemEventMessage(
 		additional_kwargs: {
 			source: event.source,
 			...(event.failed ? { failed: true } : {}),
+			...(event.noted ? { noted: true } : {}),
 		},
 	};
 }
@@ -284,6 +285,7 @@ class TurnWire {
 									source: event.source,
 									text: event.content,
 									failed: event.failed,
+									noted: event.noted,
 								},
 								event.id,
 							),
