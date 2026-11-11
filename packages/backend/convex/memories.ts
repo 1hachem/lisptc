@@ -110,6 +110,20 @@ export const remove = mutation({
 	},
 });
 
+export const clear = mutation({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.number(),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const memories = await ctx.db
+			.query("memories")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(MAX_MEMORIES);
+		for (const memory of memories) await ctx.db.delete(memory._id);
+		return memories.length;
+	},
+});
+
 export const purge = internalMutation({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.null(),

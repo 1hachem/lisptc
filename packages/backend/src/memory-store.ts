@@ -55,4 +55,10 @@ export class ConvexMemoryStore implements MemoryStore {
 			key,
 		});
 	}
+
+	async clear(): Promise<number> {
+		return await this.connect().mutation(api.memories.clear, {
+			workspaceId: this.workspaceId,
+		});
+	}
 }

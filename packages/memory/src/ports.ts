@@ -83,6 +83,7 @@ export interface MemoryStore {
 	get(key: string): Awaitable<StoredMemory | undefined>;
 	put(memory: MemoryWrite): Awaitable<void>;
 	delete(key: string): Awaitable<boolean>;
+	clear(): Awaitable<number>;
 }
 
 export class VolatileStore implements MemoryStore {
@@ -102,6 +103,12 @@ export class VolatileStore implements MemoryStore {
 
 	delete(key: string): boolean {
 		return this.records.delete(key);
+	}
+
+	clear(): number {
+		const count = this.records.size;
+		this.records.clear();
+		return count;
 	}
 }
 

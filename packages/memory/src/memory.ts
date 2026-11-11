@@ -807,6 +807,12 @@ export class MemoryBank {
 		return dropped;
 	}
 
+	*forgetAll(): Eval<number> {
+		const dropped = yield* settled(this.store.clear());
+		this.stale();
+		return dropped;
+	}
+
 	*recall(interp: Interp, query: string, limit: number): Eval<Memory[]> {
 		yield* this.sweep();
 		const all = yield* this.everything();
@@ -1305,11 +1311,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		"Drop every memory for good; returns how many there were. Only when the user asks for a clean slate.",
 		z.tuple([]),
 		function* (): Eval {
-			const all = (yield* bank.everything()).filter(
-				(memory) => !bank.isBuiltin(memory),
-			);
-			for (const memory of all) yield* bank.forget(memory.key);
-			return quotient(all.length, 1);
+			return quotient(yield* bank.forgetAll(), 1);
 		},
 	);
 

@@ -36,6 +36,10 @@ class PromisedStore implements MemoryStore {
 	delete(key: string): Promise<boolean> {
 		return this.later(this.inner.delete(key));
 	}
+
+	clear(): Promise<number> {
+		return this.later(this.inner.clear());
+	}
 }
 
 function interpWith(store: MemoryStore): MemoryInterp {

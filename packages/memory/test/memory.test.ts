@@ -184,6 +184,17 @@ describe("remembering and recalling", () => {
 		expect(await ev(f, "(memory/forget-all)")).toBe("0");
 	});
 
+	it("forgets everything the store holds, written after this session listed it", async () => {
+		const store = new VolatileStore();
+		const f = fixture(new MemoryBank(store));
+		store.put(plain("a"));
+		expect(await ev(f, "(length (memories))")).toBe("1");
+		store.put(plain("b"));
+
+		expect(await ev(f, "(memory/forget-all)")).toBe("2");
+		expect(await ev(f, "(length (memories))")).toBe("0");
+	});
+
 	it("asks a human before forgetting everything", () => {
 		expect(memoryExtension(bareHost).asks).toEqual(["memory/forget-all"]);
 	});

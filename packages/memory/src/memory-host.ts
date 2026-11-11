@@ -98,6 +98,10 @@ export class FileMemoryStore implements MemoryStore {
 		}
 	}
 
+	clear(): number {
+		return this.all().filter((memory) => this.delete(memory.key)).length;
+	}
+
 	private readOne(key: string): MemorySource | undefined {
 		try {
 			return { key, source: readFileSync(this.file(key), "utf8") };
@@ -152,6 +156,12 @@ export class LayeredStore implements MemoryStore {
 			this.own.delete(key),
 			this.shared.delete(key),
 			(mine, theirs) => theirs || mine,
+		);
+	}
+
+	clear(): Awaitable<number> {
+		return then(this.all(), (all) =>
+			both(this.own.clear(), this.shared.clear(), () => all.length),
 		);
 	}
 }

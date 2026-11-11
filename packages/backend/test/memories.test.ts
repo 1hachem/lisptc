@@ -92,6 +92,38 @@ describe("memory access", () => {
 		).toBe(false);
 	});
 
+	it("clears every memory of a workspace and no other", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		for (const key of ["triage", "billing"])
+			await alice.as.mutation(api.memories.put, {
+				workspaceId: alice.workspace,
+				memory: row(key, '"kept"'),
+			});
+		await bob.as.mutation(api.memories.put, {
+			workspaceId: bob.workspace,
+			memory: row("triage", '"theirs"'),
+		});
+
+		expect(
+			await alice.as.mutation(api.memories.clear, {
+				workspaceId: alice.workspace,
+			}),
+		).toBe(2);
+		expect(
+			await alice.as.query(api.memories.list, {
+				workspaceId: alice.workspace,
+			}),
+		).toEqual([]);
+		expect(
+			await bob.as.query(api.memories.list, { workspaceId: bob.workspace }),
+		).toHaveLength(1);
+		await expect(
+			alice.as.mutation(api.memories.clear, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+	});
+
 	it("refuses a memory larger than the cap", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
