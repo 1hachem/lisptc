@@ -487,11 +487,33 @@ const FORM_DOCS: Record<(typeof RULE_FORMS)[number], [string, string]> = {
 const APPLIES =
 	" Waits for the user's approval, then is saved with the config; a rule naming this form, such as (permission/allow permission/deny), lets it apply at once instead.";
 
+function defineMemoryGlobals(interp: Interp): void {
+	interp.defineGlobal(
+		newSym("*permissions-config-forms*"),
+		arrayToList(
+			[...RULE_FORMS, DELETE_FORM, CLEAR_FORM].map((name) => newSym(name)),
+		),
+		{
+			signature: "*permissions-config-forms*",
+			doc: "Every form a permissions config is written in.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*permissions-verdicts*"),
+		arrayToList(Object.keys(STRENGTH).map((name) => newSym(name))),
+		{
+			signature: "*permissions-verdicts*",
+			doc: "The verdicts permission/check gives.",
+		},
+	);
+}
+
 export function registerPermissions(
 	interp: Interp,
 	rules: SessionRules,
 	apply: (form: unknown) => unknown,
 ): void {
+	defineMemoryGlobals(interp);
 	interp.def(
 		"permission/apply",
 		1,
