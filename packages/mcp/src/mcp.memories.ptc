@@ -1,7 +1,7 @@
 (area "mcp" :when "the work needs a connected service, an MCP server or tool, or the user's own computer: finding, loading, signing in to or calling one")
 
 (memory "internal/mcp/local" :when "the work happens on the user's own computer: their local files, git, a desktop app or a web browser to drive; or a local server failed to start"
-  "User's own machine (their files, git, desktop app, browser on their computer) : servers run there through desktop app.
+  (format nil "User's own machine (their files, git, desktop app, browser on their computer) : servers run there through desktop app.
 How-to is memory internal/mcp/local, loads itself when user asks; else (memory/recall \"internal/mcp/local\") .
 User's own machine: predefined local servers, names start local- , e.g.
 (load-mcp \"local-files\") , (load-mcp \"local-git\") . Run on user's machine
@@ -18,11 +18,11 @@ app not open.
 (load-mcp \"acme\" :local t :quiet t) . Only listed flags; others error.
 - Toolkit server with own command: (load-mcp \"acme\" :local t) runs that
   command, not container.
-- Local load asks user as call {{local-gate}}<name> , e.g. {{local-gate}}local-files ,
-  unless config allows it: (permission/allow {{local-gate}}local-files) or
-(permission/allow {{local-gate}}*) .
+- Local load asks user as call ~a<name> , e.g. ~alocal-files ,
+  unless config allows it: (permission/allow ~alocal-files) or
+(permission/allow ~a*) .
 - Load fails with message if desktop app not open or user denied: say so,
-  don't retry.")
+  don't retry." *mcp-local-gate* *mcp-local-gate* *mcp-local-gate* *mcp-local-gate*))
 
 (memory "internal/mcp/oauth" :when "a connected service needs sign-in or authorization, a call just failed on expired or missing authorization, or the user wants to sign out"
   "OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
@@ -57,13 +57,13 @@ lists only those servers. Unloaded name is error.
 it, then (search-tools \"widget\") ; list with (list-tools \"acme\") .")
 
 (memory "internal/mcp/timeout" :when "the agent is about to run a slow job through an MCP tool, such as a crawl, scrape, build, render, big export or long query, or a tool call just timed out"
-  "Tool call waits {{tool-timeout-seconds}} seconds, then fails \"acme/x timed out\".
-Slow tool: add :mcp/timeout with seconds, above 0, max {{max-tool-timeout-seconds}}, beside tool's own
+  (format nil "Tool call waits ~d seconds, then fails \"acme/x timed out\".
+Slow tool: add :mcp/timeout with seconds, above 0, max ~d, beside tool's own
 keywords:
 (acme/crawl_site :url \"https://...\" :mcp/timeout 600)
 :mcp/timeout is yours, never sent to server. Set it up front when tool name or
 args say slow. Call timed out? Retry once with larger :mcp/timeout, not same
-call again. Still too slow? Split work into smaller calls.")
+call again. Still too slow? Split work into smaller calls." *mcp-tool-timeout-seconds* *mcp-max-tool-timeout-seconds*))
 
 (memory "internal/mcp/result" :when "a connected service just returned a result and the agent must read values or report fields out of it"
   "Tool result is Lisp data: JSON object is alist with string keys, array is list.

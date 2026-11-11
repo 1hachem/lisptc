@@ -824,24 +824,10 @@ export const LOCAL_GATE = "local/";
 
 export const LOCAL_ASKS: readonly string[] = [`${LOCAL_GATE}*`];
 
-function filledMemories(host: McpExtensionHost): string {
-	const fills: Record<string, string> = {
-		"tool-timeout-seconds": String(TOOL_TIMEOUT_SECONDS),
-		"max-tool-timeout-seconds": String(MAX_TOOL_TIMEOUT_SECONDS),
-		"local-gate": LOCAL_GATE,
-	};
-	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
-		const fill = fills[name];
-		if (fill === undefined)
-			throw new Error(`no value fills {{${name}}} in the mcp memories`);
-		return fill;
-	});
-}
-
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
-		memories: filledMemories(host),
+		memories: host.memories(),
 		session(hooks: SessionHooks): void {
 			answerAuthorization(hooks);
 			if (host.machine !== undefined) refreshMachine(hooks, host.machine);
@@ -865,6 +851,27 @@ export function registerMcp(
 	const { client, toolkit, search, clock } = host;
 	const policy = host.policy ?? openPolicy;
 	const commands = host.commands === true;
+
+	interp.defineGlobal(newSym("*mcp-local-gate*"), LOCAL_GATE, {
+		signature: "*mcp-local-gate*",
+		doc: "The prefix a load of a server on the user's own machine is asked as, before the server name.",
+	});
+	interp.defineGlobal(
+		newSym("*mcp-tool-timeout-seconds*"),
+		BigInt(TOOL_TIMEOUT_SECONDS),
+		{
+			signature: "*mcp-tool-timeout-seconds*",
+			doc: "How long a tool call waits, in seconds, when the tool sets no :mcp/timeout.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*mcp-max-tool-timeout-seconds*"),
+		BigInt(MAX_TOOL_TIMEOUT_SECONDS),
+		{
+			signature: "*mcp-max-tool-timeout-seconds*",
+			doc: "The most seconds :mcp/timeout may give a tool call.",
+		},
+	);
 
 	const servers = interp.state(
 		"mcp/servers",
