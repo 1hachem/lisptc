@@ -15,6 +15,7 @@ import type { DesktopPreferences } from "@repo/shared/desktop";
 import {
 	STATUS_BAR_GAP_PREFIX,
 	STATUS_BAR_GAPS,
+	STATUS_BAR_ITEMS,
 	STATUS_BAR_SLOT_COUNT,
 	STATUS_BAR_SLOTS,
 } from "@repo/shared/status-bar";
@@ -419,9 +420,65 @@ export function registerPreferences(
 	);
 }
 
+function escaped(text: string): string {
+	return text.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function quoted(text: string): string {
+	return escaped(JSON.stringify(text));
+}
+
+function keywords(keys: readonly string[]): string {
+	return keys.map((key) => `:${key}`).join(" ");
+}
+
+function described(kind: string, offered: readonly Choice[]): string {
+	if (offered.length === 0)
+		throw new Error(`the host offers no ${kind} to describe`);
+	return offered
+		.map((choice) => `:${choice.id} ${escaped(choice.name)}`)
+		.join(", ");
+}
+
+function firstOf(kind: string, offered: readonly Choice[]): string {
+	const first = offered[0];
+	if (first === undefined)
+		throw new Error(`the host offers no ${kind} to describe`);
+	return first.id;
+}
+
+export function filledMemories(host: PreferencesHost): string {
+	const fills: Record<string, string> = {
+		keys: keywords(SET_KEYS),
+		"font-example": escaped(firstOf("fonts", host.fonts)),
+		"desktop-keys": keywords(DESKTOP_KEYS),
+		metadata: described("metadata", host.metadata),
+		"metadata-example": firstOf("metadata", host.metadata),
+		input: described("input helpers", host.input),
+		"input-example": firstOf("input helpers", host.input),
+		"status-bar-slots": String(STATUS_BAR_SLOT_COUNT),
+		"status-bar-items": STATUS_BAR_ITEMS.map(quoted).join(" "),
+		"status-bar-gaps": `${quoted(STATUS_BAR_GAPS[0] ?? "")} through ${quoted(STATUS_BAR_GAPS.at(-1) ?? "")}`,
+		"status-bar-example": [
+			STATUS_BAR_ITEMS[1],
+			STATUS_BAR_GAPS[0],
+			STATUS_BAR_ITEMS[0],
+		]
+			.map((name) => quoted(name ?? ""))
+			.join(" "),
+		"status-bar-hidden-example": quoted(STATUS_BAR_ITEMS.at(-1) ?? ""),
+	};
+	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
+		const fill = fills[name];
+		if (fill === undefined)
+			throw new Error(`no value fills {{${name}}} in the preferences memories`);
+		return fill;
+	});
+}
+
 export function preferencesExtension(host: PreferencesHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerPreferences(interp, host),
-		{ prompt: host.prompt(), memories: host.memories() },
+		{ prompt: host.prompt(), memories: filledMemories(host) },
 	);
 }

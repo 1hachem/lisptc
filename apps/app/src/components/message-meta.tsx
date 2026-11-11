@@ -1,8 +1,8 @@
 import { Route01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { StepMeta } from "@repo/components";
+import type { MetaField } from "@repo/shared/chat-toggles";
 import { Fragment } from "react";
-import type { MetaField } from "../lib/meta-fields.ts";
 
 const META_FIELDS: Record<MetaField, boolean> = {
 	time: true,

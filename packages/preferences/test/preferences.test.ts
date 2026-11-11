@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { preferencesHost } from "../src/preferences-host.ts";
-import { desktopMachine, world } from "./helpers.ts";
+import { preferencesExtension } from "../src/preferences.ts";
+import {
+	preferencesHost,
+	preferencesHostFor,
+} from "../src/preferences-host.ts";
+import { desktopMachine, HOST_CHOICES, world } from "./helpers.ts";
 
 const HELD = {
 	font: "geist",
@@ -331,6 +335,20 @@ describe("the prompt", () => {
 		);
 		expect(memories).toContain("(motions)");
 		expect(memories).toContain("(desktop-preferences/set");
+	});
+
+	it("fills every value its memories take from code", () => {
+		const { memories } = preferencesExtension(preferencesHostFor(HOST_CHOICES));
+		expect(memories).not.toMatch(/\{\{|\}\}/);
+	});
+
+	it("names the metadata the host offers in a memory of its own", () => {
+		const { memories } = preferencesExtension(preferencesHostFor(HOST_CHOICES));
+		const metadata = memories?.slice(
+			memories.indexOf('(memory "internal/preferences/metadata"'),
+		);
+		expect(metadata).toContain(":input input tokens");
+		expect(metadata).toContain(":model model");
 	});
 });
 

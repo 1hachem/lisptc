@@ -33,6 +33,7 @@ import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { semanticExtension } from "@repo/semantic-extension";
 import { semanticHost } from "@repo/semantic-extension/host";
+import { INPUT_HELPERS, META_FIELDS } from "@repo/shared/chat-toggles";
 import { fonts } from "@repo/ui/fonts.ts";
 import { motions } from "@repo/ui/motions.ts";
 import { defaultThemeId, themes } from "@repo/ui/themes";
@@ -152,6 +153,11 @@ export async function workspaceExtensions(
 			store: new ConvexPreferencesStore(workspaceId, connect),
 			fonts,
 			motions,
+			metadata: META_FIELDS.map(({ id, label }) => ({ id, name: label })),
+			input: INPUT_HELPERS.map(({ id, label, hint }) => ({
+				id,
+				name: `${label}, ${hint}`,
+			})),
 			...(desktop === undefined
 				? {}
 				: { desktop: { apply: (change) => desktop.settings(change) } }),
