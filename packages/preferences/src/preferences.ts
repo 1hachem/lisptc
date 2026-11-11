@@ -7,6 +7,7 @@ import {
 	type List,
 	listToArray,
 	newLispKeyword,
+	newSym,
 } from "@repo/interpreter/objects";
 import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
@@ -270,6 +271,59 @@ export function registerPreferences(
 ): void {
 	const { store } = host;
 
+	const keywords = (keys: readonly string[]): List =>
+		arrayToList(keys.map((key) => newLispKeyword(key)));
+	const described = (offered: readonly Choice[]): List =>
+		plist(offered.map((choice) => [choice.id, choice.name]));
+	interp.defineGlobal(newSym("*preferences-keys*"), keywords(SET_KEYS), {
+		signature: "*preferences-keys*",
+		doc: "Every key preferences/set takes.",
+	});
+	interp.defineGlobal(
+		newSym("*preferences-desktop-keys*"),
+		keywords(DESKTOP_KEYS),
+		{
+			signature: "*preferences-desktop-keys*",
+			doc: "Every key desktop-preferences/set takes.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*preferences-metadata*"),
+		described(host.metadata),
+		{
+			signature: "*preferences-metadata*",
+			doc: "The metadata fields a message can show, as a plist of id and what it shows.",
+		},
+	);
+	interp.defineGlobal(newSym("*preferences-input*"), described(host.input), {
+		signature: "*preferences-input*",
+		doc: "The helpers the chat input can run, as a plist of id and what it does.",
+	});
+	interp.defineGlobal(
+		newSym("*preferences-status-bar-slots*"),
+		BigInt(STATUS_BAR_SLOT_COUNT),
+		{
+			signature: "*preferences-status-bar-slots*",
+			doc: "How many slots the bottom bar has.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*preferences-status-bar-items*"),
+		arrayToList([...STATUS_BAR_ITEMS]),
+		{
+			signature: "*preferences-status-bar-items*",
+			doc: "The items the bottom bar can hold.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*preferences-status-bar-gaps*"),
+		arrayToList([...STATUS_BAR_GAPS]),
+		{
+			signature: "*preferences-status-bar-gaps*",
+			doc: "The names of the bottom bar's empty slots.",
+		},
+	);
+
 	interp.defGen(
 		"preferences",
 		0,
@@ -420,65 +474,9 @@ export function registerPreferences(
 	);
 }
 
-function escaped(text: string): string {
-	return text.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
-}
-
-function quoted(text: string): string {
-	return escaped(JSON.stringify(text));
-}
-
-function keywords(keys: readonly string[]): string {
-	return keys.map((key) => `:${key}`).join(" ");
-}
-
-function described(kind: string, offered: readonly Choice[]): string {
-	if (offered.length === 0)
-		throw new Error(`the host offers no ${kind} to describe`);
-	return offered
-		.map((choice) => `:${choice.id} ${escaped(choice.name)}`)
-		.join(", ");
-}
-
-function firstOf(kind: string, offered: readonly Choice[]): string {
-	const first = offered[0];
-	if (first === undefined)
-		throw new Error(`the host offers no ${kind} to describe`);
-	return first.id;
-}
-
-export function filledMemories(host: PreferencesHost): string {
-	const fills: Record<string, string> = {
-		keys: keywords(SET_KEYS),
-		"font-example": escaped(firstOf("fonts", host.fonts)),
-		"desktop-keys": keywords(DESKTOP_KEYS),
-		metadata: described("metadata", host.metadata),
-		"metadata-example": firstOf("metadata", host.metadata),
-		input: described("input helpers", host.input),
-		"input-example": firstOf("input helpers", host.input),
-		"status-bar-slots": String(STATUS_BAR_SLOT_COUNT),
-		"status-bar-items": STATUS_BAR_ITEMS.map(quoted).join(" "),
-		"status-bar-gaps": `${quoted(STATUS_BAR_GAPS[0] ?? "")} through ${quoted(STATUS_BAR_GAPS.at(-1) ?? "")}`,
-		"status-bar-example": [
-			STATUS_BAR_ITEMS[1],
-			STATUS_BAR_GAPS[0],
-			STATUS_BAR_ITEMS[0],
-		]
-			.map((name) => quoted(name ?? ""))
-			.join(" "),
-		"status-bar-hidden-example": quoted(STATUS_BAR_ITEMS.at(-1) ?? ""),
-	};
-	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
-		const fill = fills[name];
-		if (fill === undefined)
-			throw new Error(`no value fills {{${name}}} in the preferences memories`);
-		return fill;
-	});
-}
-
 export function preferencesExtension(host: PreferencesHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerPreferences(interp, host),
-		{ prompt: host.prompt(), memories: filledMemories(host) },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }
