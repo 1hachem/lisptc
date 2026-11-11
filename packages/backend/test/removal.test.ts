@@ -185,6 +185,25 @@ describe("removing a workspace", () => {
 		expect(replLayers).toEqual([]);
 	});
 
+	it("stops being one the cluster sees as existing, so its mcp namespace goes", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const doomed = await alice.as.mutation(api.workspaces.create, {
+			name: "doomed",
+		});
+		const ids = [doomed, alice.workspace, "not-an-id"];
+		expect(await t.query(internal.workspaces.existing, { ids })).toEqual([
+			doomed,
+			alice.workspace,
+		]);
+
+		await alice.as.mutation(api.workspaces.remove, { workspaceId: doomed });
+
+		expect(await t.query(internal.workspaces.existing, { ids })).toEqual([
+			alice.workspace,
+		]);
+	});
+
 	it("takes its preferences with it and leaves the other workspace's", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");

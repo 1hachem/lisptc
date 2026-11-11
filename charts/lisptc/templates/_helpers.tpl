@@ -31,6 +31,14 @@ https://{{ . }}.$(TAILNET_DOMAIN)
 {{- end }}
 {{- end }}
 
+{{- define "lisptc.mcpNamespacePrefix" -}}
+{{- if .Values.preview.enabled -}}
+{{- printf "%s-ws-" .Release.Namespace -}}
+{{- else -}}
+{{- .Values.mcp.namespacePrefix -}}
+{{- end -}}
+{{- end }}
+
 {{- define "lisptc.mode" -}}
 {{- if .Values.preview.enabled -}}
 preview

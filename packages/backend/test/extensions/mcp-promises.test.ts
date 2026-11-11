@@ -6,7 +6,7 @@ import { mcpHost } from "@repo/mcp-extension/mcp-host";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { afterAll, describe, expect, it } from "vitest";
-import { type MockServer, mockMcpClient } from "./helpers.ts";
+import { type MockServer, mockMcpClient, mockToolkit } from "./helpers.ts";
 
 function replWith(servers: Record<string, MockServer>): Interp {
 	const interp = new Interp({
@@ -14,8 +14,8 @@ function replWith(servers: Record<string, MockServer>): Interp {
 			promisesExtension(promisesHost),
 			mcpExtension({
 				...mcpHost,
-				commands: true,
 				client: mockMcpClient(servers),
+				toolkit: mockToolkit(servers),
 			}),
 		],
 	});
@@ -28,7 +28,7 @@ async function evalStr(interp: Interp, code: string): Promise<string> {
 }
 
 function loadForm(name: string): string {
-	return `(load-mcp :name "${name}" :command "node")`;
+	return `(load-mcp "${name}")`;
 }
 
 describe("awaiting an MCP load", () => {

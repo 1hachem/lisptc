@@ -14,7 +14,7 @@ kind: Deployment
 metadata:
   name: app
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "3"
     secrets.infisical.com/auto-reload: "true"
 spec:
   replicas: 1
@@ -31,6 +31,7 @@ spec:
       labels:
         app: app
     spec:
+      serviceAccountName: {{ .Values.app.serviceAccount }}
       {{- with .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ . }}
@@ -42,11 +43,6 @@ spec:
       {{- end }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      volumes:
-        - name: docker
-          hostPath:
-            path: /var/run/docker.sock
-            type: Socket
       {{- end }}
       containers:
         - name: app
@@ -61,6 +57,12 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.app.port | quote }}
+            - name: LISPTC_MCP_HOST
+              value: kubernetes
+            - name: LISPTC_MCP_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: LISPTC_MCP_IMAGE_TAG
+              value: {{ include "lisptc.imageTag" (list . .Values.app.image.tag) | quote }}
             {{- include "lisptc.previewEnv" (list . (dict
                 "APP_URL" (include "lisptc.appHostname" .))) | nindent 12 }}
             {{- include "lisptc.clusterConvexEnv" . | nindent 12 }}
@@ -68,11 +70,6 @@ spec:
             - name: LISPTC_OAUTH_REDIRECT_URL
               value: {{ printf "%s/oauth/callback" (include "lisptc.url" (include "lisptc.appHostname" .)) | quote }}
             {{- end }}
-          {{- if .Values.dev.enabled }}
-          volumeMounts:
-            - name: docker
-              mountPath: /var/run/docker.sock
-          {{- end }}
           livenessProbe:
             httpGet:
               {{- if .Values.dev.enabled }}

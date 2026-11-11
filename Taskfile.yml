@@ -10,6 +10,9 @@ includes:
   dashi-codes: ./taskfiles/dashi-codes.yml
   evals: ./taskfiles/evals.yml
   cluster: ./taskfiles/cluster.yml
+  mcp-images:
+    taskfile: ./taskfiles/mcp-images.yml
+    flatten: true
 tasks:
   default:
     desc: prints this help
@@ -38,12 +41,6 @@ tasks:
       - echo "desktop on {{.URL}}"
       - LISPTC_DESKTOP_URL={{.URL}} pnpm --filter @lisptc/desktop dev
 
-  mcp:browser:build:
-    desc: build the browser MCP image the playwright toolkit entry runs
-    vars:
-      TAG: '{{.TAG | default "v1.63.0"}}'
-    cmd: docker build -f docker/browser-mcp.Dockerfile -t lisptc/browser-mcp:{{.TAG}} .
-
   mcp:reap:
     desc: remove MCP containers orphaned by a REPL that exited without (mcp-shutdown)
     cmd: |
@@ -60,7 +57,7 @@ tasks:
     desc: run the whole stack on the local k3s cluster under tilt, in the lisptc-dev namespace, with live reload
     aliases:
       - dev
-    deps: [mcp:browser:build, registry, cluster:_reachable]
+    deps: [mcp:images:build, registry, cluster:_reachable]
     cmds:
       - defer: setsid -w tilt down
       - tilt up --stream {{.CLI_ARGS}}
@@ -80,7 +77,7 @@ tasks:
     aliases:
       - up:prod
       - prod
-    deps: [mcp:browser:build, registry, cluster:_reachable]
+    deps: [mcp:images:build, registry, cluster:_reachable]
     cmds:
       - defer: setsid -w tilt down
       - task: _infisical-run

@@ -13,6 +13,7 @@ import { extensionBlind } from "./check-arch/extension-blind.ts";
 import { extensionHost } from "./check-arch/extension-host.ts";
 import { extensionReach } from "./check-arch/extension-reach.ts";
 import { manifests } from "./check-arch/manifests.ts";
+import { mcpCluster } from "./check-arch/mcp-cluster.ts";
 import { relays } from "./check-arch/relays.ts";
 import { restrictedImports } from "./check-arch/restricted-imports.ts";
 import { sessionDrivers } from "./check-arch/session-drivers.ts";
@@ -54,6 +55,7 @@ const CHECKS: Check[] = [
 	manifests,
 	staticPackages,
 	restrictedImports,
+	mcpCluster,
 	extensionReach,
 	extensionHost,
 	sessionDrivers,

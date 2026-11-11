@@ -34,4 +34,33 @@ describe("migrations", () => {
 			}),
 		).toMatchObject({ font: "mono" });
 	});
+
+	it("hand the MCP statuses written before reporters to the operator, and drop the session's", async () => {
+		const t = harness();
+		migrationsTest.register(t);
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await t.run(async (ctx) => {
+			for (const [server, reporter] of [
+				["playwright", undefined],
+				["linear", "session"],
+			] as const)
+				await ctx.db.insert("mcpServers", {
+					workspaceId,
+					server,
+					phase: "ready",
+					...(reporter === undefined ? {} : { reporter }),
+					observedAt: 0,
+				});
+		});
+
+		vi.useFakeTimers();
+		await t.mutation(internal.migrations.runAll, {});
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+		await t.mutation(internal.mcpServers.reconcile, { servers: [] });
+
+		expect(
+			(await alice.as.query(api.mcpServers.list, { workspaceId })).servers,
+		).toEqual([]);
+	});
 });

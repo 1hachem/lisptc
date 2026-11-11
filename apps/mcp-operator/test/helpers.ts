@@ -1,0 +1,269 @@
+import type {
+	V1DaemonSet,
+	V1Namespace,
+	V1Pod,
+	V1Service,
+} from "@kubernetes/client-node";
+import { runSpecFor } from "@repo/containers/launch";
+import {
+	KIND,
+	type McpServer,
+	type McpServerStatus,
+	serverName,
+	specFor,
+	VERSION,
+} from "@repo/mcp-extension/kubernetes";
+import type { ImageEntry } from "@repo/toolkit";
+import type { Cluster, Located, Probe, Servers } from "../src/cluster.ts";
+import type { Deps } from "../src/reconcile.ts";
+import type { ServerRow, Snapshot, StatusSink } from "../src/status-sink.ts";
+
+export const RELEASE = "lisptc";
+export const PREFIX = "lisptc-ws-";
+const WORKSPACE = "ws1";
+export const NAMESPACE = `${PREFIX}${WORKSPACE}`;
+
+const browser: ImageEntry = {
+	name: "playwright",
+	image: "playwright-mcp",
+	port: 8931,
+	app: {
+		image: "chromium-vnc",
+		ports: [
+			{ name: "cdp", port: 9222 },
+			{ name: "view", port: 6080 },
+		],
+		expose: ["view"],
+	},
+};
+
+export function server(conf: ImageEntry = browser, now = 1000): McpServer {
+	const run = runSpecFor(conf);
+	if (!run) throw new Error("no launch");
+	return {
+		apiVersion: `lisptc.io/${VERSION}`,
+		kind: KIND,
+		metadata: {
+			name: serverName(WORKSPACE, conf.name),
+			namespace: RELEASE,
+			uid: "uid-1",
+			generation: 1,
+			finalizers: [],
+		},
+		spec: specFor(run, WORKSPACE, now),
+	};
+}
+
+const key = (namespace: string, name: string) => `${namespace}/${name}`;
+
+export function fakeCluster() {
+	const namespaces = new Map<string, V1Namespace>();
+	const policies: string[] = [];
+	const copied: string[] = [];
+	const pods = new Map<string, V1Pod>();
+	const services = new Map<string, V1Service>();
+	const removed: string[] = [];
+	const daemonSets = new Map<string, V1DaemonSet>();
+	let answering = true;
+	const remote = new Map<string, Probe>();
+	let logs = "";
+	let event: string | undefined;
+
+	function matching<T extends { metadata?: V1Pod["metadata"] }>(
+		map: Map<string, T>,
+		namespace: string,
+		selector: string,
+	): T[] {
+		const wanted = Object.fromEntries(
+			selector.split(",").map((pair) => pair.split("=")),
+		);
+		return [...map.entries()]
+			.filter(([k]) => k.startsWith(`${namespace}/`))
+			.map(([, item]) => item)
+			.filter((item) =>
+				Object.entries(wanted).every(
+					([label, value]) => item.metadata?.labels?.[label] === value,
+				),
+			);
+	}
+
+	function locate<T extends { metadata?: V1Pod["metadata"] }>(
+		map: Map<string, T>,
+	): Located[] {
+		return [...map.entries()].map(([k, item]) => ({
+			namespace: k.split("/")[0] ?? "",
+			name: item.metadata?.name ?? "",
+			labels: item.metadata?.labels ?? {},
+			annotations: item.metadata?.annotations ?? {},
+		}));
+	}
+
+	const cluster: Cluster = {
+		async ensureNamespace(ns) {
+			const name = ns.metadata?.name ?? "";
+			if (!namespaces.has(name)) namespaces.set(name, ns);
+		},
+		async ensureNetworkPolicy(namespace, policy) {
+			const name = `${namespace}/${policy.metadata?.name}`;
+			if (!policies.includes(name)) policies.push(name);
+		},
+		async copySecret(from, to, name) {
+			copied.push(`${from}/${name} -> ${to}`);
+		},
+		async pod(namespace, name) {
+			return pods.get(key(namespace, name));
+		},
+		async createPod(namespace, pod) {
+			pods.set(key(namespace, pod.metadata?.name ?? ""), pod);
+		},
+		async ensureService(namespace, service) {
+			const k = key(namespace, service.metadata?.name ?? "");
+			if (!services.has(k)) services.set(k, service);
+		},
+		async removePod(namespace, name) {
+			if (pods.delete(key(namespace, name))) removed.push(`pod ${name}`);
+		},
+		async remove(namespace, name) {
+			pods.delete(key(namespace, name));
+			services.delete(key(namespace, name));
+			removed.push(`all ${name}`);
+		},
+		async logs() {
+			return logs;
+		},
+		async lastEvent() {
+			return event;
+		},
+		async ensureDaemonSet(namespace, daemonSet) {
+			daemonSets.set(key(namespace, daemonSet.metadata?.name ?? ""), daemonSet);
+		},
+		async daemonSets(namespace, selector) {
+			return matching(daemonSets, namespace, selector).map(
+				(set) => set.metadata?.name ?? "",
+			);
+		},
+		async deleteDaemonSet(namespace, name) {
+			if (daemonSets.delete(key(namespace, name)))
+				removed.push(`daemonset ${name}`);
+		},
+		async pods(namespace, selector) {
+			return matching(pods, namespace, selector);
+		},
+		async reachable() {
+			return answering;
+		},
+		async probe(url: string) {
+			return remote.get(url) ?? { answered: true as const };
+		},
+		origin(namespace, service, port) {
+			return `http://${service}.${namespace}:${port}`;
+		},
+		async managedPods() {
+			return locate(pods);
+		},
+		async managedNamespaces() {
+			return [...namespaces.values()].map((ns) => ({
+				namespace: "",
+				name: ns.metadata?.name ?? "",
+				labels: ns.metadata?.labels ?? {},
+				annotations: ns.metadata?.annotations ?? {},
+			}));
+		},
+		async annotateNamespace(name, annotations) {
+			const ns = namespaces.get(name);
+			if (!ns) return;
+			const next = { ...ns.metadata?.annotations };
+			for (const [k, value] of Object.entries(annotations))
+				if (value === null) delete next[k];
+				else next[k] = value;
+			ns.metadata = { ...ns.metadata, annotations: next };
+		},
+		async deleteNamespace(name) {
+			namespaces.delete(name);
+			removed.push(`namespace ${name}`);
+		},
+	};
+
+	return {
+		cluster,
+		namespaces,
+		policies,
+		copied,
+		pods,
+		services,
+		removed,
+		daemonSets,
+		setEvent(value: string | undefined) {
+			event = value;
+		},
+		setAnswering(value: boolean) {
+			answering = value;
+		},
+		setRemote(url: string, probe: Probe) {
+			remote.set(url, probe);
+		},
+		setLogs(value: string) {
+			logs = value;
+		},
+		runPods(ready = true) {
+			for (const pod of pods.values())
+				pod.status = {
+					phase: "Running",
+					containerStatuses: (pod.spec?.containers ?? []).map((c) => ({
+						name: c.name,
+						ready,
+						restartCount: 0,
+						image: c.image ?? "",
+						imageID: "",
+						state: { running: {} },
+					})),
+				};
+		},
+	};
+}
+
+function recordingServers(target: McpServer) {
+	const writes: McpServerStatus[] = [];
+	const removed: string[] = [];
+	const servers: Servers = {
+		async writeStatus(_, status) {
+			writes.push(status);
+			target.status = structuredClone(status);
+		},
+		async setFinalizers(_, finalizers) {
+			target.metadata.finalizers = finalizers;
+		},
+		async remove(name) {
+			removed.push(name);
+		},
+	};
+	return { servers, writes, removed };
+}
+
+function recordingSink() {
+	const servers: ServerRow[] = [];
+	const snapshots: Snapshot[] = [];
+	const sink: StatusSink = {
+		async observeServer(row) {
+			servers.push(row);
+		},
+		async reconcile(snapshot) {
+			snapshots.push(snapshot);
+		},
+	};
+	return { sink, servers, snapshots };
+}
+
+export function world(target: McpServer = server()) {
+	const fake = fakeCluster();
+	const recorded = recordingServers(target);
+	const sink = recordingSink();
+	const deps = (now: number): Deps => ({
+		cluster: fake.cluster,
+		servers: recorded.servers,
+		sink: sink.sink,
+		placement: { prefix: PREFIX, release: RELEASE, pullSecret: "ghcr-pull" },
+		now,
+	});
+	return { target, fake, recorded, sink, deps };
+}

@@ -1,4 +1,5 @@
 import { isNumeric } from "@repo/interpreter/arith";
+import type { Progress } from "@repo/interpreter/async";
 import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import { settled } from "@repo/interpreter/drive";
@@ -40,11 +41,11 @@ import {
 	AuthorizationRequired,
 	type ConnConfig,
 	type ConnectResult,
-	type HttpConnConfig,
 	type Icon,
 	type JsonSchema,
 	type McpClient,
 	type McpPolicy,
+	type OAuthConnConfig,
 	openPolicy,
 	type Tool,
 	type ToolkitRegistry,
@@ -788,6 +789,10 @@ function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
 	);
 }
 
+function putEntry(servers: Servers, entry: ServerEntry): void {
+	servers.set([...servers.get().filter((e) => e.name !== entry.name), entry]);
+}
+
 function installServer(
 	wiring: Wiring,
 	name: string,
@@ -813,7 +818,7 @@ function installServer(
 		...(res.icons === undefined ? {} : { icons: res.icons }),
 		args,
 	};
-	servers.set([...servers.get().filter((e) => e.name !== name), entry]);
+	putEntry(servers, entry);
 	return arrayToList(toolRows(entry, policy));
 }
 
@@ -833,18 +838,38 @@ function toolRows(entry: ServerEntry, policy: McpPolicy): List[] {
 	return shownTools(entry, policy).map((tool) => toolRow(entry, tool));
 }
 
+export type SleepIdle = () => Promise<void>;
+
+function sleepIdleEachTurn(
+	hooks: SessionHooks,
+	sleepers: WeakMap<Interp, SleepIdle>,
+): void {
+	hooks.turnStart.use(function* (ctx, next) {
+		const sleepIdle = sleepers.get(ctx.interp);
+		if (sleepIdle !== undefined) yield* settled(sleepIdle());
+		yield* next(ctx);
+	});
+}
+
 export const LOCAL_GATE = "local/";
 
 export const LOCAL_ASKS: readonly string[] = [`${LOCAL_GATE}*`];
 
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
-	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
-		prompt: host.prompt(),
-		session(hooks: SessionHooks): void {
-			answerAuthorization(hooks);
-			if (host.machine !== undefined) announceMachine(hooks, host.machine);
+	const sleepers = new WeakMap<Interp, SleepIdle>();
+	return Object.assign(
+		(interp: Interp): void => {
+			sleepers.set(interp, registerMcp(interp, host));
 		},
-	});
+		{
+			prompt: host.prompt(),
+			session: (hooks: SessionHooks): void => {
+				answerAuthorization(hooks);
+				sleepIdleEachTurn(hooks, sleepers);
+				if (host.machine !== undefined) announceMachine(hooks, host.machine);
+			},
+		},
+	);
 }
 
 export function registerMcp(
@@ -859,7 +884,7 @@ export function registerMcp(
 		| "machine"
 		| "commands"
 	>,
-): void {
+): SleepIdle {
 	const { client, toolkit, search, clock } = host;
 	const policy = host.policy ?? openPolicy;
 	const commands = host.commands === true;
@@ -900,10 +925,14 @@ export function registerMcp(
 			.get()
 			.filter((entry) => policy.server(entry.name).access !== "hidden");
 
-	function connect(args: List, signal: AbortSignal): Promise<List> {
+	function connect(
+		args: List,
+		signal: AbortSignal,
+		progress?: Progress,
+	): Promise<List> {
 		const conf = connConfigFromArgs(args, shown(), toolkit.local, commands);
 		admitServer(policy, conf.name);
-		return client.connect(conf, signal).then(
+		return client.connect(conf, { signal, progress }).then(
 			(res) => {
 				if (signal.aborted) {
 					void client.disconnect(res.serverId).catch(() => {});
@@ -945,10 +974,10 @@ export function registerMcp(
 				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 			});
 		report("started");
-		const promise = interp.async.start((signal) => connect(args, signal), {
-			kind: "load-mcp",
-			args: [args],
-		});
+		const promise = interp.async.start(
+			(signal, progress) => connect(args, signal, progress),
+			{ kind: "load-mcp", args: [args] },
+		);
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
 		void interp.async.promiseOf(promise).then(
@@ -1306,14 +1335,42 @@ export function registerMcp(
 				),
 		);
 	});
+
+	async function sleepIdle(): Promise<void> {
+		const loaded = servers.get().filter((entry) => entry.state === "loaded");
+		const asleep = await Promise.all(
+			loaded.map((entry) => client.asleep(entry.serverId).catch(() => false)),
+		);
+		loaded.forEach((entry, i) => {
+			const current = entryOf(servers, entry.name);
+			if (
+				!asleep[i] ||
+				current?.state !== "loaded" ||
+				current.serverId !== entry.serverId
+			)
+				return;
+			void client.disconnect(entry.serverId).catch(() => {});
+			putEntry(servers, {
+				...current,
+				state: "dormant",
+				reason: "stopped after going unused",
+			});
+		});
+	}
+
+	return sleepIdle;
+}
+
+function signsIn(conf: ConnConfig): conf is OAuthConnConfig {
+	return "url" in conf || ("image" in conf && conf.oauth !== undefined);
 }
 
 function oauthServer(
 	predefined: Map<string, ConnConfig>,
 	name: string,
-): HttpConnConfig {
+): OAuthConnConfig {
 	const conf = predefined.get(name);
-	if (!conf || !("url" in conf))
+	if (!conf || !signsIn(conf))
 		throw new EvalException("unknown OAuth MCP server", name, false);
 	return conf;
 }

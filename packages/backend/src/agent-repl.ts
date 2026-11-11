@@ -16,8 +16,8 @@ import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
-import { DockerHost } from "@repo/mcp-extension/docker-host";
-import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { containerHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import { RoutedHost } from "@repo/mcp-extension/routed-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
@@ -46,7 +46,7 @@ import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
 import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
-import { BridgedHost, type Desktop } from "./desktop-bridge.ts";
+import { BridgedHost, type Desktop, desktopServer } from "./desktop-bridge.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -54,6 +54,7 @@ import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
+import { reportsOf } from "./server-reports.ts";
 import { ConvexSourceFolder } from "./source-folder.ts";
 import { ConvexViewStore } from "./view-store.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
@@ -100,6 +101,8 @@ export async function workspaceExtensions(
 	connect: Connect,
 	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
+	const report = reportsOf(workspaceId, connect);
+	const containers = containerHost(workspaceId, report);
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
@@ -180,10 +183,16 @@ export async function workspaceExtensions(
 				scope: workspaceId,
 				oauth: workspaceOAuthStore(workspaceId, connect),
 				...(desktop === undefined
-					? { host: new DockerHost() }
+					? { host: containers }
 					: {
 							desktop: async () => desktop.connected(),
-							host: new BridgedHost(desktop, new DockerHost()),
+							host: new RoutedHost([
+								{
+									claims: desktopServer,
+									host: new BridgedHost(desktop, report),
+								},
+								{ claims: () => true, host: containers },
+							]),
 						}),
 			}),
 			policy: permissions.rules,
