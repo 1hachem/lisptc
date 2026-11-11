@@ -5,7 +5,7 @@ export type Role = "system" | "user" | "assistant";
 export const ROLES: Role[] = ["system", "user", "assistant"];
 
 export interface ChatMessage {
-	role: Role;
+	role: Role | "developer";
 	content: string;
 }
 

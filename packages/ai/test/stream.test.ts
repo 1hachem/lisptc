@@ -631,13 +631,13 @@ describe("chat stream", () => {
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
 			{ repl: testRepl([emitting("k: the note\n")]) },
 		);
-		const live = sent[1].find((m) => m.role === "system");
+		const live = sent[1].find((m) => m.role === "developer");
 
 		const at = first.findIndex((m) => m.type === "system");
 		expect(first[at - 1]?.type).toBe("tool");
 		expect(first[at - 1]?.content).not.toContain("k: the note");
 		expect(first[at]?.content).toBe("k: the note\n");
-		expect(live).toEqual({ role: "system", content: "k: the note\n" });
+		expect(live).toEqual({ role: "developer", content: "k: the note\n" });
 
 		turn = 0;
 		sent.length = 0;
@@ -645,7 +645,7 @@ describe("chat stream", () => {
 			messages: [...first, { type: "human", content: "and 2 + 2?" }],
 		}).text();
 
-		expect(sent[0].find((m) => m.role === "system")).toEqual(live);
+		expect(sent[0].find((m) => m.role === "developer")).toEqual(live);
 	});
 
 	test("a user message's eval result reaches the model as a system event after it and the wire as its own row", async () => {
