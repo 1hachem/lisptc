@@ -13,9 +13,15 @@ no TypeScript and no workspace package, so whatever the main process imports is
 bundled before it ships. The packaging config lives in `package.json`.
 
 `src/bridge.ts` is the desktop end of the MCP bridge. Its wire is
-`@repo/desktop-protocol`, which the server speaks too.
+`@repo/desktop-protocol`, which the server speaks too. `src/openers.ts`
+turns a server the bridge is asked to open into a transport: a command over
+stdio, an image as a container on the user's docker.
 
 ## Rules
+
+**The bridge carries messages and nothing else.** How a server runs is its
+opener's, and a container runs through `@repo/containers`'s runner, the one the
+MCP hosts run theirs through, never a docker call of the shell's own.
 
 **A local server finds its command as it would in the user's terminal**, however
 the app was started.

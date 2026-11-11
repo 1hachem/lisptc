@@ -1,6 +1,10 @@
 import type { Id } from "@repo/backend/dataModel";
-import type { Desktop, LocalServer } from "@repo/backend/desktop-bridge";
-import type { DesktopMessage, ServerMessage } from "@repo/desktop-protocol";
+import type { Desktop } from "@repo/backend/desktop-bridge";
+import type {
+	DesktopMessage,
+	LocalServerSpec,
+	ServerMessage,
+} from "@repo/desktop-protocol";
 import type { McpTransport } from "@repo/mcp-extension/ports";
 import type { DesktopPreferences } from "@repo/shared/desktop";
 
@@ -214,7 +218,10 @@ export class DesktopRegistry {
 		return [...machines.values()].at(-1);
 	}
 
-	async open(userId: Id<"users">, server: LocalServer): Promise<McpTransport> {
+	async open(
+		userId: Id<"users">,
+		server: LocalServerSpec,
+	): Promise<McpTransport> {
 		const connection = this.latest(userId);
 		if (connection === undefined) throw noDesktop(server.name);
 		const id = crypto.randomUUID();

@@ -1,12 +1,14 @@
+import { runSpecFor } from "@repo/containers/launch";
+import type { LocalServerSpec } from "@repo/desktop-protocol";
 import type {
 	ConnConfig,
+	LocalConnConfig,
 	McpHost,
 	McpTransport,
 	ServerHandle,
 	ServerRef,
 	ServerReporter,
 	ServerState,
-	StdioConnConfig,
 } from "@repo/mcp-extension/ports";
 import {
 	type ReportedTransport,
@@ -15,17 +17,10 @@ import {
 import type { DesktopPreferences } from "@repo/shared/desktop";
 import type { Id } from "../convex/_generated/dataModel.js";
 
-export interface LocalServer {
-	readonly name: string;
-	readonly command: string;
-	readonly args: readonly string[];
-	readonly env: Readonly<Record<string, string>>;
-}
-
 export interface Desktop {
 	connected(): boolean;
 	running(name: string): boolean;
-	open(server: LocalServer): Promise<McpTransport>;
+	open(server: LocalServerSpec): Promise<McpTransport>;
 	close(name: string): Promise<void>;
 	settings(
 		change: Partial<DesktopPreferences>,
@@ -34,9 +29,31 @@ export interface Desktop {
 
 export type DesktopFor = (userId: Id<"users">) => Desktop;
 
-export function desktopServer(conf: ConnConfig): conf is StdioConnConfig {
-	if ("url" in conf || "image" in conf) return false;
+export function desktopServer(conf: ConnConfig): conf is LocalConnConfig {
+	if ("url" in conf) return false;
 	return conf.local === true;
+}
+
+function specOf(
+	conf: LocalConnConfig,
+	imageTag: string | undefined,
+): LocalServerSpec {
+	if (!("image" in conf))
+		return {
+			kind: "command",
+			name: conf.name,
+			command: conf.command,
+			args: conf.args ?? [],
+			env: conf.env ?? {},
+		};
+	const run = runSpecFor(conf, imageTag);
+	return {
+		kind: "image",
+		name: run.name,
+		launch: run.launch,
+		...(run.app ? { app: run.app } : {}),
+		env: run.env ?? {},
+	};
 }
 
 export class BridgedHost implements McpHost {
@@ -45,6 +62,7 @@ export class BridgedHost implements McpHost {
 	constructor(
 		private readonly desktop: Desktop,
 		private readonly report: ServerReporter = () => {},
+		private readonly imageTag?: string,
 	) {}
 
 	async ensure(conf: ConnConfig): Promise<ServerHandle> {
@@ -53,12 +71,7 @@ export class BridgedHost implements McpHost {
 		const { name } = conf;
 		let channel: McpTransport;
 		try {
-			channel = await this.desktop.open({
-				name,
-				command: conf.command,
-				args: conf.args ?? [],
-				env: conf.env ?? {},
-			});
+			channel = await this.desktop.open(specOf(conf, this.imageTag));
 		} catch (ex) {
 			this.report({
 				server: name,

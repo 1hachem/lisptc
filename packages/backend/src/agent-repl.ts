@@ -16,7 +16,11 @@ import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { LOCAL_ASKS, mcpExtension } from "@repo/mcp-extension";
-import { containerHost, mcpHostFor } from "@repo/mcp-extension/mcp-host";
+import {
+	containerHost,
+	mcpHostFor,
+	ownImageTag,
+} from "@repo/mcp-extension/mcp-host";
 import { RoutedHost } from "@repo/mcp-extension/routed-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
@@ -190,7 +194,7 @@ export async function workspaceExtensions(
 							host: new RoutedHost([
 								{
 									claims: desktopServer,
-									host: new BridgedHost(desktop, report),
+									host: new BridgedHost(desktop, report, ownImageTag()),
 								},
 								{ claims: () => true, host: containers },
 							]),

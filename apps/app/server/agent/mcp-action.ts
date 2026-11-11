@@ -32,8 +32,10 @@ async function dedicatedRepl(
 }
 
 async function sharedRepl(session: Session, workspaceId: Id<"workspaces">) {
-	await convexAs(session).query(api.workspaces.get, { workspaceId });
-	return await workspaceRepl(workspaceId);
+	const convex = convexAs(session);
+	await convex.query(api.workspaces.get, { workspaceId });
+	const me = await convex.query(api.users.me, {});
+	return await workspaceRepl(workspaceId, me._id);
 }
 
 export const mcpAction = {

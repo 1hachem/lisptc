@@ -1,10 +1,7 @@
+import type { LocalServerSpec } from "@repo/desktop-protocol";
 import type { McpTransport, ServerReport } from "@repo/mcp-extension/ports";
 import { describe, expect, it } from "vitest";
-import {
-	BridgedHost,
-	type Desktop,
-	type LocalServer,
-} from "../src/desktop-bridge.ts";
+import { BridgedHost, type Desktop } from "../src/desktop-bridge.ts";
 
 function channel(): McpTransport & { end(error?: Error): void } {
 	const transport: McpTransport & { end(error?: Error): void } = {
@@ -22,10 +19,10 @@ function channel(): McpTransport & { end(error?: Error): void } {
 }
 
 function bridge(): Desktop & {
-	opened: LocalServer[];
+	opened: LocalServerSpec[];
 	channels: ReturnType<typeof channel>[];
 } {
-	const opened: LocalServer[] = [];
+	const opened: LocalServerSpec[] = [];
 	const channels: ReturnType<typeof channel>[] = [];
 	return {
 		opened,
@@ -61,9 +58,70 @@ describe("BridgedHost", () => {
 		await connected(host);
 
 		expect(desktop.opened).toEqual([
-			{ name: "fs", command: "npx", args: ["fs-mcp"], env: {} },
+			{
+				kind: "command",
+				name: "fs",
+				command: "npx",
+				args: ["fs-mcp"],
+				env: {},
+			},
 		]);
 		expect(host.status({ name: "fs" })).toBe("running");
+	});
+
+	it("opens a :local image server as a container on the owner's desktop", async () => {
+		const desktop = bridge();
+		const host = new BridgedHost(desktop);
+
+		await host.ensure({
+			name: "browser",
+			image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+			port: 8931,
+			local: true,
+		});
+
+		expect(desktop.opened).toEqual([
+			{
+				kind: "image",
+				name: "browser",
+				launch: {
+					image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+					exposed: "8931",
+					path: "/mcp",
+					args: [],
+				},
+				env: {},
+			},
+		]);
+		expect(host.status({ name: "browser" })).toBe("running");
+	});
+
+	it("opens an image of our own at the build this server was released with", async () => {
+		const desktop = bridge();
+		const host = new BridgedHost(desktop, () => {}, "pr-175-abc");
+
+		await host.ensure({
+			name: "browser",
+			image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
+			internal: true,
+			port: 8931,
+			local: true,
+		});
+		await host.ensure({
+			name: "theirs",
+			image: "mcp/time:latest",
+			port: 8000,
+			local: true,
+		});
+
+		expect(
+			desktop.opened.map((server) =>
+				server.kind === "image" ? server.launch.image : undefined,
+			),
+		).toEqual([
+			"ghcr.io/1hachem/lisptc-mcp-playwright:pr-175-abc",
+			"mcp/time:latest",
+		]);
 	});
 
 	it("reports a bridged server stopped once the desktop no longer runs it", async () => {

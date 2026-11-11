@@ -42,8 +42,11 @@ export const threads = new Threads(
 	{ maxDepth: MAX_SPAWN_DEPTH },
 );
 
-export function workspaceRepl(workspaceId: Id<"workspaces">) {
-	return host.workspace(workspaceId);
+export function workspaceRepl(
+	workspaceId: Id<"workspaces">,
+	callerId: Id<"users">,
+) {
+	return host.workspace(workspaceId, callerId);
 }
 
 export function chatRepl(chatId: Id<"chats">) {

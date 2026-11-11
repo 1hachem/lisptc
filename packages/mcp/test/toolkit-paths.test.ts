@@ -147,16 +147,6 @@ describe("the production toolkit runs a command only as an image's local setup",
 	}
 });
 
-describe("the machine toolkit runs no container", () => {
-	for (const conf of machineToolkit().all()) {
-		it(`runs ${conf.name} as a command on the machine`, () => {
-			expect("image" in conf).toBe(false);
-			expect("url" in conf).toBe(false);
-			expect("command" in conf).toBe(true);
-		});
-	}
-});
-
 describe("the desktop toolkit", () => {
 	const bundled = bundledToolkit();
 	const bridged = bridgedEntries(bundled, machineToolkit());

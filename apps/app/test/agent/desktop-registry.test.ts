@@ -8,7 +8,13 @@ import {
 } from "../../server/desktop/registry.ts";
 
 const user = "user-1" as Id<"users">;
-const server = { name: "fs", command: "npx", args: ["fs-mcp"], env: {} };
+const server = {
+	kind: "command" as const,
+	name: "fs",
+	command: "npx",
+	args: ["fs-mcp"],
+	env: {},
+};
 
 function fakeDesktop(registry: DesktopRegistry): DesktopPeer & {
 	sent: ServerMessage[];
