@@ -824,10 +824,24 @@ export const LOCAL_GATE = "local/";
 
 export const LOCAL_ASKS: readonly string[] = [`${LOCAL_GATE}*`];
 
+function filledMemories(host: McpExtensionHost): string {
+	const fills: Record<string, string> = {
+		"tool-timeout-seconds": String(TOOL_TIMEOUT_SECONDS),
+		"max-tool-timeout-seconds": String(MAX_TOOL_TIMEOUT_SECONDS),
+		"local-gate": LOCAL_GATE,
+	};
+	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
+		const fill = fills[name];
+		if (fill === undefined)
+			throw new Error(`no value fills {{${name}}} in the mcp memories`);
+		return fill;
+	});
+}
+
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
-		memories: host.memories(),
+		memories: filledMemories(host),
 		session(hooks: SessionHooks): void {
 			answerAuthorization(hooks);
 			if (host.machine !== undefined) refreshMachine(hooks, host.machine);

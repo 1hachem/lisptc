@@ -18,9 +18,9 @@ app not open.
 (load-mcp \"acme\" :local t :quiet t) . Only listed flags; others error.
 - Toolkit server with own command: (load-mcp \"acme\" :local t) runs that
   command, not container.
-- Local load asks user as call local/<name> , e.g. local/local-files ,
-  unless config allows it: (permission/allow local/local-files) or
-(permission/allow local/*) .
+- Local load asks user as call {{local-gate}}<name> , e.g. {{local-gate}}local-files ,
+  unless config allows it: (permission/allow {{local-gate}}local-files) or
+(permission/allow {{local-gate}}*) .
 - Load fails with message if desktop app not open or user denied: say so,
   don't retry.")
 
@@ -57,8 +57,8 @@ lists only those servers. Unloaded name is error.
 it, then (search-tools \"widget\") ; list with (list-tools \"acme\") .")
 
 (memory "internal/mcp/timeout" :when "the agent is about to run a slow job through an MCP tool, such as a crawl, scrape, build, render, big export or long query, or a tool call just timed out"
-  "Tool call waits 120 seconds, then fails \"acme/x timed out\".
-Slow tool: add :mcp/timeout with seconds, above 0, max 900, beside tool's own
+  "Tool call waits {{tool-timeout-seconds}} seconds, then fails \"acme/x timed out\".
+Slow tool: add :mcp/timeout with seconds, above 0, max {{max-tool-timeout-seconds}}, beside tool's own
 keywords:
 (acme/crawl_site :url \"https://...\" :mcp/timeout 600)
 :mcp/timeout is yours, never sent to server. Set it up front when tool name or
