@@ -43,7 +43,8 @@ function attachSession(hooks: SessionHooks): void {
 	hooks.received.use(function* (ctx, received, next) {
 		const files = readReceived(received, attachmentsKind) ?? [];
 		if (files.length > 0)
-			ctx.emit(
+			ctx.interp.conversation.append(
+				"knowledge",
 				`user attached: ${files.map(({ folder, name }) => `${folder}/${name}`).join(", ")}`,
 			);
 		yield* next(ctx, received);

@@ -66,7 +66,7 @@ export const messageEnvelope = z.object({
 	display: lenient(z.string()),
 	failure: lenient(z.string()),
 	failed: lenient(z.literal(true)),
-	riding: lenient(z.string()),
+	noted: lenient(z.literal(true)),
 	results: lenient(z.array(z.string())),
 	reasoning_content: lenient(z.string()),
 	prose: lenient(z.array(skipped)),

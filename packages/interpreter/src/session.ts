@@ -3,20 +3,19 @@ import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
 import type { Reader } from "./channels.ts";
 import type { ChannelBuffer } from "./channels-host.ts";
+import type { ConversationInterp } from "./conversation.ts";
 import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
 import type { Installable, Interp } from "./lisp.ts";
 export type Bounded = Record<Reader, string>;
 
 export interface TurnContext {
-	readonly interp: Interp;
-	emit(text: string): void;
+	readonly interp: ConversationInterp;
 }
 
 export interface StepContext {
-	readonly interp: Interp;
+	readonly interp: ConversationInterp;
 	readonly code: string;
-	emit(text: string): void;
 }
 
 export interface StepOutcome extends Bounded {
@@ -52,15 +51,6 @@ export interface AgentTurn {
 	readonly prompt: string;
 	readonly provider: string;
 	readonly model: string;
-}
-
-export interface AgentStep {
-	readonly step: number;
-	readonly code: string;
-	readonly output: string;
-	readonly error: boolean;
-	readonly failed: boolean;
-	readonly latencyMs: number;
 }
 
 export interface AgentFailure {
@@ -99,21 +89,7 @@ export interface InterpExtension extends Installable {
 export interface SessionHooks {
 	readonly turnStart: Chain<[ctx: TurnContext], Eval<void>>;
 	readonly received: Chain<[ctx: TurnContext, received: Received], Eval<void>>;
-	readonly system: Chain<[interp: Interp, prompt: string], Eval<string>>;
 	readonly beginStep: Chain<[ctx: TurnContext], Eval<void>>;
-	readonly context: Chain<
-		[interp: Interp, messages: readonly ChatMessage[]],
-		readonly ChatMessage[]
-	>;
-	readonly modelCall: Chain<
-		[interp: Interp, request: ModelRequest],
-		AsyncIterable<ModelDelta>
-	>;
-	readonly response: Chain<[interp: Interp, text: string], string>;
-	readonly stepEnd: Chain<
-		[turn: AgentTurn, step: AgentStep, verdict: StepVerdict],
-		StepVerdict
-	>;
 	readonly beforeSettle: Chain<
 		[ctx: TurnContext, more: boolean],
 		Eval<boolean>
@@ -136,12 +112,7 @@ export function newSessionHooks(): SessionHooks {
 	return {
 		turnStart: new Chain(),
 		received: new Chain(),
-		system: new Chain(),
 		beginStep: new Chain(),
-		context: new Chain(),
-		modelCall: new Chain(),
-		response: new Chain(),
-		stepEnd: new Chain(),
 		beforeSettle: new Chain(),
 		answer: new Chain(),
 		settled: new Chain(),

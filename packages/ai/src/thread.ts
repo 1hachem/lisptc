@@ -1,6 +1,5 @@
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
-import type { MessageKwargs } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { exhausted, type Limits, type Usage } from "./budget.ts";
 import { evalMessage } from "./eval.ts";
@@ -8,6 +7,7 @@ import type { Envelope, Mailbox } from "./mailbox.ts";
 import {
 	type ChatMessageInput,
 	entryMessage,
+	noteMessage,
 	streamTurn,
 	systemEventMessage,
 	type ThreadState,
@@ -20,7 +20,6 @@ import { runAgentTurn, type TurnEvent } from "./turn.ts";
 export interface TranscriptStore {
 	read(threadId: string): Promise<ChatMessageInput[]>;
 	append(threadId: string, messages: WireMessage[]): Promise<void>;
-	revise(threadId: string, id: string, kwargs: MessageKwargs): Promise<void>;
 }
 
 export type TurnEnding = { failure: string } | { stopped: true };
@@ -309,7 +308,7 @@ export class Thread {
 				signal,
 				quiet,
 				onStep: (produced) => ports.transcript.append(id, produced),
-				onTurn: (produced, revised, failure) => {
+				onTurn: (produced, failure) => {
 					failed =
 						failure ??
 						(deadline?.aborted === true
@@ -318,9 +317,7 @@ export class Thread {
 								? "the turn ran out of tokens"
 								: undefined);
 					return this.record(
-						history,
 						produced,
-						revised,
 						failed !== undefined
 							? { failure: failed }
 							: halting.signal.aborted
@@ -369,6 +366,9 @@ export class Thread {
 				await ports.transcript.append(id, [
 					evaluated.message,
 					...evaluated.entries.map((entry) => entryMessage(entry)),
+					...evaluated.notes.map((note) =>
+						noteMessage(note, crypto.randomUUID()),
+					),
 				]);
 				quiet = evaluated.quiet;
 			}
@@ -378,19 +378,11 @@ export class Thread {
 	}
 
 	private async record(
-		history: ChatMessageInput[],
 		produced: WireMessage[],
-		revised: ReadonlyMap<number, WireMessage>,
 		ending: TurnEnding | undefined,
 	): Promise<void> {
 		const { id, ports } = this;
 		try {
-			for (const [at, message] of revised) {
-				const stored = at < history.length ? history[at].id : message.id;
-				if (stored === undefined || message.additional_kwargs === undefined)
-					continue;
-				await ports.transcript.revise(id, stored, message.additional_kwargs);
-			}
 			if (produced.length > 0) await ports.transcript.append(id, produced);
 		} finally {
 			await ports.status.settle(id, ending);

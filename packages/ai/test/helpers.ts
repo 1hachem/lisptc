@@ -75,11 +75,11 @@ export function hearing(text: string): InterpExtension {
 	});
 }
 
-export function riding(text: string): InterpExtension {
+export function telling(text: string): InterpExtension {
 	let said = false;
 	return extension((hooks) => {
 		hooks.beginStep.use(function* (ctx, next) {
-			if (!said) ctx.emit(text);
+			if (!said) ctx.interp.conversation.append("test", text);
 			said = true;
 			yield* next(ctx);
 		});
@@ -90,7 +90,8 @@ export function receiving(): InterpExtension {
 	return extension((hooks) => {
 		hooks.received.use(function* (ctx, received, next) {
 			const said = received.said;
-			if (typeof said === "string") ctx.emit(`the user also said: ${said}`);
+			if (typeof said === "string")
+				ctx.interp.conversation.append("test", `the user also said: ${said}`);
 			yield* next(ctx, received);
 		});
 	});

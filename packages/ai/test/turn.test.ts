@@ -10,7 +10,7 @@ import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { snapshotConversation, type TranscriptEntry } from "../src/repl.ts";
+import type { TranscriptEntry } from "../src/repl.ts";
 import type { TurnEvent } from "../src/turn.ts";
 import {
 	asking,
@@ -21,7 +21,7 @@ import {
 	receiving,
 	recording,
 	reporting,
-	riding,
+	telling,
 	testRepl,
 } from "./helpers.ts";
 
@@ -292,63 +292,79 @@ describe("the agent turn", () => {
 		});
 	});
 
-	test("what rode the user's message stays on it for every later step", async () => {
+	test("a note an extension appends reaches the model once, as a system message after the prompt", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 
 		const events = await drain(ask, {
-			repl: testRepl([riding("you are a pirate")]),
+			repl: testRepl([telling("you are a pirate")]),
 		});
 
-		expect(events.filter((e) => e.type === "rode")).toEqual([
-			{ type: "rode", text: "you are a pirate" },
+		expect(events.filter((e) => e.type === "noted")).toEqual([
+			{
+				type: "noted",
+				note: { role: "system", content: "you are a pirate", source: "test" },
+			},
 		]);
-		for (const call of seen)
-			expect(call.messages[0].content).toBe(
-				"what is 1 + 2?\n\nyou are a pirate",
-			);
-		expect(ask[0].riding).toBeUndefined();
+		expect(seen[0].messages).toEqual([
+			{ role: "user", content: "what is 1 + 2?" },
+			{ role: "system", content: "you are a pirate" },
+		]);
+		expect(
+			seen[1].messages.filter((m) => m.content === "you are a pirate"),
+		).toHaveLength(1);
+		expect(seen[1].messages[0]).toEqual({
+			role: "user",
+			content: "what is 1 + 2?",
+		});
 	});
 
-	test("what the user's message carried beside its text rides it, told by whoever reads it", async () => {
+	test("what the user's message carried beside its text is told as a note by whoever reads it", async () => {
 		script = [[{ text: "three." }]];
 
-		const events = await drain(ask, {
+		await drain(ask, {
 			repl: testRepl([receiving()]),
 			received: { said: "in hex" },
 		});
 
-		expect(events.filter((e) => e.type === "rode")).toEqual([
-			{ type: "rode", text: "the user also said: in hex" },
+		expect(seen[0].messages).toEqual([
+			{ role: "user", content: "what is 1 + 2?" },
+			{ role: "system", content: "the user also said: in hex" },
 		]);
-		expect(seen[0].messages[0].content).toBe(
-			"what is 1 + 2?\n\nthe user also said: in hex",
-		);
 	});
 
-	test("what a message carried rides nothing when no extension reads it", async () => {
+	test("what a message carried notes nothing when no extension reads it", async () => {
 		script = [[{ text: "three." }]];
 
 		const events = await drain(ask, { received: { said: "in hex" } });
 
-		expect(events.some((e) => e.type === "rode")).toBe(false);
-		expect(seen[0].messages[0].content).toBe("what is 1 + 2?");
+		expect(events.some((e) => e.type === "noted")).toBe(false);
+		expect(seen[0].messages).toEqual([
+			{ role: "user", content: "what is 1 + 2?" },
+		]);
 	});
 
-	test("what rode an earlier message reaches the model, but not the conversation vars", async () => {
+	test("a note from an earlier turn reaches the model in place, and is not something the user said", async () => {
 		script = [[{ text: "three." }]];
 		const history: TranscriptEntry[] = [
-			{ role: "user", content: "hello", riding: "you are a pirate" },
+			{ role: "user", content: "hello" },
+			{ role: "system", content: "you are a pirate", source: "test" },
 			{ role: "assistant", content: "ahoy." },
 			{ role: "user", content: "what is 1 + 2?" },
 		];
+		const repl = testRepl();
 
-		await drain(history);
+		await drain(history, { repl });
 
-		expect(seen[0].messages[0].content).toBe("hello\n\nyou are a pirate");
-		expect(snapshotConversation(history)["user-messages"]).toEqual([
-			"hello",
-			"what is 1 + 2?",
-		]);
+		expect(seen[0].messages[1]).toEqual({
+			role: "system",
+			content: "you are a pirate",
+		});
+		expect(
+			repl.interp.conversation
+				.said()
+				.filter((s) => s.role === "user")
+				.map((s) => s.content),
+		).toEqual(["hello", "what is 1 + 2?"]);
 	});
 
 	test("a steer taken between steps reaches the next model call after the tool result", async () => {
@@ -527,88 +543,12 @@ describe("the agent turn", () => {
 		expect(seen).toHaveLength(1);
 	});
 
-	test("the system prompt the model gets is the one the session shaped", async () => {
+	test("the model gets the system prompt the turn was configured with", async () => {
 		script = [[{ text: "three." }]];
-		const repl = testRepl([
-			extension((hooks) =>
-				hooks.system.use(function* (interp, prompt, next) {
-					return yield* next(interp, `${prompt}\n\nyou are a pirate`);
-				}),
-			),
-		]);
 
-		await drain(ask, { repl, config: { system: "base" } });
+		await drain(ask, { config: { system: "base" } });
 
-		expect(seen[0].system).toBe("base\n\nyou are a pirate");
-	});
-
-	test("a hook can answer in place of the model", async () => {
-		const repl = testRepl([
-			extension((hooks) =>
-				hooks.modelCall.use(async function* () {
-					yield { text: "replayed." };
-				}),
-			),
-		]);
-
-		const events = await drain(ask, { repl });
-
-		expect(seen).toHaveLength(0);
-		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "replayed." });
-	});
-
-	test("a hook can rewrite the code before it runs", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-		const repl = testRepl([
-			extension((hooks) =>
-				hooks.response.use((interp, text, next) =>
-					next(interp, text.replace("(+ 1 2)", "(+ 2 2)")),
-				),
-			),
-		]);
-
-		const events = await drain(ask, { repl });
-
-		expect(events.find((e) => e.type === "assistant")).toMatchObject({
-			code: "(+ 2 2)",
-		});
-	});
-
-	test("a hook can keep the turn going past an answer", async () => {
-		script = [[{ text: "three." }], [{ text: "really three." }]];
-		let overruled = false;
-		const repl = testRepl([
-			extension((hooks) =>
-				hooks.stepEnd.use((turn, step, verdict, next) => {
-					if (verdict !== "halt" || overruled) return next(turn, step, verdict);
-					overruled = true;
-					return "continue";
-				}),
-			),
-		]);
-
-		const events = await drain(ask, { repl });
-
-		expect(events.map((e) => e.type)).toEqual([
-			"delta",
-			"assistant",
-			"result",
-			"delta",
-			"assistant",
-			"halt",
-		]);
-		expect(events.at(-1)).toMatchObject({ answer: "really three.", steps: 2 });
-	});
-
-	test("a hook that never lets the turn end still stops at the cap", async () => {
-		script = [[{ text: "three." }]];
-		const repl = testRepl([
-			extension((hooks) => hooks.stepEnd.use(() => "continue")),
-		]);
-
-		const events = await drain(ask, { repl, maxSteps: 3 });
-
-		expect(events.at(-1)).toEqual({ type: "capped", steps: 3 });
+		expect(seen[0].system).toBe("base");
 	});
 
 	test("a steer that lands during the answering step buys one more step", async () => {
@@ -639,7 +579,7 @@ describe("the agent turn", () => {
 				hooks.beforeSettle.use(function* (ctx, more, next) {
 					if (asked) return yield* next(ctx, more);
 					asked = true;
-					ctx.emit("check your answer");
+					ctx.interp.conversation.append("test", "check your answer");
 					return true;
 				}),
 			),
@@ -675,17 +615,10 @@ describe("the agent turn", () => {
 		expect(outcomes).toEqual([expected]);
 	});
 
-	test("telemetry still sees a step that a hook does not pass on", async () => {
+	test("telemetry sees every step the turn ran", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-		const repl = testRepl([
-			extension((hooks) =>
-				hooks.stepEnd.use((_turn, step) =>
-					step.code === "three." ? "halt" : "continue",
-				),
-			),
-		]);
 
-		await drain(ask, { repl });
+		await drain(ask);
 
 		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
 	});

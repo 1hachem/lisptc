@@ -1,3 +1,4 @@
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
@@ -33,20 +34,15 @@ function session(online: { value: boolean }) {
 		),
 		machine,
 	});
-	const interp = new Interp({ extensions: [extension] });
+	const interp = new ConversationInterpreter({ extensions: [extension] });
 	runSync(interp, prelude);
 	const hooks = openSession([extension]);
 	const step = async (): Promise<string> => {
-		let emitted = "";
-		await driveAsync(
-			hooks.beginStep.run(() => settled(undefined), {
-				interp,
-				emit: (text) => {
-					emitted += text;
-				},
-			}),
-		);
-		return emitted;
+		await driveAsync(hooks.beginStep.run(() => settled(undefined), { interp }));
+		return interp
+			.takeAppended()
+			.map((note) => note.content)
+			.join("");
 	};
 	const listed = () => str(runSync(interp, "(list-toolkit)"));
 	const asked = () => str(runSync(interp, "(desktop-connected-p)"));

@@ -10,6 +10,7 @@
     "./async": "./src/async.ts",
     "./channels": "./src/channels.ts",
     "./channels-host": "./src/channels-host.ts",
+    "./conversation": "./src/conversation.ts",
     "./core-builtins": "./src/core-builtins.ts",
     "./docs": "./src/docs.ts",
     "./drive": "./src/drive.ts",

@@ -121,7 +121,7 @@ function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
 	hooks.beginStep.use(function* (ctx, next) {
 		const now = yield* settled(machine.refresh());
 		if (now !== known && machine.servers().length > 0)
-			ctx.emit(machineNotice(machine, now));
+			ctx.interp.conversation.append("mcp", machineNotice(machine, now));
 		known = now;
 		yield* next(ctx);
 	});

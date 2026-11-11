@@ -1,3 +1,4 @@
+import type { Said } from "@repo/interpreter/conversation";
 import { ENTRY_TYPE, type Entry, type Received } from "@repo/shared/journal";
 import {
 	contentToText,
@@ -6,12 +7,7 @@ import {
 	lighten,
 	type MessageKwargs,
 } from "@repo/shared/messages";
-import {
-	isUserPrompt,
-	joinRiding,
-	type TranscriptEntry,
-	withItsResult,
-} from "./repl.ts";
+import { isUserPrompt, type TranscriptEntry, userRanEvent } from "./repl.ts";
 import type { SystemEvent } from "./system-event.ts";
 import { toolMessage } from "./tool-message.ts";
 import type { TurnEvent } from "./turn.ts";
@@ -39,12 +35,6 @@ const encoder = new TextEncoder();
 
 const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
-function lastHuman(wire: WireMessage[]): number {
-	for (let i = wire.length - 1; i >= 0; i--)
-		if (wire[i].type === "human") return i;
-	return -1;
-}
-
 export function entryMessage(
 	entry: Entry,
 	id: string = crypto.randomUUID(),
@@ -64,10 +54,6 @@ export function entryMessage(
 }
 
 const ENTRY_SNAPSHOT_MS = 100;
-
-function riding(message: { additional_kwargs?: MessageKwargs }) {
-	return envelopeOf(message.additional_kwargs).riding;
-}
 
 function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -105,17 +91,23 @@ export function systemEventMessage(
 	};
 }
 
-function eventSource(message: ChatMessageInput): string {
-	return envelopeOf(message.additional_kwargs).source ?? "system";
+export function noteMessage(note: Said, id: string): WireMessage {
+	return {
+		type: "system",
+		content: note.content,
+		id,
+		additional_kwargs: { source: note.source ?? "system", noted: true },
+	};
 }
 
 function toEntry(m: ChatMessageInput): TranscriptEntry {
 	const content = contentToText(m.content);
 	const role = agentRole(m.type ?? m.role);
-	if (role === "system")
-		return { role: "user", content, event: { source: eventSource(m) } };
-	const rode = riding(m);
-	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
+	if (role !== "system") return { role, content };
+	const { source = "system", noted } = envelopeOf(m.additional_kwargs);
+	return noted
+		? { role: "system", content, source }
+		: { role: "user", content, event: { source } };
 }
 
 function received(input: ChatInput): Received | undefined {
@@ -139,7 +131,7 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	for (const entry of read.map(toEntry)) {
 		const previous = transcript.at(-1);
 		if (entry.role === "tool" && previous && isUserPrompt(previous))
-			transcript.splice(-1, 1, ...withItsResult(previous, entry));
+			transcript.push(userRanEvent(entry));
 		else transcript.push(entry);
 	}
 	return transcript;
@@ -150,7 +142,6 @@ export interface TurnStreamOptions {
 	onStep?: (produced: WireMessage[]) => Promise<void> | void;
 	onTurn?: (
 		messages: WireMessage[],
-		revised: ReadonlyMap<number, WireMessage>,
 		failure: string | undefined,
 	) => Promise<void> | void;
 	quiet?: boolean;
@@ -174,7 +165,6 @@ type Of<T extends TurnEvent["type"]> = Extract<TurnEvent, { type: T }>;
 class TurnWire {
 	readonly wire: WireMessage[];
 	readonly carried: number;
-	readonly revised = new Map<number, WireMessage>();
 	steps = 0;
 	failure: string | undefined;
 	outcome: TurnOutcome = { stopped: "stopped without answering" };
@@ -302,9 +292,9 @@ class TurnWire {
 			case "evaluated":
 				this.wire.push(event.message);
 				return this.snapshot();
-			case "rode":
-				this.reviseLastHuman((m) => carrying(m, event.text));
-				return true;
+			case "noted":
+				this.wire.push(noteMessage(event.note, crypto.randomUUID()));
+				return this.snapshot();
 			case "assistant":
 				this.assistant(event);
 				return true;
@@ -313,10 +303,8 @@ class TurnWire {
 			case "halt":
 				this.steps = event.steps;
 				this.outcome = this.held ?? { answer: event.answer };
-				if (this.lastMeta) {
+				if (this.lastMeta && this.lastAnswer >= this.flushed)
 					this.lastMeta.steps = event.steps;
-					this.reviseFlushed(this.lastAnswer);
-				}
 				this.snapshot();
 				return true;
 			case "capped":
@@ -381,30 +369,6 @@ class TurnWire {
 		this.flush();
 		return this.snapshot();
 	}
-
-	private reviseLastHuman(
-		update: (message: WireMessage) => WireMessage,
-	): boolean {
-		const at = lastHuman(this.wire);
-		if (at === -1) return false;
-		this.wire[at] = update(this.wire[at]);
-		this.reviseFlushed(at);
-		return true;
-	}
-
-	private reviseFlushed(at: number): void {
-		if (at !== -1 && at < this.flushed) this.revised.set(at, this.wire[at]);
-	}
-}
-
-function carrying(message: WireMessage, text: string): WireMessage {
-	return {
-		...message,
-		additional_kwargs: {
-			...message.additional_kwargs,
-			riding: joinRiding(riding(message), text),
-		},
-	};
 }
 
 async function record(
@@ -414,7 +378,7 @@ async function record(
 	const unrecorded = await turn.unrecorded();
 	if (!onTurn) return;
 	try {
-		await onTurn(unrecorded, turn.revised, turn.failure);
+		await onTurn(unrecorded, turn.failure);
 	} catch (error) {
 		console.error("[ai] the turn was not recorded:", error);
 	}

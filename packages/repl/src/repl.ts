@@ -8,6 +8,10 @@ import {
 	type ChannelBuffer,
 } from "@repo/interpreter/channels-host";
 import {
+	ConversationInterpreter,
+	type Said,
+} from "@repo/interpreter/conversation";
+import {
 	driveAsync,
 	type Eval,
 	type Hold,
@@ -22,37 +26,27 @@ import {
 } from "@repo/interpreter/hooks";
 import { type Image, restore, snapshot } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import {
-	EndOfFile,
-	jsonToLisp,
-	newSym,
-	Unspecified,
-} from "@repo/interpreter/objects";
+import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { EndOfFile, Unspecified } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import {
 	type AgentEnd,
-	type AgentStep,
 	type AgentTurn,
 	type Bounded,
 	type InterpExtension,
-	type ModelDelta,
-	type ModelRequest,
 	openSession,
 	type SessionHooks,
 	type StepContext,
-	type StepVerdict,
 	type TurnContext,
 } from "@repo/interpreter/session";
 import { type Note, note } from "@repo/interpreter/topics";
 import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
-import type { ChatMessage } from "@repo/shared/messages";
 import type { Checkpoint, ImageStore } from "./image-store.ts";
 
 export interface Repl {
-	readonly interp: Interp;
+	readonly interp: ConversationInterpreter;
 	reset(): void;
 }
 
@@ -79,7 +73,7 @@ function liveEntries(live: LiveEntries): ChannelTransport {
 export interface EvalOutput extends Bounded {
 	entries: readonly Entry[];
 	effects: readonly Effect[];
-	emitted: string;
+	notes: readonly Said[];
 	failed: boolean;
 	failure?: string;
 	held: boolean;
@@ -182,7 +176,7 @@ function render(result: StepResult): EvalOutput {
 		user: result.user + notes,
 		entries: result.entries,
 		effects: result.effects,
-		emitted: result.emitted,
+		notes: result.notes,
 		failed: result.failed,
 		held: result.held,
 		message: result.message,
@@ -202,7 +196,7 @@ function snapshotOf(interp: Interp): Image | undefined {
 }
 
 export class MemoryRepl implements InMemoryRepl {
-	private currentInterp: Interp;
+	private currentInterp: ConversationInterpreter;
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
 	private recorder: FormRecorder | undefined;
@@ -227,12 +221,14 @@ export class MemoryRepl implements InMemoryRepl {
 		this.currentInterp = this.freshInterp();
 	}
 
-	get interp(): Interp {
+	get interp(): ConversationInterpreter {
 		return this.currentInterp;
 	}
 
-	private freshInterp(): Interp {
-		const interp = new Interp({ extensions: this.extensions });
+	private freshInterp(): ConversationInterpreter {
+		const interp = new ConversationInterpreter({
+			extensions: this.extensions,
+		});
 		const recording = () => this.recorder;
 		interp.hooks.evalForm.use(function* (i, form, next) {
 			const record = recording();
@@ -280,7 +276,9 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	private load({ depth, image }: Checkpoint): void {
-		const interp = new Interp({ extensions: this.extensions });
+		const interp = new ConversationInterpreter({
+			extensions: this.extensions,
+		});
 		try {
 			restore(interp, image);
 		} catch (ex) {
@@ -305,10 +303,10 @@ export class MemoryRepl implements InMemoryRepl {
 		return result;
 	}
 
-	protected setup(_interp: Interp): void {}
+	protected setup(_interp: ConversationInterpreter): void {}
 
-	protected currentInterpOrUndefined(): Interp | undefined {
-		return this.currentInterp as Interp | undefined;
+	protected currentInterpOrUndefined(): ConversationInterpreter | undefined {
+		return this.currentInterp as ConversationInterpreter | undefined;
 	}
 
 	async evalOutput(
@@ -406,15 +404,8 @@ export class MemoryRepl implements InMemoryRepl {
 		body: (ctx: StepContext) => Promise<void>,
 		live?: LiveEntries,
 	): Promise<StepResult> {
-		let emitted = "";
 		const interp = this.currentInterp;
-		const ctx: StepContext = {
-			interp,
-			code,
-			emit: (text) => {
-				emitted += text;
-			},
-		};
+		const ctx: StepContext = { interp, code };
 		const { channels } = interp;
 		channels.step = this.calls + 1;
 		const buffer = bufferTransport();
@@ -455,11 +446,12 @@ export class MemoryRepl implements InMemoryRepl {
 		const error = this.errorOf(ctx, thrown, failed);
 		const carriedError = this.errorOf(ctx, carriedThrown, failed);
 		const message = this.hooks.message.run(noOpinion, buffer);
+		const notes = interp.takeAppended();
 		return {
 			envelopes: buffer.envelopes,
 			model: carried ? error.model : bounded.model + error.model + holding,
 			user: bounded.user + carriedError.user + error.user,
-			emitted,
+			notes,
 			entries: buffer.collect(journal),
 			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
@@ -538,17 +530,17 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 }
 
+interface Noted {
+	readonly notes: readonly Said[];
+	readonly entries: readonly Entry[];
+}
+
 export class AgentRepl extends MemoryRepl {
 	private pendingProse: string[] = [];
-	private conversationNames: string[] = [];
 
-	protected override setup(interp: Interp): void {
+	protected override setup(interp: ConversationInterpreter): void {
 		const previous = this.currentInterpOrUndefined();
-		for (const name of this.conversationNames ?? []) {
-			const sym = newSym(name);
-			if (previous?.hasGlobal(sym))
-				defineConversationVar(interp, name, previous.getGlobal(sym));
-		}
+		if (previous !== undefined) interp.carryFrom(previous);
 	}
 
 	async evalMessage(code: string, origin?: string): Promise<EvalOutput> {
@@ -569,7 +561,7 @@ export class AgentRepl extends MemoryRepl {
 			user: result.user,
 			entries: result.entries,
 			effects: [...result.effects, END],
-			emitted: result.emitted,
+			notes: result.notes,
 			failed: result.failed,
 			failure: result.failure,
 			held: result.held,
@@ -581,7 +573,7 @@ export class AgentRepl extends MemoryRepl {
 	private answered(code: string, result: StepResult): boolean {
 		return this.hooks.answered.run(
 			() => false,
-			{ interp: this.interp, code, emit: () => {} },
+			{ interp: this.interp, code },
 			{
 				model: result.model,
 				user: result.user,
@@ -597,85 +589,39 @@ export class AgentRepl extends MemoryRepl {
 
 	async turnStart(
 		around?: Middleware<[TurnContext], Eval<void>>,
-	): Promise<{ emitted: string; entries: readonly Entry[] }> {
+	): Promise<Noted> {
 		const chain = outermost(this.hooks.turnStart, around);
-		const { emitted, entries } = await this.emitting((ctx) =>
+		const { notes, entries } = await this.noting((ctx) =>
 			chain.run(() => settled(undefined), ctx),
 		);
-		return { emitted, entries };
+		return { notes, entries };
 	}
 
-	received(
+	async received(
 		received: Received,
 		around?: Middleware<[TurnContext, Received], Eval<void>>,
-	): Promise<{
-		emitted: string;
-		entries: readonly Entry[];
-	}> {
+	): Promise<Noted> {
 		const chain = outermost(this.hooks.received, around);
-		return this.emitting((ctx) =>
+		const { notes, entries } = await this.noting((ctx) =>
 			chain.run(() => settled(undefined), ctx, received),
 		);
+		return { notes, entries };
 	}
 
-	async system(
-		prompt: string,
-	): Promise<{ prompt: string; entries: readonly Entry[] }> {
-		const { value, entries } = await this.emitting(() =>
-			this.hooks.system.run((_i, p) => settled(p), this.interp, prompt),
-		);
-		return { prompt: value, entries };
-	}
-
-	beginStep(): Promise<{
-		emitted: string;
-		entries: readonly Entry[];
-	}> {
-		return this.emitting((ctx) =>
+	async beginStep(): Promise<Noted> {
+		const { notes, entries } = await this.noting((ctx) =>
 			this.hooks.beginStep.run(() => settled(undefined), ctx),
 		);
+		return { notes, entries };
 	}
 
-	context(messages: readonly ChatMessage[]): readonly ChatMessage[] {
-		return this.hooks.context.run((_i, m) => m, this.interp, messages);
-	}
-
-	modelCall(
-		request: ModelRequest,
-		call: (request: ModelRequest) => AsyncIterable<ModelDelta>,
-	): AsyncIterable<ModelDelta> {
-		return this.hooks.modelCall.run((_i, r) => call(r), this.interp, request);
-	}
-
-	response(text: string, read: (text: string) => string): string {
-		return this.hooks.response.run((_i, t) => read(t), this.interp, text);
-	}
-
-	stepEnd(
-		turn: AgentTurn,
-		step: AgentStep,
-		verdict: StepVerdict,
-		around?: Middleware<[AgentTurn, AgentStep, StepVerdict], StepVerdict>,
-	): StepVerdict {
-		return outermost(this.hooks.stepEnd, around).run(
-			(_t, _s, v) => v,
-			turn,
-			step,
-			verdict,
-		);
-	}
-
-	async beforeSettle(more: boolean): Promise<{
-		more: boolean;
-		emitted: string;
-		entries: readonly Entry[];
-	}> {
+	async beforeSettle(more: boolean): Promise<Noted & { more: boolean }> {
 		const { beforeSettle } = this.hooks;
 		let decided = more;
-		const { emitted, entries } = await this.emitting(function* (ctx) {
+		const { notes, entries } = await this.noting(function* (ctx) {
 			decided = yield* beforeSettle.run((_c, m) => settled(m), ctx, more);
 		});
-		return { more: decided, emitted, entries };
+		return { more: decided, notes, entries };
 	}
 
 	answer(code: string): string {
@@ -690,38 +636,28 @@ export class AgentRepl extends MemoryRepl {
 		outermost(this.hooks.settled, around).run(() => {}, turn, end);
 	}
 
-	private async emitting<T>(
+	private async noting<T>(
 		run: (ctx: TurnContext) => Eval<T>,
-	): Promise<{ value: T; emitted: string; entries: readonly Entry[] }> {
-		let emitted = "";
-		const { channels } = this.interp;
+	): Promise<Noted & { value: T }> {
+		const { interp } = this;
 		const buffer = bufferTransport();
-		const detach = channels.pipe(buffer);
+		const detach = interp.channels.pipe(buffer);
 		let value: T;
 		try {
-			({ value } = await driveAsync(
-				run({
-					interp: this.interp,
-					emit: (text) => {
-						emitted += emitted === "" ? text : `\n\n${text}`;
-					},
-				}),
-			));
+			({ value } = await driveAsync(run({ interp })));
 		} finally {
 			detach();
 			this.handledBetweenSteps(buffer.envelopes);
 		}
 		return {
 			value,
-			emitted,
+			notes: interp.takeAppended(),
 			entries: buffer.collect(journal),
 		};
 	}
 
-	setConversationVars(vars: Record<string, unknown>): void {
-		this.conversationNames = Object.keys(vars);
-		for (const [name, value] of Object.entries(vars))
-			defineConversationVar(this.interp, name, jsonToLisp(value));
+	seed(said: readonly Said[]): void {
+		this.interp.seed(said);
 	}
 
 	takeProseFeedback(): string {
@@ -755,19 +691,6 @@ function outermost<A extends unknown[], R>(
 	around: Middleware<A, R> | undefined,
 ): Chain<A, R> {
 	return around === undefined ? chain : chain.wrappedBy(around);
-}
-
-function defineConversationVar(
-	interp: Interp,
-	name: string,
-	value: unknown,
-): void {
-	const sym = newSym(name);
-	interp.defineGlobal(sym, value, {
-		signature: name,
-		doc: "Read-only live conversation state (auto-updated each step).",
-	});
-	interp.seal(sym, "repl");
 }
 
 function carriedOn(printed: string): string {
