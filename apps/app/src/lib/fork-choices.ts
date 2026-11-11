@@ -1,6 +1,5 @@
+import { type ChatMessage, isEntryMessage } from "@repo/components";
 import type { Choice } from "@repo/components/choice-dialog.tsx";
-import type { ChatMessage } from "./chat.tsx";
-import { isEntryMessage } from "./entries.ts";
 import { isGreetingMessage } from "./greeting.ts";
 
 const SNIPPET = 90;

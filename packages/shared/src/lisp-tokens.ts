@@ -1,5 +1,5 @@
 export function tokenPattern(): RegExp {
-	return /\s+|("(\\.?|.)*?"|,@?|[^()'`~" \t]+|.)/g;
+	return /\s+|("(\\[\s\S]|[^"\\])*"|,@?|[^()'`~"\s]+|.)/g;
 }
 
 const QUOTE_TOKENS = ["'", "`", ",", ",@"] as const;

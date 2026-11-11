@@ -1,7 +1,6 @@
 import { DEFAULT_TOGGLES } from "@repo/backend/preference-defaults";
+import { INPUT_HELPERS, META_FIELDS } from "@repo/shared/chat-toggles";
 import { describe, expect, it } from "vitest";
-import { INPUT_HELPERS } from "../src/lib/input-helpers.ts";
-import { META_FIELDS } from "../src/lib/meta-fields.ts";
 
 const ids = (fields: readonly { id: string }[]) =>
 	fields.map(({ id }) => id).sort();

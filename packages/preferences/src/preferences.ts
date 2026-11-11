@@ -7,6 +7,7 @@ import {
 	type List,
 	listToArray,
 	newLispKeyword,
+	newSym,
 } from "@repo/interpreter/objects";
 import { parsePlist, plistOptions } from "@repo/interpreter/plist";
 import { zList } from "@repo/interpreter/schema";
@@ -15,6 +16,7 @@ import type { DesktopPreferences } from "@repo/shared/desktop";
 import {
 	STATUS_BAR_GAP_PREFIX,
 	STATUS_BAR_GAPS,
+	STATUS_BAR_ITEMS,
 	STATUS_BAR_SLOT_COUNT,
 	STATUS_BAR_SLOTS,
 } from "@repo/shared/status-bar";
@@ -269,6 +271,59 @@ export function registerPreferences(
 ): void {
 	const { store } = host;
 
+	const keywords = (keys: readonly string[]): List =>
+		arrayToList(keys.map((key) => newLispKeyword(key)));
+	const described = (offered: readonly Choice[]): List =>
+		plist(offered.map((choice) => [choice.id, choice.name]));
+	interp.defineGlobal(newSym("*preferences-keys*"), keywords(SET_KEYS), {
+		signature: "*preferences-keys*",
+		doc: "Every key preferences/set takes.",
+	});
+	interp.defineGlobal(
+		newSym("*preferences-desktop-keys*"),
+		keywords(DESKTOP_KEYS),
+		{
+			signature: "*preferences-desktop-keys*",
+			doc: "Every key desktop-preferences/set takes.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*preferences-metadata*"),
+		described(host.metadata),
+		{
+			signature: "*preferences-metadata*",
+			doc: "The metadata fields a message can show, as a plist of id and what it shows.",
+		},
+	);
+	interp.defineGlobal(newSym("*preferences-input*"), described(host.input), {
+		signature: "*preferences-input*",
+		doc: "The helpers the chat input can run, as a plist of id and what it does.",
+	});
+	interp.defineGlobal(
+		newSym("*preferences-status-bar-slots*"),
+		BigInt(STATUS_BAR_SLOT_COUNT),
+		{
+			signature: "*preferences-status-bar-slots*",
+			doc: "How many slots the bottom bar has.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*preferences-status-bar-items*"),
+		arrayToList([...STATUS_BAR_ITEMS]),
+		{
+			signature: "*preferences-status-bar-items*",
+			doc: "The items the bottom bar can hold.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*preferences-status-bar-gaps*"),
+		arrayToList([...STATUS_BAR_GAPS]),
+		{
+			signature: "*preferences-status-bar-gaps*",
+			doc: "The names of the bottom bar's empty slots.",
+		},
+	);
+
 	interp.defGen(
 		"preferences",
 		0,
@@ -422,6 +477,6 @@ export function registerPreferences(
 export function preferencesExtension(host: PreferencesHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerPreferences(interp, host),
-		{ prompt: host.prompt() },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }

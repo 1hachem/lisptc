@@ -4,7 +4,7 @@ import type { Awaitable } from "@repo/shared/host";
 import type { z } from "zod";
 import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
-import { compileFunc } from "./compile.ts";
+import { compileFunc, MACRO_EXPANSION_DEPTH } from "./compile.ts";
 import { installCore } from "./core-builtins.ts";
 import {
 	type Arity,
@@ -49,6 +49,7 @@ import {
 	Cell,
 	catchSym,
 	condSym,
+	EndOfFile,
 	Keyword,
 	type List,
 	lambdaSym,
@@ -65,10 +66,10 @@ import {
 } from "./objects.ts";
 import { str } from "./print.ts";
 import { qqExpand, qqQuote } from "./quasiquote.ts";
-import { Reader } from "./reader.ts";
+import { Reader, readFailure, type SyntaxFailure } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
-import { LANGUAGE_REFERENCE } from "./source.ts";
+import { LANGUAGE_MEMORIES, LANGUAGE_REFERENCE } from "./source.ts";
 import { note } from "./topics.ts";
 import type { ForeignValue } from "./types.ts";
 
@@ -129,6 +130,7 @@ export interface Contents {
 export interface Installable {
 	(interp: Interp): void;
 	readonly prompt?: string;
+	readonly memories?: string;
 }
 
 export interface InterpOptions {
@@ -194,6 +196,8 @@ export class Interp {
 
 	private readonly prompts: string[] = [];
 
+	private readonly memories: string[] = [LANGUAGE_MEMORIES];
+
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);
 	}
@@ -252,15 +256,58 @@ export class Interp {
 			runLoopBody: (a) => this.runLoopBody(a),
 			importFile: (path) => this.importFile(path),
 		});
+		this.defineGlobal(
+			newSym("*max-macro-depth*"),
+			BigInt(MACRO_EXPANSION_DEPTH),
+			{
+				signature: "*max-macro-depth*",
+				doc: "How deep macro expansion nests before it stops with an error.",
+			},
+		);
 
 		for (const extension of options.extensions ?? []) {
 			extension(this);
 			if (extension.prompt) this.prompts.push(extension.prompt);
+			if (extension.memories) this.memories.push(extension.memories);
 		}
 	}
 
 	systemPrompt(): string {
 		return [LANGUAGE_REFERENCE, ...this.prompts].join("\n\n");
+	}
+
+	builtinMemories(): readonly string[] {
+		return this.memories;
+	}
+
+	read(text: string): unknown {
+		const reader = new Reader();
+		reader.push(text);
+		if (reader.isEmpty()) throw new EvalException("no expression in", text);
+		try {
+			return reader.read();
+		} catch (ex) {
+			if (ex === EndOfFile) throw new EvalException("unclosed form in", text);
+			throw ex;
+		}
+	}
+
+	readAll(text: string): unknown[] {
+		const reader = new Reader();
+		reader.push(text);
+		const forms: unknown[] = [];
+		try {
+			while (!reader.isEmpty()) forms.push(reader.read());
+		} catch (ex) {
+			if (ex === EndOfFile)
+				throw new EvalException("unclosed form at line", reader.line);
+			throw ex;
+		}
+		return forms;
+	}
+
+	readFailure(text: string): SyntaxFailure | undefined {
+		return readFailure(text);
 	}
 
 	def<T extends z.ZodType>(

@@ -70,6 +70,40 @@ describe("the agent the app serves", () => {
 			expect(await ev(`(permission/check '${form})`)).toBe("allow");
 	});
 
+	it("ships every extension's built-in memories readable, under distinct keys, within their budget", async () => {
+		const ev = await served();
+		const keys = (
+			await ev("(mapcar (lambda (entry) (car entry)) (memory/builtins))")
+		)
+			.slice(1, -1)
+			.split(" ")
+			.map((key) => JSON.parse(key) as string);
+		expect(keys).toEqual(
+			expect.arrayContaining(["internal/mcp/local", "internal/mcp/oauth"]),
+		);
+		expect(new Set(keys).size).toBe(keys.length);
+		expect(await ev("(length (memory/areas :when))")).not.toBe("0");
+	});
+
+	it("hands back every built-in memory's body as formatted text", async () => {
+		const ev = await served();
+		const bodyOf = (key: string) =>
+			ev(
+				`(cdr (assoc "body" (car (filter (lambda (m) (equal (cdr (assoc "key" m)) ${JSON.stringify(key)})) (memory/recall ${JSON.stringify(key)})))))`,
+			);
+		expect(await bodyOf("internal/memory/fading")).toContain(
+			"strength every 7 days",
+		);
+		expect(await bodyOf("internal/preferences/metadata")).toContain(
+			":input input tokens",
+		);
+		expect(
+			await ev(
+				"(filter (lambda (entry) (not (stringp (car (last entry))))) *memories*)",
+			),
+		).toBe("nil");
+	});
+
 	it("teaches the model the workspace, its knowledge and its preferences", async () => {
 		const interp = new Interp({
 			extensions: await workspaceExtensions(WORKSPACE, offline),

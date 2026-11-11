@@ -15,6 +15,7 @@ import type {
 	TranscriptEntry,
 } from "@repo/evals/runner";
 import { createEvalSuite, runCase as runEvalCase } from "@repo/evals/runner";
+import { systemPromptKind } from "@repo/journal-catalog/system";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { CataloguedChoice } from "@repo/shared/providers";
 import type { ExtensionsFor } from "./harness.ts";
@@ -111,7 +112,23 @@ const runtime = {
 					system: options.system,
 				},
 			})) {
-				if (
+				if (event.type === "system")
+					yield {
+						type: "entry" as const,
+						entry: {
+							kind: systemPromptKind.name,
+							value: { text: event.prompt, tokens: event.tokens },
+						},
+					};
+				else if (event.type === "noted")
+					yield {
+						type: "noted" as const,
+						content: event.note.content,
+						...(event.note.source === undefined
+							? {}
+							: { source: event.note.source }),
+					};
+				else if (
 					event.type === "assistant" ||
 					event.type === "entry" ||
 					event.type === "result" ||

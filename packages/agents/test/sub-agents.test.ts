@@ -7,7 +7,7 @@ import {
 } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { newSym } from "@repo/interpreter/objects";
+import { type List, listToArray, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks } from "@repo/interpreter/session";
@@ -39,6 +39,8 @@ import type {
 	Sent,
 	Spawn,
 } from "../src/ports.ts";
+
+const definitionIn = (text: string) => readDefinition(new Interp(), text);
 
 class FakeThreads implements AgentThreads {
 	readonly spawned: Spawn[] = [];
@@ -88,14 +90,13 @@ class FakeThreads implements AgentThreads {
 	}
 }
 
-function session(threads?: FakeThreads, roster?: readonly string[]) {
+function session(threads?: FakeThreads) {
 	const folder = new MemorySourceFolder();
 	const extension = agentsExtension(
 		agentsHostFor({
 			folder,
 			workspace: "w",
 			...(threads === undefined ? {} : { threads }),
-			...(roster === undefined ? {} : { roster }),
 		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
@@ -124,34 +125,39 @@ describe("a definition file", () => {
 			name: "lead",
 			prompt: 'say "hi"\nthen dig',
 			permissions: '(permission/deny "fs/*")',
-			roster: ["scout", "digger"],
 			budget: 40,
 		};
-		expect(readDefinition(writeDefinition(full))).toEqual(full);
-		expect(readDefinition(writeDefinition({ name: "r", prompt: "p" }))).toEqual(
-			{ name: "r", prompt: "p" },
-		);
+		expect(definitionIn(writeDefinition(full))).toEqual(full);
+		expect(definitionIn(writeDefinition({ name: "r", prompt: "p" }))).toEqual({
+			name: "r",
+			prompt: "p",
+		});
 		expect(writeDefinition({ name: "r", prompt: "dig" })).toBe(
 			'(defagent "r"\n  :prompt "dig")',
 		);
-		expect(readDefinition("not a form")).toBeUndefined();
-		expect(readDefinition("(defagent")).toBeUndefined();
+		expect(definitionIn("not a form")).toBeUndefined();
+		expect(definitionIn("(defagent")).toBeUndefined();
+	});
+
+	test("reads a file saved with a :roster, ignoring the key", () => {
+		expect(
+			definitionIn(
+				'(defagent "lead"\n  :prompt "dig"\n  :roster \'("scout" "digger")\n  :budget 40)',
+			),
+		).toEqual({ name: "lead", prompt: "dig", budget: 40 });
 	});
 });
 
 describe("defagent", () => {
 	test("writes sub-agents/<name>.ptc that spawn reuses by name", async () => {
 		const { run, threads, folder } = world();
-		await run(
-			'(defagent "researcher" :prompt "dig" :roster \'("scout") :budget 9)',
-		);
+		await run('(defagent "researcher" :prompt "dig" :budget 9)');
 		expect(folder.list("w", "sub-agents")).toEqual(["researcher.ptc"]);
 		expect(
-			readDefinition(folder.read("w", "sub-agents", "researcher.ptc") ?? ""),
+			definitionIn(folder.read("w", "sub-agents", "researcher.ptc") ?? ""),
 		).toEqual({
 			name: "researcher",
 			prompt: "dig",
-			roster: ["scout"],
 			budget: 9,
 		});
 		expect(str((await run('(spawn "researcher")')).value)).toBe('"researcher"');
@@ -159,7 +165,6 @@ describe("defagent", () => {
 			definition: {
 				name: "researcher",
 				prompt: "dig",
-				roster: ["scout"],
 				budget: 9,
 			},
 			seed: { from: "fresh" },
@@ -173,20 +178,6 @@ describe("defagent", () => {
 		folder.write("w", "sub-agents", "b.ptc", '(defagent "b" :prompt "y")');
 		folder.write("w", "sub-agents", "notes.txt", "not an agent");
 		expect(str((await run("(agents)")).value)).toBe('("a" "b")');
-	});
-
-	test("shows only the roster the session was handed", async () => {
-		const { interp, folder } = session(new FakeThreads(), ["shown"]);
-		folder.write(
-			"w",
-			"sub-agents",
-			"hidden.ptc",
-			'(defagent "hidden" :prompt "x")',
-		);
-		expect(str((await runAsync(interp, "(agents)")).value)).toBe("nil");
-		await expect(runAsync(interp, '(spawn "hidden")')).rejects.toThrow(
-			"no saved agent by that name",
-		);
 	});
 
 	test("refuses a definition without a prompt", async () => {
@@ -208,13 +199,13 @@ describe("defagent with permissions", () => {
 		await run(
 			'(defagent "r" :prompt "p" :permissions "(permission/deny fs/*)")',
 		);
-		expect(
-			readDefinition(folder.read("w", "sub-agents", "r.ptc") ?? ""),
-		).toEqual({
-			name: "r",
-			prompt: "p",
-			permissions: "(permission/deny fs/*)",
-		});
+		expect(definitionIn(folder.read("w", "sub-agents", "r.ptc") ?? "")).toEqual(
+			{
+				name: "r",
+				prompt: "p",
+				permissions: "(permission/deny fs/*)",
+			},
+		);
 	});
 
 	test("goes through the form the host asks for", async () => {
@@ -574,7 +565,7 @@ describe("agent-keep", () => {
 		expect(await shown('(agent-keep "scratch")')).toBe('"scratch"');
 		expect(calls).toContain(KEEP);
 		expect(
-			readDefinition(folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
+			definitionIn(folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
 		).toEqual({ name: "scratch", prompt: "dig", budget: 5 });
 		expect(await shown("(agents)")).toBe('("scratch")');
 	});
@@ -608,7 +599,7 @@ describe("agent-keep", () => {
 		restore(after.interp, image);
 		await runAsync(after.interp, '(agent-keep "scratch")');
 		expect(
-			readDefinition(after.folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
+			definitionIn(after.folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
 		).toEqual({ name: "scratch", prompt: "dig" });
 	});
 });
@@ -664,6 +655,25 @@ function subAgent() {
 	const answer = (code: string) => hooks.answer.run((_i, c) => c, interp, code);
 	return { interp, answer };
 }
+
+describe("the sub-agent extension", () => {
+	test("ships memories under the sub-agent area, every key in it", () => {
+		const interp = new Interp();
+		runSync(
+			interp,
+			`(setq areas nil)
+(setq keys nil)
+(setq area (macro (name &rest _) (list 'setq 'areas (list 'cons name 'areas))))
+(setq memory (macro (key &rest _) (list 'setq 'keys (list 'cons key 'keys))))`,
+		);
+		runSync(interp, subAgentExtension(subAgentHost()).memories ?? "");
+		expect(str(interp.getGlobal(newSym("areas")))).toBe('("sub-agent")');
+		const keys = listToArray(interp.getGlobal(newSym("keys")) as List);
+		expect(keys.length).toBeGreaterThan(0);
+		for (const key of keys)
+			expect(String(key)).toMatch(/^internal\/sub-agent\//);
+	});
+});
 
 describe("a sub-agent's exports", () => {
 	test("leave the answer alone until something is exported", () => {

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { MemoryKnowledgeStore } from "../src/memory-store.ts";
+import { EXPIRY } from "./helpers.ts";
 
 class FullStore extends MemoryKnowledgeStore {
 	override write(): string {
@@ -41,6 +42,7 @@ async function activityOf(
 				},
 			},
 			maxDownloadBytes: 1024,
+			...EXPIRY,
 			clock: ticking(1000, 25),
 		}),
 	);

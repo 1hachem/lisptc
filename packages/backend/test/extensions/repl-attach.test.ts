@@ -21,7 +21,14 @@ function attachingRepl() {
 	);
 	return memoryRepl([
 		...modelFacing(),
-		knowledgeExtension(knowledgeHostFor({ store, maxDownloadBytes: 1024 })),
+		knowledgeExtension(
+			knowledgeHostFor({
+				store,
+				maxDownloadBytes: 1024,
+				attachmentTtlMs: 604_800_000,
+				binTtlMs: 2_592_000_000,
+			}),
+		),
 	]);
 }
 

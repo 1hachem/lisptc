@@ -1,12 +1,16 @@
 import {
+	INPUT_HELPERS,
+	type InputHelper,
+	META_FIELDS,
+	type MetaField,
+} from "@repo/shared/chat-toggles";
+import {
 	createContext,
 	useCallback,
 	useContext,
 	useMemo,
 	useState,
 } from "react";
-import { INPUT_HELPERS, type InputHelper } from "./input-helpers.ts";
-import { META_FIELDS, type MetaField } from "./meta-fields.ts";
 import { usePreferences, usePutPreferences } from "./preferences.ts";
 import {
 	PREFERENCES_COOKIE,

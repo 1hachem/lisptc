@@ -1,10 +1,10 @@
+import type { ChatMessage } from "@repo/components";
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { TraceLines } from "../src/components/trace-view.tsx";
-import type { ChatMessage } from "../src/lib/chat.tsx";
 import { UIProvider } from "../src/lib/ui.tsx";
 
 vi.mock("../src/lib/preferences.ts", () => ({

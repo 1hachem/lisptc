@@ -6,7 +6,13 @@ export {
 } from "./agent.ts";
 export { Budget, type Limits, type Usage } from "./budget.ts";
 export { type Envelope, type Mailbox, MemoryMailbox } from "./mailbox.ts";
+export {
+	type MemorySystem,
+	memorySystem,
+	RECOGNITION_TIMEOUT_MS,
+} from "./memory-system.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
+export { LOOP_MEMORIES } from "./prompts/loop-memories.ts";
 export {
 	evalCode,
 	replResultContent,

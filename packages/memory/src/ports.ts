@@ -2,6 +2,7 @@ import { EvalException } from "@repo/interpreter/errors";
 import {
 	arrayToList,
 	Cell,
+	LispKeyword,
 	type List,
 	listToArray,
 	newLispKeyword,
@@ -9,10 +10,21 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
+import { str } from "@repo/interpreter/print";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
+import type { AreaGate, Recognize } from "@repo/shared/recognition";
 import type { SearchEngine } from "@repo/shared/search";
 
 export const INITIAL_SCORE = 1;
+export const INTERNAL = "internal/";
+
+export function areaOf(key: string): string | undefined {
+	const rest = key.startsWith(INTERNAL) ? key.slice(INTERNAL.length) : key;
+	const slash = rest.indexOf("/");
+	return slash === -1 ? undefined : rest.slice(0, slash);
+}
+export const LINKED_FIRES_AT = 2;
+export const WHEN_FIRES_AT = 0.7;
 
 export const TRIGGER_KINDS = [
 	"call",
@@ -23,6 +35,7 @@ export const TRIGGER_KINDS = [
 	"user",
 	"recall",
 	"start",
+	"when",
 ] as const;
 
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
@@ -30,6 +43,7 @@ export type TriggerKind = (typeof TRIGGER_KINDS)[number];
 export interface Trigger {
 	kind: TriggerKind;
 	pattern?: unknown;
+	unless?: string;
 }
 
 export interface Memory {
@@ -42,30 +56,59 @@ export interface Memory {
 	lastUsed: number;
 }
 
+export interface MemoryRecord {
+	key: string;
+	body: string;
+	on?: string;
+	links: { key: string; weight: number }[];
+	score: number;
+	used: number;
+	lastUsed: number;
+}
+
+export interface MemorySource {
+	key: string;
+	source: string;
+}
+
+export type StoredMemory = MemoryRecord | MemorySource;
+
+export interface MemoryWrite {
+	record: MemoryRecord;
+	source: string;
+}
+
 export interface MemoryStore {
-	all(): Awaitable<Memory[]>;
-	get(key: string): Awaitable<Memory | undefined>;
-	put(memory: Memory): Awaitable<void>;
+	all(): Awaitable<StoredMemory[]>;
+	get(key: string): Awaitable<StoredMemory | undefined>;
+	put(memory: MemoryWrite): Awaitable<void>;
 	delete(key: string): Awaitable<boolean>;
+	clear(): Awaitable<number>;
 }
 
 export class VolatileStore implements MemoryStore {
-	private readonly memories = new Map<string, Memory>();
+	private readonly records = new Map<string, MemoryRecord>();
 
-	all(): Memory[] {
-		return [...this.memories.values()];
+	all(): MemoryRecord[] {
+		return [...this.records.values()];
 	}
 
-	get(key: string): Memory | undefined {
-		return this.memories.get(key);
+	get(key: string): MemoryRecord | undefined {
+		return this.records.get(key);
 	}
 
-	put(memory: Memory): void {
-		this.memories.set(memory.key, memory);
+	put({ record }: MemoryWrite): void {
+		this.records.set(record.key, record);
 	}
 
 	delete(key: string): boolean {
-		return this.memories.delete(key);
+		return this.records.delete(key);
+	}
+
+	clear(): number {
+		const count = this.records.size;
+		this.records.clear();
+		return count;
 	}
 }
 
@@ -83,6 +126,8 @@ export function combinatorIn(pattern: unknown): string | undefined {
 export function triggerToForm(trigger: Trigger): unknown {
 	const parts: unknown[] = [newSym(trigger.kind)];
 	if (trigger.pattern !== undefined) parts.push(trigger.pattern);
+	if (trigger.unless !== undefined)
+		parts.push(newLispKeyword("unless"), trigger.unless);
 	return arrayToList(parts);
 }
 
@@ -92,8 +137,7 @@ function isTextPattern(pattern: unknown): boolean {
 	return listToArray((pattern as Cell).cdr as List).every(isTextPattern);
 }
 
-export function parseTrigger(value: unknown): Trigger | undefined {
-	if (value === null || value === undefined) return undefined;
+function triggerKind(value: unknown): TriggerKind {
 	if (!(value instanceof Cell) || !(value.car instanceof Sym))
 		throw new EvalException("trigger expected, as (kind pattern)", value);
 	const kind = value.car.name as TriggerKind;
@@ -102,27 +146,129 @@ export function parseTrigger(value: unknown): Trigger | undefined {
 			`unknown trigger kind; expected one of ${TRIGGER_KINDS.join(" ")}`,
 			value.car,
 		);
-	const rest = value.cdr;
+	return kind;
+}
+
+const PATTERN_RULES: readonly {
+	readonly breaks: (kind: TriggerKind, pattern: unknown) => boolean;
+	readonly message: (kind: TriggerKind) => string;
+}[] = [
+	{
+		breaks: (kind) => kind === "start",
+		message: () =>
+			"a start trigger fires once, on the user's first message, and takes no pattern: write (start)",
+	},
+	{
+		breaks: (kind, pattern) => kind === "call" && typeof pattern === "string",
+		message: () =>
+			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',
+	},
+	{
+		breaks: (kind, pattern) => kind === "when" && typeof pattern !== "string",
+		message: () =>
+			"a when trigger is matched against the situation, so it is one string describing the situation that needs the memory",
+	},
+	{
+		breaks: (kind, pattern) => kind !== "call" && !isTextPattern(pattern),
+		message: (kind) =>
+			`a ${kind} trigger matches text, so its pattern must be a string or a combinator over strings`,
+	},
+];
+
+function checkPattern(kind: TriggerKind, pattern: unknown): void {
+	const broken = PATTERN_RULES.find((rule) => rule.breaks(kind, pattern));
+	if (broken !== undefined)
+		throw new EvalException(broken.message(kind), pattern);
+}
+
+function parseTrigger(value: unknown): Trigger | undefined {
+	if (value === null || value === undefined) return undefined;
+	const kind = triggerKind(value);
+	const rest = (value as Cell).cdr;
+	if (rest === null && kind === "when")
+		throw new EvalException(
+			'a when trigger describes in words the situation that needs the memory: write :when "the agent is about to drive a web page, or a page call just failed"',
+			value,
+		);
 	if (rest === null) return { kind };
 	if (!(rest instanceof Cell))
 		throw new EvalException("trigger pattern expected after the kind", rest);
 	const pattern = rest.car;
-	if (kind === "start")
+	checkPattern(kind, pattern);
+	if (kind !== "when" || rest.cdr === null) return { kind, pattern };
+	const unless = exclusion(
+		plistOptions(rest.cdr as List, ["unless"]).get("unless"),
+	);
+	return unless === undefined ? { kind, pattern } : { kind, pattern, unless };
+}
+
+function exclusion(unless: unknown): string | undefined {
+	if (unless === null || unless === undefined) return undefined;
+	if (typeof unless !== "string" || unless.trim() === "")
 		throw new EvalException(
-			"a start trigger fires once, on the user's first message, and takes no pattern: write (start)",
-			pattern,
+			'an :unless is one string describing the look-alike situation that must not fire the memory: write :unless "the agent only names a page, without driving it"',
+			unless,
 		);
-	if (kind === "call" && typeof pattern === "string")
+	return unless;
+}
+
+function authoredTrigger(
+	on: unknown,
+	when: unknown,
+	unless?: unknown,
+): Trigger | undefined {
+	const given = (value: unknown) => value !== null && value !== undefined;
+	if (given(unless) && !given(when))
 		throw new EvalException(
-			'a call trigger matches a form, not a name: write (call (load-mcp "playwright")), or (call (load-mcp)) for any call to it',
-			pattern,
+			"an :unless narrows a :when, so it is given alongside one",
+			unless,
 		);
-	if (kind !== "call" && !isTextPattern(pattern))
+	if (given(on) && given(when))
 		throw new EvalException(
-			`a ${kind} trigger matches text, so its pattern must be a string or a combinator over strings`,
-			pattern,
+			"a memory fires on one trigger: give :on or :when, not both",
+			when,
 		);
-	return { kind, pattern };
+	if (given(when)) {
+		if (typeof when !== "string" || when.trim() === "")
+			throw new EvalException(
+				"a :when is one string describing the situation that needs the memory: what the user asks, what the agent is doing, an error or a result it just got",
+				when,
+			);
+		const excluded = exclusion(unless);
+		return excluded === undefined
+			? { kind: "when", pattern: when }
+			: { kind: "when", pattern: when, unless: excluded };
+	}
+	const trigger = parseTrigger(on);
+	if (trigger?.kind === "when")
+		throw new EvalException(
+			'a situation is written with :when, not :on: write :when "the agent is about to drive a web page"',
+			on,
+		);
+	return trigger;
+}
+
+export function refuseEmpty(body: unknown, key: string): void {
+	if (body === null || (typeof body === "string" && body.trim() === ""))
+		throw new EvalException(
+			"a memory needs a body: the prose it loads, or the form it replays",
+			key,
+		);
+}
+
+export function hookedTrigger(
+	on: unknown,
+	when: unknown,
+	unless: unknown,
+	key: string,
+): Trigger {
+	const trigger = authoredTrigger(on, when, unless);
+	if (trigger === undefined)
+		throw new EvalException(
+			'a memory needs a hook, so it comes back by itself: give :when "the situation that needs it" or :on (kind "pattern")',
+			key,
+		);
+	return trigger;
 }
 
 function readableTrigger(value: unknown): Trigger | undefined {
@@ -184,9 +330,208 @@ export function formToMemory(form: unknown): Memory | undefined {
 	};
 }
 
+export function memoryToRecord(memory: Memory): MemoryRecord {
+	return {
+		key: memory.key,
+		body: str(memory.body),
+		...(memory.on === undefined ? {} : { on: str(triggerToForm(memory.on)) }),
+		links: [...memory.links].map(([key, weight]) => ({ key, weight })),
+		score: memory.score,
+		used: memory.used,
+		lastUsed: memory.lastUsed,
+	};
+}
+
+export function recordToMemory(
+	record: MemoryRecord,
+	read: (text: string) => unknown,
+): Memory | undefined {
+	let body: unknown;
+	try {
+		body = read(record.body);
+	} catch {
+		return undefined;
+	}
+	let on: Trigger | undefined;
+	try {
+		on = record.on === undefined ? undefined : readableTrigger(read(record.on));
+	} catch {
+		on = undefined;
+	}
+	return {
+		key: record.key,
+		body,
+		on,
+		links: new Map(record.links.map(({ key, weight }) => [key, weight])),
+		score: record.score,
+		used: record.used,
+		lastUsed: record.lastUsed,
+	};
+}
+
+export function areaFrom(declared: unknown): AreaGate {
+	const name = declared instanceof Cell ? declared.car : undefined;
+	const situation =
+		declared instanceof Cell
+			? plistOptions(declared.cdr as List, ["when"]).get("when")
+			: undefined;
+	if (typeof name !== "string" || typeof situation !== "string")
+		throw new EvalException(
+			'an area is declared as (area "name" :when "situation"): the work its memories are for',
+			declared,
+		);
+	return { name, situation };
+}
+
+interface Declaration {
+	key: string;
+	body: unknown;
+	opts: Map<string, unknown>;
+}
+
+function declaration(
+	declared: Cell,
+	allowed: readonly string[],
+	what: string,
+): Declaration {
+	const key = declared.car as string;
+	const options: unknown[] = [];
+	const values: unknown[] = [];
+	let at: unknown = declared.cdr;
+	while (at instanceof Cell) {
+		if (at.car instanceof LispKeyword && at.cdr instanceof Cell) {
+			options.push(at.car, at.cdr.car);
+			at = at.cdr.cdr;
+		} else {
+			values.push(at.car);
+			at = at.cdr;
+		}
+	}
+	const [body, ...extra] = values;
+	if (extra.length > 0)
+		throw new EvalException(`${what} has one body, after its options`, key);
+	return {
+		key,
+		body,
+		opts: plistOptions(arrayToList(options) as List, allowed),
+	};
+}
+
+export function builtinFrom(declared: unknown): Memory {
+	if (!(declared instanceof Cell) || typeof declared.car !== "string")
+		throw new EvalException(
+			'a built-in memory is declared as (memory "key" :when "situation" [:unless "situation"] [:links ("key"...)] "body"), or with :on (kind "pattern") in place of :when',
+			declared,
+		);
+	const key = declared.car;
+	if (!key.startsWith(INTERNAL) || areaOf(key) === undefined)
+		throw new EvalException(
+			`a built-in memory key is in the internal namespace, under its area: write "${INTERNAL}area/name"`,
+			key,
+		);
+	const { body, opts } = declaration(
+		declared,
+		["on", "when", "unless", "links"],
+		"a built-in memory",
+	);
+	if (typeof body !== "string" || body.trim() === "")
+		throw new EvalException("a built-in memory needs a body string", key);
+	const links = new Map<string, number>();
+	for (const linked of listToArray((opts.get("links") ?? null) as List)) {
+		if (typeof linked !== "string")
+			throw new EvalException("a link is the key of another memory", linked);
+		links.set(linked, LINKED_FIRES_AT);
+	}
+	return {
+		key,
+		body: body.trim(),
+		on: hookedTrigger(
+			opts.get("on"),
+			opts.get("when"),
+			opts.get("unless"),
+			key,
+		),
+		links,
+		score: INITIAL_SCORE,
+		used: 0,
+		lastUsed: 0,
+	};
+}
+
+export function rememberedFrom(declared: unknown): Memory {
+	if (
+		!(declared instanceof Cell) ||
+		typeof declared.car !== "string" ||
+		declared.car.startsWith(INTERNAL)
+	)
+		throw new EvalException(
+			`a remembered memory is (memory "key" [:when "situation" | :on (kind "pattern")] :links (("key" . weight)...) :score n :used n :last-used ms body), keyed outside ${INTERNAL}`,
+			declared,
+		);
+	const { key, body, opts } = declaration(
+		declared,
+		["on", "when", "unless", "links", "score", "used", "last-used"],
+		"a remembered memory",
+	);
+	if (body === undefined)
+		throw new EvalException("a remembered memory needs a body", key);
+	refuseEmpty(body, key);
+	const links = new Map<string, number>();
+	for (const pair of listToArray((opts.get("links") ?? null) as List))
+		if (pair instanceof Cell && typeof pair.car === "string")
+			links.set(pair.car, Number(pair.cdr));
+	return {
+		key,
+		body,
+		on: hookedTrigger(
+			opts.get("on"),
+			opts.get("when"),
+			opts.get("unless"),
+			key,
+		),
+		links,
+		score: Number(opts.get("score") ?? INITIAL_SCORE),
+		used: Number(opts.get("used") ?? 0),
+		lastUsed: Number(opts.get("last-used") ?? 0),
+	};
+}
+
+export function memoryToSource(memory: Memory): unknown {
+	const trigger: unknown[] =
+		memory.on === undefined
+			? []
+			: memory.on.kind === "when"
+				? [
+						newLispKeyword("when"),
+						memory.on.pattern,
+						...(memory.on.unless === undefined
+							? []
+							: [newLispKeyword("unless"), memory.on.unless]),
+					]
+				: [newLispKeyword("on"), triggerToForm(memory.on)];
+	return arrayToList([
+		newSym("memory"),
+		memory.key,
+		...trigger,
+		newLispKeyword("links"),
+		arrayToList([...memory.links].map(([k, w]) => new Cell(k, w))),
+		newLispKeyword("score"),
+		memory.score,
+		newLispKeyword("used"),
+		memory.used,
+		newLispKeyword("last-used"),
+		memory.lastUsed,
+		memory.body,
+	]);
+}
+
+export const recognizeNothing: Recognize = () => new Map();
+
 export interface MemoryHost {
 	store: MemoryStore;
 	clock: Clock;
 	prompt: PromptSource;
+	memories: PromptSource;
 	search: SearchEngine;
+	recognize: Recognize;
 }

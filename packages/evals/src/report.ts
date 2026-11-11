@@ -18,6 +18,12 @@ const messageLineSchema = z.object({
 	content: z.string(),
 });
 
+const noteLineSchema = z.object({
+	role: z.literal("system"),
+	content: z.string(),
+	source: z.string().optional(),
+});
+
 const entryLineSchema = z.object({
 	role: z.literal("entry"),
 	kind: z.string(),
@@ -27,6 +33,7 @@ const entryLineSchema = z.object({
 
 export const transcriptLineSchema = z.discriminatedUnion("role", [
 	messageLineSchema,
+	noteLineSchema,
 	entryLineSchema,
 ]);
 
@@ -53,6 +60,7 @@ export const reportRowSchema = z.object({
 	errors: z.number(),
 	skips: z.number(),
 	checks: z.array(checkOutcomeSchema),
+	system: z.string().optional(),
 	transcript: z.array(transcriptLineSchema),
 	recap: z.string().optional(),
 	judge: z.string().optional(),

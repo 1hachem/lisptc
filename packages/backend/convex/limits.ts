@@ -6,6 +6,8 @@ export const MAX_MEMORY_BYTES = 32_768;
 
 export const MAX_MEMORIES = 500;
 
+export const MAX_WHEN_MEMORIES = 50;
+
 export const MAX_SOURCE_BYTES = 32_768;
 
 export const MAX_SOURCES = 100;

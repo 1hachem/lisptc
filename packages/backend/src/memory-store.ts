@@ -1,50 +1,18 @@
-import { str } from "@repo/interpreter/print";
-import { Reader } from "@repo/interpreter/reader";
-import {
-	type Memory,
-	type MemoryStore,
-	parseTrigger,
-	triggerToForm,
+import type {
+	MemoryRecord,
+	MemoryStore,
+	MemoryWrite,
 } from "@repo/memory-extension/ports";
-import type { Awaitable } from "@repo/shared/host";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
-export interface StoredMemory {
-	key: string;
-	body: string;
-	on?: string;
-	links: { key: string; weight: number }[];
-	score: number;
-	used: number;
-	lastUsed: number;
-}
-
-function readForm(text: string): unknown {
-	const reader = new Reader();
-	reader.push(text);
-	return reader.read();
-}
-
-export function encodeMemory(memory: Memory): StoredMemory {
-	return {
-		key: memory.key,
-		body: str(memory.body),
-		...(memory.on === undefined ? {} : { on: str(triggerToForm(memory.on)) }),
-		links: [...memory.links].map(([key, weight]) => ({ key, weight })),
-		score: memory.score,
-		used: memory.used,
-		lastUsed: memory.lastUsed,
-	};
-}
-
-export function decodeMemory(row: StoredMemory): Memory {
+function recordOf(row: MemoryRecord): MemoryRecord {
 	return {
 		key: row.key,
-		body: readForm(row.body),
-		on: row.on === undefined ? undefined : parseTrigger(readForm(row.on)),
-		links: new Map(row.links.map(({ key, weight }) => [key, weight])),
+		body: row.body,
+		...(row.on === undefined ? {} : { on: row.on }),
+		links: row.links.map(({ key, weight }) => ({ key, weight })),
 		score: row.score,
 		used: row.used,
 		lastUsed: row.lastUsed,
@@ -54,57 +22,43 @@ export function decodeMemory(row: StoredMemory): Memory {
 export type MemoryClient = Pick<ConvexHttpClient, "query" | "mutation">;
 
 export class ConvexMemoryStore implements MemoryStore {
-	private cache?: Map<string, Memory>;
-	private hydrating?: Promise<Map<string, Memory>>;
-
 	constructor(
 		private readonly workspaceId: Id<"workspaces">,
 		private readonly connect: () => MemoryClient,
 	) {}
 
-	all(): Awaitable<Memory[]> {
-		if (this.cache !== undefined) return [...this.cache.values()];
-		return this.hydrate().then((cache) => [...cache.values()]);
+	async all(): Promise<MemoryRecord[]> {
+		const rows = await this.connect().query(api.memories.list, {
+			workspaceId: this.workspaceId,
+		});
+		return rows.map(recordOf);
 	}
 
-	get(key: string): Awaitable<Memory | undefined> {
-		if (this.cache !== undefined) return this.cache.get(key);
-		return this.hydrate().then((cache) => cache.get(key));
+	async get(key: string): Promise<MemoryRecord | undefined> {
+		const row = await this.connect().query(api.memories.get, {
+			workspaceId: this.workspaceId,
+			key,
+		});
+		return row === null ? undefined : recordOf(row);
 	}
 
-	put(memory: Memory): Awaitable<void> {
-		return this.hydrate().then(async (cache) => {
-			cache.set(memory.key, memory);
-			await this.connect().mutation(api.memories.put, {
-				workspaceId: this.workspaceId,
-				memory: encodeMemory(memory),
-			});
+	async put({ record }: MemoryWrite): Promise<void> {
+		await this.connect().mutation(api.memories.put, {
+			workspaceId: this.workspaceId,
+			memory: recordOf(record),
 		});
 	}
 
-	delete(key: string): Awaitable<boolean> {
-		return this.hydrate().then(async (cache) => {
-			cache.delete(key);
-			return await this.connect().mutation(api.memories.remove, {
-				workspaceId: this.workspaceId,
-				key,
-			});
+	async delete(key: string): Promise<boolean> {
+		return await this.connect().mutation(api.memories.remove, {
+			workspaceId: this.workspaceId,
+			key,
 		});
 	}
 
-	private hydrate(): Promise<Map<string, Memory>> {
-		if (this.cache !== undefined) return Promise.resolve(this.cache);
-		this.hydrating ??= this.connect()
-			.query(api.memories.list, { workspaceId: this.workspaceId })
-			.then((rows) => {
-				this.cache = new Map(
-					rows.map((row) => [row.key, decodeMemory(row)] as const),
-				);
-				return this.cache;
-			})
-			.finally(() => {
-				this.hydrating = undefined;
-			});
-		return this.hydrating;
+	async clear(): Promise<number> {
+		return await this.connect().mutation(api.memories.clear, {
+			workspaceId: this.workspaceId,
+		});
 	}
 }

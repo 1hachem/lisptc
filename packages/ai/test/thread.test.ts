@@ -9,7 +9,7 @@ import {
 	type TurnEnding,
 	type TurnSetup,
 } from "../src/thread.ts";
-import { testRepl } from "./helpers.ts";
+import { testRepl, unprompted } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as string[],
@@ -207,8 +207,9 @@ describe("a thread", () => {
 		});
 		await posted.ended;
 
-		expect(world.stored[0]).toMatchObject({ type: "system", id: "e1" });
-		expect(world.stored[1]).toMatchObject({ type: "ai" });
+		const stored = unprompted(world.stored);
+		expect(stored[0]).toMatchObject({ type: "system", id: "e1" });
+		expect(stored[1]).toMatchObject({ type: "ai" });
 		expect(model.calls[0].at(-1)?.content).toContain(
 			'<system-event source="agent:r">(+ 40 2)</system-event>',
 		);

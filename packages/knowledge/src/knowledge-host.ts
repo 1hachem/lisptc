@@ -10,6 +10,10 @@ import type {
 
 const knowledgePrompt = filePrompt(new URL("./knowledge.ptc", import.meta.url));
 
+const knowledgeMemories = filePrompt(
+	new URL("./knowledge.memories.ptc", import.meta.url),
+);
+
 const FETCH_TIMEOUT_MS = 30_000;
 
 const MAX_PDF_PAGES = 200;
@@ -92,12 +96,17 @@ export function knowledgeHostFor(options: {
 	downloader?: Downloader;
 	clock?: Clock;
 	pdf?: PdfReader;
+	attachmentTtlMs: number;
+	binTtlMs: number;
 }): KnowledgeHost {
 	return {
 		store: options.store,
 		downloader: options.downloader ?? httpDownloader(options.maxDownloadBytes),
 		pdf: options.pdf ?? unpdfReader(MAX_PDF_PAGES),
 		prompt: knowledgePrompt,
+		memories: knowledgeMemories,
 		clock: options.clock ?? systemClock,
+		attachmentTtlMs: options.attachmentTtlMs,
+		binTtlMs: options.binTtlMs,
 	};
 }

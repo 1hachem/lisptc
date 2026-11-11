@@ -8,20 +8,18 @@ import {
 	Cell,
 	LispKeyword,
 	type List,
-	listToArray,
 	newLispKeyword,
 	newSym,
 	Sym,
 } from "@repo/interpreter/objects";
 import { keyName } from "@repo/interpreter/plist";
-import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { output } from "@repo/interpreter/topics";
 import { activityKind } from "@repo/journal-catalog/activity";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
-import { AGENT_FOLDER, writeDefinition } from "./definition.ts";
+import { AGENT_FOLDER, readDefinition, writeDefinition } from "./definition.ts";
 import {
 	EXPORTS_GLOBAL,
 	EXPORTS_STATE,
@@ -36,16 +34,20 @@ import {
 	type AgentDefinition,
 	type AgentThreads,
 	type ChatSeed,
+	FORK,
+	FRESH,
+	IDLE,
 	type Outcome,
 	PARENT_NAME,
 	type ReplSeed,
+	SENT_STATES,
 } from "./ports.ts";
 
 export interface AgentsHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 	folder: SourceFolder;
 	workspace: string;
-	roster?: readonly string[];
 	threads?: AgentThreads;
 }
 
@@ -64,6 +66,7 @@ export const DELEGATE_PROMPT =
 
 export interface SubAgentHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export const EXPORT = "agents/export";
@@ -74,9 +77,38 @@ export interface AgentsExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
 
+function defineMemoryGlobals(interp: Interp): void {
+	interp.defineGlobal(newSym("*agents-parent*"), PARENT_NAME, {
+		signature: "*agents-parent*",
+		doc: "The name a sub-agent calls the agent that started it.",
+	});
+	interp.defineGlobal(newSym("*agents-folder*"), AGENT_FOLDER, {
+		signature: "*agents-folder*",
+		doc: "The knowledge folder saved sub-agent definitions are written to.",
+	});
+	interp.defineGlobal(newSym("*agents-fresh*"), newLispKeyword(FRESH), {
+		signature: "*agents-fresh*",
+		doc: "The keyword that starts a sub-agent's REPL or chat empty.",
+	});
+	interp.defineGlobal(newSym("*agents-fork*"), newLispKeyword(FORK), {
+		signature: "*agents-fork*",
+		doc: "The keyword that starts a sub-agent's REPL or chat as a copy of the parent's.",
+	});
+	interp.defineGlobal(
+		newSym("*agents-states*"),
+		arrayToList([IDLE, ...SENT_STATES].map((state) => newLispKeyword(state))),
+		{ signature: "*agents-states*", doc: "Every state a sub-agent can be in." },
+	);
+	interp.defineGlobal(newSym("*agents-first-delegate*"), delegateName([]), {
+		signature: "*agents-first-delegate*",
+		doc: "The name the first sub-agent started without a name gets.",
+	});
+}
+
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
+		memories: host.memories(),
 		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
 	});
 }
@@ -84,6 +116,7 @@ export function agentsExtension(host: AgentsHost): AgentsExtension {
 export function subAgentExtension(host: SubAgentHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerExports(interp), {
 		prompt: host.prompt(),
+		memories: host.memories(),
 		session(hooks: SessionHooks): void {
 			hooks.answer.use((interp, code, next) =>
 				withExports(interp, next(interp, code)),
@@ -111,6 +144,7 @@ function symbolName(form: string, value: unknown): string {
 }
 
 function registerExports(interp: Interp): void {
+	defineMemoryGlobals(interp);
 	const exports = interp.state(
 		EXPORTS_STATE,
 		exportsCodec,
@@ -182,37 +216,31 @@ function countOf(form: string, what: string, value: unknown): number {
 	throw new EvalException(`${form}: ${what} is a positive integer`, value);
 }
 
-function rosterOf(value: unknown): readonly string[] {
-	if (value !== null && !(value instanceof Cell))
-		throw new EvalException("defagent: :roster is a list of names", value);
-	return listToArray(value).map((member) => nameOf("defagent", member));
-}
-
 function seedOf(interp: Interp, value: unknown): ReplSeed {
-	const from = value === undefined ? "fresh" : nameOf("spawn", value);
-	if (from === "fresh") return { from };
-	if (from === "fork") return { from, image: snapshot(interp) };
-	throw new EvalException("spawn: :repl is :fresh or :fork", value);
+	const from = value === undefined ? FRESH : nameOf("spawn", value);
+	if (from === FRESH) return { from };
+	if (from === FORK) return { from, image: snapshot(interp) };
+	throw new EvalException(`spawn: :repl is :${FRESH} or :${FORK}`, value);
 }
 
 function chatOf(value: unknown): ChatSeed {
-	const from = value === undefined ? "fresh" : nameOf("spawn", value);
-	if (from === "fresh" || from === "fork") return { from };
-	throw new EvalException("spawn: :chat is :fresh or :fork", value);
+	const from = value === undefined ? FRESH : nameOf("spawn", value);
+	if (from === FRESH || from === FORK) return { from };
+	throw new EvalException(`spawn: :chat is :${FRESH} or :${FORK}`, value);
 }
 
 function definitionFrom(
+	interp: Interp,
 	form: string,
 	name: string,
 	options: Map<string, unknown>,
 ): AgentDefinition {
 	const prompt = textOf(form, ":prompt", options.get("prompt"));
 	const permissions = options.get("permissions");
-	const roster = options.get("roster");
 	const budget = options.get("budget");
 	if (permissions !== undefined) {
 		const rules = textOf(form, ":permissions", permissions);
-		const failure = readFailure(rules);
+		const failure = interp.readFailure(rules);
 		if (failure !== undefined)
 			throw new EvalException(
 				`${form}: :permissions does not read: ${failure.reason}`,
@@ -225,16 +253,16 @@ function definitionFrom(
 		...(permissions === undefined
 			? {}
 			: { permissions: permissions as string }),
-		...(options.has("roster") ? { roster: rosterOf(roster) } : {}),
 		...(budget === undefined
 			? {}
 			: { budget: countOf(form, ":budget", budget) }),
 	};
 }
 
-const DEFINE_KEYS = ["prompt", "roster", "budget"];
+const DEFINE_KEYS = ["prompt", "budget"];
 
 export function registerAgents(interp: Interp, host: AgentsHost): void {
+	defineMemoryGlobals(interp);
 	const handles = new Handles(
 		interp.state(
 			"agents/spawned",
@@ -244,7 +272,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		),
 	);
 
-	const library = new AgentLibrary(host.folder, host.workspace, host.roster);
+	const library = new AgentLibrary(host.folder, host.workspace);
 
 	function report(id: string, name: string, detail: string, chat: string) {
 		record(interp.channels, activityKind, {
@@ -264,19 +292,24 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		return host.threads;
 	}
 
+	async function saved(name: string): Promise<AgentDefinition | undefined> {
+		const text = await library.source(name);
+		return text === undefined ? undefined : readDefinition(interp, text);
+	}
+
 	async function definitionOf(
 		name: string,
 		options: Map<string, unknown>,
 	): Promise<AgentDefinition> {
 		if (options.has("prompt")) {
-			if ((await library.saved(name)) !== undefined)
+			if ((await saved(name)) !== undefined)
 				throw new EvalException(
 					"spawn: a saved agent has that name; spawn it without :prompt, or give this one another name",
 					name,
 				);
-			return definitionFrom("spawn", name, options);
+			return definitionFrom(interp, "spawn", name, options);
 		}
-		const definition = await library.saved(name);
+		const definition = await saved(name);
 		if (definition === undefined)
 			throw new EvalException(
 				'spawn: no saved agent by that name; pass :prompt "task" for a temporary agent that starts on that task, or delegate the work',
@@ -314,7 +347,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			if (values.length !== 1)
 				throw new EvalException("defagent takes one name, then :prompt", rest);
 			const name = nameOf("defagent", values[0]);
-			const definition = definitionFrom("defagent", name, options);
+			const definition = definitionFrom(interp, "defagent", name, options);
 			await library.save(name, writeDefinition(definition));
 			handles.saved(name);
 			return name;
@@ -347,8 +380,8 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		),
 		{
 			signature:
-				'(defagent "name" :prompt "..." [:permissions "rules"] [:roster \'("name"...)] [:budget n])',
-			doc: `Save an agent definition as ${AGENT_FOLDER}/<name>.ptc, replacing one of the same name, once the user approves. Spawn it later by that name. Check (agents) first and reuse a saved agent that fits; for one-off work spawn with :prompt instead, and agent-keep it once it proved worth reusing. :permissions holds permission forms as text; they bound the agent on top of the workspace's rules and can only tighten them. :roster names the agents it may spawn in turn. :budget caps the steps it may spend. Return the name.`,
+				'(defagent "name" :prompt "..." [:permissions "rules"] [:budget n])',
+			doc: `Save an agent definition as ${AGENT_FOLDER}/<name>.ptc, replacing one of the same name, once the user approves. Spawn it later by that name. Check (agents) first and reuse a saved agent that fits; for one-off work spawn with :prompt instead, and agent-keep it once it proved worth reusing. :permissions holds permission forms as text; they bound the agent on top of the workspace's rules and can only tighten them. :budget caps the steps it may spend. Return the name.`,
 		},
 	);
 
@@ -378,9 +411,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		z.tuple([zString]),
 		async ([target]) => {
 			const name = nameOf("agent-definition", target);
-			return library.shows(name)
-				? ((await library.source(name)) ?? null)
-				: null;
+			return (await library.source(name)) ?? null;
 		},
 	);
 
@@ -534,7 +565,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 			await port.spawn({
 				definition: { name, prompt: DELEGATE_PROMPT },
 				seed,
-				chat: { from: "fresh" },
+				chat: { from: FRESH },
 			});
 			handles.adopt({ name });
 			await port.send(name, { text, maxSteps });
@@ -601,7 +632,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"agent-state",
 		1,
 		'(agent-state "name")',
-		"Return where the last message sent to that agent stands: :pending, :held, :done, :failed, :cancelled or :lost, or :idle when it was sent nothing since the runtime started.",
+		`Return where the last message sent to that agent stands: ${SENT_STATES.map((state) => `:${state}`).join(", ")}, or :${IDLE} when it was sent nothing since the runtime started.`,
 		z.tuple([zString]),
 		async ([target]) => {
 			const name = spawnedName("agent-state", target);
@@ -613,7 +644,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"agent-cancel",
 		1,
 		'(agent-cancel "name")',
-		"Stop that agent and every agent under it, the message it was last sent too, queued or running. Return t when something was cancelled, nil when it had nothing left to do.",
+		"Stop that agent and the message it was last sent, queued or running. Return t when something was cancelled, nil when it had nothing left to do.",
 		z.tuple([zString]),
 		async ([target]) => {
 			const name = spawnedName("agent-cancel", target);

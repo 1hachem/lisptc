@@ -1,6 +1,12 @@
-import { ENTRY_TYPE, type Entry, entryOf } from "@repo/shared/journal";
+import {
+	type ActivityEntry,
+	activityKind,
+} from "@repo/journal-catalog/activity";
+import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
+import { systemPromptKind } from "@repo/journal-catalog/system";
+import { ENTRY_TYPE, type Entry, entryOf, view } from "@repo/shared/journal";
 import { envelopeOf } from "@repo/shared/messages";
-import type { ChatMessage } from "./chat.tsx";
+import type { ChatMessage } from "./trace-message.ts";
 
 interface Pending {
 	readonly row: ChatMessage;
@@ -136,4 +142,18 @@ export function entriesOfMessage(message: EntryCarrier): readonly Entry[] {
 		return entry === undefined ? [] : [entry];
 	}
 	return message.entries ?? [];
+}
+
+const TRACE_STANDING: ReadonlySet<string> = new Set([
+	memoryKind.name,
+	recognizedKind.name,
+	systemPromptKind.name,
+]);
+
+export function tracePlacement(entry: Entry): "carried" | "standing" {
+	return TRACE_STANDING.has(entry.kind) ? "standing" : "carried";
+}
+
+export function toolActivity(message: ChatMessage): ActivityEntry[] {
+	return view(entriesOfMessage(message), activityKind);
 }

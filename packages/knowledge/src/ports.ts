@@ -41,5 +41,8 @@ export interface KnowledgeHost {
 	downloader: Downloader;
 	pdf: PdfReader;
 	prompt: PromptSource;
+	memories: PromptSource;
 	clock: Clock;
+	attachmentTtlMs: number;
+	binTtlMs: number;
 }

@@ -18,6 +18,7 @@ import { z } from "zod";
 
 export interface IntrospectionHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export function introspectionExtension(
@@ -25,7 +26,7 @@ export function introspectionExtension(
 ): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerIntrospection(interp),
-		{ prompt: host.prompt() },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }
 

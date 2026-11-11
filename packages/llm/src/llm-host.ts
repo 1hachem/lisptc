@@ -7,4 +7,5 @@ export const llmHost: LlmHost = {
 	generate: langchainGenerate,
 	clock: systemClock,
 	prompt: filePrompt(new URL("./llm.ptc", import.meta.url)),
+	memories: filePrompt(new URL("./llm.memories.ptc", import.meta.url)),
 };

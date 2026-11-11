@@ -1,13 +1,7 @@
 import { EvalException } from "@repo/interpreter/errors";
-import {
-	Cell,
-	EndOfFile,
-	LispKeyword,
-	type List,
-	Sym,
-} from "@repo/interpreter/objects";
+import type { Interp } from "@repo/interpreter/lisp";
+import { Cell, LispKeyword, type List, Sym } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
-import { Reader } from "@repo/interpreter/reader";
 import type { Ruling, ServerAccess, Verdict } from "./ports.ts";
 
 export interface Rule {
@@ -77,12 +71,11 @@ export class PermissionRules {
 
 	with(form: Cell): PermissionRules {
 		const text = str(form);
-		parseRules(text);
 		const source =
 			this.source.trim() === ""
 				? `${text}\n`
 				: `${this.source.trimEnd()}\n${text}\n`;
-		return parseRules(source);
+		return rulesOf(source, [...this.forms, form]);
 	}
 
 	without(form: unknown): PermissionRules {
@@ -90,7 +83,7 @@ export class PermissionRules {
 		const kept = this.forms.filter((held) => str(held) !== text);
 		if (kept.length === this.forms.length)
 			throw new EvalException("no such permissions form", form, false);
-		return parseRules(kept.map((held) => `${str(held)}\n`).join(""));
+		return rulesOf(kept.map((held) => `${str(held)}\n`).join(""), kept);
 	}
 
 	private hides(name: string): boolean {
@@ -102,8 +95,27 @@ export class PermissionRules {
 	}
 }
 
-export function parseRules(source: string): PermissionRules {
-	const forms = readForms(source);
+export type ConfigReader = Pick<Interp, "readAll" | "readFailure">;
+
+export function readRules(
+	reader: ConfigReader,
+	source: string,
+): PermissionRules {
+	const failure = reader.readFailure(source);
+	if (failure?.reason === "unexpected end of input")
+		throw new EvalException(
+			"a permissions config ends inside a form",
+			`line ${failure.line}`,
+			false,
+		);
+	return rulesOf(source, reader.readAll(source));
+}
+
+export function rulesOf(
+	source: string,
+	read: readonly unknown[],
+): PermissionRules {
+	const forms = read.filter((form): form is Cell => form instanceof Cell);
 	const rules: Rule[] = [];
 	const hidden: RegExp[] = [];
 	const only = new Map<string, RegExp[]>();
@@ -231,27 +243,6 @@ function namesAndReason(
 	if (names.length === 0)
 		throw new EvalException("a permissions form names nothing", form, false);
 	return reason === undefined ? { names } : { names, reason };
-}
-
-function readForms(source: string): Cell[] {
-	const reader = new Reader();
-	reader.push(source);
-	const forms: Cell[] = [];
-	try {
-		while (!reader.isEmpty()) {
-			const form = reader.read();
-			if (form instanceof Cell) forms.push(form);
-		}
-	} catch (ex) {
-		if (ex === EndOfFile)
-			throw new EvalException(
-				"a permissions config ends inside a form",
-				`line ${reader.line}`,
-				false,
-			);
-		throw ex;
-	}
-	return forms;
 }
 
 function split(form: Cell): [string, unknown[]] {

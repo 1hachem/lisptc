@@ -1,6 +1,6 @@
 import { agentsExtension, subAgentExtension } from "@repo/agents-extension";
 import { agentsHostFor, subAgentHost } from "@repo/agents-extension/host";
-import type { Threads } from "@repo/ai";
+import { LOOP_MEMORIES, memorySystem, type Threads } from "@repo/ai";
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
 import { diagnosticsExtension } from "@repo/diagnostics-extension";
@@ -20,6 +20,7 @@ import { DockerHost } from "@repo/mcp-extension/docker-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
+import { jev } from "@repo/models/providers";
 import { permissionsExtension } from "@repo/permissions-extension";
 import { permissionsHostFor } from "@repo/permissions-extension/host";
 import { preferencesExtension } from "@repo/preferences-extension";
@@ -32,6 +33,7 @@ import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import { semanticExtension } from "@repo/semantic-extension";
 import { semanticHost } from "@repo/semantic-extension/host";
+import { INPUT_HELPERS, META_FIELDS } from "@repo/shared/chat-toggles";
 import { fonts } from "@repo/ui/fonts.ts";
 import { motions } from "@repo/ui/motions.ts";
 import { defaultThemeId, themes } from "@repo/ui/themes";
@@ -43,7 +45,11 @@ import type { ConvexHttpClient } from "convex/browser";
 import type { Infer } from "convex/values";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
-import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
+import {
+	ATTACHMENT_TTL_MS,
+	BIN_TTL_MS,
+	MAX_KNOWLEDGE_BYTES,
+} from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
 import { BridgedHost, type Desktop } from "./desktop-bridge.ts";
@@ -90,19 +96,23 @@ export interface ThreadScope {
 	readonly chatId?: Id<"chats">;
 	readonly supervisor?: Supervisor;
 	readonly bounds?: readonly string[];
-	readonly roster?: readonly string[];
 	readonly subAgent?: boolean;
 	readonly desktop?: Desktop;
+}
+
+function loopMemories(): InterpExtension {
+	return Object.assign(() => undefined, { memories: LOOP_MEMORIES });
 }
 
 export async function workspaceExtensions(
 	workspaceId: Id<"workspaces">,
 	connect: Connect,
-	{ chatId, supervisor, bounds, roster, subAgent, desktop }: ThreadScope = {},
+	{ chatId, supervisor, bounds, subAgent, desktop }: ThreadScope = {},
 ): Promise<InterpExtension[]> {
 	const memory = memoryExtension({
 		...memoryHostFor(workspaceId),
 		store: new ConvexMemoryStore(workspaceId, connect),
+		recognize: memorySystem(jev),
 	});
 	const workspace = workspaceExtension(
 		workspaceHostFor({
@@ -118,13 +128,14 @@ export async function workspaceExtensions(
 		knowledgeHostFor({
 			store: new ConvexKnowledgeStore(workspaceId, connect),
 			maxDownloadBytes: MAX_KNOWLEDGE_BYTES,
+			attachmentTtlMs: ATTACHMENT_TTL_MS,
+			binTtlMs: BIN_TTL_MS,
 		}),
 	);
 	const agents = agentsExtension(
 		agentsHostFor({
 			folder: new ConvexSourceFolder(connect),
 			workspace: workspaceId,
-			...(roster === undefined ? {} : { roster }),
 			...(supervisor === undefined || chatId === undefined
 				? {}
 				: { threads: new SupervisedAgents(supervisor, chatId) }),
@@ -148,6 +159,11 @@ export async function workspaceExtensions(
 			store: new ConvexPreferencesStore(workspaceId, connect),
 			fonts,
 			motions,
+			metadata: META_FIELDS.map(({ id, label }) => ({ id, name: label })),
+			input: INPUT_HELPERS.map(({ id, label, hint }) => ({
+				id,
+				name: `${label}, ${hint}`,
+			})),
 			...(desktop === undefined
 				? {}
 				: { desktop: { apply: (change) => desktop.settings(change) } }),
@@ -166,6 +182,7 @@ export async function workspaceExtensions(
 		? [agents, workspace, preferences, ui]
 		: [exports];
 	return [
+		loopMemories(),
 		permissions,
 		secretsExtension({
 			...secretsHost,

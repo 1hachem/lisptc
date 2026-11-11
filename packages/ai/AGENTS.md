@@ -13,7 +13,9 @@ events. `src/eval.ts` is the one-shot evaluation.
 
 `src/agent.ts` wraps the model call and yields deltas, on a chat provider from
 `@repo/models`. `src/prompts/lisp.ts` holds the
-system prompt and the step cap. `src/repl.ts` turns a transcript into model
+system prompt and the step cap. `src/prompts/loop.memories.ptc` holds the
+loop's built-in memories, and only those: a memory about another surface ships
+with the extension that owns it. `src/repl.ts` turns a transcript into model
 messages and an eval result into content. `src/telemetry.ts` is the PostHog
 side, and `src/turn-telemetry.ts` lays it over the turn's chains as their
 outermost layer, so no hook can drop a trace and the loop names no capture.
@@ -60,6 +62,13 @@ The loop interprets no journal entry, coming or going. Which entries a view
 shows is that view's choice, never the loop's. What the model reads is what an
 extension emits, the same live and after a reload. A payload that would need
 interpreting belongs below the seam.
+
+**What the loop needs to run is in the system prompt, never in a :when
+memory.** How a step is taken, how a turn ends, what the user sees and what
+counts as their words: the model needs these on every turn, and recognition is
+a judgment that can miss. A memory here only carries detail the prompt's rule
+can live without. If the rule breaks when the memory does not fire, the text
+belongs in the prompt.
 
 A new kind of thing a turn can report is a new variant of the turn event union,
 not a side channel.

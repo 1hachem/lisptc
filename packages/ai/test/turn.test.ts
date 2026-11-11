@@ -121,7 +121,7 @@ describe("the agent turn", () => {
 			repl: testRepl(),
 			...options,
 		}))
-			events.push(event);
+			if (event.type !== "system") events.push(event);
 		return events;
 	}
 
@@ -520,7 +520,12 @@ describe("the agent turn", () => {
 			if (event.type === "result") abort.abort();
 		}
 
-		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "result"]);
+		expect(events.map((e) => e.type)).toEqual([
+			"system",
+			"delta",
+			"assistant",
+			"result",
+		]);
 		expect(seen).toHaveLength(1);
 	});
 
@@ -560,12 +565,20 @@ describe("the agent turn", () => {
 		expect(seen).toHaveLength(1);
 	});
 
-	test("the model gets the system prompt the turn was configured with", async () => {
+	test("the turn counts the system prompt in tokens, fewer than its characters", async () => {
 		script = [[{ text: "three." }]];
+		const counted: number[] = [];
+		for (const system of ["be terse", "be terse ".repeat(50)])
+			for await (const event of runAgentTurn(ask, {
+				repl: testRepl(),
+				config: { system },
+			}))
+				if (event.type === "system") counted.push(event.tokens);
 
-		await drain(ask, { config: { system: "base" } });
-
-		expect(seen[0].system).toBe("base");
+		const [short, long] = counted;
+		expect(short).toBeGreaterThan(0);
+		expect(short).toBeLessThan("be terse".length);
+		expect(long).toBeGreaterThan(short ?? 0);
 	});
 
 	test("a steer that lands during the answering step buys one more step", async () => {

@@ -38,8 +38,11 @@ export interface PreferencesHost {
 	store: PreferencesStore;
 	fonts: readonly Choice[];
 	motions: readonly Choice[];
+	metadata: readonly Choice[];
+	input: readonly Choice[];
 	desktop?: DesktopPreferencesPort;
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export class MemoryPreferencesStore implements PreferencesStore {

@@ -238,8 +238,35 @@ handed one.
 to. **Adding an extension, or a new outward reach in one, means adding a port.**
 Do not import `node:fs` "just for this one path".
 
+**Stored data has one source of truth: the persistence host.** In the served
+agent that is Convex. A host keeps no copy of what it stores: every call it
+answers goes to the store.
+
+**Every other module reads stored data by evaluating a form in the REPL**, never
+by calling a host. The loop, the server and another module's chain hook all go
+through the extension's own form, and that form reads the store each time it is
+evaluated. Only the extension's forms and the composition root touch a host. The
+UI is the one exception: it may read Convex directly to draw.
+
+A cache of stored data belongs in the image and nowhere else, and only for data
+that rarely changes. The session's own writes are what clear it. Nothing
+notifies a live REPL.
+
 The shape of the pattern, the rule about ports that may have to wait, and where
 a shared port lives are in `packages/interpreter/AGENTS.md`.
+
+**All session state lives in the REPL image.** What a session has seen,
+fired, loaded or counted is interpreter state, kept in the image, never a field
+of an extension, a host or anything above them. Stored data still has its one
+source of truth in the persistence host. The image holds what this session
+knows about it.
+
+**Nothing but the interpreter interprets code.** No extension and no host runs
+the reader over text to pick out forms or data, and none searches text for
+what a form would tell it. Text that declares something is evaluated, and its
+forms put the data where the extension reads it, in a global or through a form
+the extension defines. An extension that needs to read code defines a form or a
+macro for it.
 
 ## The session seam
 
@@ -284,6 +311,30 @@ rewrite that treats `*` or a backtick as markdown and strips it teaches the
 model code that does not run: `(* n n)` becomes `(n n)`, `let*` becomes `let`,
 `*version*` becomes `version`, a quasiquoted expansion loses its backtick. An
 example a prompt shows still evaluates to the result the prompt claims for it.
+
+**A built-in memory ships with the package that owns its surface.** How to show
+the user something is the UI extension's, how to remember is the memory
+extension's, and the loop keeps only what is about the loop. A memory about
+another surface written in the loop's file is moved to that extension's file.
+
+**A built-in memory lives in a `.memories.ptc` file, never in a TypeScript or
+JavaScript string.** The file is lisptc like any other, so a malformed memory
+fails when it loads and the editor flags it as it is written. A value the text
+shares with code is never copied into the file: the memory reads it from the
+code in lisptc, so the two cannot drift. A package that ships a new `.ptc`
+is added to what `apps/app` ships, by the rule in `apps/app/AGENTS.md`.
+
+The one exception is a memory whose source of truth is already code, one per
+entry of a catalog: it is generated, never copied into a `.ptc` file.
+
+A built-in memory is for what only some turns need. One that fires on every
+first message, a bare greeting included, is paid for twice: once as recognition,
+once as a side load. Remove it, and move its text into the prompt that lands in
+the system prompt: the extension's own `.ptc` prompt, or the agent's system
+prompt for a loop memory.
+
+Decide from the served agent's traces of fresh conversations, a greeting and a
+real task, never from what the triggers say.
 
 ## Comments
 
@@ -378,8 +429,10 @@ Root scripts delegate to Turbo:
 ```bash
 pnpm test                    # turbo run test (vitest run in each package)
 pnpm typecheck               # turbo run typecheck (tsc --noEmit per package)
-pnpm lint                    # biome ci (lint + format check) — matches CI, run at root
-pnpm format                  # biome check --write (auto-fix)
+pnpm lint                    # biome ci (lint + format check), then the ptcfmt check of every .ptc — matches CI, run at root
+pnpm format                  # biome check --write (auto-fix), then ptcfmt on every .ptc
+pnpm check:ptc               # fails on a .ptc file ptcfmt would reformat
+pnpm format:ptc              # format every .ptc in place; a commit formats only the staged ones
 pnpm knip                    # dead-code / unused-dependency check (part of CI), run at root
 pnpm fallow                  # changed-code risk and dead code audit (part of CI), run at root
 pnpm boundaries              # package layering + import rules (part of CI), run at root

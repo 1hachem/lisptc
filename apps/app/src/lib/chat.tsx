@@ -2,9 +2,15 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import {
-	type ActivityEntry,
-	activityKind,
-} from "@repo/journal-catalog/activity";
+	type ChatMessage,
+	entriesOfMessage,
+	foldEntries,
+	messageText,
+	type StepMeta,
+	stepMeta,
+	toolModelOutput,
+} from "@repo/components";
+import { activityKind } from "@repo/journal-catalog/activity";
 import { type Answered, type Ask, asksKind } from "@repo/journal-catalog/asks";
 import {
 	type Intent,
@@ -12,12 +18,11 @@ import {
 	type Question,
 	questionKind,
 } from "@repo/journal-catalog/intent";
-import { memoryKind } from "@repo/journal-catalog/memory";
 import { type ViewRef, viewKind } from "@repo/journal-catalog/view";
 import { ATTACHMENTS_KIND } from "@repo/shared/files";
 import { type Entry, view } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
-import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
+import { envelopeOf } from "@repo/shared/messages";
 import { useQuery } from "@tanstack/react-query";
 import type { FunctionReturnType } from "convex/server";
 import {
@@ -33,51 +38,12 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
-import { entriesOfMessage, foldEntries } from "./entries.ts";
 import { fileContext, type OpenFile } from "./files.ts";
 import { GREETING_ID, greetingFor, rememberedGreeting } from "./greeting.ts";
 import { type QueuedMessage, useSteerQueue } from "./steer-queue.ts";
 import { type Sequenced, timelineOf } from "./timeline.ts";
 import { isFreshChat } from "./turns.ts";
 import { shownMessages, useWatch, type Watched } from "./watch.ts";
-
-export interface ChatMessage {
-	id?: string;
-	type: string;
-	content: unknown;
-	additional_kwargs?: MessageKwargs;
-	entries?: readonly Entry[];
-}
-
-export interface StepMeta {
-	at?: string;
-	durationMs?: number;
-	provider?: string;
-	model?: string;
-	inputTokens?: number;
-	outputTokens?: number;
-	cachedInputTokens?: number;
-	steps?: number;
-}
-
-function named(value: string | undefined): string | undefined {
-	return value === "" ? undefined : value;
-}
-
-export function stepMeta(message: ChatMessage): StepMeta | undefined {
-	const { meta } = envelopeOf(message.additional_kwargs);
-	if (meta === undefined || meta.durationMs === undefined) return undefined;
-	return {
-		at: meta.at,
-		durationMs: meta.durationMs,
-		provider: named(meta.provider),
-		model: named(meta.model),
-		inputTokens: meta.inputTokens,
-		outputTokens: meta.outputTokens,
-		cachedInputTokens: meta.cachedInputTokens,
-		steps: meta.steps,
-	};
-}
 
 export interface ChatSession {
 	messages: ChatMessage[];
@@ -726,26 +692,6 @@ export function messageReasoning(message: ChatMessage): string {
 	return envelopeOf(message.additional_kwargs).reasoning_content ?? "";
 }
 
-export function isToolMessage(message: ChatMessage): boolean {
-	return message.type === "tool";
-}
-
-export function isSystemMessage(message: ChatMessage): boolean {
-	return message.type === "system";
-}
-
-export function isUserMessage(message: ChatMessage): boolean {
-	return message.type === "human" || message.type === "user";
-}
-
-export function isParentMessage(message: ChatMessage): boolean {
-	return (
-		isSystemMessage(message) &&
-		(envelopeOf(message.additional_kwargs).source?.startsWith("agent:") ??
-			false)
-	);
-}
-
 export function messageClassified(message: ChatMessage): boolean {
 	return envelopeOf(message.additional_kwargs).prose !== undefined;
 }
@@ -779,22 +725,12 @@ const CHAT_KINDS: ReadonlySet<string> = new Set([
 	asksKind.name,
 ]);
 
-const TRACE_STANDING: ReadonlySet<string> = new Set([memoryKind.name]);
-
 function chatPlacement(entry: Entry): "carried" | "dropped" {
 	return CHAT_KINDS.has(entry.kind) ? "carried" : "dropped";
 }
 
-export function tracePlacement(entry: Entry): "carried" | "standing" {
-	return TRACE_STANDING.has(entry.kind) ? "standing" : "carried";
-}
-
 export function toolUi(message: ChatMessage): ViewRef | undefined {
 	return view(entriesOfMessage(message), viewKind);
-}
-
-export function toolActivity(message: ChatMessage): ActivityEntry[] {
-	return view(entriesOfMessage(message), activityKind);
 }
 
 export function toolIntent(message: ChatMessage): Intent | undefined {
@@ -817,26 +753,6 @@ export function toolAnswers(
 	);
 }
 
-export function toolModelOutput(message: ChatMessage): {
-	output: string;
-	error: boolean;
-} {
-	const text = messageText(message);
-	try {
-		const parsed = JSON.parse(text) as {
-			source?: unknown;
-			output?: unknown;
-			error?: unknown;
-		};
-		if (parsed?.source === "lisp-repl")
-			return {
-				output: String(parsed.output ?? ""),
-				error: Boolean(parsed.error),
-			};
-	} catch {}
-	return { output: text, error: false };
-}
-
 export function toolResult(message: ChatMessage): {
 	output: string;
 	error: boolean;
@@ -846,21 +762,4 @@ export function toolResult(message: ChatMessage): {
 		output: display ?? "",
 		error: failed === true || toolModelOutput(message).error,
 	};
-}
-
-export function messageText(message: ChatMessage): string {
-	const { content } = message;
-	if (typeof content === "string") return content;
-	if (Array.isArray(content)) {
-		return content
-			.map((part) =>
-				typeof part === "string"
-					? part
-					: part && typeof part === "object" && "text" in part
-						? String(part.text)
-						: "",
-			)
-			.join("");
-	}
-	return "";
 }

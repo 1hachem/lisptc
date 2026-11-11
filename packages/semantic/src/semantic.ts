@@ -9,6 +9,7 @@ import {
 	type List,
 	lispToJson,
 	listToArray,
+	newSym,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
@@ -45,6 +46,7 @@ export interface SemanticHost {
 	embedder: EmbeddingModel;
 	clock: Clock;
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 const callSeqCodec: StateCodec<number> = {
@@ -64,6 +66,7 @@ export function semanticExtension(host: SemanticHost): InterpExtension {
 		(interp: Interp): void => registerSemantic(interp, host),
 		{
 			prompt: host.prompt(),
+			memories: host.memories(),
 		},
 	);
 }
@@ -464,6 +467,50 @@ const SUBJECTS: Subject[] = [
 ];
 
 export function registerSemantic(interp: Interp, host: SemanticHost): void {
+	interp.defineGlobal(
+		newSym("*semantic-timeout-ms*"),
+		BigInt(SEMANTIC_TIMEOUT_MS),
+		{
+			signature: "*semantic-timeout-ms*",
+			doc: "How long a % call waits, in milliseconds, when it is given no :timeout.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*semantic-levels*"),
+		arrayToList(DEFAULT_LEVELS),
+		{
+			signature: "*semantic-levels*",
+			doc: "The levels %score rates on when it is given none, lowest first.",
+		},
+	);
+	interp.defineGlobal(newSym("*semantic-min*"), DEFAULT_MIN, {
+		signature: "*semantic-min*",
+		doc: "The probability a % predicate needs for t when it is given no :min.",
+	});
+	interp.defineGlobal(
+		newSym("*semantic-duplicate-similarity*"),
+		DUPLICATE_SIMILARITY,
+		{
+			signature: "*semantic-duplicate-similarity*",
+			doc: "The similarity at which %remove-duplicates counts two elements the same, when it is given no :min.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*semantic-cluster-similarity*"),
+		CLUSTER_SIMILARITY,
+		{
+			signature: "*semantic-cluster-similarity*",
+			doc: "The similarity %cluster groups elements at, when it is given no :min.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*semantic-outlier-similarity*"),
+		OUTLIER_SIMILARITY,
+		{
+			signature: "*semantic-outlier-similarity*",
+			doc: "The similarity below which %outliers counts an element alone, when it is given no :min.",
+		},
+	);
 	const track = tracker(interp, host);
 	const ask = asker(track, host);
 	const embed = embedder(track, host);

@@ -1,5 +1,4 @@
 import type { PermissionsStore } from "@repo/permissions-extension/ports";
-import { parseRules } from "@repo/permissions-extension/rules";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
@@ -26,7 +25,6 @@ export class ConvexPermissionsStore implements PermissionsStore {
 	}
 
 	async save(source: string): Promise<void> {
-		parseRules(source);
 		await this.connect().mutation(api.permissions.put, {
 			workspaceId: this.workspaceId,
 			source,

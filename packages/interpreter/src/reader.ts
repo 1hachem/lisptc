@@ -58,16 +58,16 @@ export class Reader {
 	private lineNo = 1;
 
 	push(text: string): void {
-		const tokenPat = tokenPattern();
-		for (const line of text.split("\n")) {
-			for (;;) {
-				const result = tokenPat.exec(line);
-				if (result === null) break;
-				const s = result[1];
-				if (s !== undefined) this.tokens.push(s);
-			}
-			this.tokens.push("\n");
+		for (const [whole, s] of text.matchAll(tokenPattern())) {
+			if (s !== undefined) this.tokens.push(s);
+			for (
+				let at = whole.indexOf("\n");
+				at !== -1;
+				at = whole.indexOf("\n", at + 1)
+			)
+				this.tokens.push("\n");
 		}
+		this.tokens.push("\n");
 	}
 
 	get line(): number {

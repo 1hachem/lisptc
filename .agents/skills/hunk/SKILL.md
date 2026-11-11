@@ -22,16 +22,19 @@ not ask you to reload.
 
 ## Start
 
-1. Arm the note watcher first, with the Monitor tool, `timeout_ms` at its
-   maximum, so nothing the user writes during the walk is missed:
+1. Arm the note watcher first, as a background Bash command
+   (`run_in_background`), so nothing the user writes during the walk is
+   missed:
 
    ```bash
-   .agents/skills/hunk/watch-notes.sh [session-id]
+   .agents/skills/hunk/watch-notes.sh --once [session-id]
    ```
 
-   Each user note without a reply from you arrives as one JSON line,
-   `{"event":"note",...}`. A note is handled once you reply on it, so reply
-   last, after the work is done. Re-arming sends every unanswered note again.
+   It prints nothing and costs no turn until the user writes. Then it prints
+   each unanswered user note as one JSON line, `{"event":"note",...}`, and
+   exits, which wakes you. A note is handled once you reply on it, so reply
+   last, after the work is done. Re-arm it after replying to every note it
+   delivered: it prints again every note still without a reply.
 2. Write the walk plan and load it, as below.
 3. Print what `walk.sh load` printed, and say in one line that you are
    listening to notes. Say how to move on: `/hunk-next`, `/hunk-prev` and
@@ -42,9 +45,10 @@ When the user asks only to have their notes watched, or the session has
 nothing worth walking, skip the plan and say in one line that you are
 listening.
 
-When the monitor expires, re-arm it. On `session-gone`, stop, and say so. A
-`retrying` line is a failed lookup on a session that is still live; the watcher
-keeps going on its own, so ignore it unless it repeats.
+A background command has no deadline, so the watcher never expires. Do not
+watch notes with the Monitor tool: its 30-minute cap costs a turn at every
+expiry and re-arm. On `session-gone` or `error`, do not re-arm; stop and say
+so.
 
 ## The walk plan
 

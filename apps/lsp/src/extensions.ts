@@ -28,17 +28,28 @@ import { secretsHost } from "@repo/secrets-extension/host";
 import { semanticExtension } from "@repo/semantic-extension";
 import { semanticHost } from "@repo/semantic-extension/host";
 
-export function docExtensions(): InterpExtension[] {
+function shared(
+	mcp: InterpExtension,
+	memory: InterpExtension,
+): InterpExtension[] {
 	return [
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
 		agentsExtension(agentsHostFor()),
 		intentExtension(intentHost),
-		mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
+		mcp,
 		llmExtension(llmHost),
 		semanticExtension(semanticHost),
 		compactionExtension(compactionHost),
+		memory,
 	];
+}
+
+export function docExtensions(): InterpExtension[] {
+	return shared(
+		mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
+		memoryExtension(memoryHost),
+	);
 }
 
 export function sessionExtensions(): InterpExtension[] {
@@ -46,24 +57,17 @@ export function sessionExtensions(): InterpExtension[] {
 	const permissions = permissionsExtension(
 		permissionsHostFor({ asks: memory.asks }),
 	);
+	const mcp = mcpExtension({
+		...mcpHostFor({
+			host: new LocalProcessHost(),
+			oauth: new FileOAuthStore(),
+		}),
+		policy: permissions.rules,
+	});
 	return [
 		permissions,
 		secretsExtension(secretsHost),
-		promisesExtension(promisesHost),
-		introspectionExtension(introspectionHost),
-		agentsExtension(agentsHostFor()),
-		intentExtension(intentHost),
-		mcpExtension({
-			...mcpHostFor({
-				host: new LocalProcessHost(),
-				oauth: new FileOAuthStore(),
-			}),
-			policy: permissions.rules,
-		}),
-		llmExtension(llmHost),
-		semanticExtension(semanticHost),
-		compactionExtension(compactionHost),
-		memory,
+		...shared(mcp, memory),
 		proseExtension(proseHost),
 		diagnosticsExtension(diagnosticsHost),
 	];

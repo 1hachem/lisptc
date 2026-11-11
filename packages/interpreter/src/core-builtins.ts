@@ -24,6 +24,7 @@ import {
 } from "./docs.ts";
 import type { Eval } from "./drive.ts";
 import { EvalException, LoopSignal, ThrowSignal } from "./errors.ts";
+import { formatText } from "./format.ts";
 import { BuiltInFunc } from "./func.ts";
 import {
 	Cell,
@@ -1061,6 +1062,27 @@ export function installCore(interp: Definer, core: CoreOps): void {
 				out += s;
 			}
 			return out;
+		},
+	);
+	interp.def(
+		"format",
+		-1,
+		"(format destination control args...)",
+		'Format `args` by the Common Lisp `control` string. `destination` nil returns the string; t prints it and returns nil; a control string in its place is read as nil. Directives: ~a as `string` prints, ~s readable, ~d an integer, ~% a newline, ~& a newline unless at line start, ~~ a tilde, ~{...~} once per element of a list argument, ~^ stops the loop when no element is left. `(format nil "~a has ~d" "x" 3)` is "x has 3"; `(format nil "~{~s~^ ~}" \'("a" "b"))` is "\\"a\\" \\"b\\"".',
+		z.tuple([zList]),
+		([rest]) => {
+			const [destination, ...given] = listItems(rest);
+			const legacy = typeof destination === "string";
+			const [control, ...items] = legacy ? [destination, ...given] : given;
+			if (typeof control !== "string")
+				throw new EvalException("format needs a control string", control);
+			const text = formatText(control, items);
+			if (legacy) return text;
+			if (destination === null) return text;
+			if (destination !== true)
+				throw new EvalException("format writes to nil or t", destination);
+			output.emit(interp.channels, { user: text });
+			return null;
 		},
 	);
 	interp.def(

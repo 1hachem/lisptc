@@ -1,3 +1,4 @@
+import { CHANNELS, type ChannelId, type ChatMessage } from "@repo/components";
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
@@ -6,8 +7,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
 import { TraceLines } from "../src/components/trace-view.tsx";
 import { CallTimeline } from "../src/components/turn-intent.tsx";
-import { CHANNELS, type ChannelId } from "../src/lib/channels.ts";
-import type { ChatMessage } from "../src/lib/chat.tsx";
 import { traceOpen } from "../src/lib/panel-ops.ts";
 import { SideTraceProvider } from "../src/lib/side-trace.tsx";
 import { TraceSourceProvider } from "../src/lib/trace-source.tsx";
@@ -599,9 +598,9 @@ describe("the trace", () => {
 		},
 		{
 			id: "m1",
-			type: "entry",
-			content: "",
-			additional_kwargs: entry("memory", { key: "remembered", body: "b" }),
+			type: "system",
+			content: "remembered: MEMORY-MARK",
+			additional_kwargs: { source: "memory:remembered", noted: true },
 		},
 		{
 			id: "a1",
@@ -654,7 +653,7 @@ describe("the trace", () => {
 		ui: "UI-MARK",
 		attachments: "USER-FILE.pdf",
 		thinking: "THINKING-MARK",
-		memory: "1 memory recalled",
+		memory: "MEMORY-MARK",
 		asks: "ASKS-MARK",
 		system: "SYSTEM-MARK",
 		agents: "AGENTS-MARK",

@@ -873,6 +873,7 @@ function countArg(rest: List, value: unknown, wordLimit: number): number {
 
 export interface CompactionHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export interface CompactionOptions {
@@ -909,6 +910,7 @@ export function compactionExtension(
 		{
 			compactor,
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session: compactionSession(compactor),
 		},
 	);

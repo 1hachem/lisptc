@@ -8,7 +8,6 @@
     "./approvals": "./src/approvals.ts",
     "./host": "./src/permissions-host.ts",
     "./ports": "./src/ports.ts",
-    "./rules": "./src/rules.ts",
     "./ui-approver": "./src/ui-approver.ts"
   },
   "engines": {

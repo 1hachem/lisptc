@@ -1,3 +1,5 @@
+import { tokenPattern } from "./lisp-tokens.ts";
+
 export interface FormJudge {
 	unclosed(text: string, at: number): string | undefined;
 	unreadable(text: string, start: number, end: number): string | undefined;
@@ -10,31 +12,17 @@ export interface Skipped {
 	readonly reason: string;
 }
 
-function stringFrom(text: string, i: number): { end: number; closed: boolean } {
-	for (let j = i + 1; j < text.length; j++) {
-		const c = text[j];
-		if (c === "\n") return { end: j, closed: false };
-		if (c === "\\") j++;
-		else if (c === '"') return { end: j + 1, closed: true };
-	}
-	return { end: text.length, closed: false };
-}
-
-function endOfString(text: string, i: number): number {
-	return stringFrom(text, i).end;
-}
-
 export function endOfForm(text: string, i: number): number {
+	const token = tokenPattern();
+	token.lastIndex = i;
 	let depth = 0;
-	for (let j = i; j < text.length; j++) {
-		const c = text[j];
-		if (c === '"') {
-			j = endOfString(text, j) - 1;
-		} else if (c === "(") {
-			depth++;
-		} else if (c === ")") {
+	for (let m = token.exec(text); m !== null; m = token.exec(text)) {
+		const word = m[1];
+		if (word === '"') return -1;
+		if (word === "(") depth++;
+		else if (word === ")") {
 			depth--;
-			if (depth === 0) return j + 1;
+			if (depth === 0) return m.index + 1;
 		}
 	}
 	return -1;
@@ -100,14 +88,15 @@ export interface OpenAtEnd {
 
 export function openAtEnd(text: string): OpenAtEnd {
 	const parens: number[] = [];
-	for (let i = 0; i < text.length; i++) {
-		const c = text[i];
-		if (c === '"' && parens.length > 0) {
-			const { end, closed } = stringFrom(text, i);
-			if (end === text.length && !closed) return { parens, inString: true };
-			i = end - 1;
-		} else if (c === "(") parens.push(i);
-		else if (c === ")") parens.pop();
+	const token = tokenPattern();
+	for (let m = token.exec(text); m !== null; m = token.exec(text)) {
+		const word = m[1];
+		if (word === undefined) continue;
+		if (word.startsWith('"')) {
+			if (parens.length === 0) token.lastIndex = m.index + 1;
+			else if (word === '"') return { parens, inString: true };
+		} else if (word === "(") parens.push(m.index);
+		else if (word === ")") parens.pop();
 	}
 	return { parens, inString: false };
 }

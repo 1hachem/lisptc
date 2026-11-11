@@ -1,0 +1,97 @@
+(area "mcp" :when "the work needs a connected service, an MCP server or tool, or the user's own computer: finding, loading, signing in to or calling one")
+
+(memory "internal/mcp/local" :when "the work happens on the user's own computer: their local files, git, a desktop app or a web browser to drive; or a local server failed to start"
+  (format nil "User's own machine (their files, git, desktop app, browser on their computer) : servers run there through desktop app.
+How-to is memory internal/mcp/local, loads itself when user asks; else (memory/recall \"internal/mcp/local\") .
+User's own machine: predefined local servers, names start local- , e.g.
+(load-mcp \"local-files\") , (load-mcp \"local-git\") . Run on user's machine
+through desktop app. Only when user asks for their machine. Fails if desktop
+app not open.
+- (desktop-connected-p) : t if desktop app connected as of this step, else nil.
+- Listed only while desktop app connected. Row ends :local , e.g.
+(\"local-git\" \"…\" (\"git\" …) :unloaded :local) . No :local = runs on server.
+- Row ends :also-local = toolkit server has own setup for user machine:
+(load-mcp \"acme\" :local t) . Without :local t it runs on server. Browser
+  automation on user's own browser is this: find browser server with
+  search-mcps, load it :local t.
+- List after :local or :also-local = flags server takes, e.g. (:quiet) :
+(load-mcp \"acme\" :local t :quiet t) . Only listed flags; others error.
+- Toolkit server with own command: (load-mcp \"acme\" :local t) runs that
+  command, not container.
+- Local load asks user as call ~a<name> , e.g. ~alocal-files ,
+  unless config allows it: (permission/allow ~alocal-files) or
+(permission/allow ~a*) .
+- Load fails with message if desktop app not open or user denied: say so,
+  don't retry." *mcp-local-gate* *mcp-local-gate* *mcp-local-gate* *mcp-local-gate*))
+
+(memory "internal/mcp/oauth" :when "a connected service needs sign-in or authorization, a call just failed on expired or missing authorization, or the user wants to sign out"
+  "OAuth remote: add :oauth t, optional :scopes; then login and mcp-authorize.
+login/logout only for :oauth t servers:
+- (login \"name\") gives :logged-in if authenticated. Else, like load needing
+  login, asks user to authorize, ends turn; you are told when they answer.
+- User authorized: run (await (load-mcp \"name\")) , carry on with original
+  request; redirect captured for you. Only when they hand back bare code,
+  run (mcp-authorize \"name\" \"<code>\") before that load. Never ask for code
+  before that load failed.
+- (logout \"name\") gives :logged-out. Unloads server if loaded AND deletes
+  saved tokens, so next (load-mcp \"name\") or (login \"name\") re-authorizes
+  from scratch. Use to sign out, or force fresh consent after widening
+  :scopes, e.g. on 403 insufficient_scope: (logout \"name\") then
+(login \"name\") again.
+- Accept only predefined OAuth server name; unknown or non-OAuth errors.
+  logout no-op-safe when server not loaded.")
+
+(memory "internal/mcp/search" :when "the agent needs a capability or service nobody named and must find which MCP server or tool does the job"
+  "Two searches, two jobs, don't confuse:
+- (search-mcps \"query\") searches toolkit of predefined servers, loaded or not.
+  Matches keywords, name, description, so search capability in own words:
+  vision, spreadsheet, tickets, analytics. Don't guess product name.
+  Misspelling still lands, prefix counts: read near miss before retyping. Also
+(list-mcps) , and (list-toolkit) with every server's keywords.
+- (search-tools \"query\") searches tools of ALL loaded servers by name and
+  description, best-first, forgives misspelling. ONE query string, NO server
+  argument.
+(list-tools) lists tools of ALL loaded servers. (list-tools \"acme\" \"beta\")
+lists only those servers. Unloaded name is error.
+(search-tools \"acme\" \"widget\") is WRONG, an arity error. For one server: load
+it, then (search-tools \"widget\") ; list with (list-tools \"acme\") .")
+
+(memory "internal/mcp/timeout" :when "the agent is about to run a slow job through an MCP tool, such as a crawl, scrape, build, render, big export or long query, or a tool call just timed out"
+  (format nil "Tool call waits ~d seconds, then fails \"acme/x timed out\".
+Slow tool: add :mcp/timeout with seconds, above 0, max ~d, beside tool's own
+keywords:
+(acme/crawl_site :url \"https://...\" :mcp/timeout 600)
+:mcp/timeout is yours, never sent to server. Set it up front when tool name or
+args say slow. Call timed out? Retry once with larger :mcp/timeout, not same
+call again. Still too slow? Split work into smaller calls." *mcp-tool-timeout-seconds* *mcp-max-tool-timeout-seconds*))
+
+(memory "internal/mcp/result" :when "a connected service just returned a result and the agent must read values or report fields out of it"
+  "Tool result is Lisp data: JSON object is alist with string keys, array is list.
+Read with assoc, cdr, mapcar, nth. No parsing. JSON sent as text is parsed too,
+so report names its keys. Only non-JSON string needs (json-parse s) .")
+
+(memory "internal/mcp/example" :when "the agent is about to use an MCP tool end to end: find the server, load it, find the tool, call it"
+  "Worked example, names made up:
+(search-mcps \"widget\")
+(await (load-mcp \"acme\"))
+(search-tools \"widget\")
+(acme/get_widget :id \"42\")
+A loaded tool's (doc 'acme/list_widgets) prints full signature, every argument, which required.")
+
+(memory "internal/mcp/load" :when "the agent is about to load a predefined or ad-hoc MCP server, several at once, or start a load now to use later; or a load just failed"
+  "(load-mcp \"name\") loads predefined server. load-mcp async: returns promise at
+once, NOT blocking; server connects in background; tools install when it
+settles. Wrap SINGLE load-mcp call in await to use it in same step. Each
+loaded tool becomes global named <server>/<tool>, called with keyword args,
+blocking.
+:command , :args , :env NOT supported: error. Only toolkit names and :url .
+(await (load-mcp \"acme\")) blocks until ready, returns tools as
+(name argument-count description) , same rows as (list-tools) , so no listing
+after load.
+  Do NOT call (load-mcp \"acme\") then (await (load-mcp \"acme\")) : TWO
+  connections. Wrap directly, or bind one promise:
+(setq p (load-mcp \"acme\")) then later (await p) .
+- Ad-hoc remote server, awaited same way:
+(load-mcp :name \"x\" :url \"https://...\" :headers '((\"Authorization\" . \"Bearer …\")))
+- Several concurrently:
+(await (promise-all-settled (list (load-mcp \"a\") (load-mcp \"b\")))) .")

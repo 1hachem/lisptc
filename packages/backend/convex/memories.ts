@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
-import { MAX_MEMORIES, MAX_MEMORY_BYTES } from "./limits.js";
+import { MAX_MEMORIES, MAX_MEMORY_BYTES, MAX_WHEN_MEMORIES } from "./limits.js";
 
 const PURGE_BATCH = 256;
 
@@ -51,6 +51,10 @@ export const get = query({
 	},
 });
 
+function onSituation(on: string | undefined): boolean {
+	return on?.startsWith("(when ") ?? false;
+}
+
 export const put = mutation({
 	args: { workspaceId: v.id("workspaces"), memory: v.object(stored) },
 	returns: v.null(),
@@ -66,15 +70,22 @@ export const put = mutation({
 				q.eq("workspaceId", workspaceId).eq("key", memory.key),
 			)
 			.unique();
+		const owned = async () =>
+			await ctx.db
+				.query("memories")
+				.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+				.take(MAX_MEMORIES);
+		if (onSituation(memory.on) && !onSituation(existing?.on)) {
+			const situational = (await owned()).filter((m) => onSituation(m.on));
+			if (situational.length >= MAX_WHEN_MEMORIES) {
+				throw new ConvexError({ code: "TOO_MANY_WHEN_MEMORIES" });
+			}
+		}
 		if (existing !== null) {
 			await ctx.db.replace(existing._id, { workspaceId, ...memory });
 			return null;
 		}
-		const owned = await ctx.db
-			.query("memories")
-			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-			.take(MAX_MEMORIES);
-		if (owned.length >= MAX_MEMORIES) {
+		if ((await owned()).length >= MAX_MEMORIES) {
 			throw new ConvexError({ code: "TOO_MANY_MEMORIES" });
 		}
 		await ctx.db.insert("memories", { workspaceId, ...memory });
@@ -96,6 +107,20 @@ export const remove = mutation({
 		if (existing === null) return false;
 		await ctx.db.delete(existing._id);
 		return true;
+	},
+});
+
+export const clear = mutation({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.number(),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const memories = await ctx.db
+			.query("memories")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(MAX_MEMORIES);
+		for (const memory of memories) await ctx.db.delete(memory._id);
+		return memories.length;
 	},
 });
 

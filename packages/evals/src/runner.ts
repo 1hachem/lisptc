@@ -42,6 +42,7 @@ export type EvalTurnEvent =
 			meta: { inputTokens?: number; outputTokens?: number };
 	  }
 	| { type: "entry"; entry: EvalEntry }
+	| { type: "noted"; content: string; source?: string }
 	| { type: "result"; output: string }
 	| { type: "halt"; answer: string }
 	| { type: "silent" }
@@ -112,6 +113,7 @@ export interface RunResult {
 	errors: number;
 	skips: number;
 	checks: CheckOutcome[];
+	system: string;
 	transcript: TranscriptLine[];
 }
 
@@ -158,6 +160,7 @@ function grade(
 function speaker(line: TranscriptLine): string {
 	if (line.role === "entry") return line.kind;
 	if (line.role === "user") return "user";
+	if (line.role === "system") return line.source ?? "system";
 	return line.role === "assistant" ? "agent" : "repl";
 }
 
@@ -171,6 +174,21 @@ function entryText({ kind, value }: EvalEntry): string {
 	const fields = record(value);
 	if (kind === "memory" && typeof fields.key === "string")
 		return `${fields.key}: ${typeof fields.body === "string" ? fields.body : ""}`;
+	if (kind === "recognized") {
+		const scores = Object.entries(record(fields.scores)).map(
+			([ask, score]) =>
+				`${ask} → ${typeof score === "number" ? score.toFixed(2) : String(score)}`,
+		);
+		if (typeof fields.error === "string")
+			scores.push(`failed: ${fields.error}`);
+		const fired = Array.isArray(fields.fired) ? fields.fired.map(record) : [];
+		for (const memory of fired)
+			if (typeof memory.key === "string")
+				scores.push(
+					`fired ${memory.key}: ${typeof memory.body === "string" ? memory.body : ""}`,
+				);
+		return scores.join("\n");
+	}
 	return JSON.stringify(value) ?? "";
 }
 
@@ -325,6 +343,12 @@ async function replaySeed<Repl>(
 		see({ role: "assistant", content: entry.assistant });
 		for (const recorded of entries) see(entryLine(recorded));
 		see({ role: "tool", content: output });
+		for (const { content, source } of notes)
+			see({
+				role: "system",
+				content,
+				...(source === undefined ? {} : { source }),
+			});
 	}
 }
 
@@ -379,6 +403,13 @@ async function followTurn(
 			case "entry":
 				see(entryLine(event.entry));
 				break;
+			case "noted":
+				see({
+					role: "system",
+					content: event.content,
+					...(event.source === undefined ? {} : { source: event.source }),
+				});
+				break;
 			case "result":
 				see({ role: "tool", content: event.output });
 				checks.evaluate(tally.steps);
@@ -415,13 +446,14 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 	trace.beginStep(0);
 	await replaySeed(runtime.agent, repl, spec.seed ?? [], transcript, see);
 
+	const system = spec.system ?? runtime.agent.systemPrompt(repl);
 	const startedAt = Date.now();
 	const tally = await followTurn(
 		runtime.agent.turn(transcript, {
 			repl,
 			maxSteps: spec.max,
 			target,
-			system: spec.system ?? runtime.agent.systemPrompt(repl),
+			system,
 		}),
 		trace,
 		checks,
@@ -440,6 +472,7 @@ export async function runCase<Spec extends EvalSpec, Repl>(
 		errors: trace.errors(),
 		skips: trace.skips(),
 		checks: verdicts,
+		system,
 		transcript: seen,
 	};
 }

@@ -10,6 +10,8 @@ import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { MemoryKnowledgeStore } from "../src/memory-store.ts";
 import type { Downloader, PdfReader } from "../src/ports.ts";
 
+export const EXPIRY = { attachmentTtlMs: 604_800_000, binTtlMs: 2_592_000_000 };
+
 export interface World {
 	ev(code: string): Promise<string>;
 	store: MemoryKnowledgeStore;
@@ -30,7 +32,13 @@ export async function world(
 	const interp = new Interp({
 		extensions: [
 			knowledgeExtension(
-				knowledgeHostFor({ store, downloader, pdf, maxDownloadBytes: 1024 }),
+				knowledgeHostFor({
+					store,
+					downloader,
+					pdf,
+					maxDownloadBytes: 1024,
+					...EXPIRY,
+				}),
 			),
 		],
 	});

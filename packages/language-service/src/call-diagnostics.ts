@@ -1,4 +1,4 @@
-import type { Arity, DocArg } from "@repo/interpreter/docs";
+import type { Arity, DocArg, WordCap } from "@repo/interpreter/docs";
 import {
 	type Call,
 	collectCalls,
@@ -20,12 +20,43 @@ export interface Diagnostic {
 	range: Range;
 	message: string;
 	severity: "error" | "warning";
-	code: "missing-argument" | "arity";
+	code: "missing-argument" | "arity" | "word-cap";
 }
 
 export interface CallDoc {
 	args?: DocArg[];
 	arity?: Arity;
+	wordCaps?: readonly WordCap[];
+}
+
+function wordsIn(text: string): number {
+	return text.split(/\s+/).filter((word) => word !== "").length;
+}
+
+function overCap(call: Call, caps: readonly WordCap[]): Diagnostic[] {
+	return caps.flatMap(({ position, words }) => {
+		const arg = call.positional[position];
+		if (arg?.kind !== "atom" || !arg.text.startsWith('"')) return [];
+		const count = wordsIn(arg.text.slice(1, -1));
+		if (count <= words) return [];
+		const lines = arg.text.split("\n");
+		const last = lines.at(-1) ?? "";
+		return [
+			{
+				severity: "error",
+				code: "word-cap",
+				range: {
+					start: { line: arg.line, character: arg.char },
+					end: {
+						line: arg.line + lines.length - 1,
+						character:
+							lines.length === 1 ? arg.char + last.length : last.length,
+					},
+				},
+				message: `${call.name}: holds at most ${words} words here, this one has ${count}`,
+			},
+		];
+	});
 }
 
 export function expectedArgs({ min, max }: Arity): string {
@@ -91,12 +122,19 @@ function positionalProblems(
 	);
 }
 
-function problemsOf(call: Call, doc: CallDoc): Diagnostic[] {
+function argumentProblems(call: Call, doc: CallDoc): Diagnostic[] {
 	const { args, arity } = doc;
 	const positional =
 		arity !== undefined && (call.keywords.size === 0 || !args?.length);
 	if (positional) return positionalProblems(call, arity, args ?? []);
 	return keywordProblems(call, args ?? []);
+}
+
+function problemsOf(call: Call, doc: CallDoc): Diagnostic[] {
+	return [
+		...(doc.wordCaps === undefined ? [] : overCap(call, doc.wordCaps)),
+		...argumentProblems(call, doc),
+	];
 }
 
 export function diagnosticsForCalls(

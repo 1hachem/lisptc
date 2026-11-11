@@ -6,7 +6,7 @@ import type { AgentDelta } from "../src/agent.ts";
 import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
 import type { ChatMessageInput, WireMessage } from "../src/stream.ts";
 import { type Lineage, Threads, type ThreadsOptions } from "../src/threads.ts";
-import { approvingByNote, holding, testRepl } from "./helpers.ts";
+import { approvingByNote, holding, testRepl, unprompted } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as string[],
@@ -427,7 +427,7 @@ describe("a thread's budget", () => {
 			(m) => m.id === asked()?.additional_kwargs?.holding,
 		);
 		expect(
-			grand
+			unprompted(grand)
 				.filter((m) => m.type === "entry")
 				.map((m) => m.additional_kwargs?.value),
 		).toEqual(["approve it", "approve"]);

@@ -44,10 +44,10 @@ describe("reading a form", () => {
 });
 
 describe("reading a call", () => {
-	it("splits a saved agent into its name and its options, unquoting the roster", () => {
+	it("splits a call into its name and its options, unquoting a quoted list", () => {
 		const call = callOf(
 			readForm(
-				'(defagent "reader"\n  :prompt "read it"\n  :permissions "(permission/deny \\"fs/*\\")"\n  :roster \'("helper" "scout")\n  :budget 40)',
+				'(defagent "reader"\n  :prompt "read it"\n  :permissions "(permission/deny \\"fs/*\\")"\n  :tags \'("helper" "scout")\n  :budget 40)',
 			),
 		);
 		expect(call?.head).toBe("defagent");
@@ -59,7 +59,7 @@ describe("reading a call", () => {
 			kind: "string",
 			value: '(permission/deny "fs/*")',
 		});
-		expect(call?.options.get("roster")).toEqual({
+		expect(call?.options.get("tags")).toEqual({
 			kind: "list",
 			items: [
 				{ kind: "string", value: "helper" },
