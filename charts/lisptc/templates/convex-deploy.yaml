@@ -62,6 +62,9 @@ spec:
               {{- if and .Values.dev.enabled .Values.dev.watch }}
               pnpm exec convex dev --once --typecheck disable --codegen disable
               pnpm run migrate
+              {{- with .Values.dev.seed }}
+              pnpm exec convex run seed:account '{"email":"{{ .email }}","password":"{{ .password }}"}'
+              {{- end }}
               touch /tmp/pushed
               exec pnpm exec convex dev --typecheck disable --codegen disable
               {{- else }}

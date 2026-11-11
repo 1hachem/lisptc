@@ -42,6 +42,7 @@ import type * as preferences from "../preferences.js";
 import type * as readmes from "../readmes.js";
 import type * as repls from "../repls.js";
 import type * as secrets from "../secrets.js";
+import type * as seed from "../seed.js";
 import type * as sources from "../sources.js";
 import type * as threads from "../threads.js";
 import type * as uploads from "../uploads.js";
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   readmes: typeof readmes;
   repls: typeof repls;
   secrets: typeof secrets;
+  seed: typeof seed;
   sources: typeof sources;
   threads: typeof threads;
   uploads: typeof uploads;
