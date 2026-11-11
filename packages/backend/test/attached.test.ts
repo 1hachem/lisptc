@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 async function chat() {
-	const t = harness();
+	const t = testDeployment();
 	const alice = await signIn(t, "alice@example.com");
 	const chatId = await alice.as.mutation(api.chats.create, {
 		workspaceId: alice.workspace,

@@ -1,7 +1,7 @@
 import migrationsTest from "@convex-dev/migrations/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe("migrations", () => {
 	it("drop the preferences saved before they belonged to a workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		migrationsTest.register(t);
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {

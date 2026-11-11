@@ -21,6 +21,14 @@ export default defineConfig({
 					setupFiles: ["./test/extensions/setup-env.ts"],
 				},
 			},
+			{
+				test: {
+					name: "bundles",
+					environment: "node",
+					testTimeout: 30_000,
+					include: ["test/bundles/*.test.ts"],
+				},
+			},
 		],
 		coverage: {
 			include: ["convex/**", "src/**"],

@@ -10,11 +10,11 @@ import {
 	MAX_SPAWN_DEPTH,
 	STREAMING_LEASE_MS,
 } from "../convex/limits.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 describe("a thread acting as its record's owner", () => {
 	it("reaches the owner's workspace with no session behind it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const thread = t.withIdentity({
 			issuer: ACTING_ISSUER,
@@ -41,7 +41,7 @@ describe("a thread acting as its record's owner", () => {
 	});
 
 	it("stays inside the workspace it acts for", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const other = await t.run((ctx) =>
 			ctx.db.insert("workspaces", {
@@ -61,7 +61,7 @@ describe("a thread acting as its record's owner", () => {
 	});
 
 	it("is refused what belongs to the account rather than the workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const thread = t.withIdentity({
 			issuer: ACTING_ISSUER,
@@ -81,7 +81,7 @@ describe("a thread acting as its record's owner", () => {
 	});
 
 	it("reads and writes its owner's preferences", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const thread = t.withIdentity({
 			issuer: ACTING_ISSUER,
@@ -100,7 +100,7 @@ describe("a thread acting as its record's owner", () => {
 	});
 
 	it("is refused when its user does not own the workspace it acts for", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const mismatched = t.withIdentity({
@@ -117,7 +117,7 @@ describe("a thread acting as its record's owner", () => {
 	});
 
 	it("is refused when the issuer is any other", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const forged = t.withIdentity({
 			issuer: "https://elsewhere",
@@ -132,7 +132,7 @@ describe("a thread acting as its record's owner", () => {
 
 describe("repl checkpoint access", () => {
 	it("refuses to open another user's repl", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
@@ -142,7 +142,7 @@ describe("repl checkpoint access", () => {
 	});
 
 	it("refuses a repl whose chat was removed", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -159,7 +159,7 @@ describe("repl checkpoint access", () => {
 	});
 
 	it("refuses to fork another user's chat", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
@@ -177,7 +177,7 @@ describe("repl checkpoint access", () => {
 
 describe("workspace access", () => {
 	it("lists only the workspaces a user owns", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await signIn(t, "bob@example.com");
 		const listed = await alice.as.query(api.workspaces.list, {});
@@ -185,7 +185,7 @@ describe("workspace access", () => {
 	});
 
 	it("refuses a workspace owned by someone else", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -194,7 +194,7 @@ describe("workspace access", () => {
 	});
 
 	it("refuses an unauthenticated caller", async () => {
-		const t = harness();
+		const t = testDeployment();
 		await signIn(t, "alice@example.com");
 		await expect(t.query(api.workspaces.list, {})).rejects.toThrow();
 	});
@@ -202,7 +202,7 @@ describe("workspace access", () => {
 
 describe("workspace icon", () => {
 	it("lets the owner pick one, and no one else", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await alice.as.mutation(api.workspaces.setIcon, {
@@ -225,7 +225,7 @@ describe("workspace icon", () => {
 	});
 
 	it("refuses an icon the app cannot draw", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.workspaces.setIcon, {
@@ -238,7 +238,7 @@ describe("workspace icon", () => {
 
 describe("workspace theme", () => {
 	it("lets the owner pick one per workspace, and no one else", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await alice.as.mutation(api.workspaces.setTheme, {
@@ -261,7 +261,7 @@ describe("workspace theme", () => {
 	});
 
 	it("refuses a theme the app does not offer", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.workspaces.setTheme, {
@@ -279,7 +279,7 @@ describe("workspace model", () => {
 	} as const;
 
 	it("has none until one is chosen", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const got = await alice.as.query(api.workspaces.get, {
 			workspaceId: alice.workspace,
@@ -288,7 +288,7 @@ describe("workspace model", () => {
 	});
 
 	it("keeps the model a workspace was given, and the latest one wins", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.workspaces.setModel, {
 			workspaceId: alice.workspace,
@@ -309,7 +309,7 @@ describe("workspace model", () => {
 	});
 
 	it("refuses choosing the model of another user's workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -321,7 +321,7 @@ describe("workspace model", () => {
 	});
 
 	it("refuses a model the catalog does not offer", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		for (const choice of [
 			{ provider: "openrouter", model: " " },
@@ -340,7 +340,7 @@ describe("workspace model", () => {
 
 describe("chat access", () => {
 	it("refuses reading another user's chat", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await bob.as.mutation(api.chats.create, {
@@ -356,7 +356,7 @@ describe("chat access", () => {
 	});
 
 	it("refuses reading or writing a view of another user's chat", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await bob.as.mutation(api.chats.create, {
@@ -379,7 +379,7 @@ describe("chat access", () => {
 	});
 
 	it("marks a view expired until it is written again", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await bob.as.mutation(api.chats.create, {
 			workspaceId: bob.workspace,
@@ -397,7 +397,7 @@ describe("chat access", () => {
 	});
 
 	it("refuses appending to another user's chat", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await bob.as.mutation(api.chats.create, {
@@ -412,7 +412,7 @@ describe("chat access", () => {
 	});
 
 	it("refuses recording into another user's chat", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await bob.as.mutation(api.chats.create, {
@@ -439,7 +439,7 @@ describe("chat access", () => {
 	});
 
 	it("hides an archived chat from the list", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const kept = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -457,7 +457,7 @@ describe("chat access", () => {
 	});
 
 	it("lists an archived chat apart and restores it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const kept = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -486,7 +486,7 @@ describe("chat access", () => {
 	});
 
 	it("refuses to restore a chat of another user", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
@@ -502,7 +502,7 @@ describe("chat access", () => {
 
 describe("messages", () => {
 	it("numbers appended messages in order", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -530,7 +530,7 @@ describe("messages", () => {
 	});
 
 	it("reads a light transcript with only what the person sees", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -562,7 +562,7 @@ describe("messages", () => {
 	});
 
 	it("keeps the wire id an appended message was sent with", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -581,7 +581,7 @@ describe("messages", () => {
 	});
 
 	it("deep-merges a revision into a message's kwargs by its wire id", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -614,7 +614,7 @@ describe("messages", () => {
 	});
 
 	it("refuses revising a message the chat does not hold", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -629,7 +629,7 @@ describe("messages", () => {
 	});
 
 	it("stamps the chat with its last activity", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -643,7 +643,7 @@ describe("messages", () => {
 	});
 
 	it("lists what was sent in every chat of a workspace, oldest first", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const first = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -673,7 +673,7 @@ describe("messages", () => {
 	});
 
 	it("refuses listing what was sent in another user's workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -727,7 +727,7 @@ describe("panel layout access", () => {
 	};
 
 	it("keeps a workspace's layout to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.layouts.put, {
@@ -749,7 +749,7 @@ describe("panel layout access", () => {
 	});
 
 	it("applies the agent's panel ops to the stored layout, for the owner alone", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chat = {
@@ -796,7 +796,7 @@ describe("panel layout access", () => {
 	});
 
 	it("refuses panel ops that would grow the layout past its size", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.layouts.apply, {
@@ -821,7 +821,7 @@ describe("panel layout access", () => {
 	});
 
 	it("holds one layout per workspace, replaced on save, and none before the first", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		expect(
 			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
@@ -842,7 +842,7 @@ describe("panel layout access", () => {
 	});
 
 	it("keeps a trace tab beside the chat it traces", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const traced = {
 			root: "p",
@@ -876,7 +876,7 @@ describe("panel layout access", () => {
 	});
 
 	it("keeps a view the agent opened below the chat, tied to the chat that drew it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const viewed = {
 			root: "s",
@@ -932,7 +932,7 @@ describe("panel layout access", () => {
 	});
 
 	it("keeps the chat a drawn view came from", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const view = {
 			kind: "pane" as const,
@@ -961,7 +961,7 @@ describe("panel layout access", () => {
 	});
 
 	it("takes any number of panes side by side but refuses more than three stacked", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.layouts.put, {
@@ -980,7 +980,7 @@ describe("panel layout access", () => {
 
 describe("permissions access", () => {
 	it("keeps a workspace's config to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.permissions.put, {
@@ -1005,7 +1005,7 @@ describe("permissions access", () => {
 	});
 
 	it("holds one config per workspace, replaced on save", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.permissions.put, {
 			workspaceId: alice.workspace,
@@ -1027,7 +1027,7 @@ describe("permissions access", () => {
 
 describe("source folder access", () => {
 	it("keeps a workspace's sources to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const at = {
@@ -1052,7 +1052,7 @@ describe("source folder access", () => {
 	});
 
 	it("holds one source per folder and name, replaced on write", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const at = {
 			workspaceId: alice.workspace,
@@ -1078,7 +1078,7 @@ describe("source folder access", () => {
 	});
 
 	it("refuses a source past the size limit or with a path in its name", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const at = { workspaceId: alice.workspace, folder: "sub-agents" };
 		await expect(
@@ -1100,7 +1100,7 @@ describe("source folder access", () => {
 
 describe("secret access", () => {
 	it("refuses listing another user's secrets", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.secrets.put, {
@@ -1113,7 +1113,7 @@ describe("secret access", () => {
 	});
 
 	it("finds a pending login by its state for its owner only", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.oauth.put, {
@@ -1134,7 +1134,7 @@ describe("secret access", () => {
 	});
 
 	it("refuses writing into another user's workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -1152,7 +1152,7 @@ describe("secret access", () => {
 	});
 
 	it("refuses a key without the REPL_ prefix", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.secrets.put, {
@@ -1163,7 +1163,7 @@ describe("secret access", () => {
 	});
 
 	it("keeps one workspace's secrets out of another's", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const other = await alice.as.mutation(api.workspaces.create, {
 			name: "other",
@@ -1180,7 +1180,7 @@ describe("secret access", () => {
 	});
 
 	it("replaces a secret rather than adding a second row", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.secrets.put, {
 			workspaceId: alice.workspace,
@@ -1202,7 +1202,7 @@ describe("secret access", () => {
 
 describe("oauth record access", () => {
 	it("refuses reading another user's record", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.oauth.put, {
@@ -1219,7 +1219,7 @@ describe("oauth record access", () => {
 	});
 
 	it("refuses writing into another user's workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -1238,7 +1238,7 @@ describe("oauth record access", () => {
 	});
 
 	it("keeps one workspace's record out of another's", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const other = await alice.as.mutation(api.workspaces.create, {
 			name: "other",
@@ -1267,7 +1267,7 @@ const DEFAULTS = {
 
 describe("preferences access", () => {
 	it("keeps a workspace's preferences to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const preferences = { font: "mono", themeUses: { dusk: 2 } };
@@ -1298,7 +1298,7 @@ describe("preferences access", () => {
 	});
 
 	it("keeps each workspace's preferences apart", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const other = await alice.as.mutation(api.workspaces.create, {
 			name: "other",
@@ -1322,7 +1322,7 @@ describe("preferences access", () => {
 	});
 
 	it("merges each save into one row per workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.preferences.put, {
@@ -1355,7 +1355,7 @@ describe("preferences access", () => {
 	});
 
 	it("refuses preferences past the size limit", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.preferences.put, {
@@ -1370,7 +1370,7 @@ describe("preferences access", () => {
 });
 
 describe("chat listing", () => {
-	async function three(t: ReturnType<typeof harness>) {
+	async function three(t: ReturnType<typeof testDeployment>) {
 		const alice = await signIn(t, "alice@example.com");
 		for (const title of ["plan q4", "fix login", "login copy"]) {
 			await alice.as.mutation(api.chats.create, {
@@ -1382,7 +1382,7 @@ describe("chat listing", () => {
 	}
 
 	it("pages by limit and says when more remain", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await three(t);
 		const first = await alice.as.query(api.chats.list, {
 			workspaceId: alice.workspace,
@@ -1399,7 +1399,7 @@ describe("chat listing", () => {
 	});
 
 	it("lists a chat with no messages above older ones", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await three(t);
 		const older = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -1420,7 +1420,7 @@ describe("chat listing", () => {
 	});
 
 	it("keeps a sub-agent's chat out of the list", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -1446,7 +1446,7 @@ describe("chat listing", () => {
 	});
 
 	it("hands back the same unsent draft however often a new chat is opened", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const draft = await alice.as.mutation(api.chats.draft, {
 			workspaceId: alice.workspace,
@@ -1461,7 +1461,7 @@ describe("chat listing", () => {
 	});
 
 	it("keeps an unsent draft out of the list until its first message", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const draft = await alice.as.mutation(api.chats.draft, {
 			workspaceId: alice.workspace,
@@ -1479,7 +1479,7 @@ describe("chat listing", () => {
 	});
 
 	it("opens a fresh draft once the last one has been sent", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const sent = await alice.as.mutation(api.chats.draft, {
 			workspaceId: alice.workspace,
@@ -1496,7 +1496,7 @@ describe("chat listing", () => {
 	});
 
 	it("keeps each user's draft to that user", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const own = await alice.as.mutation(api.chats.draft, {
@@ -1525,7 +1525,7 @@ describe("chat listing", () => {
 			},
 		};
 
-		async function opened(t: ReturnType<typeof harness>) {
+		async function opened(t: ReturnType<typeof testDeployment>) {
 			const alice = await signIn(t, "alice@example.com");
 			const chatId = await alice.as.mutation(api.chats.create, {
 				workspaceId: alice.workspace,
@@ -1541,14 +1541,14 @@ describe("chat listing", () => {
 		}
 
 		it("streams from start and goes idle when the turn settles", async () => {
-			const { alice, chatId, status } = await opened(harness());
+			const { alice, chatId, status } = await opened(testDeployment());
 			expect(await status()).toBe("streaming");
 			await alice.as.mutation(api.chats.settle, { chatId });
 			expect(await status()).toBeUndefined();
 		});
 
 		it("keeps why a turn failed until the next one starts", async () => {
-			const { alice, chatId, status } = await opened(harness());
+			const { alice, chatId, status } = await opened(testDeployment());
 			await alice.as.mutation(api.chats.settle, {
 				chatId,
 				failure: "the provider is down",
@@ -1567,7 +1567,7 @@ describe("chat listing", () => {
 
 		it("errors a turn that never settles once its lease runs out", async () => {
 			vi.useFakeTimers();
-			const t = harness();
+			const t = testDeployment();
 			const { alice, chatId } = await opened(t);
 			await t.finishAllScheduledFunctions(vi.runAllTimers);
 			expect(await alice.as.query(api.chats.get, { chatId })).toMatchObject({
@@ -1579,7 +1579,7 @@ describe("chat listing", () => {
 
 		it("leaves a turn that settled, or started again, to its own lease", async () => {
 			vi.useFakeTimers();
-			const t = harness();
+			const t = testDeployment();
 			const { alice, chatId, status } = await opened(t);
 			await alice.as.mutation(api.chats.settle, { chatId });
 			await t.finishAllScheduledFunctions(vi.runAllTimers);
@@ -1595,7 +1595,7 @@ describe("chat listing", () => {
 		});
 
 		it("waits on an open ask until it is answered", async () => {
-			const { alice, chatId, status } = await opened(harness());
+			const { alice, chatId, status } = await opened(testDeployment());
 			await alice.as.mutation(api.messages.append, {
 				chatId,
 				messages: [asking],
@@ -1615,7 +1615,7 @@ describe("chat listing", () => {
 		});
 
 		it("still waits on an ask buried under a long run of later entries", async () => {
-			const { alice, chatId, status } = await opened(harness());
+			const { alice, chatId, status } = await opened(testDeployment());
 			const activity = Array.from({ length: 80 }, (_, i) => ({
 				type: "entry" as const,
 				content: "",
@@ -1631,7 +1631,7 @@ describe("chat listing", () => {
 		});
 
 		it("waits on an open question until the user answers it", async () => {
-			const { alice, chatId, status } = await opened(harness());
+			const { alice, chatId, status } = await opened(testDeployment());
 			const question = {
 				type: "entry" as const,
 				content: "",
@@ -1661,7 +1661,7 @@ describe("chat listing", () => {
 		});
 
 		it("forgets an ask left open in an earlier turn", async () => {
-			const { alice, chatId, status } = await opened(harness());
+			const { alice, chatId, status } = await opened(testDeployment());
 			await alice.as.mutation(api.messages.append, {
 				chatId,
 				messages: [asking, { type: "human", content: "never mind" }],
@@ -1672,7 +1672,7 @@ describe("chat listing", () => {
 	});
 
 	it("finds chats by title", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await three(t);
 		const found = await alice.as.query(api.chats.list, {
 			workspaceId: alice.workspace,
@@ -1687,7 +1687,7 @@ describe("chat listing", () => {
 
 describe("readme access", () => {
 	it("keeps a workspace's readme to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.readmes.put, {
@@ -1709,7 +1709,7 @@ describe("readme access", () => {
 	});
 
 	it("reads empty until written, then holds one row replaced on save", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		expect(await alice.as.query(api.readmes.get, { workspaceId })).toBe("");
@@ -1721,7 +1721,7 @@ describe("readme access", () => {
 	});
 
 	it("refuses a readme past the size limit", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.readmes.put, {
@@ -1734,7 +1734,7 @@ describe("readme access", () => {
 
 describe("knowledge access", () => {
 	it("keeps a workspace's knowledge to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.files.add, {
@@ -1775,7 +1775,7 @@ describe("knowledge access", () => {
 
 describe("attachments access", () => {
 	it("keeps a workspace's attachments to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.files.add, {
@@ -1822,7 +1822,7 @@ describe("attachments access", () => {
 
 describe("bin access", () => {
 	it("keeps a workspace's bin to its owner", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.files.add, {
@@ -1870,7 +1870,7 @@ describe("spawning a sub-agent's chat", () => {
 	};
 
 	it("files it under the chat that spawned it, with its definition", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -1887,7 +1887,7 @@ describe("spawning a sub-agent's chat", () => {
 	});
 
 	it("refuses another user's chat", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await bob.as.mutation(api.chats.create, {
@@ -1899,7 +1899,7 @@ describe("spawning a sub-agent's chat", () => {
 	});
 
 	it("refuses to nest deeper than the limit", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		let chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -1916,7 +1916,7 @@ describe("a child chat", () => {
 	const agent = { name: "r", prompt: "dig", bounds: [] };
 
 	it("lists its children to its root's owner and nobody else", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
@@ -1942,7 +1942,7 @@ describe("a child chat", () => {
 	});
 
 	it("tells a child that never ran a turn from one that finished", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -1958,7 +1958,7 @@ describe("a child chat", () => {
 	});
 
 	it("is reachable by its root's owner and nobody else", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
@@ -1981,7 +1981,7 @@ describe("a child chat", () => {
 	});
 
 	it("is kept out of the workspace's chat list", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -2004,7 +2004,7 @@ describe("a thread's server functions", () => {
 	};
 
 	it("records the lineage from the thread up to its root", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -2023,7 +2023,7 @@ describe("a thread's server functions", () => {
 	});
 
 	it("writes only the thread's own chat", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -2059,7 +2059,7 @@ describe("a thread's server functions", () => {
 	});
 
 	it("refuses a chat that is gone", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -2071,7 +2071,7 @@ describe("a thread's server functions", () => {
 	});
 
 	it("finds a child by its name under its own parent only, the latest first", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -2103,7 +2103,7 @@ describe("a thread's server functions", () => {
 	});
 
 	it("refuses to spawn past the depth cap", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		let chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,

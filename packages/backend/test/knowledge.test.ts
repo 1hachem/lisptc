@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import { MAX_KNOWLEDGE, MAX_KNOWLEDGE_BYTES } from "../convex/limits.ts";
 import type schema from "../convex/schema.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 function uploaded(t: TestConvex<typeof schema>, body: BlobPart, type: string) {
 	return t.run((ctx) => ctx.storage.store(new Blob([body], { type })));
@@ -15,7 +15,7 @@ async function blobs(t: TestConvex<typeof schema>) {
 
 describe("knowledge", () => {
 	it("adds, lists, serves and removes an uploaded file", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.files.add, {
@@ -81,7 +81,7 @@ describe("knowledge", () => {
 	});
 
 	it("replaces a file of the same name and bins the old one", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		for (const body of ["one", "three"])
@@ -114,7 +114,7 @@ describe("knowledge", () => {
 	});
 
 	it("refuses another user's workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -145,7 +145,7 @@ describe("knowledge", () => {
 		".hidden",
 		" padded.txt",
 	])("refuses the name %j and drops its blob", async (name) => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.files.add, {
@@ -159,7 +159,7 @@ describe("knowledge", () => {
 	});
 
 	it("refuses a file over the size limit and drops its blob", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.files.add, {
@@ -177,7 +177,7 @@ describe("knowledge", () => {
 	});
 
 	it("refuses a new file past the count limit", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		const storageId = await uploaded(t, "x", "text/plain");
