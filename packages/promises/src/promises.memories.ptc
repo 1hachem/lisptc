@@ -1,17 +1,18 @@
 (area "promises" :when "slow or background work: several jobs at once, a wait with a limit, a value printed as #<...>, or a load to reuse")
 
 (memory "internal/promises/waiting" :when "several slow jobs could run at once, a wait needs a time limit, only the first of several results matters, or a background job must stop"
-  "Waiting on promises:
-- (await promise) with no timeout-ms waits {{await-seconds}} seconds, then fails \"await timed out\".
+  (format nil "Waiting on promises:
+- (await promise) with no timeout-ms waits ~d seconds, then fails \"await timed out\".
   The promise keeps running. Wait again, or (cancel promise) to stop it.
 - (await promise 600000) waits up to timeout-ms milliseconds. Same failure past it.
   A settled promise returns at once.
 - (promise-all promises) : values in order. First rejection rejects all. Use when every value is needed.
 - (promise-all-settled promises) : one (:fulfilled value) or (:rejected \"message\") per promise. Never rejects, so one failure keeps siblings. Use when some may fail and the rest still count, e.g. when loading several servers.
-- (promise-any promises) : first success wins. When all fail: \"{{every-rejected}}\", with each message joined by \"{{rejections-joined}}\".
+- (promise-any promises) : first success wins. When all fail: \"~a\", with each message joined by \"~a\".
 - (promise-race promises) : first to settle wins, success or failure.
 - (promise-state promise) reads progress without waiting: :pending, :fulfilled or :rejected. (promises) lists what still runs.
-- (cancel promise) aborts the request behind one promise; returns t if there was something to abort. Promise-all and friends have nothing of their own to abort: nil.")
+- (cancel promise) aborts the request behind one promise; returns t if there was something to abort. Promise-all and friends have nothing of their own to abort: nil."
+    *promises-await-seconds* *promises-every-rejected* *promises-rejections-joined*))
 
 (memory "internal/promises/live" :when "the agent holds a value printed as #<...>, or is about to reuse a background load"
   "- A PROMISE IS A LIVE VALUE. Await only to use value in same step:

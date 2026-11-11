@@ -6,6 +6,7 @@ import {
 	type List,
 	listToArray,
 	newLispKeyword,
+	newSym,
 } from "@repo/interpreter/objects";
 import { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
@@ -59,20 +60,6 @@ function unawaited(error: EvalException): string | undefined {
 	return `${String(error)}\n${where}${of} is a job, not its value. Wrap it in (await ...) first.`;
 }
 
-function filledMemories(host: PromisesHost): string {
-	const fills: Record<string, string> = {
-		"await-seconds": String(AWAIT_TIMEOUT_MS / 1000),
-		"every-rejected": EVERY_REJECTED,
-		"rejections-joined": REJECTIONS_JOINED,
-	};
-	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
-		const fill = fills[name];
-		if (fill === undefined)
-			throw new Error(`no value fills {{${name}}} in the promises memories`);
-		return fill;
-	});
-}
-
 export function promisesExtension(host: PromisesHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => {
@@ -83,11 +70,31 @@ export function promisesExtension(host: PromisesHost): InterpExtension {
 				return { reported };
 			});
 		},
-		{ prompt: host.prompt(), memories: filledMemories(host) },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }
 
 export function registerPromises(interp: Interp): void {
+	interp.defineGlobal(
+		newSym("*promises-await-seconds*"),
+		BigInt(AWAIT_TIMEOUT_MS / 1000),
+		{
+			signature: "*promises-await-seconds*",
+			doc: "How many seconds await waits on a promise before it fails.",
+		},
+	);
+	interp.defineGlobal(newSym("*promises-every-rejected*"), EVERY_REJECTED, {
+		signature: "*promises-every-rejected*",
+		doc: "The error promise-any raises when every promise rejected.",
+	});
+	interp.defineGlobal(
+		newSym("*promises-rejections-joined*"),
+		REJECTIONS_JOINED,
+		{
+			signature: "*promises-rejections-joined*",
+			doc: "The separator promise-any puts between the rejection reasons it reports.",
+		},
+	);
 	interp.def(
 		"await",
 		-1,
