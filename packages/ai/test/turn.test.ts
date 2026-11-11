@@ -152,6 +152,25 @@ describe("the agent turn", () => {
 		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
 	});
 
+	test("steps-taken counts the steps of this turn, not the replies of earlier ones", async () => {
+		script = [
+			[{ text: "(echo steps-taken)" }],
+			[{ text: "(echo steps-taken)" }],
+			[{ text: "done." }],
+		];
+
+		const events = await drain([
+			{ role: "user", content: "hi" },
+			{ role: "assistant", content: "(+ 1 1)" },
+			{ role: "assistant", content: "hello." },
+			...ask,
+		]);
+
+		expect(
+			events.flatMap((e) => (e.type === "result" ? [e.display] : [])),
+		).toEqual(["0\n", "1\n"]);
+	});
+
 	test("a prose reply ends the loop and reports the answer", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 

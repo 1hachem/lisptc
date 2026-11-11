@@ -653,8 +653,8 @@ export class AgentRepl extends MemoryRepl {
 		};
 	}
 
-	seed(said: readonly Said[]): void {
-		this.interp.seed(said);
+	seed(said: readonly Said[], stepsTaken: number): void {
+		this.interp.seed(said, stepsTaken);
 	}
 }
 
