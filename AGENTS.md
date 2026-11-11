@@ -320,10 +320,8 @@ another surface written in the loop's file is moved to that extension's file.
 **A built-in memory lives in a `.memories.ptc` file, never in a TypeScript or
 JavaScript string.** The file is lisptc like any other, so a malformed memory
 fails when it loads and the editor flags it as it is written. A value the text
-shares with code, one that could drift from what the code holds, is read from
-the code when the memory loads, never copied into the file. The memory reads it
-in lisptc, never through a placeholder some other code substitutes, and a value
-it cannot read fails the load. A package that ships a new `.ptc`
+shares with code is never copied into the file: the memory reads it from the
+code in lisptc, so the two cannot drift. A package that ships a new `.ptc`
 is added to what `apps/app` ships, by the rule in `apps/app/AGENTS.md`.
 
 The one exception is a memory whose source of truth is already code, one per
