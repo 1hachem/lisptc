@@ -23,8 +23,8 @@ describe("a session's slots", () => {
 describe("openSession", () => {
 	it("starts every chain empty", () => {
 		const hooks = openSession([]);
-		expect(hooks.response.isEmpty).toBe(true);
-		expect(hooks.response.run((_, text) => text, undefined as never, "x")).toBe(
+		expect(hooks.answer.isEmpty).toBe(true);
+		expect(hooks.answer.run((_, text) => text, undefined as never, "x")).toBe(
 			"x",
 		);
 	});
@@ -32,7 +32,7 @@ describe("openSession", () => {
 	it("lets each extension hook the chains, and skips one with no session", () => {
 		const shouting: InterpExtension = Object.assign(() => {}, {
 			session(hooks: SessionHooks) {
-				hooks.response.use((interp, text, next) =>
+				hooks.answer.use((interp, text, next) =>
 					next(interp, text.toUpperCase()),
 				);
 			},
@@ -40,7 +40,7 @@ describe("openSession", () => {
 		const silent: InterpExtension = () => {};
 		const hooks = openSession([silent, shouting]);
 		expect(
-			hooks.response.run((_, text) => text, undefined as never, "quiet"),
+			hooks.answer.run((_, text) => text, undefined as never, "quiet"),
 		).toBe("QUIET");
 	});
 });

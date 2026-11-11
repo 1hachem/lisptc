@@ -167,6 +167,7 @@ function conversationOf(interp: Interp): Turn[] {
 				fields.set(at.car.car, at.car.cdr);
 		const role = fields.get("role");
 		const content = fields.get("content");
+		if (fields.has("source")) return [];
 		return typeof role === "string" && typeof content === "string"
 			? [{ role, content }]
 			: [];
@@ -928,22 +929,27 @@ function startText(memories: FiredMemory[]): string {
 
 export const memorySlot = slot<MemoryBank>("memory");
 
+const SOURCE = "memory";
+
 function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
 		hooks.beginStep.use(function* (ctx, next) {
+			const { conversation } = ctx.interp;
 			const started = yield* bank.start(ctx.interp);
-			if (started.length > 0) ctx.emit(startText(started));
+			if (started.length > 0) conversation.append(SOURCE, startText(started));
 			const heard = yield* bank.hear(ctx.interp);
-			if (heard.length > 0) ctx.emit(heardText(heard));
+			if (heard.length > 0) conversation.append(SOURCE, heardText(heard));
 			yield* next(ctx);
 		});
 		hooks.evalStep.use(async (ctx, next) => {
-			ctx.emit((await driveAsync(bank.beginStep(ctx.code, ctx.interp))).value);
+			const before = (await driveAsync(bank.beginStep(ctx.code, ctx.interp)))
+				.value;
 			try {
 				await next(ctx);
 			} finally {
-				ctx.emit((await driveAsync(bank.endStep())).value);
+				const after = (await driveAsync(bank.endStep())).value;
+				ctx.interp.conversation.append(SOURCE, before + after);
 			}
 		});
 	};

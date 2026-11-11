@@ -1,3 +1,4 @@
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
@@ -110,16 +111,11 @@ describe("the agent the app serves", () => {
 		const extensions = await workspaceExtensions(WORKSPACE, offline, {
 			desktop,
 		});
-		const interp = new Interp({ extensions });
+		const interp = new ConversationInterpreter({ extensions });
 		await runAsync(interp, prelude);
 		const hooks = openSession(extensions);
 		const step = () =>
-			driveAsync(
-				hooks.beginStep.run(() => settled(undefined), {
-					interp,
-					emit: () => {},
-				}),
-			);
+			driveAsync(hooks.beginStep.run(() => settled(undefined), { interp }));
 		const asked = async () =>
 			str((await runAsync(interp, "(desktop-connected-p)")).value, false);
 		await step();

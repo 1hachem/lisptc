@@ -27,7 +27,8 @@ export interface CheckEvaluator {
 export type TranscriptEntry =
 	| { role: "user"; content: string }
 	| { role: "assistant"; content: string }
-	| { role: "tool"; content: string; riding?: string };
+	| { role: "tool"; content: string }
+	| { role: "system"; content: string; source?: string };
 
 export interface EvalEntry {
 	readonly kind: string;
@@ -50,7 +51,7 @@ export interface EvalResult {
 	output: string;
 	error: boolean;
 	entries: readonly EvalEntry[];
-	emitted: string;
+	notes: readonly { readonly content: string; readonly source?: string }[];
 }
 
 export interface AgentDriver<Repl> {
@@ -326,7 +327,7 @@ async function replaySeed<Repl>(
 			see({ role: "user", content: entry.user });
 			continue;
 		}
-		const { output, error, entries, emitted } = await agent.eval(
+		const { output, error, entries, notes } = await agent.eval(
 			repl,
 			entry.assistant,
 		);
@@ -334,8 +335,9 @@ async function replaySeed<Repl>(
 		transcript.push({
 			role: "tool",
 			content: agent.resultContent(output, error),
-			...(emitted === "" ? {} : { riding: emitted }),
 		});
+		for (const { content, source } of notes)
+			transcript.push({ role: "system", content, source });
 		see({ role: "assistant", content: entry.assistant });
 		for (const recorded of entries) see(entryLine(recorded));
 		see({ role: "tool", content: output });

@@ -6,12 +6,6 @@ import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
 import { runAsync, runSync } from "@repo/interpreter/lisp";
-import {
-	arrayToList,
-	Cell,
-	listToArray,
-	newSym,
-} from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { type InterpExtension, openSession } from "@repo/interpreter/session";
@@ -74,16 +68,13 @@ function fixture(
 
 async function opening(f: Fixture): Promise<string> {
 	const hooks = openSession([memoryExtension(bareHost, { bank: f.bank })]);
-	let emitted = "";
 	await drive(
-		hooks.beginStep.run(() => settled(undefined), {
-			interp: f.interp,
-			emit: (text) => {
-				emitted += text;
-			},
-		}),
+		hooks.beginStep.run(() => settled(undefined), { interp: f.interp }),
 	);
-	return emitted;
+	return f.interp
+		.takeAppended()
+		.map((note) => note.content)
+		.join("");
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
@@ -91,9 +82,10 @@ async function ev(f: Fixture, code: string): Promise<string> {
 }
 
 function said(f: Fixture, text: string): void {
-	const before = f.interp.getGlobal(newSym("user-messages"));
-	const all = before instanceof Cell ? listToArray(before) : [];
-	f.interp.defineGlobal(newSym("user-messages"), arrayToList([...all, text]));
+	f.interp.seed([
+		...f.interp.conversation.said(),
+		{ role: "user", content: text },
+	]);
 }
 
 function clockAt(ms: { now: number }): Clock {
@@ -1002,7 +994,7 @@ describe("the start of a conversation", () => {
 		expect(await opening(f)).toBe("");
 	});
 
-	it("rides the user's first message", async () => {
+	it("is told on the user's first message", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
 		said(f, "hello");

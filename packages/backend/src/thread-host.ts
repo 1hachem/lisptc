@@ -123,13 +123,6 @@ export class ThreadHost {
 					messages: toStored(messages),
 				});
 			},
-			async revise(threadId, id, kwargs) {
-				await server.mutation(internal.threads.revise, {
-					chatId: asChat(threadId),
-					id,
-					kwargs,
-				});
-			},
 		};
 		this.status = {
 			async start(threadId) {

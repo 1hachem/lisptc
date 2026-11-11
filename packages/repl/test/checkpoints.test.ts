@@ -163,7 +163,7 @@ describe("checkpoints", () => {
 	it("keeps the conversation globals in the image, still sealed", async () => {
 		const images = new MemoryImageStore();
 		const first = new AgentRepl({ extensions: [], images });
-		first.setConversationVars({ "user-messages": ["hi"] });
+		first.seed([{ role: "user", content: "hi" }]);
 		await first.evalOutput("(setq seen (length user-messages))");
 		await settle();
 		const second = new AgentRepl({ extensions: [], images });

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { api, internal } from "../convex/_generated/api.js";
-import { harness, signIn } from "./helpers.ts";
+import { api } from "../convex/_generated/api.js";
+import { signIn, testDeployment } from "./helpers.ts";
 
 async function chat() {
-	const t = harness();
+	const t = testDeployment();
 	const alice = await signIn(t, "alice@example.com");
 	const chatId = await alice.as.mutation(api.chats.create, {
 		workspaceId: alice.workspace,
@@ -43,20 +43,5 @@ describe("the files a message attached", () => {
 		expect(await alice.as.query(api.messages.transcript, { chatId })).toEqual(
 			[],
 		);
-	});
-
-	it("refuses attachments revised onto a stored message", async () => {
-		const { t, alice, chatId } = await chat();
-		await alice.as.mutation(api.messages.append, {
-			chatId,
-			messages: [{ id: "t1", type: "tool", content: "" }],
-		});
-		await expect(
-			t.mutation(internal.threads.revise, {
-				chatId,
-				id: "t1",
-				kwargs: { attachments: [{ folder: "bin", name: "x" }] },
-			}),
-		).rejects.toThrow(/MALFORMED_ATTACHMENTS/);
 	});
 });

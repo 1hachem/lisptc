@@ -9,7 +9,7 @@ import {
 	UNCLAIMED_UPLOAD_TTL_MS,
 } from "../convex/limits.ts";
 import type schema from "../convex/schema.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 type Alice = Awaited<ReturnType<typeof signIn>>;
 
@@ -69,7 +69,7 @@ async function blobs(t: TestConvex<typeof schema>) {
 
 describe("bin", () => {
 	it("takes what knowledge and attachments delete, keeping the blob", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await inKnowledge(t, alice, "notes.md");
@@ -96,7 +96,7 @@ describe("bin", () => {
 	});
 
 	it("discards an attachment for good without the bin", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await inAttachments(t, alice, "spec.pdf");
 		await alice.as.mutation(api.files.discard, {
@@ -109,7 +109,7 @@ describe("bin", () => {
 	});
 
 	it("numbers a name the bin already holds", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await inKnowledge(t, alice, "a.md");
@@ -131,7 +131,7 @@ describe("bin", () => {
 	});
 
 	it("restores a file to the folder it came from, numbering a taken name", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await inKnowledge(t, alice, "a.md");
@@ -164,7 +164,7 @@ describe("bin", () => {
 	});
 
 	it("numbers a name at the length cap without passing it, and restores it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		const name = `${"a".repeat(MAX_FILE_NAME - 3)}.md`;
@@ -191,7 +191,7 @@ describe("bin", () => {
 
 	it("keeps the newest files once it holds as many as it may", async () => {
 		vi.useFakeTimers();
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		const binnedAt = Date.now() - 60_000;
@@ -222,7 +222,7 @@ describe("bin", () => {
 	});
 
 	it("deletes a file for good", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await inKnowledge(t, alice, "a.md");
@@ -242,7 +242,7 @@ describe("bin", () => {
 	});
 
 	it("bins many files in one call and deletes them for good in another", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await inKnowledge(t, alice, "a.md");
@@ -279,7 +279,7 @@ describe("bin", () => {
 	});
 
 	it("refuses more names in one call than a folder can hold", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.files.removeMany, {
@@ -291,7 +291,7 @@ describe("bin", () => {
 	});
 
 	it("empties a file left in the bin past its month, and only that one", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		for (const [name, binnedAt] of [
@@ -318,7 +318,7 @@ describe("bin", () => {
 
 describe("an upload a file already claimed", () => {
 	it("is refused for a second file and stays with the first", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const storageId = await stored(t, "mine");
@@ -368,7 +368,7 @@ describe("an upload no file claimed", () => {
 
 	it("is freed a day on, while every claimed blob stays", async () => {
 		vi.useFakeTimers();
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		const unclaimed = await stored(t, "lost");
