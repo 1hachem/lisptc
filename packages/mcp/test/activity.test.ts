@@ -55,6 +55,7 @@ function fakeClient(icons: Icon[] | undefined = SERVER_ICONS): McpClient {
 		},
 		asleep: async () => false,
 		disconnect: () => Promise.resolve(),
+		remove: () => Promise.resolve(),
 		login: () => Promise.resolve({ authUrl: null }),
 		logout: () => Promise.resolve(),
 		authorize: () => Promise.resolve(),

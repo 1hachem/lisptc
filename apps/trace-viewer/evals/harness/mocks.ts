@@ -182,6 +182,10 @@ function mockClient(spec: MockSpec): McpClient {
 		disconnect: async (serverId) => {
 			live.delete(serverId);
 		},
+		remove: async (conf) => {
+			for (const [serverId, entry] of live)
+				if (entry.name === conf.name) live.delete(serverId);
+		},
 		asleep: async () => false,
 		login: async () => ({ authUrl: null }),
 		logout: async () => {},

@@ -27,6 +27,11 @@ export class RoutedHost implements McpHost {
 		await this.ownerOf(server)?.stop(server);
 	}
 
+	async remove(conf: ConnConfig): Promise<void> {
+		await this.hostOf(conf).remove(conf);
+		this.owners.delete(conf.name);
+	}
+
 	async stopAll(): Promise<void> {
 		await Promise.all(
 			[...new Set(this.routes.map((route) => route.host))].map((host) =>

@@ -98,6 +98,8 @@ export const panelContent = v.union(
 			v.literal("preferences"),
 			v.literal("account"),
 			v.literal("bin"),
+			v.literal("mcp"),
+			v.literal("toolkit"),
 		),
 		id: v.optional(v.string()),
 		title: v.string(),
@@ -364,6 +366,28 @@ export default defineSchema({
 	})
 		.index("by_reporter", ["reporter"])
 		.index("by_beat", ["beatAt"]),
+
+	mcpCatalog: defineTable({
+		workspaceId: v.id("workspaces"),
+		server: v.string(),
+		description: v.optional(v.string()),
+		icon: v.optional(v.string()),
+		login: v.optional(v.boolean()),
+		tools: v.string(),
+		fetchedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_server", ["workspaceId", "server"]),
+
+	mcpMounts: defineTable({
+		workspaceId: v.id("workspaces"),
+		server: v.string(),
+		conf: v.optional(v.string()),
+		tools: v.string(),
+		mountedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_server", ["workspaceId", "server"]),
 
 	sources: defineTable({
 		workspaceId: v.id("workspaces"),

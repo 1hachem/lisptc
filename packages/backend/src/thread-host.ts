@@ -125,6 +125,7 @@ const asChat = (threadId: string) => threadId as Id<"chats">;
 export class ThreadHost {
 	readonly transcript: TranscriptStore;
 	readonly status: ThreadStatus;
+	private readonly workspaces = new Map<Id<"workspaces">, Promise<AgentRepl>>();
 
 	constructor(private readonly options: ThreadHostOptions) {
 		const { server } = options;
@@ -278,6 +279,29 @@ export class ThreadHost {
 		const images = new MemoryImageStore();
 		await images.save(image);
 		return await this.build(threadId, images, false);
+	}
+
+	workspace(workspaceId: Id<"workspaces">): Promise<AgentRepl> {
+		const kept = this.workspaces.get(workspaceId);
+		if (kept !== undefined) return kept;
+		const built = this.buildWorkspace(workspaceId);
+		this.workspaces.set(workspaceId, built);
+		built.catch(() => this.workspaces.delete(workspaceId));
+		return built;
+	}
+
+	private async buildWorkspace(
+		workspaceId: Id<"workspaces">,
+	): Promise<AgentRepl> {
+		const { server, actAs } = this.options;
+		const userId = await server.query(internal.workspaces.owner, {
+			workspaceId,
+		});
+		const owner = actAs({ userId, workspaceId });
+		return new AgentRepl({
+			extensions: await workspaceExtensions(workspaceId, () => owner),
+			images: new MemoryImageStore(),
+		});
 	}
 
 	async repl(chatId: Id<"chats">): Promise<AgentRepl> {

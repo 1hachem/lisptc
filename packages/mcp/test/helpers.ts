@@ -43,12 +43,14 @@ export function withServers(
 export function recordingHost(): McpHost & {
 	ensured: ConnConfig[];
 	stopped: string[];
+	removed: string[];
 	stoppedAll: number;
 	uses: string[];
 	sleeping: Set<string>;
 } {
 	const ensured: ConnConfig[] = [];
 	const stopped: string[] = [];
+	const removed: string[] = [];
 	const uses: string[] = [];
 	const sleeping = new Set<string>();
 	let stoppedAll = 0;
@@ -56,6 +58,7 @@ export function recordingHost(): McpHost & {
 	return {
 		ensured,
 		stopped,
+		removed,
 		uses,
 		sleeping,
 		get stoppedAll() {
@@ -70,6 +73,9 @@ export function recordingHost(): McpHost & {
 		},
 		stop: async ({ name }) => {
 			stopped.push(name);
+		},
+		remove: async (conf) => {
+			removed.push(conf.name);
 		},
 		stopAll: async () => {
 			stoppedAll += 1;
@@ -115,6 +121,7 @@ export function countingHost(
 		},
 		callTool: (call, signal) => client.callTool(call, signal),
 		disconnect: (serverId) => client.disconnect(serverId),
+		remove: (conf) => client.remove(conf),
 		login: (conf) => client.login(conf),
 		logout: (conf) => client.logout(conf),
 		authorize: (conf, code) => client.authorize(conf, code),

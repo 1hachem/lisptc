@@ -24,10 +24,10 @@ describe("a routed host", () => {
 		const { host, remotes, containers } = routed();
 
 		await host.ensure(remote);
-		await host.ensure(container);
+		await host.remove(container);
 
 		expect(remotes.ensured.map((conf) => conf.name)).toEqual(["linear"]);
-		expect(containers.ensured.map((conf) => conf.name)).toEqual(["fs"]);
+		expect(containers.removed).toEqual(["fs"]);
 	});
 
 	it("stops a server on the host that runs it, and nowhere else", async () => {

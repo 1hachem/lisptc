@@ -85,8 +85,9 @@ its status; `apps/mcp-operator` runs it. `src/mcp-server-resource.ts` is that
 resource's contract, which the package exports under the name kubernetes, and the schema in
 `charts/lisptc/crds` has to accept what it writes.
 
-**A host never deletes a server.** Unloading or going idle only stops one,
-and a load keeps what someone changed on the live server.
+**A host deletes a server only when someone asks for it to be removed.**
+Unloading or going idle never deletes one, and a load keeps what someone
+changed on the live server.
 
 **No server keeps state.** Nothing a server writes outlives its container, so a
 server that needs data back reads it from somewhere else.

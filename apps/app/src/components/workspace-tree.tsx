@@ -9,6 +9,7 @@ import {
 	FlashIcon,
 	Home01Icon,
 	InformationCircleIcon,
+	McpServerIcon,
 	PaintBoardIcon,
 	Settings02Icon,
 	ShieldKeyIcon,
@@ -48,6 +49,7 @@ import {
 	KnowledgeFolder,
 } from "./file-folder.tsx";
 import { FileMenu } from "./file-menu.tsx";
+import { McpFolder } from "./mcp-workspace.tsx";
 import { linkTo, useShown } from "./panel-link.tsx";
 import { SourceFolder } from "./source-folder.tsx";
 import { Empty, type FolderState, Listing } from "./tree-listing.tsx";
@@ -66,6 +68,7 @@ const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	knowledge: Book02Icon,
 	attachments: Attachment01Icon,
 	bin: Delete02Icon,
+	mcp: McpServerIcon,
 	"sub-agents": restingIcon(),
 	triggers: FlashIcon,
 	tasks: TaskDone01Icon,
@@ -310,6 +313,7 @@ export function WorkspaceTree({
 			/>
 		),
 		bin: () => <BinFolder workspaceId={workspaceId} folder={folder("bin")} />,
+		mcp: () => <McpFolder workspaceId={workspaceId} folder={folder("mcp")} />,
 		"sub-agents": () => (
 			<SourceFolder
 				workspaceId={workspaceId}

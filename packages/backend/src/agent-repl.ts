@@ -49,6 +49,7 @@ import { SupervisedAgents } from "./agent-threads.ts";
 import { BridgedHost, type Desktop, desktopServer } from "./desktop-bridge.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
+import { ConvexMcpRegistry } from "./mcp-registry.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
@@ -196,6 +197,7 @@ export async function workspaceExtensions(
 						}),
 			}),
 			policy: permissions.rules,
+			registry: new ConvexMcpRegistry(workspaceId, connect),
 		}),
 		llmExtension(llmHost),
 		semanticExtension(semanticHost),

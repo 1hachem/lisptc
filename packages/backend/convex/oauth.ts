@@ -88,6 +88,34 @@ export const pendingFor = query({
 	},
 });
 
+function hasTokens(record: string): boolean {
+	try {
+		return (JSON.parse(record) as { tokens?: unknown }).tokens != null;
+	} catch {
+		return false;
+	}
+}
+
+export const signedIn = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.array(v.string()),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const scoped = `${workspaceId}/`;
+		const rows = await ctx.db
+			.query("oauthRecords")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(MAX_OAUTH_RECORDS);
+		return rows
+			.filter((row) => hasTokens(row.record))
+			.map((row) =>
+				row.serverKey.startsWith(scoped)
+					? row.serverKey.slice(scoped.length)
+					: row.serverKey,
+			);
+	},
+});
+
 export const remove = mutation({
 	args: { workspaceId: v.id("workspaces"), serverKey: v.string() },
 	returns: v.boolean(),
