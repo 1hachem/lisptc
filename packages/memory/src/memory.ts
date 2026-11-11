@@ -188,6 +188,7 @@ const DECLARED_MEMORIES = "*memories*";
 const DECLARED_AREAS = "*areas*";
 
 const DECLARED = "memory/declared";
+const BUILT_BODY = "memory/built-body";
 const DECLARE = `
 (setq memory
   (macro (key &rest declared)
@@ -215,7 +216,11 @@ function withBody(interp: Interp, declared: unknown): unknown {
 	const parts = listToArray(declared as List);
 	const body = parts.at(-1);
 	if (parts.length < 2 || !(body instanceof Cell)) return declared;
-	return arrayToList([...parts.slice(0, -1), runSync(interp, str(body))]);
+	const built = newSym(BUILT_BODY);
+	runSync(interp, `(progn (setq ${BUILT_BODY} ${str(body)}) ${DECLARED})`);
+	const text = interp.getGlobal(built);
+	interp.defineGlobal(built, null);
+	return arrayToList([...parts.slice(0, -1), text]);
 }
 
 function declaredIn(interp: Interp, name: string): unknown[] {
@@ -1071,6 +1076,10 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.channels);
 	interp.defineGlobal(newSym(DECLARED), Unspecified);
+	interp.defineGlobal(newSym(BUILT_BODY), null, {
+		signature: BUILT_BODY,
+		doc: "Where a built-in memory's body lands while it is evaluated, so the evaluation reports nothing in a step.",
+	});
 	interp.setDoc(DECLARED, {
 		signature: DECLARED,
 		doc: "What a memory or area declaration returns: nothing, so declaring one reports nothing.",
