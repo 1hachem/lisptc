@@ -82,7 +82,7 @@ function StatusBarList() {
 	const { order, shown, reorder, toggle } = useStatusBarOrder();
 	const { motion } = useSidebarMotion();
 	return (
-		<div {...anchorOf("right/status-bar")} className="px-4 text-[11.5px]">
+		<div {...anchorOf("preferences/status-bar")} className="px-4 text-[11.5px]">
 			<SortableTree order={order} onReorder={reorder} motion={motion}>
 				{(item) =>
 					isGap(item) ? (
@@ -140,7 +140,10 @@ function SidebarList() {
 			motion={motion}
 			overlay={(entry) => <EntryDragged entry={entry} />}
 		>
-			<div className="grid grid-cols-2 gap-4 px-4 text-[11.5px]">
+			<div
+				{...anchorOf("preferences/sidebar")}
+				className="grid grid-cols-2 gap-4 px-4 text-[11.5px]"
+			>
 				{(["left", "right"] as const).map((side) => (
 					<div key={side} className="flex min-w-0 flex-col gap-1">
 						<span className="text-dim">{side}</span>
@@ -174,7 +177,7 @@ function ThemeList({ open }: { open: boolean }) {
 
 	return (
 		<div
-			{...anchorOf("right/theme")}
+			{...anchorOf("preferences/theme")}
 			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 		>
 			{shown.map((candidate) => {
@@ -210,7 +213,7 @@ function FontList() {
 	const { font, chooseFont } = useAppearance();
 	return (
 		<div
-			{...anchorOf("right/font")}
+			{...anchorOf("preferences/font")}
 			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 		>
 			{fonts.map((candidate) => {
@@ -241,7 +244,7 @@ function PanelMotionToggle() {
 	const { panelMotion, setPanelMotion } = usePanelMotion();
 	return (
 		<div
-			{...anchorOf("right/motion")}
+			{...anchorOf("preferences/motion")}
 			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 		>
 			{[true, false].map((on) => {
@@ -294,7 +297,7 @@ function DeveloperToggles() {
 	const { traceLink, setTraceLink } = useTraceLink();
 	return (
 		<div
-			{...anchorOf("right/developer")}
+			{...anchorOf("preferences/developer")}
 			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 		>
 			<OnOffToggle
@@ -312,7 +315,7 @@ function DesktopToggles() {
 	if (settings === undefined) return null;
 	return (
 		<div
-			{...anchorOf("right/desktop")}
+			{...anchorOf("preferences/desktop")}
 			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 		>
 			<OnOffToggle
@@ -333,7 +336,7 @@ function MotionList() {
 	const { motion, chooseMotion } = useSidebarMotion();
 	return (
 		<div
-			{...anchorOf("right/motion")}
+			{...anchorOf("preferences/motion")}
 			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 		>
 			{motions.map((candidate) => {
@@ -365,7 +368,7 @@ export function PreferenceSections() {
 				metadata
 			</div>
 			<div
-				{...anchorOf("right/metadata")}
+				{...anchorOf("preferences/metadata")}
 				className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 			>
 				{META_FIELDS.map((field) => (
@@ -376,7 +379,7 @@ export function PreferenceSections() {
 				input
 			</div>
 			<div
-				{...anchorOf("right/input")}
+				{...anchorOf("preferences/input")}
 				className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 			>
 				{INPUT_HELPERS.map((helper) => (

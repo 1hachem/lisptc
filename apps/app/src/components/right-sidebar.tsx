@@ -1,4 +1,5 @@
 import { Sidebar, SidebarContent, SidebarRail, useSidebar } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { EntryRail } from "./entry-rail.tsx";
 import { WorkspaceTree } from "./workspace-tree.tsx";
@@ -19,7 +20,10 @@ export function RightSidebar() {
 					<EntryRail side="right" />
 				)}
 			</SidebarContent>
-			<SidebarRail className="hover:after:bg-transparent" />
+			<SidebarRail
+				{...anchorOf("right/toggle")}
+				className="hover:after:bg-transparent"
+			/>
 		</Sidebar>
 	);
 }

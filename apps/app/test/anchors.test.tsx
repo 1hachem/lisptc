@@ -92,7 +92,7 @@ describe("a control nobody can point at", () => {
 			<a id="label">not a link</a>
 			<input id="hidden" type="hidden" />
 			<button id="marked" data-anchor="composer/send">x</button>
-			<div data-anchor="right/theme"><button id="inside">x</button></div>
+			<div data-anchor="preferences/theme"><button id="inside">x</button></div>
 		`);
 		expect(unpointable(host).map((element) => element.id)).toEqual([
 			"bare",

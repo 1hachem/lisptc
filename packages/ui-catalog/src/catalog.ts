@@ -159,8 +159,7 @@ export type SidebarFolder = (typeof SIDEBAR_FOLDERS)[number];
 
 export type AnchorLocation =
 	| { kind: "shell" }
-	| { kind: "sidebar" }
-	| { kind: "right" }
+	| { kind: "sidebar"; folder?: SidebarFolder }
 	| { kind: "chat" }
 	| { kind: "folder"; folder: SidebarFolder }
 	| { kind: "page"; page: PageId };
@@ -173,12 +172,16 @@ const SHELL: AnchorLocation = { kind: "shell" };
 
 const SIDEBAR: AnchorLocation = { kind: "sidebar" };
 
-const RIGHT: AnchorLocation = { kind: "right" };
-
 const CHAT: AnchorLocation = { kind: "chat" };
+
+const PREFERENCES: AnchorLocation = { kind: "page", page: "preferences" };
 
 function inFolder(folder: SidebarFolder): AnchorLocation {
 	return { kind: "folder", folder };
+}
+
+function onFolder(folder: SidebarFolder): AnchorLocation {
+	return { kind: "sidebar", folder };
 }
 
 export const anchors = {
@@ -191,7 +194,7 @@ export const anchors = {
 	home: anchor("sidebar entry home", SHELL),
 	"new-chat": anchor("sidebar entry new_chat: start chat", SHELL),
 	chats: anchor("sidebar folder chat: past chats", SHELL),
-	"chats/new": anchor("+ on chat folder: new chat", SIDEBAR),
+	"chats/new": anchor("+ on chat folder: new chat", onFolder("chat")),
 	"chats/search": anchor("search box in chat folder", inFolder("chat")),
 	"chats/item": anchor("chat in chat folder, click opens it", inFolder("chat")),
 	"chats/menu": anchor(
@@ -214,14 +217,20 @@ export const anchors = {
 	onboarding: anchor("sidebar folder onboarding: app walkthroughs", SHELL),
 	permissions: anchor("sidebar folder permissions: what agent may call", SHELL),
 	knowledge: anchor("sidebar folder knowledge: files user uploaded", SHELL),
-	"knowledge/upload": anchor("+ on knowledge folder: upload files", SIDEBAR),
+	"knowledge/upload": anchor(
+		"+ on knowledge folder: upload files",
+		onFolder("knowledge"),
+	),
 	attachments: anchor("sidebar folder attachments: files sent in chat", SHELL),
 	bin: anchor("sidebar folder bin: deleted files", SHELL),
 	"sub-agents": anchor("sidebar folder sub-agents", SHELL),
-	triggers: anchor("sidebar folder triggers, not ready yet", SIDEBAR),
-	tasks: anchor("sidebar folder tasks, not ready yet", SIDEBAR),
-	ui: anchor("sidebar folder ui, not ready yet", SIDEBAR),
-	tests: anchor("sidebar folder tests, not ready yet", SIDEBAR),
+	triggers: anchor(
+		"sidebar folder triggers, not ready yet",
+		onFolder("triggers"),
+	),
+	tasks: anchor("sidebar folder tasks, not ready yet", onFolder("tasks")),
+	ui: anchor("sidebar folder ui, not ready yet", onFolder("ui")),
+	tests: anchor("sidebar folder tests, not ready yet", onFolder("tests")),
 	"files/search": anchor("search box in file folder", inFolder("knowledge")),
 	"files/item": anchor(
 		"file in file folder, click opens it",
@@ -245,21 +254,33 @@ export const anchors = {
 	account: anchor("gear at bottom of sidebar", SHELL, "account"),
 	"sign-out": anchor("sign out, beside user name; click twice", SHELL),
 	"right/toggle": anchor(
-		"right edge of app: open or close quick preferences",
+		"right edge of app: open or close right sidebar",
 		SHELL,
 	),
-	"right/sections": anchor(
-		"icons on right edge: quick preference sections",
-		SHELL,
+	"preferences/input": anchor("preferences: message box helpers", PREFERENCES),
+	"preferences/status-bar": anchor(
+		"preferences: what bottom bar shows",
+		PREFERENCES,
 	),
-	"right/input": anchor("quick preferences: message box helpers", RIGHT),
-	"right/status-bar": anchor("quick preferences: what bottom bar shows", RIGHT),
-	"right/theme": anchor("quick preferences: theme", RIGHT),
-	"right/font": anchor("quick preferences: font", RIGHT),
-	"right/motion": anchor("quick preferences: animation", RIGHT),
-	"right/metadata": anchor("quick preferences: details under answers", RIGHT),
-	"right/developer": anchor("quick preferences: developer switches", RIGHT),
-	"right/desktop": anchor("quick preferences: desktop app switches", RIGHT),
+	"preferences/sidebar": anchor(
+		"preferences: which entries sit on which sidebar",
+		PREFERENCES,
+	),
+	"preferences/theme": anchor("preferences: theme", PREFERENCES),
+	"preferences/font": anchor("preferences: font", PREFERENCES),
+	"preferences/motion": anchor("preferences: animation", PREFERENCES),
+	"preferences/metadata": anchor(
+		"preferences: details under answers",
+		PREFERENCES,
+	),
+	"preferences/developer": anchor(
+		"preferences: developer switches",
+		PREFERENCES,
+	),
+	"preferences/desktop": anchor(
+		"preferences: desktop app switches",
+		PREFERENCES,
+	),
 	composer: anchor("box where user types message", CHAT),
 	"composer/send": anchor("send button in message box", CHAT),
 	"composer/stop": anchor("stop button, while agent works", CHAT),
@@ -272,10 +293,6 @@ export const anchors = {
 	"composer/menu": anchor("menu typing / or @ opens", CHAT),
 	"composer/question": anchor(
 		"choices in place of message box when you ask",
-		CHAT,
-	),
-	"chat/trace": anchor(
-		"button on chat tab: trace of agent steps beside chat",
 		CHAT,
 	),
 	"chat/trace-resize": anchor("handle between chat and trace: drag", CHAT),

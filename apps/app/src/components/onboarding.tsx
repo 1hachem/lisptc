@@ -4,7 +4,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { type AnchorId, anchors, isAnchor, isPage } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import type { FunctionReturnType } from "convex/server";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import {
 	anchorElement,
@@ -14,6 +14,8 @@ import {
 import { postMessage } from "../lib/chat.tsx";
 import { NEW_CHAT, type PanelContent, panelTab } from "../lib/panel-ops.ts";
 import { requestPanelOps } from "../lib/panel-requests.ts";
+import { usePreferences } from "../lib/preferences.ts";
+import { sidebarView } from "../lib/sidebar-order.ts";
 import { pageContent, reveal } from "../lib/tour-layout.ts";
 import { useUI } from "../lib/ui.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
@@ -49,17 +51,20 @@ function openChat(): void {
 
 function useReveal({ page, anchor }: { page?: string; anchor?: string }): void {
 	const { setLeftOpen, setRightOpen } = useUI();
+	const stored = usePreferences();
+	const { sides } = useMemo(() => sidebarView(stored ?? {}), [stored]);
 	useEffect(() => {
 		if (page !== undefined && isPage(page)) openBeside(pageContent(page));
 		if (anchor === undefined || !isAnchor(anchor)) return;
 		reveal(anchors[anchor].location, {
-			openSidebar: () => setLeftOpen(true),
-			openRight: () => setRightOpen(true),
+			sideOf: (folder) => (sides.right.includes(folder) ? "right" : "left"),
+			openSidebar: (side) =>
+				side === "right" ? setRightOpen(true) : setLeftOpen(true),
 			openChat,
 			openFolder,
 			openPage: openBeside,
 		});
-	}, [page, anchor, setLeftOpen, setRightOpen]);
+	}, [page, anchor, sides, setLeftOpen, setRightOpen]);
 }
 
 function useReportMissing(anchor: AnchorId | undefined, gaveUp: boolean) {

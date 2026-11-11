@@ -49,11 +49,11 @@ describe("the tour callout", () => {
 });
 
 describe("revealing an anchor", () => {
-	function recorder() {
+	function recorder(onRight: readonly string[] = []) {
 		const calls: string[] = [];
 		const revealer: Revealer = {
-			openSidebar: () => calls.push("sidebar"),
-			openRight: () => calls.push("right"),
+			sideOf: (folder) => (onRight.includes(folder) ? "right" : "left"),
+			openSidebar: (side) => calls.push(`sidebar:${side}`),
 			openChat: () => calls.push("chat"),
 			openFolder: (folder) => calls.push(`folder:${folder}`),
 			openPage: (content: PanelContent) =>
@@ -71,15 +71,25 @@ describe("revealing an anchor", () => {
 	it("opens the sidebar and the folder for one inside a folder", () => {
 		const { calls, revealer } = recorder();
 		reveal({ kind: "folder", folder: "knowledge" }, revealer);
-		expect(calls).toEqual(["sidebar", "folder:knowledge"]);
+		expect(calls).toEqual(["sidebar:left", "folder:knowledge"]);
 	});
 
-	it("opens what hides one in the sidebar, the right sidebar or a chat", () => {
-		const { calls, revealer } = recorder();
+	it("opens the right sidebar for a folder the user put there", () => {
+		const { calls, revealer } = recorder(["memories", "tests"]);
+		reveal({ kind: "folder", folder: "memories" }, revealer);
+		reveal({ kind: "sidebar", folder: "tests" }, revealer);
+		expect(calls).toEqual([
+			"sidebar:right",
+			"folder:memories",
+			"sidebar:right",
+		]);
+	});
+
+	it("opens what hides one in the left sidebar or a chat", () => {
+		const { calls, revealer } = recorder(["chat"]);
 		reveal({ kind: "sidebar" }, revealer);
-		reveal({ kind: "right" }, revealer);
 		reveal({ kind: "chat" }, revealer);
-		expect(calls).toEqual(["sidebar", "right", "chat"]);
+		expect(calls).toEqual(["sidebar:left", "chat"]);
 	});
 
 	it("opens the page for one on a page", () => {

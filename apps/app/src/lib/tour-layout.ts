@@ -5,6 +5,7 @@ import {
 	type SidebarFolder,
 } from "@repo/ui-catalog";
 import type { PanelContent } from "./panel-ops.ts";
+import type { SidebarSide } from "./sidebar-order.ts";
 
 export interface Box {
 	top: number;
@@ -90,8 +91,8 @@ export function pageContent(page: PageId): PanelContent {
 }
 
 export interface Revealer {
-	openSidebar(): void;
-	openRight(): void;
+	sideOf(folder: SidebarFolder): SidebarSide;
+	openSidebar(side: SidebarSide): void;
 	openChat(): void;
 	openFolder(folder: SidebarFolder): void;
 	openPage(content: PanelContent): void;
@@ -102,16 +103,17 @@ export function reveal(location: AnchorLocation, revealer: Revealer): void {
 		case "shell":
 			return;
 		case "sidebar":
-			revealer.openSidebar();
-			return;
-		case "right":
-			revealer.openRight();
+			revealer.openSidebar(
+				location.folder === undefined
+					? "left"
+					: revealer.sideOf(location.folder),
+			);
 			return;
 		case "chat":
 			revealer.openChat();
 			return;
 		case "folder":
-			revealer.openSidebar();
+			revealer.openSidebar(revealer.sideOf(location.folder));
 			revealer.openFolder(location.folder);
 			return;
 		case "page":

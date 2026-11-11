@@ -146,7 +146,14 @@ describe("an anchor's location", () => {
 			kind: "folder",
 			folder: "chat",
 		});
-		expect(anchors["knowledge/upload"].location).toEqual({ kind: "sidebar" });
+		expect(anchors["knowledge/upload"].location).toEqual({
+			kind: "sidebar",
+			folder: "knowledge",
+		});
+		expect(anchors["preferences/theme"].location).toEqual({
+			kind: "page",
+			page: "preferences",
+		});
 	});
 
 	it("is told to the agent in a few words", () => {
