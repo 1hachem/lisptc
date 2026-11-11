@@ -330,6 +330,7 @@ async function* evaluateStep(
 		meta: stepMeta(startedAt, reply.usage, ran),
 	};
 	transcript.push({ role: "assistant", content: code });
+	repl.seed(said(transcript), turn.steps);
 
 	const evalStartedAt = Date.now();
 	const { output, display, error, effects, notes, failed, held, results } =

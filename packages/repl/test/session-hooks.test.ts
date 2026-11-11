@@ -1,5 +1,5 @@
 import type { Channels } from "@repo/interpreter/channels";
-import { ends } from "@repo/interpreter/effects";
+import { effect, ends } from "@repo/interpreter/effects";
 import { journal } from "@repo/interpreter/journal";
 import {
 	type AgentTurn,
@@ -70,9 +70,16 @@ describe("an extension hooking the session", () => {
 		expect(await r.eval("(nope)")).toBe("nope\n");
 	});
 
-	it("decides that a step ended the turn", async () => {
+	it("lets a step end the turn", async () => {
 		const r = new AgentRepl({
-			extensions: [extension((hooks) => hooks.answered.use(() => true))],
+			extensions: [
+				extension((hooks) =>
+					hooks.evalStep.use(async (ctx, next) => {
+						await next(ctx);
+						effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+					}),
+				),
+			],
 		});
 
 		const out = await r.evalOutput('(echo "hi")');

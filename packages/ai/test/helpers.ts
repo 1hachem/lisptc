@@ -42,9 +42,11 @@ export function extension(
 }
 
 const answersOnForms = extension((hooks) =>
-	hooks.answered.use((ctx, out, next) =>
-		ctx.code.includes("(") ? next(ctx, out) : true,
-	),
+	hooks.evalStep.use((ctx, next) => {
+		if (!ctx.code.includes("("))
+			effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+		return next(ctx);
+	}),
 );
 
 export function reporting(text: string): InterpExtension {
