@@ -433,6 +433,7 @@ export class MemoryBank {
 	private declarations:
 		| { memories: ReadonlyMap<string, Memory>; areas: readonly AreaGate[] }
 		| undefined;
+	private loadingBuiltins = false;
 	private runtime: State<readonly Memory[] | undefined> =
 		detachedState(undefined);
 
@@ -490,7 +491,21 @@ export class MemoryBank {
 	} {
 		if (this.declarations !== undefined) return this.declarations;
 		const interp = this.declaredIn;
-		if (interp === undefined) return { memories: new Map(), areas: [] };
+		if (interp === undefined || this.loadingBuiltins)
+			return { memories: new Map(), areas: [] };
+		this.loadingBuiltins = true;
+		try {
+			this.declarations = this.loadBuiltins(interp);
+		} finally {
+			this.loadingBuiltins = false;
+		}
+		return this.declarations;
+	}
+
+	private loadBuiltins(interp: Interp): {
+		memories: ReadonlyMap<string, Memory>;
+		areas: readonly AreaGate[];
+	} {
 		interp.defineGlobal(newSym(DECLARED_MEMORIES), null);
 		interp.defineGlobal(newSym(DECLARED_AREAS), null);
 		for (const source of interp.builtinMemories()) runSync(interp, source);
@@ -516,8 +531,7 @@ export class MemoryBank {
 				throw new EvalException("two areas share this name", gate.name);
 			areas.set(gate.name, gate);
 		}
-		this.declarations = { memories, areas: [...areas.values()] };
-		return this.declarations;
+		return { memories, areas: [...areas.values()] };
 	}
 
 	isBuiltin(memory: Memory): boolean {
