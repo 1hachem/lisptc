@@ -26,9 +26,9 @@ function opaque(): InterpExtension {
 function breaking(): InterpExtension {
 	return Object.assign((_: Interp) => {}, {
 		session(hooks: SessionHooks): void {
-			hooks.stepOutput.use((ctx, out, next) => {
+			hooks.evalStep.use(async (ctx, next) => {
+				await next(ctx);
 				if (ctx.code.includes("boom")) throw new Error("host broke");
-				return next(ctx, out);
 			});
 		},
 	});

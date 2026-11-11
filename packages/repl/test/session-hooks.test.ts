@@ -41,19 +41,20 @@ describe("an extension hooking the session", () => {
 		expect(seen).toEqual(["before (+ 1 1)", "after"]);
 	});
 
-	it("adds to what the model is shown, beside what the human read", async () => {
+	it("hands over what an extension noted during a step, beside what the human read", async () => {
 		const r = new MemoryRepl({
 			extensions: [
 				extension((hooks) => {
-					hooks.stepOutput.use((ctx, out, next) =>
-						next(ctx, { ...out, model: `${out.model}and one more thing\n` }),
-					);
+					hooks.evalStep.use(async (ctx, next) => {
+						await next(ctx);
+						ctx.interp.conversation.append("test", "and one more thing");
+					});
 				}),
 			],
 		});
 
-		const { model, user } = await r.evalOutput('(echo "hi")');
-		expect(model).toBe("and one more thing\n");
+		const { notes, user } = await r.evalOutput('(echo "hi")');
+		expect(notes.map((n) => n.content)).toEqual(["and one more thing"]);
 		expect(user).toBe("hi\n");
 	});
 

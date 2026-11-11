@@ -439,10 +439,10 @@ export class MemoryRepl implements InMemoryRepl {
 		}
 		const { skipped, failed, held } = partition(buffer.collect(note));
 		const holding = held.map((n) => `held: ${n.text}\n`).join("");
-		const bounded = this.hooks.stepOutput.run((_c, out) => out, ctx, {
+		const bounded: Bounded = {
 			model: buffer.collectText("model"),
 			user: buffer.collectText("user"),
-		});
+		};
 		const error = this.errorOf(ctx, thrown, failed);
 		const carriedError = this.errorOf(ctx, carriedThrown, failed);
 		const message = this.hooks.message.run(noOpinion, buffer);
