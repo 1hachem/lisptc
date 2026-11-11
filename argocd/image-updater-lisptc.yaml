@@ -27,3 +27,9 @@ spec:
             helm:
               name: convexDeploy.image.repository
               tag: convexDeploy.image.tag
+        - alias: mcp-operator
+          imageName: ghcr.io/1hachem/lisptc-mcp-operator
+          manifestTargets:
+            helm:
+              name: mcpOperator.image.repository
+              tag: mcpOperator.image.tag

@@ -7,8 +7,7 @@
     "node": ">=22.6.0"
   },
   "exports": {
-    ".": "./src/toolkit.ts",
-    "./mcp.toolkit.json": "./mcp.toolkit.json"
+    ".": "./src/toolkit.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

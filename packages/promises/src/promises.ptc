@@ -5,6 +5,9 @@ semantics: settles once, keeps result, awaiting twice gives same answer,
 familiar combinators.
 - (await promise [timeout-ms]) wait, return value, re-raise error. Settled
   promise returns at once.
+  Await gives up after default timeout. Timed out "while the work kept
+  running": nothing failed, it names what work is doing, so await same
+  promise again.
 - (promise-all promises) one promise for every value, in order; rejects when
   any does.
 - (promise-all-settled promises) one promise for each outcome,

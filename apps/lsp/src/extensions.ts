@@ -12,7 +12,6 @@ import { introspectionHost } from "@repo/introspection-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
-import { LocalProcessHost } from "@repo/mcp-extension/local-host";
 import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { FileOAuthStore } from "@repo/mcp-extension/oauth-host";
 import { memoryExtension } from "@repo/memory-extension";
@@ -54,10 +53,7 @@ export function sessionExtensions(): InterpExtension[] {
 		agentsExtension(agentsHostFor()),
 		intentExtension(intentHost),
 		mcpExtension({
-			...mcpHostFor({
-				host: new LocalProcessHost(),
-				oauth: new FileOAuthStore(),
-			}),
+			...mcpHostFor({ oauth: new FileOAuthStore() }),
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),

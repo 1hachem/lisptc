@@ -7,6 +7,13 @@ It holds what is true repo-wide. **Every workspace carries an `AGENTS.md` of its
 own**, with its shape and the rules that govern it. Read that one before working
 in a package, and put a rule that belongs to one package there, not here.
 
+## Build it clean, or stop and say so
+
+Always build code cleanly, modularly, and with proper architecture and
+separation of concerns. Never bolt a feature on just because it was asked for.
+If there is no easy way to build it naturally, and you would recommend a
+refactor to make the whole thing clean, stop before doing the work and say so.
+
 ## The code is the only source of truth
 
 These files hold rules: how things are interfaced, which way dependencies run,
@@ -139,6 +146,7 @@ Everything else:
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
 - `packages/models` (`@repo/models`) — how the code reaches a model vendor: the chat providers and the System One models.
+- `packages/containers` (`@repo/containers`) — how a toolkit entry runs as a container, and the docker runner the MCP hosts and the desktop share.
 - `packages/desktop-protocol` (`@repo/desktop-protocol`) — the wire between the desktop app and the app server.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/ui-catalog` (`@repo/ui-catalog`) — the widgets a view may hold, which the UI extension builds against and the frontend draws against.
@@ -161,6 +169,7 @@ Everything else:
 - `apps/lsp` (`@lisptc/lsp`) — a language server for the lisptc dialect.
 - `apps/mcp` (`@lisptc/mcp-repl`) — an MCP server exposing the REPL to an MCP client.
 - `apps/mcp-toolkit` (`@lisptc/mcp-toolkit`) — the MCP servers we write ourselves, pointing outward.
+- `apps/mcp-operator` (`@lisptc/mcp-operator`) — the controller that runs each `McpServer` on the cluster.
 - `apps/trace-viewer` (`@lisptc/trace-viewer`) — a viewer for eval runs, and the home of the eval cases and their concrete hosts.
 
 ## Dependency flow
@@ -420,7 +429,8 @@ The remote Turbo cache is shared, and `turbo.json` is where it is named. Its
 token is a secret like any other, kept at the `/turbo` Infisical path.
 
 Runtime requires **Node >= 22.6.0**, and `.ts` files run directly with no build
-step. `.github/workflows/` holds the CI jobs and the order their checks run in,
+step. A package or app that does need a build bundles it with esbuild, and only
+`apps/app`, whose frontend vite builds, takes another bundler. `.github/workflows/` holds the CI jobs and the order their checks run in,
 `.husky/` what a commit and a push have to satisfy first. A check that fails
 there fails the same way locally, under the command it names.
 

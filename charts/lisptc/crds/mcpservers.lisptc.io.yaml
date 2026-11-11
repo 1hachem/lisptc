@@ -1,0 +1,88 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcpservers.lisptc.io
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false,ServerSideApply=true
+spec:
+  group: lisptc.io
+  scope: Namespaced
+  names:
+    kind: McpServer
+    plural: mcpservers
+    singular: mcpserver
+    shortNames: [mcps]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - { name: Workspace, type: string, jsonPath: .spec.workspace }
+        - { name: Server, type: string, jsonPath: .spec.server }
+        - { name: Phase, type: string, jsonPath: .status.phase }
+        - { name: Reason, type: string, jsonPath: .status.reason, priority: 1 }
+        - { name: Age, type: date, jsonPath: .metadata.creationTimestamp }
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [workspace, server, restarts, lastUsed, idleSeconds]
+              x-kubernetes-validations:
+                - rule: "has(self.mcp) != has(self.remote)"
+                  message: an McpServer runs either a container (mcp) or a remote server (remote), and exactly one of them
+                - rule: "!has(self.remote) || !has(self.app)"
+                  message: a remote McpServer runs no app beside it
+              properties:
+                workspace: { type: string, minLength: 1 }
+                server: { type: string, minLength: 1 }
+                restarts: { type: integer, minimum: 0 }
+                lastUsed: { type: integer, minimum: 0 }
+                idleSeconds: { type: integer, minimum: 1 }
+                remote:
+                  type: object
+                  required: [url]
+                  properties:
+                    url: { type: string, pattern: "^https?://" }
+                mcp:
+                  type: object
+                  required: [image, args, port, path, resources]
+                  properties:
+                    image: { type: string, minLength: 1 }
+                    args: { type: array, items: { type: string } }
+                    port: { type: integer, minimum: 1, maximum: 65535 }
+                    path: { type: string, pattern: "^/" }
+                    secret: { type: string, pattern: "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", maxLength: 253 }
+                    resources: &resources
+                      type: object
+                      required: [requests, limits]
+                      properties:
+                        requests: &amounts
+                          type: object
+                          properties:
+                            cpu: { type: string }
+                            memory: { type: string }
+                        limits: *amounts
+                app:
+                  type: object
+                  required: [image, args, ports, expose, resources]
+                  properties:
+                    image: { type: string, minLength: 1 }
+                    args: { type: array, items: { type: string } }
+                    ports:
+                      type: array
+                      items:
+                        type: object
+                        required: [name, port]
+                        properties:
+                          name: { type: string, pattern: "^[a-z]([a-z0-9-]*[a-z0-9])?$", maxLength: 15 }
+                          port: { type: integer, minimum: 1, maximum: 65535 }
+                    expose: { type: array, items: { type: string } }
+                    resources: *resources
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true

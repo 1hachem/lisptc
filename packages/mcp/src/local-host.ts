@@ -1,27 +1,42 @@
 import { spawn } from "node:child_process";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import {
+	reachable,
+	START_LIMITS,
+	waitForStart,
+} from "@repo/containers/start-wait";
+import type { LaunchedEntry, RemoteEntry } from "@repo/toolkit";
 import type {
 	ConnConfig,
 	McpHost,
+	McpTransport,
 	ServerHandle,
+	ServerRef,
+	ServerReporter,
 	ServerState,
+	StartWatch,
 } from "./ports.ts";
+import {
+	type ReportedTransport,
+	reportedTransport,
+} from "./reported-transport.ts";
 
-const START_TIMEOUT_MS = 60_000;
-const POLL_MS = 250;
 const STDERR_KEEP = 4096;
 
 interface LocalServer {
 	child: ReturnType<typeof spawn>;
 	stderr: string;
+	exited: boolean;
+	ready: boolean;
 }
 
-async function reachable(url: string): Promise<boolean> {
-	try {
-		await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(2000) });
-		return true;
-	} catch {
-		return false;
-	}
+interface Piped {
+	readonly key: string;
+	readonly reported: ReportedTransport;
+}
+
+function launched(conf: ConnConfig): conf is LaunchedEntry {
+	return "url" in conf && "command" in conf;
 }
 
 function whyItDied(server: LocalServer): string {
@@ -31,67 +46,148 @@ function whyItDied(server: LocalServer): string {
 
 export class LocalProcessHost implements McpHost {
 	private readonly started = new Map<string, LocalServer>();
+	private readonly piped = new Set<Piped>();
 
-	async ensure(conf: ConnConfig): Promise<ServerHandle | undefined> {
-		if (!("url" in conf)) return undefined;
+	constructor(private readonly report: ServerReporter = () => {}) {}
+
+	async ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle> {
+		if ("image" in conf && conf.app)
+			throw new Error(
+				`${conf.name}: runs an app beside it, which needs a container host (docker or kubernetes), not a local process.`,
+			);
+		if (!("url" in conf)) return this.pipe(conf);
+		if (!launched(conf))
+			throw new Error(`${conf.name}: is a remote server, not a local one.`);
 		const handle: ServerHandle = conf.headers
 			? { url: conf.url, headers: conf.headers }
 			: { url: conf.url };
-		if (!conf.command) return handle;
+		const known = this.started.get(conf.name)?.ready === true;
+		try {
+			const ready = await this.start(conf, handle, watch);
+			if (!known) this.report({ server: conf.name, phase: "ready" });
+			return ready;
+		} catch (ex) {
+			this.report({
+				server: conf.name,
+				phase: "failed",
+				reason: ex instanceof Error ? ex.message : String(ex),
+			});
+			throw ex;
+		}
+	}
+
+	private async start(
+		conf: LaunchedEntry,
+		handle: ServerHandle,
+		watch?: StartWatch,
+	): Promise<ServerHandle> {
 		const origin = new URL(conf.url).origin;
 		if (await reachable(origin)) return handle;
 		let server = this.started.get(conf.name);
-		if (!server || server.child.exitCode !== null) {
-			server = this.spawn(conf.command, conf.args, conf.env);
+		if (!server || server.exited) {
+			this.report({ server: conf.name, phase: "starting" });
+			server = this.spawn(conf);
 			this.started.set(conf.name, server);
 		}
-		const deadline = Date.now() + START_TIMEOUT_MS;
-		while (Date.now() < deadline) {
-			if (await reachable(origin)) return handle;
-			if (server.child.exitCode !== null) {
-				this.started.delete(conf.name);
-				throw new Error(
-					`${conf.name}: its server exited with code ${server.child.exitCode} before ${origin} answered.${whyItDied(server)}`,
-				);
-			}
-			await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-		}
-		throw new Error(
-			`${conf.name}: started its server but ${origin} did not answer within ${START_TIMEOUT_MS / 1000}s.${whyItDied(server)}`,
+		const started = server;
+		await waitForStart(
+			async () => {
+				if (await reachable(origin)) return { ready: undefined };
+				if (started.exited) {
+					if (this.started.get(conf.name) === started)
+						this.started.delete(conf.name);
+					throw new Error(
+						`${conf.name}: its server exited with code ${started.child.exitCode} before ${origin} answered.${whyItDied(started)}`,
+					);
+				}
+				return { waiting: `${conf.name} is waiting for ${origin} to answer` };
+			},
+			START_LIMITS.process,
+			({ seconds }) =>
+				new Error(
+					`${conf.name}: started its server but ${origin} did not answer within ${seconds}s.${whyItDied(started)}`,
+				),
+			watch,
 		);
+		started.ready = true;
+		return handle;
 	}
 
-	async stop(name: string): Promise<void> {
-		const server = this.started.get(name);
-		if (!server) return;
+	private pipe(conf: Exclude<ConnConfig, RemoteEntry>): ServerHandle {
+		if (conf.command === undefined)
+			throw new Error(
+				`${conf.name}: runs as a container image and the host started none`,
+			);
+		const { command, args, env } = conf;
+		const server = { name: conf.name };
+		return {
+			transport: () => {
+				const stdio = new StdioClientTransport({
+					command,
+					args: args ?? [],
+					env: {
+						// biome-ignore lint/style/noProcessEnv: the child inherits the whole environment, no value is read here
+						...(process.env as Record<string, string>),
+						...(env ?? {}),
+					},
+				});
+				const piped: Piped = {
+					key: server.name,
+					reported: reportedTransport(
+						server,
+						stdio as unknown as McpTransport,
+						this.report,
+						() => this.piped.delete(piped),
+					),
+				};
+				this.piped.add(piped);
+				return piped.reported.transport;
+			},
+		};
+	}
+
+	async stop(server: ServerRef): Promise<void> {
+		if (await this.drop(server))
+			this.report({ server: server.name, phase: "sleeping" });
+	}
+
+	private async drop(ref: ServerRef): Promise<boolean> {
+		const server = this.started.get(ref.name);
+		if (!server) return false;
+		this.started.delete(ref.name);
 		const { pid } = server.child;
 		try {
 			if (pid !== undefined) process.kill(-pid, "SIGTERM");
 		} catch {
 			server.child.kill("SIGTERM");
 		}
-		this.started.delete(name);
+		return true;
 	}
 
 	async stopAll(): Promise<void> {
-		for (const name of [...this.started.keys()]) await this.stop(name);
+		for (const name of [...this.started.keys()]) await this.stop({ name });
+		await Promise.all([...this.piped].map((piped) => piped.reported.end()));
 	}
 
-	status(name: string): ServerState {
-		const server = this.started.get(name);
+	status(ref: ServerRef): ServerState {
+		const key = ref.name;
+		for (const piped of this.piped) if (piped.key === key) return "running";
+		const server = this.started.get(ref.name);
 		if (!server) return "unknown";
-		return server.child.exitCode === null ? "running" : "stopped";
+		return server.exited ? "stopped" : "running";
 	}
 
-	logs(name: string): string {
-		return this.started.get(name)?.stderr ?? "";
+	logs(server: ServerRef): string {
+		return this.started.get(server.name)?.stderr ?? "";
 	}
 
-	private spawn(
-		command: string,
-		args?: string[],
-		env?: Record<string, string>,
-	): LocalServer {
+	used(_server: ServerRef): void {}
+
+	async asleep(_server: ServerRef): Promise<boolean> {
+		return false;
+	}
+
+	private spawn({ name, command, args, env }: LaunchedEntry): LocalServer {
 		const child = spawn(command, args ?? [], {
 			detached: true,
 			stdio: ["ignore", "ignore", "pipe"],
@@ -101,12 +197,27 @@ export class LocalProcessHost implements McpHost {
 				...(env ?? {}),
 			},
 		});
-		const server: LocalServer = { child, stderr: "" };
+		const server: LocalServer = {
+			child,
+			stderr: "",
+			exited: false,
+			ready: false,
+		};
 		child.stderr?.on("data", (chunk: Buffer) => {
 			server.stderr = (server.stderr + chunk.toString()).slice(-STDERR_KEEP);
 		});
 		child.on("error", (err) => {
 			server.stderr += `\n${err.message}`;
+		});
+		child.on("close", (code, signal) => {
+			server.exited = true;
+			if (!server.ready || this.started.get(name) !== server) return;
+			this.started.delete(name);
+			this.report({
+				server: name,
+				phase: "failed",
+				reason: `its process exited with ${signal ?? `code ${code}`}.${whyItDied(server)}`,
+			});
 		});
 		child.unref();
 		return server;

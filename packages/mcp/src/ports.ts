@@ -2,6 +2,13 @@ import type {
 	OAuthClientInformationFull,
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import type {
+	CommandEntry,
+	ImageEntry,
+	IssuerOAuth,
+	LaunchedEntry,
+	RemoteEntry,
+} from "@repo/toolkit";
 
 export interface JsonSchema {
 	type?: string;
@@ -31,45 +38,15 @@ export interface Tool {
 	icons?: Icon[];
 }
 
-export interface ConnMeta {
-	description?: string;
-	keywords?: string[];
-	icon?: string;
-}
+export type StdioConnConfig = CommandEntry & { local?: boolean };
 
-export type HttpConnConfig = ConnMeta & {
-	name: string;
-	url: string;
-	headers?: Record<string, string>;
-	oauth?: boolean;
-	scopes?: string[];
-	command?: string;
-	args?: string[];
-	env?: Record<string, string>;
-};
+export type ConnConfig =
+	| RemoteEntry
+	| LaunchedEntry
+	| ImageEntry
+	| StdioConnConfig;
 
-export type ContainerConnConfig = ConnMeta & {
-	name: string;
-	image: string;
-	port: number;
-	path?: string;
-	command?: string;
-	args?: string[];
-	headers?: Record<string, string>;
-	env?: Record<string, string>;
-	flags?: Record<string, string[]>;
-};
-
-export type StdioConnConfig = ConnMeta & {
-	name: string;
-	command: string;
-	args?: string[];
-	env?: Record<string, string>;
-	local?: boolean;
-	flags?: Record<string, string[]>;
-};
-
-export type ConnConfig = HttpConnConfig | ContainerConnConfig | StdioConnConfig;
+export type OAuthConnConfig = RemoteEntry | LaunchedEntry | ImageEntry;
 
 export interface ConnectResult {
 	serverId: string;
@@ -85,12 +62,13 @@ export interface ToolCall {
 }
 
 export interface McpClient {
-	connect(conf: ConnConfig, signal?: AbortSignal): Promise<ConnectResult>;
+	connect(conf: ConnConfig, watch?: StartWatch): Promise<ConnectResult>;
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
-	login(conf: HttpConnConfig): Promise<{ authUrl: string | null }>;
-	logout(conf: HttpConnConfig): Promise<void>;
-	authorize(conf: HttpConnConfig, code: string): Promise<void>;
+	asleep(serverId: string): Promise<boolean>;
+	login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }>;
+	logout(conf: OAuthConnConfig): Promise<void>;
+	authorize(conf: OAuthConnConfig, code: string): Promise<void>;
 	shutdown(): Promise<void>;
 }
 
@@ -130,12 +108,33 @@ export type ServerHandle = AddressHandle | TransportHandle;
 
 export type ServerState = "running" | "stopped" | "unknown";
 
+export interface ServerRef {
+	name: string;
+}
+
+export type ServerPhase = "starting" | "ready" | "sleeping" | "failed" | "gone";
+
+export interface ServerReport {
+	server: string;
+	phase: ServerPhase;
+	reason?: string;
+}
+
+export type ServerReporter = (report: ServerReport) => void;
+
+export interface StartWatch {
+	signal?: AbortSignal;
+	progress?: (note: string) => void;
+}
+
 export interface McpHost {
-	ensure(conf: ConnConfig): Promise<ServerHandle | undefined>;
-	stop(name: string): Promise<void>;
+	ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle>;
+	stop(server: ServerRef): Promise<void>;
 	stopAll(): Promise<void>;
-	status(name: string): ServerState;
-	logs(name: string): string;
+	status(server: ServerRef): ServerState;
+	logs(server: ServerRef): string;
+	used(server: ServerRef): void;
+	asleep(server: ServerRef): Promise<boolean>;
 }
 
 export interface UserMachine {
@@ -168,14 +167,23 @@ export interface PendingAuthorization {
 	state: string;
 	serverUrl: string;
 	scope?: string;
+	oauth?: IssuerOAuth;
 }
 
 export interface OAuthRecord {
 	clientInformation?: OAuthClientInformationFull;
 	tokens?: OAuthTokens;
+	expiresAt?: number;
 	codeVerifier?: string;
 	pending?: PendingAuthorization;
 }
+
+export interface OAuthClient {
+	client_id: string;
+	client_secret: string;
+}
+
+export type OAuthClients = Record<string, OAuthClient>;
 
 export interface OAuthStore {
 	load(serverKey: string): Promise<OAuthRecord | undefined>;

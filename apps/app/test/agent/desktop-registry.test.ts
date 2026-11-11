@@ -1,7 +1,6 @@
 import type { Id } from "@repo/backend/dataModel";
 import { BridgedHost } from "@repo/backend/desktop-bridge";
 import type { ServerMessage } from "@repo/desktop-protocol";
-import type { McpHost } from "@repo/mcp-extension/ports";
 import { describe, expect, it, vi } from "vitest";
 import {
 	type DesktopPeer,
@@ -207,24 +206,16 @@ describe("the desktop registry", () => {
 });
 
 describe("the bridge is the account's, not the window's", () => {
-	const cluster: McpHost = {
-		ensure: async () => undefined,
-		stop: async () => {},
-		stopAll: async () => {},
-		status: () => "unknown",
-		logs: () => "",
-	};
-
 	it("reaches the account's desktop for a chat driven from any client", async () => {
 		const registry = new DesktopRegistry();
 		const desktop = fakeDesktop(registry);
 		registry.attach(user, "m1", desktop);
-		const fromBrowser = new BridgedHost(registry.for(user), cluster);
-		const fromWindow = new BridgedHost(registry.for(user), cluster);
+		const fromBrowser = new BridgedHost(registry.for(user));
+		const fromWindow = new BridgedHost(registry.for(user));
 		for (const host of [fromBrowser, fromWindow]) {
 			const handle = await host.ensure({ ...server, local: true });
 			expect(handle).not.toHaveProperty("url");
-			if (handle === undefined || !("transport" in handle))
+			if (!("transport" in handle))
 				throw new Error("expected a transport handle");
 			const channel = handle.transport();
 			const received: unknown[] = [];
@@ -239,7 +230,7 @@ describe("the bridge is the account's, not the window's", () => {
 		const registry = new DesktopRegistry();
 		registry.attach("user-2" as Id<"users">, "m1", fakeDesktop(registry));
 		await expect(
-			new BridgedHost(registry.for(user), cluster).ensure({
+			new BridgedHost(registry.for(user)).ensure({
 				...server,
 				local: true,
 			}),

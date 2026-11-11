@@ -36,11 +36,7 @@ function promptFiles(dir: URL): URL[] {
 		.map((name) => new URL(name, dir));
 }
 
-export const RUNTIME_ASSETS: URL[] = [
-	...PROMPT_ROOTS.flatMap(promptFiles),
-	pathToFileURL(require.resolve("@repo/toolkit/mcp.toolkit.json")),
-	pathToFileURL(require.resolve("@repo/mcp-extension/mcp.toolkit.local.json")),
-];
+export const RUNTIME_ASSETS: URL[] = [...PROMPT_ROOTS.flatMap(promptFiles)];
 
 export function assetName(asset: URL): string {
 	return asset.pathname.slice(asset.pathname.lastIndexOf("/") + 1);

@@ -1,9 +1,4 @@
-import type {
-	ConnConfig,
-	McpHost,
-	McpTransport,
-	ServerState,
-} from "@repo/mcp-extension/ports";
+import type { McpTransport, ServerReport } from "@repo/mcp-extension/ports";
 import { describe, expect, it } from "vitest";
 import {
 	BridgedHost,
@@ -11,108 +6,119 @@ import {
 	type LocalServer,
 } from "../src/desktop-bridge.ts";
 
-function fallback(): McpHost & { ensured: string[]; stopped: string[] } {
-	const ensured: string[] = [];
-	const stopped: string[] = [];
-	return {
-		ensured,
-		stopped,
-		ensure: async (conf: ConnConfig) => {
-			ensured.push(conf.name);
-			return undefined;
+function channel(): McpTransport & { end(error?: Error): void } {
+	const transport: McpTransport & { end(error?: Error): void } = {
+		start: async () => {},
+		send: async () => {},
+		close: async () => {
+			transport.onclose?.();
 		},
-		stop: async (name) => {
-			stopped.push(name);
+		end(error) {
+			if (error) transport.onerror?.(error);
+			transport.onclose?.();
 		},
-		stopAll: async () => {},
-		status: (): ServerState => "unknown",
-		logs: () => "docker log",
 	};
+	return transport;
 }
-
-const channel: McpTransport = {
-	start: async () => {},
-	send: async () => {},
-	close: async () => {},
-};
 
 function bridge(): Desktop & {
 	opened: LocalServer[];
-	closed: string[];
+	channels: ReturnType<typeof channel>[];
 } {
 	const opened: LocalServer[] = [];
-	const closed: string[] = [];
+	const channels: ReturnType<typeof channel>[] = [];
 	return {
 		opened,
-		closed,
+		channels,
 		open: async (server) => {
 			opened.push(server);
-			return channel;
+			const opening = channel();
+			channels.push(opening);
+			return opening;
 		},
-		close: async (name) => {
-			closed.push(name);
-		},
+		close: async () => {},
 		connected: () => true,
 		running: () => true,
 		settings: async () => undefined,
 	};
 }
 
+const fs = { name: "fs", command: "npx", args: ["fs-mcp"], local: true };
+
+async function connected(host: BridgedHost) {
+	const handle = await host.ensure(fs);
+	if (!("transport" in handle)) throw new Error("expected a transport");
+	const transport = handle.transport();
+	await transport.start();
+	return transport;
+}
+
 describe("BridgedHost", () => {
 	it("opens a :local command server on the owner's desktop", async () => {
 		const desktop = bridge();
-		const docker = fallback();
-		const host = new BridgedHost(desktop, docker);
-		const handle = await host.ensure({
-			name: "fs",
-			command: "npx",
-			args: ["fs-mcp"],
-			local: true,
-		});
+		const host = new BridgedHost(desktop);
+
+		await connected(host);
+
 		expect(desktop.opened).toEqual([
 			{ name: "fs", command: "npx", args: ["fs-mcp"], env: {} },
 		]);
-		expect(docker.ensured).toEqual([]);
-		expect(handle).not.toHaveProperty("url");
-		expect(handle && "transport" in handle && handle.transport()).toBe(channel);
-		expect(host.status("fs")).toBe("running");
+		expect(host.status({ name: "fs" })).toBe("running");
 	});
 
 	it("reports a bridged server stopped once the desktop no longer runs it", async () => {
 		const desktop = bridge();
 		const alive = { value: true };
 		desktop.running = () => alive.value;
-		const host = new BridgedHost(desktop, fallback());
-		await host.ensure({ name: "fs", command: "npx", local: true });
-		expect(host.status("fs")).toBe("running");
+		const host = new BridgedHost(desktop);
+		await connected(host);
+
 		alive.value = false;
-		expect(host.status("fs")).toBe("stopped");
+
+		expect(host.status({ name: "fs" })).toBe("stopped");
 	});
 
-	it("leaves every other server to the fallback host", async () => {
+	it("refuses a server that does not run on the desktop", async () => {
+		const host = new BridgedHost(bridge());
+
+		await expect(
+			host.ensure({ name: "plain", command: "npx" }),
+		).rejects.toThrow(/does not run on the desktop/);
+	});
+
+	it("reports a server starting, ready, then asleep once stopped", async () => {
+		const reports: ServerReport[] = [];
+		const host = new BridgedHost(bridge(), (r) => reports.push(r));
+		await connected(host);
+
+		await host.stop({ name: "fs" });
+
+		expect(reports).toEqual([
+			{ server: "fs", phase: "starting" },
+			{ server: "fs", phase: "ready" },
+			{ server: "fs", phase: "sleeping" },
+		]);
+		expect(host.status({ name: "fs" })).toBe("unknown");
+	});
+
+	it("reports a server failed when it exits on the desktop", async () => {
 		const desktop = bridge();
-		const docker = fallback();
-		const host = new BridgedHost(desktop, docker);
-		await host.ensure({ name: "plain", command: "npx" });
-		await host.ensure({ name: "remote", url: "https://example.test/mcp" });
-		expect(docker.ensured).toEqual(["plain", "remote"]);
-		expect(desktop.opened).toEqual([]);
+		const reports: ServerReport[] = [];
+		const host = new BridgedHost(desktop, (r) => reports.push(r));
+		await connected(host);
+
+		desktop.channels[0]?.end(new Error('"fs" exited on the desktop'));
+
+		expect(reports.at(-1)).toEqual({
+			server: "fs",
+			phase: "failed",
+			reason: '"fs" exited on the desktop',
+		});
+		expect(host.status({ name: "fs" })).toBe("unknown");
 	});
 
-	it("closes a bridged server on the desktop and stops the rest on the fallback", async () => {
-		const desktop = bridge();
-		const docker = fallback();
-		const host = new BridgedHost(desktop, docker);
-		await host.ensure({ name: "fs", command: "npx", local: true });
-		await host.stop("fs");
-		await host.stop("other");
-		expect(desktop.closed).toEqual(["fs"]);
-		expect(docker.stopped).toEqual(["other"]);
-		expect(host.status("fs")).toBe("unknown");
-	});
-
-	it("passes the bridge's refusal through when no desktop is connected", async () => {
-		const docker = fallback();
+	it("reports the bridge's refusal when no desktop is connected", async () => {
+		const reports: ServerReport[] = [];
 		const host = new BridgedHost(
 			{
 				open: async () => {
@@ -123,16 +129,18 @@ describe("BridgedHost", () => {
 				running: () => true,
 				settings: async () => undefined,
 			},
-			docker,
+			(r) => reports.push(r),
 		);
-		await expect(
-			host.ensure({
-				name: "fs",
-				command: "npx",
-				args: ["fs-mcp"],
-				local: true,
-			}),
-		).rejects.toThrow("no desktop connected for this user");
-		expect(docker.ensured).toEqual([]);
+
+		await expect(host.ensure(fs)).rejects.toThrow(
+			"no desktop connected for this user",
+		);
+		expect(reports).toEqual([
+			{
+				server: "fs",
+				phase: "failed",
+				reason: "no desktop connected for this user",
+			},
+		]);
 	});
 });

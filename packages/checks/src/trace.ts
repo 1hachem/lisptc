@@ -126,7 +126,7 @@ export class Trace {
 	client(inner: McpClient): McpClient {
 		return {
 			...inner,
-			connect: (conf, signal) => this.recordConnect(inner, conf, signal),
+			connect: (conf, watch) => this.recordConnect(inner, conf, watch),
 			callTool: (call, signal) => this.recordCall(inner, call, signal),
 		};
 	}
@@ -134,11 +134,11 @@ export class Trace {
 	private async recordConnect(
 		inner: McpClient,
 		conf: Parameters<McpClient["connect"]>[0],
-		signal?: AbortSignal,
+		watch?: Parameters<McpClient["connect"]>[1],
 	): Promise<ConnectResult> {
 		const server = conf.name;
 		try {
-			const result = await inner.connect(conf, signal);
+			const result = await inner.connect(conf, watch);
 			this.servers.set(result.serverId, server);
 			this.add({ kind: "connect", step: this.step, server, ok: true });
 			return result;

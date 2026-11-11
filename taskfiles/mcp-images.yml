@@ -1,0 +1,39 @@
+version: '3'
+silent: true
+tasks:
+  mcp:image:build:
+    desc: build one MCP server's image, NAME naming its Dockerfile under docker/mcp
+    requires:
+      vars: [NAME]
+    vars:
+      TAG: '{{.TAG | default "main"}}'
+    cmd: docker build -f docker/mcp/{{.NAME}}.Dockerfile -t ghcr.io/1hachem/lisptc-mcp-{{.NAME}}:{{.TAG}} .
+
+  mcp:image:push:
+    desc: build one MCP server's image and push it to GHCR
+    requires:
+      vars: [NAME]
+    vars:
+      TAG: '{{.TAG | default "main"}}'
+    cmds:
+      - task: mcp:image:build
+        vars: { NAME: '{{.NAME}}', TAG: '{{.TAG}}' }
+      - docker push ghcr.io/1hachem/lisptc-mcp-{{.NAME}}:{{.TAG}}
+
+  mcp:images:build:
+    desc: build the image of every MCP server under docker/mcp
+    sources: [docker/mcp/*.Dockerfile]
+    method: none
+    cmds:
+      - for: sources
+        task: mcp:image:build
+        vars: { NAME: '{{base .ITEM | trimSuffix ".Dockerfile"}}', TAG: '{{.TAG}}' }
+
+  mcp:images:push:
+    desc: build and push the image of every MCP server under docker/mcp
+    sources: [docker/mcp/*.Dockerfile]
+    method: none
+    cmds:
+      - for: sources
+        task: mcp:image:push
+        vars: { NAME: '{{base .ITEM | trimSuffix ".Dockerfile"}}', TAG: '{{.TAG}}' }

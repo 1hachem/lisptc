@@ -12,6 +12,8 @@ const raw = createEnv({
 			.default(8909),
 		LISPTC_OAUTH_DIR: z.string().optional(),
 		XDG_CONFIG_HOME: z.string().optional(),
+		GOOGLE_CLIENT_ID: z.string().optional(),
+		GOOGLE_CLIENT_SECRET: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

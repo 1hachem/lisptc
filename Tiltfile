@@ -36,10 +36,7 @@ manifests = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/app/
     'packages/%s/package.json' % p for p in packages
 ]
 
-read_once_at_startup = str(local("git ls-files 'packages/*.ptc'", quiet=True)).split() + [
-    'packages/toolkit/mcp.toolkit.json',
-    'packages/mcp/mcp.toolkit.local.json',
-]
+read_once_at_startup = str(local("git ls-files 'packages/*.ptc'", quiet=True)).split()
 
 if prod:
     docker_build(

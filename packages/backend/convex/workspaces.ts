@@ -9,6 +9,7 @@ import {
 	query,
 } from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
+import { existingIn } from "./lib/existing.js";
 import { slugify } from "./lib/slug.js";
 import { dropRepl } from "./repls.js";
 import { modelChoice, workspaceIcon } from "./schema.js";
@@ -38,6 +39,7 @@ export async function dropWorkspace(
 	await ctx.scheduler.runAfter(0, internal.sources.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.secrets.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.oauth.purge, { workspaceId });
+	await ctx.scheduler.runAfter(0, internal.mcpServers.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.permissions.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.readmes.purge, { workspaceId });
 	await ctx.scheduler.runAfter(0, internal.files.purge, { workspaceId });
@@ -153,6 +155,8 @@ export const remove = mutation({
 		});
 	},
 });
+
+export const existing = existingIn("workspaces");
 
 export const purge = internalMutation({
 	args: { workspaceId: v.id("workspaces") },

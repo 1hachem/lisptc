@@ -41,6 +41,13 @@ function pair<P extends ProviderName, M extends string>(choice: {
 	});
 }
 
+export const mcpServerPhase = v.union(
+	v.literal("starting"),
+	v.literal("ready"),
+	v.literal("sleeping"),
+	v.literal("failed"),
+);
+
 export const modelChoice = v.union(...CATALOGUED_CHOICES.map(pair));
 
 export const workspaceIcon = v.union(
@@ -337,6 +344,26 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	mcpServers: defineTable({
+		workspaceId: v.id("workspaces"),
+		server: v.string(),
+		phase: mcpServerPhase,
+		reason: v.optional(v.string()),
+		reporter: v.optional(v.string()),
+		observedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_server", ["workspaceId", "server"])
+		.index("by_reporter", ["reporter"]),
+
+	mcpReporters: defineTable({
+		reporter: v.string(),
+		workspaceId: v.optional(v.id("workspaces")),
+		beatAt: v.number(),
+	})
+		.index("by_reporter", ["reporter"])
+		.index("by_beat", ["beatAt"]),
 
 	sources: defineTable({
 		workspaceId: v.id("workspaces"),
