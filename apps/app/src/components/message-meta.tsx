@@ -1,5 +1,6 @@
 import { Route01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { anchorOf } from "@repo/ui-catalog";
 import { Fragment } from "react";
 import type { StepMeta } from "../lib/chat.tsx";
 import type { MetaField } from "../lib/meta-fields.ts";
@@ -105,7 +106,10 @@ export function MessageMeta({
 	if (parts.length === 0 && onTrace === undefined) return null;
 
 	return (
-		<div className="mt-1 select-none text-[11px] text-dim leading-[1.7]">
+		<div
+			{...anchorOf("chat/meta")}
+			className="mt-1 select-none text-[11px] text-dim leading-[1.7]"
+		>
 			{parts.map((part, i) => (
 				<Fragment key={part.field}>
 					{i > 0 && " · "}

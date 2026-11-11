@@ -3,6 +3,7 @@ import { Archive01Icon } from "@hugeicons/core-free-icons";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { TreeFilter, TreeFolder, TreeMore } from "@repo/components";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNewChat } from "../lib/chats.ts";
@@ -43,8 +44,10 @@ export function ChatFolder({
 			{...folder}
 			onCreate={() => void newChat()}
 			createLabel="new chat"
+			createAnchor={anchorOf("chats/new")}
 		>
 			<TreeFilter
+				anchor={anchorOf("chats/search")}
 				value={search}
 				onChange={(next) => {
 					setSearch(next);
@@ -59,7 +62,10 @@ export function ChatFolder({
 				{(chat) => <SessionRow key={chat._id} chat={chat} />}
 			</Listing>
 			{page?.more && (
-				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />
+				<TreeMore
+					anchor={anchorOf("chats/more")}
+					onMore={() => setLimit((shown) => shown + CHAT_PAGE)}
+				/>
 			)}
 			<ArchivedFolder workspaceId={workspaceId} enabled={folder.open} />
 		</TreeFolder>
@@ -93,13 +99,17 @@ function ArchivedFolder({
 			depth={1}
 			open={open}
 			onToggle={() => setOpen((shown) => !shown)}
+			toggleAnchor={anchorOf("chats/archived")}
 		>
 			{open &&
 				page.chats.map((chat) => (
 					<SessionRow key={chat._id} chat={chat} depth={2} />
 				))}
 			{open && page.more && (
-				<TreeMore onMore={() => setLimit((shown) => shown + CHAT_PAGE)} />
+				<TreeMore
+					anchor={anchorOf("chats/more")}
+					onMore={() => setLimit((shown) => shown + CHAT_PAGE)}
+				/>
 			)}
 		</TreeFolder>
 	);

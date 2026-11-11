@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { fileContext, permissionRules, withoutRule } from "../src/lib/files.ts";
+import {
+	fileContext,
+	onboardingSource,
+	permissionRules,
+	withoutRule,
+} from "../src/lib/files.ts";
+
+describe("onboardingSource", () => {
+	it("writes an onboarding as the create call that saves it", () => {
+		expect(
+			onboardingSource({
+				name: "welcome",
+				about: "first look",
+				script: '(ui/tour "welcome" (quote (:say "hi")))',
+			}),
+		).toBe(
+			'(onboarding/create "welcome"\n  \'(ui/tour "welcome" (quote (:say "hi")))\n  :about "first look")',
+		);
+	});
+
+	it("leaves out an empty line", () => {
+		expect(
+			onboardingSource({ name: "tips", about: "", script: "(+ 1 2)" }),
+		).toBe('(onboarding/create "tips"\n  \'(+ 1 2))');
+	});
+});
 
 describe("fileContext", () => {
 	it("opens with the path and the source fenced as lisp", () => {

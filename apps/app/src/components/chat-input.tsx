@@ -8,6 +8,7 @@ import { PromptDialog } from "@repo/components";
 import type { Question } from "@repo/journal-catalog/intent";
 import type { SymbolTable } from "@repo/language-service";
 import { cn } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useCallback, useEffect, useRef } from "react";
 import {
 	type FileTransfer,
@@ -16,6 +17,7 @@ import {
 } from "../lib/attachments.ts";
 import { useDraft, useKeys, useRecall } from "../lib/chat-draft.ts";
 import { useMenus, usePick, usePromptSearch } from "../lib/chat-menus.ts";
+import { useComposerRequests } from "../lib/composer-requests.ts";
 import { useDropZone } from "../lib/drop-zone.ts";
 import type { InputHelper } from "../lib/input-helpers.ts";
 import { useNotice } from "../lib/notice.ts";
@@ -78,6 +80,7 @@ function SendAction({
 	if (streaming?.active && empty)
 		return (
 			<InputAction
+				anchor={anchorOf("composer/stop")}
 				label="stop"
 				glyph="■"
 				tone="text-red hover:brightness-125"
@@ -87,6 +90,7 @@ function SendAction({
 	if (streaming?.active)
 		return (
 			<InputAction
+				anchor={anchorOf("composer/queue")}
 				label="queue"
 				glyph="⏎"
 				tone="text-yellow hover:brightness-125"
@@ -95,6 +99,7 @@ function SendAction({
 		);
 	return (
 		<InputAction
+			anchor={anchorOf("composer/send")}
 			label="send"
 			glyph="⏎"
 			tone="text-green hover:brightness-125"
@@ -246,6 +251,16 @@ function useComposer({
 		attach,
 	});
 	const stops = streaming?.active === true && empty;
+	const fill = useCallback(
+		(target: Element, next: string) => {
+			const root = editor.getRootElement();
+			if (root === null || !target.contains(root)) return;
+			replace(next);
+			editor.focus();
+		},
+		[editor, replace],
+	);
+	useComposerRequests(fill);
 
 	useKeys({
 		disabled: busy,

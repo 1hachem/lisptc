@@ -1,0 +1,213 @@
+<title>Onboarding Relevance Funnel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Hanken+Grotesk:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* layout: one reading column; the funnel is a stepped ladder whose rungs narrow as cost rises */
+  :root{
+    --ground:#F3F5F4; --surface:#FFFFFF; --sunk:#E8ECEA;
+    --ink:#16201C; --ink-2:#4E5E57; --ink-3:#7A8A83;
+    --rule:#D3DCD8;
+    --sign:#1D6B47; --sign-soft:#DCEDE4;
+    --cost:#9C5A0E; --cost-soft:#F5E7D3;
+    --display:"Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --body:"Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --measure:68ch;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0F1513; --surface:#161E1B; --sunk:#1C2622;
+      --ink:#DDE7E2; --ink-2:#9AACA4; --ink-3:#6E8078;
+      --rule:#27332E;
+      --sign:#5CCB95; --sign-soft:#17322A;
+      --cost:#E5A65A; --cost-soft:#33261A;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0F1513; --surface:#161E1B; --sunk:#1C2622;
+    --ink:#DDE7E2; --ink-2:#9AACA4; --ink-3:#6E8078;
+    --rule:#27332E;
+    --sign:#5CCB95; --sign-soft:#17322A;
+    --cost:#E5A65A; --cost-soft:#33261A;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--ground); color:var(--ink); font-family:var(--body); font-size:16.5px; line-height:1.6;}
+  .page{max-width:880px; margin:0 auto; padding-inline:20px; padding-block:2.5rem 4rem; display:grid; gap:2.6rem;}
+  .col{max-width:var(--measure); display:grid; gap:.9rem;}
+  h1,h2,h3{font-family:var(--display); margin:0; text-wrap:balance; letter-spacing:-.01em;}
+  h1{font-size:clamp(2rem,5vw,2.9rem); line-height:1.05; font-weight:700;}
+  h2{font-size:1.45rem; line-height:1.2; font-weight:700;}
+  h3{font-size:1.05rem; font-weight:700;}
+  p{margin:0;}
+  .eyebrow{font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3);}
+  .lede{font-size:1.12rem; color:var(--ink-2);}
+  code{font-family:var(--mono); font-size:.86em; background:var(--sunk); padding:.08em .32em; border-radius:3px;}
+  pre{margin:0; background:var(--sunk); border:1px solid var(--rule); border-radius:6px; padding:1rem 1.1rem; overflow-x:auto; font-family:var(--mono); font-size:.8rem; line-height:1.65;}
+  pre code{background:none; padding:0; font-size:1em;}
+  .k{color:var(--sign); font-weight:500;}
+  ul{margin:0; padding-left:1.2rem; display:grid; gap:.35rem;}
+
+  .sign{display:inline-flex; align-items:center; gap:.5rem; background:var(--sign); color:var(--surface); font-family:var(--display); font-weight:700; font-size:.82rem; padding:.3rem .7rem; border-radius:4px; letter-spacing:.02em; width:max-content;}
+  .sign svg{width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2.2;}
+
+  .ladder{display:grid; gap:.6rem;}
+  .rung{display:grid; grid-template-columns:3rem 1fr; gap:1rem; align-items:start; background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:1rem 1.1rem;}
+  .rung > div{min-width:0; display:grid; gap:.45rem;}
+  .rung:nth-child(2){margin-left:2%;} .rung:nth-child(3){margin-left:4%;} .rung:nth-child(4){margin-left:6%;} .rung:nth-child(5){margin-left:8%;}
+  .num{font-family:var(--display); font-weight:700; font-size:1.7rem; line-height:1; color:var(--sign);}
+  .head{display:flex; flex-wrap:wrap; align-items:baseline; gap:.5rem .8rem;}
+  .tag{font-family:var(--mono); font-size:.7rem; padding:.12rem .45rem; border-radius:3px; background:var(--sign-soft); color:var(--sign); white-space:nowrap;}
+  .tag.paid{background:var(--cost-soft); color:var(--cost);}
+  .rung p, .rung li{color:var(--ink-2);}
+  .stop{font-family:var(--mono); font-size:.75rem; color:var(--ink-3);}
+
+  .states{display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; font-family:var(--mono); font-size:.8rem;}
+  .st{border:1px solid var(--rule); background:var(--surface); padding:.25rem .6rem; border-radius:999px;}
+  .st.new{border-color:var(--sign); color:var(--sign);}
+  .st.add{border-style:dashed; border-color:var(--cost); color:var(--cost);}
+  .arrow{color:var(--ink-3);}
+
+  .table-wrap{overflow-x:auto; border:1px solid var(--rule); border-radius:8px; background:var(--surface);}
+  table{border-collapse:collapse; width:100%; min-width:560px; font-size:.92rem;}
+  th,td{text-align:left; padding:.6rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top;}
+  th{font-family:var(--mono); font-weight:500; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3);}
+  tr:last-child td{border-bottom:none;}
+  td:first-child{color:var(--ink);} td{color:var(--ink-2);}
+
+  .phases{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.8rem;}
+  .phase{border-top:3px solid var(--sign); background:var(--surface); padding:.9rem 1rem; border-radius:0 0 6px 6px; display:grid; gap:.4rem; align-content:start;}
+  .phase:nth-child(3){border-top-color:var(--cost);}
+  .phase p{color:var(--ink-2); font-size:.93rem;}
+  .done{display:grid; gap:.5rem; border-left:3px solid var(--sign); padding-left:1rem;}
+  footer{font-size:.85rem; color:var(--ink-3);}
+</style>
+
+<main class="page">
+  <header class="col">
+    <span class="sign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg>branch feat/onboarding-tours</span>
+    <h1>Onboarding Relevance Funnel</h1>
+    <p class="lede">How the agent should suggest a saved onboarding only when it fits what the user is doing. Each stage is cheaper than the next and can stop early, so most messages never reach a model, and the rest make at most one shared call.</p>
+  </header>
+
+  <section class="col">
+    <span class="eyebrow">Already built</span>
+    <div class="done">
+      <p><code>@repo/onboarding-extension</code> gives the agent <code>(onboardings)</code>, <code>onboarding/read</code>, <code>create</code>, <code>update</code>, <code>run</code>, <code>done</code> and <code>done?</code>. A script is a quoted lisptc form, usually a <code>ui/tour</code>, run the way <code>memory/replay</code> runs.</p>
+      <p>Convex keeps <code>onboardings</code> per workspace as printed source and <code>onboardingProgress</code> per user (<code>started</code> / <code>done</code>). The sidebar has an <code>onboarding/</code> folder with a read-only source page. The first-message note was dropped.</p>
+    </div>
+  </section>
+
+  <section class="col" style="max-width:none">
+    <span class="eyebrow">Per user message</span>
+    <h2>The funnel</h2>
+    <div class="ladder">
+      <article class="rung">
+        <span class="num">1</span>
+        <div>
+          <div class="head"><h3>Eligibility</h3><span class="tag">free · local</span></div>
+          <p>An onboarding is a candidate only when the user's status is <code>new</code>, it isn't cooling down after a decline, it wasn't already offered in this chat, no tour is on screen, and the message is the user's own (not an event or sub-agent notice).</p>
+          <p>The extension caches the candidate list in the REPL, the way <code>ConvexMemoryStore</code> caches memories, and updates it on its own writes.</p>
+          <span class="stop">no candidates → stop. A user who finished everything costs nothing again.</span>
+        </div>
+      </article>
+      <article class="rung">
+        <span class="num">2</span>
+        <div>
+          <div class="head"><h3>Triggers the author declares</h3><span class="tag">free · certain</span></div>
+          <p>Each onboarding says when it applies, in the trigger language memories already use. A hit means relevant, no model.</p>
+<pre><code>(onboarding/create "upload-files" '(ui/tour ...)
+  :about "how to give me files"
+  <span class="k">:on</span> (any-of (user "upload|pdf|attach") (error "no such file")))</code></pre>
+          <p><code>call</code> triggers catch the agent reaching for a form the onboarding covers; <code>error</code> triggers catch a stuck user. The matcher (<code>evalPattern</code>, <code>structurally</code>) moves from <code>packages/memory</code> into <code>@repo/interpreter</code> so both extensions share it.</p>
+        </div>
+      </article>
+      <article class="rung">
+        <span class="num">3</span>
+        <div>
+          <div class="head"><h3>Lexical prefilter</h3><span class="tag">free · local</span></div>
+          <p>With no trigger hit, rank candidates against the message with the search engine memory uses (<code>@repo/shared/search</code>), over each onboarding's <code>about</code> line and its tour steps' <code>:say</code> text.</p>
+          <span class="stop">below the score floor → stop.</span>
+        </div>
+      </article>
+      <article class="rung">
+        <span class="num">4</span>
+        <div>
+          <div class="head"><h3>One shared judge call</h3><span class="tag paid">≤ 1 model call</span></div>
+          <p>Extensions never call a model. They propose labels such as <code>{owner: "onboarding", id: "upload-files", about}</code>. The runtime in <code>packages/ai</code> merges every extension's labels plus a <code>none</code> label into one classify call, then hands each result back to its owner.</p>
+          <p>Accept a label only when its probability clears a threshold and beats <code>none</code> by a margin. The judge (a Jev client, or the structured-output fallback) is passed in once by the composition root.</p>
+        </div>
+      </article>
+      <article class="rung">
+        <span class="num">5</span>
+        <div>
+          <div class="head"><h3>Remember the answer</h3><span class="tag">one write</span></div>
+          <p>Nothing is suggested twice. Progress gains <code>offered</code> (with a timestamp) and <code>declined</code>, each with a cooldown. An optional <code>:covers</code> pattern marks it <code>done</code> when the user's own forms run what it teaches.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="col">
+    <span class="eyebrow">Progress per user</span>
+    <h2>Statuses</h2>
+    <div class="states" aria-label="status flow">
+      <span class="st new">new</span><span class="arrow">→</span>
+      <span class="st add">offered</span><span class="arrow">→</span>
+      <span class="st">started</span><span class="arrow">→</span>
+      <span class="st">done</span>
+      <span class="arrow">·</span>
+      <span class="st add">declined</span>
+    </div>
+    <p>Dashed statuses are new. A skipped tour or a "no thanks" becomes <code>declined</code>, with a longer cooldown than <code>offered</code>.</p>
+  </section>
+
+  <section class="col">
+    <span class="eyebrow">What the agent sees</span>
+    <h2>Delivery</h2>
+    <p>One private line at the next step, the way fired memories arrive. The main agent, already running, decides whether and how to offer it. The background part only gates: it never starts a turn and never speaks to the user.</p>
+<pre><code>&lt;onboarding&gt; "upload-files" fits what the user asked (trigger).
+offer it: (onboarding/run "upload-files") &lt;/onboarding&gt;</code></pre>
+  </section>
+
+  <section class="col" style="max-width:none">
+    <span class="eyebrow">Placement</span>
+    <h2>Where each piece lives</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Piece</th><th>Place</th></tr></thead>
+        <tbody>
+          <tr><td>Trigger matcher</td><td><code>@repo/interpreter</code>, moved out of memory</td></tr>
+          <tr><td><code>:on</code>, <code>:covers</code>, <code>offered</code> / <code>declined</code>, candidate cache, step-start note</td><td><code>packages/onboarding</code></td></tr>
+          <tr><td>Status, timestamp, cooldown</td><td><code>onboardingProgress</code> in Convex</td></tr>
+          <tr><td><code>heard</code> point per step, as <code>propose</code> then <code>judged</code></td><td>interpreter session hooks, run from <code>packages/repl</code></td></tr>
+          <tr><td>Merged judge call, cancelled when the turn ends</td><td><code>packages/ai/src/turn.ts</code></td></tr>
+          <tr><td>Jev client or structured-output fallback</td><td><code>packages/backend/src/agent-repl.ts</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="col" style="max-width:none">
+    <span class="eyebrow">Build order</span>
+    <h2>Three steps</h2>
+    <div class="phases">
+      <div class="phase"><h3>Stages 1, 2 and 5</h3><p>No model and no new hook point: triggers run at step start, as memory triggers already do. Covers most of the value.</p></div>
+      <div class="phase"><h3>Stage 3</h3><p>Add the lexical prefilter once real triggers prove too blunt.</p></div>
+      <div class="phase"><h3>Stage 4 and <code>heard</code></h3><p>Build the shared judge when a second background consumer, the memory curator, exists. Only then does one merged call pay for itself.</p></div>
+    </div>
+  </section>
+
+  <section class="col">
+    <span class="eyebrow">Guardrails</span>
+    <ul>
+      <li>A per-workspace budget for judge calls.</li>
+      <li>Skip the model whenever there is nothing to classify.</li>
+      <li>Record each judge call in the turn trace.</li>
+      <li>An eval case per background job in <code>apps/trace-viewer/evals</code>.</li>
+    </ul>
+  </section>
+
+  <footer>Plan saved 2026-10-31 for later work on the onboarding extension.</footer>
+</main>

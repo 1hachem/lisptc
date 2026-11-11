@@ -1,5 +1,6 @@
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { anchorOf } from "@repo/ui-catalog";
 import { useChatSession } from "../lib/chat.tsx";
 import { UserLine } from "./user-line.tsx";
 
@@ -11,6 +12,7 @@ export function SteerQueue() {
 
 	return queued.map((item) => (
 		<div
+			{...anchorOf("chat/queued")}
 			key={item.id}
 			className="group relative flex min-w-0 items-start gap-2 text-dim opacity-60"
 		>

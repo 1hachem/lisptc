@@ -24,6 +24,39 @@ export const subAgent = v.object({
 	budget: v.optional(v.number()),
 });
 
+export const tourStep = v.object({
+	anchor: v.optional(v.string()),
+	page: v.optional(v.string()),
+	say: v.string(),
+	until: v.union(v.literal("next"), v.literal("click")),
+});
+
+export const tourLabels = v.object({
+	next: v.optional(v.string()),
+	done: v.optional(v.string()),
+	skip: v.optional(v.string()),
+});
+
+export const pointerMark = v.union(v.literal("arrow"), v.literal("oval"));
+
+export const pointerSize = v.union(
+	v.literal("small"),
+	v.literal("medium"),
+	v.literal("large"),
+);
+
+export const onboardingStatus = v.union(
+	v.literal("started"),
+	v.literal("done"),
+);
+
+export const tourStatus = v.union(
+	v.literal("active"),
+	v.literal("paused"),
+	v.literal("done"),
+	v.literal("skipped"),
+);
+
 export const chatStatus = v.union(
 	v.literal("streaming"),
 	v.literal("waiting"),
@@ -85,6 +118,7 @@ export const panelContent = v.union(
 		kind: v.literal("page"),
 		page: v.union(
 			v.literal("memory"),
+			v.literal("onboarding"),
 			v.literal("permission"),
 			v.literal("readme"),
 			v.literal("settings"),
@@ -291,6 +325,44 @@ export default defineSchema({
 		.index("by_chat_view", ["chatId", "viewId"])
 		.index("by_workspace", ["workspaceId"]),
 
+	tours: defineTable({
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		tourId: v.string(),
+		steps: v.array(tourStep),
+		current: v.number(),
+		status: tourStatus,
+		labels: v.optional(tourLabels),
+		done: v.optional(v.string()),
+		skip: v.optional(v.string()),
+		expiresAt: v.number(),
+	})
+		.index("by_chat_tour", ["chatId", "tourId"])
+		.index("by_user_status", ["userId", "status"]),
+
+	pointers: defineTable({
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		anchor: v.string(),
+		mark: pointerMark,
+		size: pointerSize,
+		click: v.boolean(),
+		open: v.optional(v.string()),
+		fill: v.optional(v.string()),
+		expiresAt: v.number(),
+	})
+		.index("by_user", ["userId"])
+		.index("by_chat", ["chatId"]),
+
+	tourProgress: defineTable({
+		userId: v.id("users"),
+		tourId: v.string(),
+		status: v.union(v.literal("done"), v.literal("skipped")),
+		at: v.number(),
+	}).index("by_user_tour", ["userId", "tourId"]),
+
 	repls: defineTable({
 		workspaceId: v.id("workspaces"),
 		chatId: v.id("chats"),
@@ -324,6 +396,22 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_server", ["workspaceId", "serverKey"])
 		.index("by_pending_state", ["pendingState"]),
+
+	onboardings: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		about: v.string(),
+		script: v.string(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"]),
+
+	onboardingProgress: defineTable({
+		onboardingId: v.id("onboardings"),
+		userId: v.id("users"),
+		status: onboardingStatus,
+		at: v.number(),
+	}).index("by_onboarding_user", ["onboardingId", "userId"]),
 
 	memories: defineTable({
 		workspaceId: v.id("workspaces"),

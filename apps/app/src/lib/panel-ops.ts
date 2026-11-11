@@ -6,16 +6,15 @@ import {
 	type SplitLayout,
 	type Tab,
 } from "@repo/shared/split-layout";
+import { PAGE_IDS } from "@repo/ui-catalog";
 
 export type Folder = "attachments" | "knowledge";
 
 const PAGES = [
+	...PAGE_IDS,
 	"memory",
+	"onboarding",
 	"permission",
-	"readme",
-	"settings",
-	"preferences",
-	"account",
 	"bin",
 ] as const;
 

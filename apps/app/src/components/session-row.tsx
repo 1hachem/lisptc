@@ -18,6 +18,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { type CSSProperties, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
@@ -72,6 +73,7 @@ function RenameForm({
 	const [title, setTitle] = useState(chat.title);
 	return (
 		<form
+			{...anchorOf("chats/item")}
 			className="px-1"
 			onSubmit={(event) => {
 				event.preventDefault();
@@ -114,6 +116,7 @@ function SessionMenu({
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
+				{...anchorOf("chats/menu")}
 				title="session options"
 				className="flex-none cursor-pointer px-1.5 py-0.5 text-dim opacity-0 transition hover:text-fg focus:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
 			>
@@ -181,6 +184,7 @@ function ThreadToggle({
 	if (count === 0) return null;
 	return (
 		<button
+			{...anchorOf("chats/sub-agents")}
 			type="button"
 			aria-expanded={expanded}
 			title={`${count} sub-agent${count === 1 ? "" : "s"}`}
@@ -250,6 +254,7 @@ export function SessionRow({
 				onDragStart={dragsAs(opens)}
 				link={(content, className) => (
 					<PanelLink
+						anchor={anchorOf("chats/item")}
 						workspaceId={chat.workspaceId}
 						content={opens}
 						className={className}

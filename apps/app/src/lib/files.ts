@@ -1,9 +1,26 @@
+import type { Doc } from "@repo/backend/dataModel";
 import { formSpans } from "@repo/shared/lisp-forms";
 
 export interface OpenFile {
 	path: string;
 	source: string;
 	language?: "lisp" | "markdown";
+}
+
+function quoted(text: string): string {
+	return JSON.stringify(text);
+}
+
+export function onboardingSource(
+	onboarding: Pick<Doc<"onboardings">, "name" | "about" | "script">,
+): string {
+	const lines = [
+		`(onboarding/create ${quoted(onboarding.name)}`,
+		`  '${onboarding.script}`,
+	];
+	if (onboarding.about !== "")
+		lines.push(`  :about ${quoted(onboarding.about)}`);
+	return `${lines.join("\n")})`;
 }
 
 export function fileContext(file: OpenFile, text: string): string {

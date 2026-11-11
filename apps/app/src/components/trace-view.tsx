@@ -3,6 +3,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { MessageMemories } from "@repo/components";
 import { memoryKind } from "@repo/journal-catalog/memory";
 import { view } from "@repo/shared/journal";
+import { contentRegion } from "@repo/ui-catalog";
 import {
 	type ComponentProps,
 	createContext,
@@ -543,6 +544,7 @@ export function TraceLines({
 		<ChannelsShown shown={shown}>
 			<FindQuery.Provider value={find.query}>
 				<section
+					{...contentRegion}
 					aria-label="trace"
 					className="flex h-full min-h-0 flex-col"
 					onKeyDown={onKeyDown}

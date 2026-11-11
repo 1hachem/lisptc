@@ -4,6 +4,7 @@ import { useNoSwipeNavigation } from "../lib/swipe-guard.ts";
 import { useUI } from "../lib/ui.tsx";
 import { EntrySidebars } from "./entry-sidebars.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
+import { Onboarding } from "./onboarding.tsx";
 import { RightSidebar } from "./right-sidebar.tsx";
 
 const SIDEBAR_SIZE = {
@@ -31,6 +32,7 @@ export function AppShell({
 					className="h-full min-h-0"
 				>
 					<LeftSidebar onSignOut={onSignOut} />
+					<Onboarding />
 					<SidebarProvider
 						open={rightOpen}
 						onOpenChange={setRightOpen}

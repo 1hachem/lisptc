@@ -55,6 +55,36 @@ describe("removing a chat", () => {
 		expect(left).toEqual([]);
 	});
 
+	it("takes its tours with it", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.tours.start, {
+			chatId,
+			tourId: "upload-files",
+			steps: [{ say: "hi", until: "next" }],
+		});
+		await alice.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+		});
+
+		vi.useFakeTimers();
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const left = await t.run(async (ctx) => [
+			...(await ctx.db.query("tours").collect()),
+			...(await ctx.db.query("pointers").collect()),
+		]);
+		expect(left).toEqual([]);
+	});
+
 	it("takes its repl checkpoints with it", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
@@ -401,6 +431,8 @@ async function remaining(t: TestConvex<typeof schema>) {
 		replLayers: await ctx.db.query("replLayers").collect(),
 		replLayerChunks: await ctx.db.query("replLayerChunks").collect(),
 		memories: await ctx.db.query("memories").collect(),
+		onboardings: await ctx.db.query("onboardings").collect(),
+		onboardingProgress: await ctx.db.query("onboardingProgress").collect(),
 		sources: await ctx.db.query("sources").collect(),
 		secrets: await ctx.db.query("secrets").collect(),
 		oauthRecords: await ctx.db.query("oauthRecords").collect(),
@@ -420,6 +452,8 @@ const nothing = {
 	replLayers: [],
 	replLayerChunks: [],
 	memories: [],
+	onboardings: [],
+	onboardingProgress: [],
 	sources: [],
 	secrets: [],
 	oauthRecords: [],
@@ -480,7 +514,7 @@ describe("deleting an account", () => {
 		expect(await remaining(t)).toEqual(nothing);
 	});
 
-	it("takes its memories, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
+	it("takes its memories, onboardings, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.sources.put, {
@@ -515,6 +549,15 @@ describe("deleting an account", () => {
 		await alice.as.mutation(api.permissions.put, {
 			workspaceId: alice.workspace,
 			source: "(permission/deny eval)",
+		});
+		await alice.as.mutation(api.onboardings.put, {
+			workspaceId: alice.workspace,
+			onboarding: { name: "doomed", about: "", script: "(+ 1 2)" },
+		});
+		await alice.as.mutation(api.onboardings.mark, {
+			workspaceId: alice.workspace,
+			name: "doomed",
+			status: "done",
 		});
 		await t.run(async (ctx) => {
 			await ctx.db.insert("memories", {
@@ -569,6 +612,29 @@ describe("removing a user", () => {
 
 		const left = await t.run(
 			async (ctx) => await ctx.db.query("preferences").collect(),
+		);
+		expect(left).toEqual([]);
+	});
+
+	it("takes the tours they finished with them", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+		await alice.as.mutation(api.tours.start, {
+			chatId,
+			tourId: "upload-files",
+			steps: [{ say: "hi", until: "next" }],
+		});
+		const tour = await alice.as.query(api.tours.active, {});
+		if (tour === null) throw new Error("no active tour");
+		await alice.as.mutation(api.tours.advance, { tour: tour._id, from: 0 });
+
+		await t.mutation(internal.users.purge, { userId: alice.user });
+
+		const left = await t.run(
+			async (ctx) => await ctx.db.query("tourProgress").collect(),
 		);
 		expect(left).toEqual([]);
 	});

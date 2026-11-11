@@ -10,6 +10,7 @@ import {
 	SidebarRail,
 	useSidebar,
 } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
@@ -43,6 +44,7 @@ function SettingsLink({ expanded }: { expanded: boolean }) {
 	if (!workspace) return null;
 	return (
 		<PanelLink
+			anchor={anchorOf("account")}
 			workspaceId={workspace._id}
 			content={ACCOUNT}
 			className={`${expanded ? "ml-auto" : ""} flex-none text-dim hover:text-fg`}
@@ -65,6 +67,7 @@ function SignOutButton({
 	const [armed, setArmed] = useState(false);
 	return (
 		<button
+			{...anchorOf("sign-out")}
 			type="button"
 			onClick={() => (armed ? onSignOut() : setArmed(true))}
 			onBlur={() => setArmed(false)}
@@ -138,7 +141,10 @@ export function LeftSidebar({ onSignOut }: { onSignOut: () => void }) {
 				)}
 			</SidebarContent>
 			<UserRow expanded={expanded} onSignOut={onSignOut} />
-			<SidebarRail className="hover:after:bg-transparent" />
+			<SidebarRail
+				{...anchorOf("sidebar/toggle")}
+				className="hover:after:bg-transparent"
+			/>
 		</Sidebar>
 	);
 }

@@ -59,6 +59,8 @@ are no design docs: a constraint worth keeping is a name, a type, or a test.
                           the OAuth to reach the remote ones.
   packages/memory         @repo/memory-extension. What the agent keeps and
                           recalls across sessions.
+  packages/onboarding     @repo/onboarding-extension. Scripted walkthroughs
+                          of the app, and who has been through each.
   packages/promises       @repo/promises-extension. Asynchrony over a
                           synchronous evaluator.
   packages/prose          @repo/prose-extension. The prose the model writes
