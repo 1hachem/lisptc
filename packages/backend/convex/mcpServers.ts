@@ -1,14 +1,19 @@
 import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import {
 	internalMutation,
 	type MutationCtx,
 	mutation,
+	type QueryCtx,
 	query,
 } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
-import { MAX_MCP_REASON_LENGTH, MCP_REPORTER_STALE_MS } from "./limits.js";
+import {
+	MAX_MCP_MOUNT_BYTES,
+	MAX_MCP_REASON_LENGTH,
+	MCP_REPORTER_STALE_MS,
+} from "./limits.js";
 import { mcpServerPhase } from "./schema.js";
 
 const PURGE_BATCH = 256;
@@ -205,6 +210,85 @@ export const sweep = internalMutation({
 	},
 });
 
+const mountRow = v.object({
+	server: v.string(),
+	conf: v.optional(v.string()),
+	tools: v.string(),
+});
+
+export const mounts = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.array(mountRow),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const rows = await ctx.db
+			.query("mcpMounts")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(LIST_LIMIT);
+		return rows.map(({ server, conf, tools }) => ({
+			server,
+			...(conf === undefined ? {} : { conf }),
+			tools,
+		}));
+	},
+});
+
+async function mountOf(
+	ctx: MutationCtx,
+	workspaceId: Doc<"mcpMounts">["workspaceId"],
+	server: string,
+): Promise<Doc<"mcpMounts"> | null> {
+	return await ctx.db
+		.query("mcpMounts")
+		.withIndex("by_workspace_server", (q) =>
+			q.eq("workspaceId", workspaceId).eq("server", server),
+		)
+		.unique();
+}
+
+export const mount = mutation({
+	args: { workspaceId: v.id("workspaces"), ...mountRow.fields },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, server, conf, tools }) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (tools.length + (conf?.length ?? 0) > MAX_MCP_MOUNT_BYTES)
+			throw new Error(
+				`the tools of ${server} exceed ${MAX_MCP_MOUNT_BYTES} bytes`,
+			);
+		const existing = await mountOf(ctx, workspaceId, server);
+		if (existing === null) {
+			await ctx.db.insert("mcpMounts", {
+				workspaceId,
+				server,
+				...(conf === undefined ? {} : { conf }),
+				tools,
+				mountedAt: Date.now(),
+			});
+			return null;
+		}
+		if (existing.conf === conf && existing.tools === tools) return null;
+		await ctx.db.replace(existing._id, {
+			workspaceId,
+			server,
+			...(conf === undefined ? {} : { conf }),
+			tools,
+			mountedAt: existing.mountedAt,
+		});
+		return null;
+	},
+});
+
+export const unmount = mutation({
+	args: { workspaceId: v.id("workspaces"), server: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, server }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const existing = await mountOf(ctx, workspaceId, server);
+		if (existing !== null) await ctx.db.delete(existing._id);
+		return null;
+	},
+});
+
 export const reconcile = internalMutation({
 	args: { servers: v.array(serverRow) },
 	returns: v.null(),
@@ -219,6 +303,102 @@ export const reconcile = internalMutation({
 	},
 });
 
+const MAX_MCP_ICON_BYTES = 64 * 1024;
+
+const MAX_MCP_DESCRIPTION_LENGTH = 4096;
+
+const catalogRow = v.object({
+	server: v.string(),
+	description: v.optional(v.string()),
+	icon: v.optional(v.string()),
+	login: v.optional(v.boolean()),
+	tools: v.string(),
+});
+
+function iconFits(icon: string | undefined): boolean {
+	if (icon === undefined) return true;
+	if (icon.length > MAX_MCP_ICON_BYTES) return false;
+	return icon.startsWith("https://") || icon.startsWith("data:image/");
+}
+
+async function catalogOf(
+	ctx: QueryCtx,
+	workspaceId: Id<"workspaces">,
+	server: string,
+): Promise<Doc<"mcpCatalog"> | null> {
+	return await ctx.db
+		.query("mcpCatalog")
+		.withIndex("by_workspace_server", (q) =>
+			q.eq("workspaceId", workspaceId).eq("server", server),
+		)
+		.unique();
+}
+
+export const catalog = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.array(v.object({ ...catalogRow.fields, fetchedAt: v.number() })),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const rows = await ctx.db
+			.query("mcpCatalog")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(LIST_LIMIT);
+		return rows.map(
+			({ server, description, icon, login, tools, fetchedAt }) => ({
+				server,
+				...(description === undefined ? {} : { description }),
+				...(icon === undefined ? {} : { icon }),
+				...(login === undefined ? {} : { login }),
+				tools,
+				fetchedAt,
+			}),
+		);
+	},
+});
+
+export const describe = mutation({
+	args: { workspaceId: v.id("workspaces"), ...catalogRow.fields },
+	returns: v.null(),
+	handler: async (
+		ctx,
+		{ workspaceId, server, description, icon, login, tools },
+	) => {
+		await requireWorkspace(ctx, workspaceId);
+		if (tools.length > MAX_MCP_MOUNT_BYTES)
+			throw new Error(
+				`the tools of ${server} exceed ${MAX_MCP_MOUNT_BYTES} bytes`,
+			);
+		if (!iconFits(icon))
+			throw new Error(`the icon of ${server} is not an https or image url`);
+		const row = {
+			workspaceId,
+			server,
+			...(description === undefined
+				? {}
+				: { description: description.slice(0, MAX_MCP_DESCRIPTION_LENGTH) }),
+			...(icon === undefined ? {} : { icon }),
+			...(login === true ? { login } : {}),
+			tools,
+			fetchedAt: Date.now(),
+		};
+		const existing = await catalogOf(ctx, workspaceId, server);
+		if (existing === null) await ctx.db.insert("mcpCatalog", row);
+		else await ctx.db.replace(existing._id, row);
+		return null;
+	},
+});
+
+export const forget = mutation({
+	args: { workspaceId: v.id("workspaces"), server: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, server }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const existing = await catalogOf(ctx, workspaceId, server);
+		if (existing !== null) await ctx.db.delete(existing._id);
+		return null;
+	},
+});
+
 export const purge = internalMutation({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.null(),
@@ -227,8 +407,21 @@ export const purge = internalMutation({
 			.query("mcpServers")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 			.take(PURGE_BATCH);
-		for (const row of servers) await ctx.db.delete(row._id);
-		if (servers.length === PURGE_BATCH)
+		const mounts = await ctx.db
+			.query("mcpMounts")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(PURGE_BATCH);
+		const catalog = await ctx.db
+			.query("mcpCatalog")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.take(PURGE_BATCH);
+		for (const row of [...servers, ...mounts, ...catalog])
+			await ctx.db.delete(row._id);
+		if (
+			servers.length === PURGE_BATCH ||
+			mounts.length === PURGE_BATCH ||
+			catalog.length === PURGE_BATCH
+		)
 			await ctx.scheduler.runAfter(0, internal.mcpServers.purge, {
 				workspaceId,
 			});

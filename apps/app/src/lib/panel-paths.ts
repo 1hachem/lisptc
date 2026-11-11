@@ -14,6 +14,7 @@ const KEYED = {
 	memory: "memories",
 	permission: "permissions",
 	bin: "bin",
+	mcp: "mcp",
 } as const satisfies Partial<Record<Page, string>>;
 
 type KeyedPage = keyof typeof KEYED;
@@ -23,6 +24,7 @@ const NAMED = {
 	settings: "settings",
 	preferences: "preferences",
 	account: "account",
+	toolkit: "toolkit",
 } as const satisfies Record<Exclude<Page, KeyedPage>, string>;
 
 type NamedPage = keyof typeof NAMED;

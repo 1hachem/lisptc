@@ -42,6 +42,11 @@ export class RemoteHost implements McpHost {
 			this.report({ server: server.name, phase: "gone" });
 	}
 
+	async remove(conf: ConnConfig): Promise<void> {
+		this.dialed.delete(conf.name);
+		this.report({ server: conf.name, phase: "gone" });
+	}
+
 	async stopAll(): Promise<void> {
 		for (const server of [...this.dialed.values()]) await this.stop(server);
 	}

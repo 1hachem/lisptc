@@ -73,6 +73,16 @@ describe("what the docker host reports about the containers it runs", () => {
 		]);
 	});
 
+	it("reports a removed server gone, so its row goes", async () => {
+		const { host, reports } = reporting(30);
+
+		await host.ensure(playwright);
+		await host.remove(playwright);
+
+		expect(reports.at(-1)).toEqual({ server: "playwright", phase: "gone" });
+		expect(host.status({ name: "playwright" })).toBe("unknown");
+	});
+
 	it("reports a server failed when its container cannot be run", async () => {
 		process.env.STUB_DOCKER_REFUSE = "1";
 		const { host, reports } = reporting(30);

@@ -43,6 +43,7 @@ export interface ServerStore {
 	get(name: string): Promise<McpServer | undefined>;
 	create(server: McpServer): Promise<McpServer>;
 	patchSpec(name: string, spec: Partial<McpServerSpec>): Promise<McpServer>;
+	remove(name: string): Promise<void>;
 }
 
 export interface KubernetesHostOptions {
@@ -147,6 +148,13 @@ export function clientStore(
 				{ ...target, name, body: { spec } },
 				merge,
 			)) as McpServer;
+		},
+		async remove(name) {
+			try {
+				await custom.deleteNamespacedCustomObject({ ...target, name });
+			} catch (ex) {
+				if (!isStatus(ex, 404)) throw ex;
+			}
 		},
 	};
 }
@@ -255,6 +263,14 @@ export class KubernetesHost implements McpHost {
 		if (!followed) return;
 		this.unfollow(followed);
 		await this.store.patchSpec(followed.name, { lastUsed: 0 });
+	}
+
+	async remove(conf: ConnConfig): Promise<void> {
+		await this.starting.get(conf.name)?.run.catch(() => {});
+		const followed = this.followed.get(conf.name);
+		if (followed) this.unfollow(followed);
+		this.followed.delete(conf.name);
+		await this.store.remove(serverName(this.options.scope, conf.name));
 	}
 
 	async stopAll(): Promise<void> {

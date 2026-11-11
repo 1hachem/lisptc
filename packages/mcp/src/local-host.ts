@@ -151,6 +151,11 @@ export class LocalProcessHost implements McpHost {
 			this.report({ server: server.name, phase: "sleeping" });
 	}
 
+	async remove(conf: ConnConfig): Promise<void> {
+		await this.drop(conf);
+		this.report({ server: conf.name, phase: "gone" });
+	}
+
 	private async drop(ref: ServerRef): Promise<boolean> {
 		const server = this.started.get(ref.name);
 		if (!server) return false;

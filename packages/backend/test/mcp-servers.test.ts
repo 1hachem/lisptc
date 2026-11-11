@@ -116,6 +116,132 @@ describe("the MCP servers a session's host reports", () => {
 		});
 		expect(servers).toEqual([]);
 	});
+});
+
+describe("the MCP servers a workspace has loaded", () => {
+	it("keeps one mount per server, replaced when its tools change and gone on unmount", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		const tools = JSON.stringify([{ name: "echo" }]);
+
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "fx",
+			tools,
+		});
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "fx",
+			tools: JSON.stringify([{ name: "echo" }, { name: "add" }]),
+		});
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "remote",
+			conf: JSON.stringify({ name: "remote", url: "https://x.test/mcp" }),
+			tools,
+		});
+
+		const mounts = await alice.as.query(api.mcpServers.mounts, {
+			workspaceId,
+		});
+		expect(mounts.sort((a, b) => a.server.localeCompare(b.server))).toEqual([
+			{
+				server: "fx",
+				tools: JSON.stringify([{ name: "echo" }, { name: "add" }]),
+			},
+			{
+				server: "remote",
+				conf: JSON.stringify({ name: "remote", url: "https://x.test/mcp" }),
+				tools,
+			},
+		]);
+
+		await alice.as.mutation(api.mcpServers.unmount, {
+			workspaceId,
+			server: "fx",
+		});
+		expect(
+			(await alice.as.query(api.mcpServers.mounts, { workspaceId })).map(
+				(mount) => mount.server,
+			),
+		).toEqual(["remote"]);
+	});
+
+	it("keeps what it last read from a server, through an unmount, until it is forgotten", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		const tools = JSON.stringify([
+			{ name: "read", description: "reads a sheet" },
+		]);
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "sheets",
+			tools,
+		});
+		await alice.as.mutation(api.mcpServers.describe, {
+			workspaceId,
+			server: "sheets",
+			description: "Google Sheets",
+			icon: "https://example.com/sheets.png",
+			login: true,
+			tools,
+		});
+		await alice.as.mutation(api.mcpServers.unmount, {
+			workspaceId,
+			server: "sheets",
+		});
+
+		expect(
+			await alice.as.query(api.mcpServers.catalog, { workspaceId }),
+		).toMatchObject([
+			{
+				server: "sheets",
+				description: "Google Sheets",
+				icon: "https://example.com/sheets.png",
+				login: true,
+				tools,
+			},
+		]);
+
+		await alice.as.mutation(api.mcpServers.forget, {
+			workspaceId,
+			server: "sheets",
+		});
+		expect(
+			await alice.as.query(api.mcpServers.catalog, { workspaceId }),
+		).toEqual([]);
+	});
+
+	it("refuses a logo that is not an image", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		await expect(
+			alice.as.mutation(api.mcpServers.describe, {
+				workspaceId: alice.workspace,
+				server: "evil",
+				tools: "[]",
+				icon: "javascript:alert(1)",
+			}),
+		).rejects.toThrow(/not an https or image url/);
+	});
+
+	it("shows one workspace's catalog to no one else", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const mallory = await signIn(t, "mallory@example.com");
+		await alice.as.mutation(api.mcpServers.describe, {
+			workspaceId: alice.workspace,
+			server: "sheets",
+			tools: "[]",
+		});
+		await expect(
+			mallory.as.query(api.mcpServers.catalog, {
+				workspaceId: alice.workspace,
+			}),
+		).rejects.toThrow();
+	});
 
 	it("keeps a status a session reported through the operator's snapshot", async () => {
 		const t = harness();
@@ -145,22 +271,57 @@ describe("the MCP servers a session's host reports", () => {
 		).toEqual([]);
 	});
 
+	it("survives the operator's snapshot, which owns only the status", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const workspaceId = alice.workspace;
+		await alice.as.mutation(api.mcpServers.mount, {
+			workspaceId,
+			server: "fx",
+			tools: "[]",
+		});
+
+		await t.mutation(internal.mcpServers.reconcile, { servers: [] });
+
+		expect(
+			await alice.as.query(api.mcpServers.mounts, { workspaceId }),
+		).toEqual([{ server: "fx", tools: "[]" }]);
+	});
+
+	it("refuses a mount into someone else's workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const mallory = await signIn(t, "mallory@example.com");
+
+		await expect(
+			mallory.as.mutation(api.mcpServers.mount, {
+				workspaceId: alice.workspace,
+				server: "fx",
+				tools: "[]",
+			}),
+		).rejects.toThrow();
+		await expect(
+			mallory.as.query(api.mcpServers.mounts, {
+				workspaceId: alice.workspace,
+			}),
+		).rejects.toThrow();
+	});
+
 	it("goes with the workspace", async () => {
 		const t = harness();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
-		await alice.as.mutation(api.mcpServers.report, {
-			reporter: "agent-1",
+		await alice.as.mutation(api.mcpServers.mount, {
 			workspaceId,
-			server: "fs",
-			phase: "ready",
+			server: "fx",
+			tools: "[]",
 		});
 
 		await t.mutation(internal.mcpServers.purge, { workspaceId });
 
-		expect(
-			(await alice.as.query(api.mcpServers.list, { workspaceId })).servers,
-		).toEqual([]);
+		expect(await t.run((ctx) => ctx.db.query("mcpMounts").collect())).toEqual(
+			[],
+		);
 	});
 });
 

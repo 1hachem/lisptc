@@ -37,6 +37,11 @@ export class DockerHost implements McpHost {
 			this.report({ server: server.name, phase: "sleeping" });
 	}
 
+	async remove(conf: ConnConfig): Promise<void> {
+		await this.drop(conf);
+		this.report({ server: conf.name, phase: "gone" });
+	}
+
 	private async drop(server: ServerRef): Promise<boolean> {
 		const served = this.served.get(server.name);
 		if (!served) return false;

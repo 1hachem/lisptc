@@ -36,6 +36,7 @@ const ready: Operator = (server) => ({
 function fakeStore(operator: Operator = ready) {
 	const servers = new Map<string, McpServer>();
 	const patches: Partial<McpServer["spec"]>[] = [];
+	const removed: string[] = [];
 	let uid = 0;
 	const store: ServerStore = {
 		async get(name) {
@@ -61,8 +62,12 @@ function fakeStore(operator: Operator = ready) {
 			server.metadata.generation = (server.metadata.generation ?? 0) + 1;
 			return structuredClone(server);
 		},
+		async remove(name) {
+			removed.push(name);
+			servers.delete(name);
+		},
 	};
-	return { store, servers, patches };
+	return { store, servers, patches, removed };
 }
 
 function host(store: ServerStore, clock = () => 1000, imageTag?: string) {
@@ -201,6 +206,26 @@ describe("the kubernetes host", () => {
 		await host(fake.store).ensure(browser);
 
 		expect([...fake.servers.keys()]).toEqual([NAME]);
+	});
+
+	it("deletes the server it was asked to remove", async () => {
+		const fake = fakeStore();
+		const kube = host(fake.store);
+		await kube.ensure(browser);
+
+		await kube.remove(browser);
+
+		expect(fake.removed).toEqual([NAME]);
+		expect(fake.servers.has(NAME)).toBe(false);
+		expect(kube.status({ name: "playwright" })).toBe("unknown");
+	});
+
+	it("deletes a server it never started, by the name it would have", async () => {
+		const fake = fakeStore();
+
+		await host(fake.store).remove(browser);
+
+		expect(fake.removed).toEqual([NAME]);
 	});
 
 	it("raises restarts on a failed server instead of recreating it", async () => {
@@ -411,6 +436,16 @@ describe("the kubernetes host", () => {
 		expect(fake.servers.get(serverName("ws1", "remote"))?.spec.remote).toEqual({
 			url: remote.url,
 		});
+	});
+
+	it("deletes a remote server it was asked to remove", async () => {
+		const fake = fakeStore();
+		const kube = host(fake.store);
+		await kube.ensure(remote);
+
+		await kube.remove(remote);
+
+		expect(fake.servers.has(serverName("ws1", "remote"))).toBe(false);
 	});
 
 	it("runs a stdio server with a command as a container", async () => {

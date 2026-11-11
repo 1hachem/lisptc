@@ -24,6 +24,7 @@ import {
 	type OAuthClients,
 	type OAuthConnConfig,
 	type OAuthStore,
+	oauthKey,
 	type ServerHandle,
 	type ServerRef,
 	type StartWatch,
@@ -69,8 +70,10 @@ function signsIn(conf: ConnConfig): conf is OAuthConnConfig {
 	return "oauth" in conf && Boolean(conf.oauth);
 }
 
-function serverKey(conf: OAuthConnConfig, serverUrl: string): string {
-	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
+function serverDescription(...candidates: unknown[]): string | undefined {
+	for (const text of candidates)
+		if (typeof text === "string" && text.trim() !== "") return text.trim();
+	return undefined;
 }
 
 export function mcpClient(ports: McpClientPorts): McpClient {
@@ -89,7 +92,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 				: undefined;
 		return StoredOAuthProvider.open(
 			scopedStore,
-			serverKey(conf, serverUrl),
+			oauthKey(conf, serverUrl),
 			ports.redirectUri,
 			oauthScope(conf),
 			issuer,
@@ -215,11 +218,17 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		}
 		const serverId = randomUUID();
 		clients.set(serverId, { client, server: { name: conf.name } });
-		const icons = client.getServerVersion()?.icons as Icon[] | undefined;
+		const version = client.getServerVersion();
+		const icons = version?.icons as Icon[] | undefined;
+		const description = serverDescription(
+			(version as { description?: unknown } | undefined)?.description,
+			client.getInstructions(),
+		);
 		return {
 			serverId,
 			tools: tools as Tool[],
 			...(icons?.length ? { icons } : {}),
+			...(description === undefined ? {} : { description }),
 		};
 	}
 
@@ -279,6 +288,15 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			await ports.host.stop(entry.server);
 		},
 
+		async remove(conf: ConnConfig): Promise<void> {
+			for (const [serverId, entry] of clients)
+				if (entry.server.name === conf.name) {
+					clients.delete(serverId);
+					await entry.client.close().catch(() => {});
+				}
+			await ports.host.remove(conf);
+		},
+
 		async asleep(serverId: string): Promise<boolean> {
 			const entry = clients.get(serverId);
 			return entry ? await ports.host.asleep(entry.server) : false;
@@ -290,7 +308,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 		},
 
 		async logout(conf: OAuthConnConfig): Promise<void> {
-			await scopedStore.clear(serverKey(conf, "url" in conf ? conf.url : ""));
+			await scopedStore.clear(oauthKey(conf, "url" in conf ? conf.url : ""));
 		},
 
 		async authorize(conf: OAuthConnConfig, code: string): Promise<void> {

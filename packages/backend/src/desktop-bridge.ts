@@ -81,6 +81,11 @@ export class BridgedHost implements McpHost {
 		await opened.end();
 	}
 
+	async remove(conf: ConnConfig): Promise<void> {
+		await this.stop(conf);
+		this.report({ server: conf.name, phase: "gone" });
+	}
+
 	async stopAll(): Promise<void> {
 		await Promise.all(
 			[...this.opened.keys()].map((name) => this.stop({ name })),

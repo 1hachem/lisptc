@@ -48,10 +48,19 @@ export type ConnConfig =
 
 export type OAuthConnConfig = RemoteEntry | LaunchedEntry | ImageEntry;
 
+export function oauthKey(conf: OAuthConnConfig, serverUrl: string): string {
+	return "image" in conf ? `mcp:${conf.name}` : new URL(serverUrl).origin;
+}
+
+export function offersLogin(conf: ConnConfig): conf is OAuthConnConfig {
+	return "url" in conf || ("image" in conf && conf.oauth !== undefined);
+}
+
 export interface ConnectResult {
 	serverId: string;
 	tools: Tool[];
 	icons?: Icon[];
+	description?: string;
 }
 
 export interface ToolCall {
@@ -65,6 +74,7 @@ export interface McpClient {
 	connect(conf: ConnConfig, watch?: StartWatch): Promise<ConnectResult>;
 	callTool(call: ToolCall, signal?: AbortSignal): Promise<unknown>;
 	disconnect(serverId: string): Promise<void>;
+	remove(conf: ConnConfig): Promise<void>;
 	asleep(serverId: string): Promise<boolean>;
 	login(conf: OAuthConnConfig): Promise<{ authUrl: string | null }>;
 	logout(conf: OAuthConnConfig): Promise<void>;
@@ -130,6 +140,7 @@ export interface StartWatch {
 export interface McpHost {
 	ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle>;
 	stop(server: ServerRef): Promise<void>;
+	remove(conf: ConnConfig): Promise<void>;
 	stopAll(): Promise<void>;
 	status(server: ServerRef): ServerState;
 	logs(server: ServerRef): string;
@@ -146,6 +157,51 @@ export interface UserMachine {
 export interface ToolkitRegistry {
 	all(): ConnConfig[];
 	local?(name: string): StdioConnConfig | undefined;
+}
+
+export interface McpMount {
+	readonly server: string;
+	readonly conf?: RemoteEntry;
+	readonly tools: readonly Tool[];
+}
+
+export interface McpServerInfo {
+	readonly server: string;
+	readonly description?: string;
+	readonly icon?: string;
+	readonly login?: boolean;
+	readonly tools: readonly Tool[];
+}
+
+export interface McpRegistry {
+	mounts(): readonly McpMount[] | Promise<readonly McpMount[]>;
+	mount(mount: McpMount): void | Promise<void>;
+	unmount(server: string): void | Promise<void>;
+	describe(info: McpServerInfo): void | Promise<void>;
+	forget(server: string): void | Promise<void>;
+}
+
+export function memoryRegistry(): McpRegistry & {
+	described(): readonly McpServerInfo[];
+} {
+	const mounted = new Map<string, McpMount>();
+	const infos = new Map<string, McpServerInfo>();
+	return {
+		mounts: () => [...mounted.values()],
+		mount: (mount) => {
+			mounted.set(mount.server, mount);
+		},
+		unmount: (server) => {
+			mounted.delete(server);
+		},
+		describe: (info) => {
+			infos.set(info.server, info);
+		},
+		forget: (server) => {
+			infos.delete(server);
+		},
+		described: () => [...infos.values()],
+	};
 }
 
 export type ServerAccess =

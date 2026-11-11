@@ -56,6 +56,18 @@ describe("what the local process host reports about the servers it runs", () => 
 		]);
 	});
 
+	it("reports a removed server gone, so its row goes", async () => {
+		const { host, reports } = reporting();
+		const port = await freePort();
+		const conf = serving(port, answering(port));
+
+		await host.ensure(conf);
+		await host.remove(conf);
+
+		expect(reports.at(-1)).toEqual({ server: "notes", phase: "gone" });
+		expect(host.status({ name: "notes" })).toBe("unknown");
+	});
+
 	it("reports a server failed when it exits before it answers", async () => {
 		const { host, reports } = reporting();
 		const conf = serving(
