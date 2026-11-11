@@ -15,7 +15,7 @@ export interface Signed {
 	as: TestConvex<typeof schema>;
 }
 
-export function harness(): TestConvex<typeof schema> {
+export function testDeployment(): TestConvex<typeof schema> {
 	const t = convexTest(schema, modules);
 	betterAuthTest.register(t);
 	return t;
