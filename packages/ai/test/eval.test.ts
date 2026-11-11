@@ -117,12 +117,6 @@ describe("a user message", () => {
 		).toBeUndefined();
 	});
 
-	test("leaves the agent loop's prose feedback untouched", async () => {
-		const threadId = crypto.randomUUID();
-		await evaluated("(just prose, nothing to run)", threadId);
-		expect(repls.peek(threadId)?.takeProseFeedback()).toBe("");
-	});
-
 	test("is handed to the agent unless a form asked to stay quiet", async () => {
 		const quiet = testRepls([
 			extension((hooks) =>

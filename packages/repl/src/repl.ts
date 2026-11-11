@@ -536,8 +536,6 @@ interface Noted {
 }
 
 export class AgentRepl extends MemoryRepl {
-	private pendingProse: string[] = [];
-
 	protected override setup(interp: ConversationInterpreter): void {
 		const previous = this.currentInterpOrUndefined();
 		if (previous !== undefined) interp.carryFrom(previous);
@@ -555,7 +553,6 @@ export class AgentRepl extends MemoryRepl {
 		const result = await this.evaluate(code, origin, live);
 		if (result.held) return ending(render(result));
 		if (!this.answered(code, result)) return render(result);
-		this.pendingProse.push(...result.skipped);
 		return {
 			model: result.model,
 			user: result.user,
@@ -658,27 +655,6 @@ export class AgentRepl extends MemoryRepl {
 
 	seed(said: readonly Said[]): void {
 		this.interp.seed(said);
-	}
-
-	takeProseFeedback(): string {
-		const notes = this.pendingProse;
-		this.pendingProse = [];
-		return skipNotes(notes);
-	}
-
-	clearTurnSignals(): void {
-		this.pendingProse = [];
-	}
-
-	override reset(): void {
-		super.reset();
-		this.clearTurnSignals();
-	}
-
-	override async recover(): Promise<number | undefined> {
-		const depth = await super.recover();
-		this.clearTurnSignals();
-		return depth;
 	}
 }
 

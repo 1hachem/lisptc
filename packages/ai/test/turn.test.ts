@@ -17,7 +17,6 @@ import {
 	concluding,
 	extension,
 	hearing,
-	noting,
 	receiving,
 	recording,
 	reporting,
@@ -518,16 +517,15 @@ describe("the agent turn", () => {
 		});
 	});
 
-	test("withheld prose feedback reaches the model, and the caller's transcript is untouched", async () => {
-		const repl = testRepl([noting("(see above)")]);
-		await repl.evalOutput("all done");
+	test("a note left between turns reaches the model, and the caller's transcript is untouched", async () => {
+		const repl = testRepl();
+		repl.interp.conversation.append("stub", "a note left between turns");
 		script = [[{ text: "three." }]];
 
 		await drain(ask, { repl });
 
 		const sent = seen[0].messages;
-		expect(sent.at(-1)?.content).toContain("your previous reply ran nothing");
-		expect(sent.at(-1)?.content).toContain("(see above)");
+		expect(sent.at(-1)?.content).toContain("a note left between turns");
 		expect(ask).toHaveLength(1);
 	});
 

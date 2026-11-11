@@ -22,7 +22,6 @@ import {
 	evalCode,
 	isUserPrompt,
 	noted,
-	proseFeedbackContent,
 	replResultContent,
 	said,
 	stripFences,
@@ -236,10 +235,6 @@ async function* openTurn(
 	config: AgentConfig | undefined,
 ): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
 	const { repl, transcript, trace, signal } = turn;
-	const withheld = repl.takeProseFeedback();
-	if (withheld)
-		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
-
 	repl.seed(said(transcript));
 	const started = await repl.turnStart(turn.telemetry.turnStart);
 	yield* recorded(started.entries);
