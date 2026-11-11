@@ -3,6 +3,9 @@ imagePullSecret: ""
 dev:
   enabled: true
   watch: true
+  seed:
+    email: test@gmail.com
+    password: crptx123
 
 infisical:
   envSlug: dev

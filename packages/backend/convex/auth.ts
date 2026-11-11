@@ -3,9 +3,10 @@ import { type AuthFunctions, createClient } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import type { GenericCtx } from "@convex-dev/better-auth/utils";
 import { betterAuth } from "better-auth/minimal";
+import { v } from "convex/values";
 import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
-import { env } from "./_generated/server.js";
+import { env, internalAction } from "./_generated/server.js";
 import authConfig from "./auth.config.js";
 import { slugify } from "./lib/slug.js";
 import { posthog } from "./posthog.js";
@@ -96,3 +97,19 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 			convex({ authConfig }),
 		],
 	});
+
+export const seedAccount = internalAction({
+	args: { email: v.string(), password: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { email, password }) => {
+		const existing = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		if (existing !== null) return null;
+		await createAuth(ctx).api.signUpEmail({
+			body: { email, password, name: email },
+		});
+		return null;
+	},
+});
