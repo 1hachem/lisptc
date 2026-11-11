@@ -297,10 +297,12 @@ Paths same as get-in.
   characters · (string-join list sep) · (string-trim s) .")
 
 (memory "internal/lang/prelude-format" :when "the agent is about to build a sentence or message around values, or fill a text template"
-  "- (format template arg...) fill template, return string: ~a inserts next arg
-  as string would, ~% newline, ~~ tilde; letter case-insensitive.
-(format \"The sum was ~a\" n) writes a sentence around a value. Prints
-  nothing: echo result.")
+  "- (format nil \"The sum was ~a\" n) fills template, returns string.
+- (format t control arg...) prints string, returns nil.
+- ~a next arg as string would; ~s readable, string keeps quotes; ~d integer;
+  ~% newline; ~& newline unless at line start; ~~ tilde.
+- ~{...~} loops over list arg, ~^ stops before last separator:
+(format nil \"~{~a~^, ~}\" '(1 2 3)) gives \"1, 2, 3\" .")
 
 (memory "internal/lang/places" :when "the agent is about to store into a variable, a car or cdr, a list index, a vector slot, a hash entry or a nested record, or increment a counter; or a setf just failed"
   "Places:
@@ -310,7 +312,7 @@ Paths same as get-in.
 - (push x place) · (pop place) · (incf place [n]) · (decf place [n]) .")
 
 (memory "internal/lang/macros" :when "the agent is about to define a macro, generate code from a template, or needs a name that will not clash with user variables; or a macro expanded wrong"
-  "MACROS
+  (format nil "MACROS
 
 defmacro defines compile-time transformer. Build expansion with quasiquote:
 
@@ -319,7 +321,8 @@ defmacro defines compile-time transformer. Build expansion with quasiquote:
     `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))
 
 (gensym) for temporaries you introduce, so user variables are not captured.
-Expansion depth max 20 nesting levels at compile time.")
+Expansion depth max ~d nesting levels at compile time."
+    *max-macro-depth*))
 
 (memory "internal/lang/errors" :when "the agent is about to handle a failure, catch an error, unwind on exit, or leave early with block, return-from, catch or throw; or an error escaped a handler it wrote"
   "ERRORS & CONTROL FLOW

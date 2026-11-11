@@ -4,7 +4,7 @@ import type { Awaitable } from "@repo/shared/host";
 import type { z } from "zod";
 import { AsyncWork } from "./async.ts";
 import { Channels } from "./channels.ts";
-import { compileFunc } from "./compile.ts";
+import { compileFunc, MACRO_EXPANSION_DEPTH } from "./compile.ts";
 import { installCore } from "./core-builtins.ts";
 import {
 	type Arity,
@@ -256,6 +256,14 @@ export class Interp {
 			runLoopBody: (a) => this.runLoopBody(a),
 			importFile: (path) => this.importFile(path),
 		});
+		this.defineGlobal(
+			newSym("*max-macro-depth*"),
+			BigInt(MACRO_EXPANSION_DEPTH),
+			{
+				signature: "*max-macro-depth*",
+				doc: "How deep macro expansion nests before it stops with an error.",
+			},
+		);
 
 		for (const extension of options.extensions ?? []) {
 			extension(this);
