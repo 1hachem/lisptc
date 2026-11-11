@@ -515,8 +515,15 @@ export class MemoryBank {
 		interp.defineGlobal(newSym(DECLARED_AREAS), null);
 		for (const source of interp.builtinMemories()) runSync(interp, source);
 		const memories = new Map<string, Memory>();
-		for (const declared of declaredIn(interp, DECLARED_MEMORIES)) {
-			const memory = builtinFrom(withBody(interp, declared));
+		const evaluated = declaredIn(interp, DECLARED_MEMORIES).map((declared) =>
+			withBody(interp, declared),
+		);
+		interp.defineGlobal(
+			newSym(DECLARED_MEMORIES),
+			arrayToList([...evaluated].reverse()),
+		);
+		for (const declared of evaluated) {
+			const memory = builtinFrom(declared);
 			if (memories.has(memory.key))
 				throw new EvalException(
 					"two built-in memories share this key",
