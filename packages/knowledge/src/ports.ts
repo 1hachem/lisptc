@@ -43,4 +43,6 @@ export interface KnowledgeHost {
 	prompt: PromptSource;
 	memories: PromptSource;
 	clock: Clock;
+	attachmentTtlMs: number;
+	binTtlMs: number;
 }

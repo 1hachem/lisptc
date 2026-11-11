@@ -45,7 +45,11 @@ import type { ConvexHttpClient } from "convex/browser";
 import type { Infer } from "convex/values";
 import type { Id } from "../convex/_generated/dataModel.js";
 import { WORKSPACE_ICONS } from "../convex/lib/workspaceIcons.ts";
-import { MAX_KNOWLEDGE_BYTES } from "../convex/limits.js";
+import {
+	ATTACHMENT_TTL_MS,
+	BIN_TTL_MS,
+	MAX_KNOWLEDGE_BYTES,
+} from "../convex/limits.js";
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
 import { BridgedHost, type Desktop } from "./desktop-bridge.ts";
@@ -124,6 +128,8 @@ export async function workspaceExtensions(
 		knowledgeHostFor({
 			store: new ConvexKnowledgeStore(workspaceId, connect),
 			maxDownloadBytes: MAX_KNOWLEDGE_BYTES,
+			attachmentTtlMs: ATTACHMENT_TTL_MS,
+			binTtlMs: BIN_TTL_MS,
 		}),
 	);
 	const agents = agentsExtension(

@@ -2,6 +2,7 @@ import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
 import { zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { STORE_FOLDERS } from "@repo/shared/files";
@@ -45,10 +46,37 @@ function attachSession(hooks: SessionHooks): void {
 		if (files.length > 0)
 			ctx.interp.conversation.append(
 				"knowledge",
-				`user attached: ${files.map(({ folder, name }) => `${folder}/${name}`).join(", ")}`,
+				`${ATTACHED_NOTE}${files.map(({ folder, name }) => `${folder}/${name}`).join(", ")}`,
 			);
 		yield* next(ctx, received);
 	});
+}
+
+const ATTACHED_NOTE = "user attached: ";
+
+const DAY_MS = 86_400_000;
+
+function registerExpiry(interp: Interp, host: KnowledgeHost): void {
+	interp.defineGlobal(newSym("*knowledge-attached-note*"), ATTACHED_NOTE, {
+		signature: "*knowledge-attached-note*",
+		doc: "The note an attachment carries while it is kept in the attachments folder.",
+	});
+	interp.defineGlobal(
+		newSym("*knowledge-attachment-days*"),
+		BigInt(Math.round(host.attachmentTtlMs / DAY_MS)),
+		{
+			signature: "*knowledge-attachment-days*",
+			doc: "How many days an unkept attachment stays before it moves to the bin.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*knowledge-bin-days*"),
+		BigInt(Math.round(host.binTtlMs / DAY_MS)),
+		{
+			signature: "*knowledge-bin-days*",
+			doc: "How many days a file stays in the bin before it is deleted for good.",
+		},
+	);
 }
 
 export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
@@ -58,6 +86,7 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 			registerKnowledge(interp, host);
 			registerAttach(interp, host);
 			registerBin(interp, host);
+			registerExpiry(interp, host);
 		},
 		{
 			asks: [...KNOWLEDGE_ASKS, ...ATTACHMENT_ASKS, ...BIN_ASKS],

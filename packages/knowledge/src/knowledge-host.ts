@@ -96,6 +96,8 @@ export function knowledgeHostFor(options: {
 	downloader?: Downloader;
 	clock?: Clock;
 	pdf?: PdfReader;
+	attachmentTtlMs: number;
+	binTtlMs: number;
 }): KnowledgeHost {
 	return {
 		store: options.store,
@@ -104,5 +106,7 @@ export function knowledgeHostFor(options: {
 		prompt: knowledgePrompt,
 		memories: knowledgeMemories,
 		clock: options.clock ?? systemClock,
+		attachmentTtlMs: options.attachmentTtlMs,
+		binTtlMs: options.binTtlMs,
 	};
 }
