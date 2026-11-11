@@ -2,11 +2,12 @@ import {
 	bufferTransport,
 	type ChannelBuffer,
 } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveSync, settled } from "@repo/interpreter/drive";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import {
@@ -24,31 +25,33 @@ import { intentHost } from "../src/intent-host.ts";
 function fresh() {
 	const clock = { at: 1000, now: () => clock.at };
 	const extension = intentExtension({ ...intentHost, clock });
-	const interp = new Interp({ extensions: [extension] });
+	const interp = new ConversationInterpreter({ extensions: [extension] });
 	runSync(interp, prelude);
 	const hooks = newSessionHooks();
 	extension.session?.(hooks);
 	return { interp, hooks, clock };
 }
 
-function turnStart(interp: Interp, hooks: SessionHooks): void {
-	driveSync(
-		hooks.turnStart.run(() => settled(undefined), { interp, emit: () => {} }),
-	);
+function turnStart(interp: ConversationInterpreter, hooks: SessionHooks): void {
+	driveSync(hooks.turnStart.run(() => settled(undefined), { interp }));
 }
 
-function failStep(interp: Interp, hooks: SessionHooks, code: string) {
+function failStep(
+	interp: ConversationInterpreter,
+	hooks: SessionHooks,
+	code: string,
+) {
 	return watching(interp, () => {
 		step(interp, code);
 		hooks.stepError.run(
 			(_c, text) => ({ model: text, user: text }),
-			{ interp, code, emit: () => {} },
+			{ interp, code },
 			"boom\n",
 		);
 	});
 }
 
-function watching(interp: Interp, run: () => void) {
+function watching(interp: ConversationInterpreter, run: () => void) {
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
 	try {
@@ -67,7 +70,11 @@ function questions(buffer: ChannelBuffer) {
 	return view(buffer.collect(journal), { ...questionKind, fold: every });
 }
 
-function settle(interp: Interp, hooks: SessionHooks, outcome: TurnOutcome) {
+function settle(
+	interp: ConversationInterpreter,
+	hooks: SessionHooks,
+	outcome: TurnOutcome,
+) {
 	const turn: AgentTurn = {
 		interp,
 		threadId: "t",
@@ -84,23 +91,21 @@ function settle(interp: Interp, hooks: SessionHooks, outcome: TurnOutcome) {
 	});
 }
 
-function beforeSettle(interp: Interp, hooks: SessionHooks, more: boolean) {
+function beforeSettle(
+	interp: ConversationInterpreter,
+	hooks: SessionHooks,
+	more: boolean,
+) {
 	return watching(interp, () => {
-		driveSync(
-			hooks.beforeSettle.run(
-				(_c, m) => settled(m),
-				{ interp, emit: () => {} },
-				more,
-			),
-		);
+		driveSync(hooks.beforeSettle.run((_c, m) => settled(m), { interp }, more));
 	});
 }
 
-function logOf(interp: Interp): string {
+function logOf(interp: ConversationInterpreter): string {
 	return str(runSync(interp, "*intent/log*"));
 }
 
-function step(interp: Interp, code: string) {
+function step(interp: ConversationInterpreter, code: string) {
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
 	try {

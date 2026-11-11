@@ -1,3 +1,4 @@
+import type { Said } from "@repo/interpreter/conversation";
 import type { Effect } from "@repo/interpreter/effects";
 import type { AgentRepl, EvalOutput, LiveEntries } from "@repo/repl/repl";
 import type { Entry } from "@repo/shared/journal";
@@ -8,40 +9,32 @@ export interface TranscriptEntry {
 	role: "user" | "assistant" | "system" | "tool";
 	content: string;
 	event?: { source: string };
-	riding?: string;
+	source?: string;
 }
 
 export function isUserPrompt(entry: TranscriptEntry): boolean {
 	return entry.role === "user" && entry.event === undefined;
 }
 
-export function snapshotConversation(
-	transcript: TranscriptEntry[],
-): Record<string, unknown> {
-	return {
-		conversation: transcript.map((e) => ({
-			role: e.event ? "system" : e.role,
-			content: e.content,
-		})),
-		"user-messages": transcript.filter(isUserPrompt).map((e) => e.content),
-		"assistant-messages": transcript
-			.filter((e) => e.role === "assistant")
-			.map((e) => e.content),
-	};
+export function said(transcript: readonly TranscriptEntry[]): Said[] {
+	return transcript.map((e) =>
+		e.event
+			? { role: "system", content: e.content }
+			: e.source === undefined
+				? { role: e.role, content: e.content }
+				: { role: e.role, content: e.content, source: e.source },
+	);
 }
 
-export function joinRiding(standing: string | undefined, text: string): string {
-	return standing === undefined || standing === ""
-		? text
-		: `${standing}\n\n${text}`;
+export function noted(note: Said): TranscriptEntry {
+	return { role: "system", content: note.content, source: note.source };
 }
 
 export function toLlmMessages(transcript: TranscriptEntry[]): ChatMessage[] {
 	return transcript.map((e) => ({
-		role: e.role === "tool" ? "user" : e.role,
-		content: e.riding
-			? joinRiding(modelContent(e), neutraliseSystemEvents(e.riding))
-			: modelContent(e),
+		role:
+			e.role === "tool" ? "user" : e.role === "system" ? "developer" : e.role,
+		content: modelContent(e),
 	}));
 }
 
@@ -70,18 +63,6 @@ export function replResultContent(output: string, error: boolean): string {
 	});
 }
 
-export function proseFeedbackContent(feedback: string): string {
-	return replResultContent(
-		[
-			"your previous reply ran nothing — a parenthesis in prose is read as prose:",
-			feedback.trimEnd(),
-			"put parentheses only around code you mean to run.",
-			"this note is private: it is not from the user and the user cannot see it. Do not mention it, apologise for it, or explain it — just answer the user's message without repeating that shape.",
-		].join("\n"),
-		false,
-	);
-}
-
 async function outcomeOf(
 	repl: AgentRepl,
 	run: () => Promise<EvalOutput>,
@@ -91,7 +72,7 @@ async function outcomeOf(
 	error: boolean;
 	entries: readonly Entry[];
 	effects: readonly Effect[];
-	emitted: string;
+	notes: readonly Said[];
 	failed: boolean;
 	failure: string;
 	held: boolean;
@@ -103,7 +84,7 @@ async function outcomeOf(
 			user,
 			entries,
 			effects,
-			emitted,
+			notes,
 			failed,
 			failure = "",
 			held,
@@ -116,7 +97,7 @@ async function outcomeOf(
 			error: false,
 			entries,
 			effects,
-			emitted,
+			notes,
 			failed,
 			held,
 			results,
@@ -135,7 +116,7 @@ async function outcomeOf(
 			error: true,
 			entries: [],
 			effects: [],
-			emitted: "",
+			notes: [],
 			failed: true,
 			held: false,
 			results: [],
@@ -177,7 +158,7 @@ function replOutcome(content: string): { output: string; error: boolean } {
 	return { output: content, error: false };
 }
 
-function userRanEvent(result: TranscriptEntry): TranscriptEntry {
+export function userRanEvent(result: TranscriptEntry): TranscriptEntry {
 	const { output, error } = replOutcome(result.content);
 	return {
 		role: "user",
@@ -189,13 +170,4 @@ function userRanEvent(result: TranscriptEntry): TranscriptEntry {
 		].join("\n\n"),
 		event: { source: "lisp-repl" },
 	};
-}
-
-export function withItsResult(
-	prompt: TranscriptEntry,
-	result: TranscriptEntry,
-): [TranscriptEntry, TranscriptEntry] {
-	const ran = userRanEvent(result);
-	if (result.riding === undefined) return [prompt, ran];
-	return [{ ...prompt, riding: joinRiding(prompt.riding, result.riding) }, ran];
 }

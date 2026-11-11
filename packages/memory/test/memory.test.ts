@@ -2,16 +2,11 @@ import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import {
-	arrayToList,
-	Cell,
-	listToArray,
-	newSym,
-} from "@repo/interpreter/objects";
+import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { type InterpExtension, openSession } from "@repo/interpreter/session";
@@ -42,7 +37,7 @@ function drive<T>(gen: Eval<T>): Promise<T> {
 }
 
 interface Fixture {
-	interp: Interp;
+	interp: ConversationInterpreter;
 	bank: MemoryBank;
 	step(code: string): Promise<string>;
 }
@@ -51,7 +46,7 @@ function fixture(
 	bank: MemoryBank = new MemoryBank(new VolatileStore()),
 	extras: InterpExtension[] = [],
 ): Fixture {
-	const interp = new Interp({
+	const interp = new ConversationInterpreter({
 		extensions: [memoryExtension(memoryHost, { bank }), ...extras],
 	});
 	runSync(interp, prelude);
@@ -70,16 +65,13 @@ function fixture(
 
 async function opening(f: Fixture): Promise<string> {
 	const hooks = openSession([memoryExtension(memoryHost, { bank: f.bank })]);
-	let emitted = "";
 	await drive(
-		hooks.beginStep.run(() => settled(undefined), {
-			interp: f.interp,
-			emit: (text) => {
-				emitted += text;
-			},
-		}),
+		hooks.beginStep.run(() => settled(undefined), { interp: f.interp }),
 	);
-	return emitted;
+	return f.interp
+		.takeAppended()
+		.map((note) => note.content)
+		.join("");
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
@@ -87,9 +79,10 @@ async function ev(f: Fixture, code: string): Promise<string> {
 }
 
 function said(f: Fixture, text: string): void {
-	const before = f.interp.getGlobal(newSym("user-messages"));
-	const all = before instanceof Cell ? listToArray(before) : [];
-	f.interp.defineGlobal(newSym("user-messages"), arrayToList([...all, text]));
+	f.interp.seed(
+		[...f.interp.conversation.said(), { role: "user", content: text }],
+		0,
+	);
 }
 
 function clockAt(ms: { now: number }): Clock {
@@ -456,7 +449,7 @@ describe("triggers", () => {
 		const f = fixture(bank);
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
 
-		const quiet = new Interp({
+		const quiet = new ConversationInterpreter({
 			extensions: [memoryExtension(memoryHost, { bank })],
 		});
 		runSync(quiet, prelude);
@@ -729,7 +722,9 @@ describe("the file store", () => {
 	it("round-trips a form body, which is what makes a recipe survive", () => {
 		const dir = mkdtempSync(join(tmpdir(), "lisptc-memory-test-"));
 		const store = new FileMemoryStore(dir);
-		const interp = new Interp({ extensions: [memoryExtension(memoryHost)] });
+		const interp = new ConversationInterpreter({
+			extensions: [memoryExtension(memoryHost)],
+		});
 		runSync(interp, prelude);
 		const body = runSync(interp, "(quote (defun double (x) (* x 2)))");
 		store.put({
@@ -860,7 +855,7 @@ describe("the start of a conversation", () => {
 		expect(await opening(f)).toBe("");
 	});
 
-	it("rides the user's first message", async () => {
+	it("is told on the user's first message", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "role" "you are a pirate" :on '(start))`);
 		said(f, "hello");

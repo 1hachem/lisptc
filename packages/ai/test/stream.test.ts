@@ -14,15 +14,15 @@ import {
 	printing,
 	receiving,
 	reporting,
-	riding,
 	streamChat,
+	telling,
 	testRepl,
 } from "./helpers.ts";
 
 const emitting = (text: string) =>
 	extension((hooks) =>
 		hooks.evalStep.use((ctx, next) => {
-			ctx.emit(text);
+			ctx.interp.conversation.append("test", text);
 			return next(ctx);
 		}),
 	);
@@ -51,7 +51,8 @@ interface WireMessage {
 		reasoning_content?: string;
 		ui?: unknown;
 		display?: string;
-		riding?: string;
+		source?: string;
+		noted?: boolean;
 		quiet?: boolean;
 		kind?: string;
 		value?: unknown;
@@ -105,20 +106,16 @@ describe("chat stream", () => {
 		options: Partial<ChatStreamOptions> = {},
 	): Promise<WireMessage[]> {
 		const made: WireMessage[] = [];
-		let revised: ReadonlyMap<number, WireMessage> = new Map();
 		await stream(input, {
 			...options,
 			onStep: (produced) => {
 				made.push(...produced);
 			},
-			onTurn: (rest, touched) => {
+			onTurn: (rest) => {
 				made.push(...rest);
-				revised = touched;
 			},
 		}).text();
-		const all = [...((input.messages ?? []) as WireMessage[]), ...made];
-		for (const [at, message] of revised) all[at] = message;
-		return all;
+		return [...((input.messages ?? []) as WireMessage[]), ...made];
 	}
 
 	beforeEach(() => {
@@ -223,7 +220,7 @@ describe("chat stream", () => {
 
 	test("reports why a turn failed, and nothing when it did not", async () => {
 		const failures: (string | undefined)[] = [];
-		const onTurn: ChatStreamOptions["onTurn"] = (_made, _revised, failure) => {
+		const onTurn: ChatStreamOptions["onTurn"] = (_made, failure) => {
 			failures.push(failure);
 		};
 		const ask = { messages: [{ type: "human", content: "what is 1 + 2?" }] };
@@ -443,23 +440,18 @@ describe("chat stream", () => {
 		expect(final[0].additional_kwargs?.meta).toBeUndefined();
 	});
 
-	test("what rode the user's message is stored on it, for the turns after", async () => {
-		let revised: ReadonlyMap<number, WireMessage> = new Map();
-		const messages = await finalMessages(
-			stream(
-				{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
-				{
-					repl: testRepl([riding("you are a pirate")]),
-					onTurn: (_produced, touched) => {
-						revised = touched;
-					},
-				},
-			),
+	test("a note an extension appends is stored as its own row after the prompt, and the prompt is left as sent", async () => {
+		const messages = await recorded(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ repl: testRepl([telling("you are a pirate")]) },
 		);
 
-		expect(messages[0].content).toBe("what is 1 + 2?");
-		expect(messages[0].additional_kwargs?.riding).toBe("you are a pirate");
-		expect(revised.get(0)?.additional_kwargs?.riding).toBe("you are a pirate");
+		expect(messages[0]).toEqual({ type: "human", content: "what is 1 + 2?" });
+		expect(messages[1]).toMatchObject({
+			type: "system",
+			content: "you are a pirate",
+			additional_kwargs: { source: "test", noted: true },
+		});
 	});
 
 	describe("what the user's newest message carried", () => {
@@ -623,7 +615,7 @@ describe("chat stream", () => {
 				onStep: (produced) => {
 					steps.push(produced);
 				},
-				onTurn: (_rest, _revised, failed) => {
+				onTurn: (_rest, failed) => {
 					failure = failed;
 				},
 			},
@@ -634,26 +626,26 @@ describe("chat stream", () => {
 		expect(steps.flat().map((m) => m.type)).toEqual(["ai", "tool"]);
 	});
 
-	test("what a step emits rides its result, and the model reads it the same after a reload", async () => {
+	test("what a step notes is stored after its result, and the model reads it the same after a reload", async () => {
 		const first = await recorded(
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
 			{ repl: testRepl([emitting("k: the note\n")]) },
 		);
-		const live = sent[1].find((m) => m.content.includes("tool_result"));
+		const live = sent[1].find((m) => m.role === "developer");
 
-		const stored = first.find((m) => m.type === "tool");
-		expect(stored?.additional_kwargs?.riding).toBe("k: the note\n");
-		expect(stored?.content).not.toContain("k: the note");
-		expect(live?.content).toContain("k: the note");
+		const at = first.findIndex((m) => m.type === "system");
+		expect(first[at - 1]?.type).toBe("tool");
+		expect(first[at - 1]?.content).not.toContain("k: the note");
+		expect(first[at]?.content).toBe("k: the note\n");
+		expect(live).toEqual({ role: "developer", content: "k: the note\n" });
 
 		turn = 0;
 		sent.length = 0;
 		await stream({
 			messages: [...first, { type: "human", content: "and 2 + 2?" }],
 		}).text();
-		const reloaded = sent[0].find((m) => m.content.includes("tool_result"));
 
-		expect(reloaded?.content).toBe(live?.content);
+		expect(sent[0].find((m) => m.role === "developer")).toEqual(live);
 	});
 
 	test("a user message's eval result reaches the model as a system event after it and the wire as its own row", async () => {

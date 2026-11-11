@@ -2,10 +2,11 @@ import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { setExit } from "@repo/interpreter/core-builtins";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { Reader } from "@repo/interpreter/reader";
@@ -43,7 +44,7 @@ const stdoutTransport = (): ChannelTransport => ({
 });
 
 class InteractiveRepl implements Repl {
-	private currentInterp: Interp;
+	private currentInterp: ConversationInterpreter;
 	private readonly extensions = cliExtensions();
 	private readonly hooks = openSession(this.extensions);
 
@@ -51,12 +52,14 @@ class InteractiveRepl implements Repl {
 		this.currentInterp = this.freshInterp();
 	}
 
-	get interp(): Interp {
+	get interp(): ConversationInterpreter {
 		return this.currentInterp;
 	}
 
-	private freshInterp(): Interp {
-		const interp = new Interp({ extensions: this.extensions });
+	private freshInterp(): ConversationInterpreter {
+		const interp = new ConversationInterpreter({
+			extensions: this.extensions,
+		});
 		runSync(interp, prelude);
 		interp.channels.pipe(stdoutTransport());
 		return interp;
@@ -104,24 +107,30 @@ class InteractiveRepl implements Repl {
 				async (ctx) => {
 					await runAsync(ctx.interp, ctx.code);
 				},
-				{ interp, code, emit: write },
+				{ interp, code },
 			);
 		} catch (ex) {
 			if (!(ex instanceof StepHold)) throw ex;
 		} finally {
 			detach();
+			for (const { content } of interp.takeAppended()) write(content);
 		}
 		return openAsks(buffer.collect(journal));
 	}
 
 	private async answer(choice: AskChoice): Promise<void> {
 		const { action, values } = choice.answer;
-		await this.hooks.invoke.run(
-			() => {
-				throw new EvalException("no ui surface on this repl", action, false);
-			},
-			{ interp: this.currentInterp, action, values },
-		);
+		const interp = this.currentInterp;
+		try {
+			await this.hooks.invoke.run(
+				() => {
+					throw new EvalException("no ui surface on this repl", action, false);
+				},
+				{ interp, action, values },
+			);
+		} finally {
+			for (const { content } of interp.takeAppended()) write(content);
+		}
 	}
 }
 

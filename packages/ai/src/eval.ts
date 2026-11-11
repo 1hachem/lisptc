@@ -1,3 +1,4 @@
+import type { Said } from "@repo/interpreter/conversation";
 import { quiets } from "@repo/interpreter/effects";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Entry } from "@repo/shared/journal";
@@ -9,6 +10,7 @@ import { type ToolMessage, toolMessage } from "./tool-message.ts";
 export interface Evaluated {
 	message: ToolMessage;
 	entries: readonly Entry[];
+	notes: readonly Said[];
 	quiet: boolean;
 }
 
@@ -28,18 +30,16 @@ export async function evalMessage(
 	if (formsOnly(message).trim() === "") return undefined;
 	if (!runsAnything(message, repl.unrun(message))) return undefined;
 	const id = crypto.randomUUID();
-	const { effects, emitted, entries, ...outcome } = await evalMessageCode(
+	const { effects, notes, entries, ...outcome } = await evalMessageCode(
 		repl,
 		message,
 		id,
 	);
 	const quiet = quiets(effects);
 	return {
-		message: toolMessage(
-			{ ...outcome, quiet, ...(emitted === "" ? {} : { riding: emitted }) },
-			id,
-		),
+		message: toolMessage({ ...outcome, quiet }, id),
 		entries,
+		notes,
 		quiet,
 	};
 }

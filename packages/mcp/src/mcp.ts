@@ -1,5 +1,4 @@
 import { isNumeric } from "@repo/interpreter/arith";
-import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import { settled } from "@repo/interpreter/drive";
 import {
@@ -121,7 +120,7 @@ function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
 	hooks.beginStep.use(function* (ctx, next) {
 		const now = yield* settled(machine.refresh());
 		if (now !== known && machine.servers().length > 0)
-			ctx.emit(machineNotice(machine, now));
+			ctx.interp.conversation.append("mcp", machineNotice(machine, now));
 		known = now;
 		yield* next(ctx);
 	});
@@ -147,12 +146,6 @@ const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
 	fromLisp: (x) => Number(x),
 };
-
-const authorizationAnswered = topic<{
-	id: string;
-	server: string;
-	approved: boolean;
-}>("mcp-authorization-answered");
 
 function authorizationAsk(server: string, url: string): Ask {
 	const id = new URL(url).searchParams.get("state") ?? url;
@@ -204,9 +197,12 @@ function answerAuthorization(hooks: SessionHooks): void {
 				false,
 			);
 		const accepted = approved === true || approved === "true";
-		authorizationAnswered.emit(ctx.interp.channels, {
-			user: { id, server, approved: accepted },
-		});
+		ctx.interp.conversation.append(
+			"mcp",
+			accepted
+				? `The user authorized "${server}". Run (load-mcp "${server}") again and carry on with what you were doing.`
+				: `The user declined to authorize "${server}". Do not load it again unless they ask.`,
+		);
 		record(
 			ctx.interp.channels,
 			asksKind,
@@ -215,17 +211,6 @@ function answerAuthorization(hooks: SessionHooks): void {
 				label: accepted ? "Authorized" : "Not authorized",
 			}),
 		);
-	});
-	hooks.message.use((buffer, next) => {
-		const answers = buffer.collect(authorizationAnswered);
-		if (answers.length === 0) return next(buffer);
-		return answers
-			.map(({ server, approved }) =>
-				approved
-					? `The user authorized "${server}". Run (load-mcp "${server}") again and carry on with what you were doing.`
-					: `The user declined to authorize "${server}". Do not load it again unless they ask.`,
-			)
-			.join("\n\n");
 	});
 }
 

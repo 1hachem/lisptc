@@ -5,7 +5,7 @@ import { journal } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { note, output } from "@repo/interpreter/topics";
+import { output } from "@repo/interpreter/topics";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import type { Repls } from "../src/repl-store.ts";
@@ -42,20 +42,12 @@ export function extension(
 }
 
 const answersOnForms = extension((hooks) =>
-	hooks.answered.use((ctx, out, next) =>
-		ctx.code.includes("(") ? next(ctx, out) : true,
-	),
+	hooks.evalStep.use((ctx, next) => {
+		if (!ctx.code.includes("("))
+			effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+		return next(ctx);
+	}),
 );
-
-export function noting(text: string): InterpExtension {
-	const skipped = { model: { kind: "skipped" as const, text } };
-	return extension((hooks) =>
-		hooks.evalStep.use((ctx, next) => {
-			note.emit(ctx.interp.channels, skipped);
-			return next(ctx);
-		}),
-	);
-}
 
 export function reporting(text: string): InterpExtension {
 	return extension((hooks) => {
@@ -75,11 +67,11 @@ export function hearing(text: string): InterpExtension {
 	});
 }
 
-export function riding(text: string): InterpExtension {
+export function telling(text: string): InterpExtension {
 	let said = false;
 	return extension((hooks) => {
 		hooks.beginStep.use(function* (ctx, next) {
-			if (!said) ctx.emit(text);
+			if (!said) ctx.interp.conversation.append("test", text);
 			said = true;
 			yield* next(ctx);
 		});
@@ -90,7 +82,8 @@ export function receiving(): InterpExtension {
 	return extension((hooks) => {
 		hooks.received.use(function* (ctx, received, next) {
 			const said = received.said;
-			if (typeof said === "string") ctx.emit(`the user also said: ${said}`);
+			if (typeof said === "string")
+				ctx.interp.conversation.append("test", `the user also said: ${said}`);
 			yield* next(ctx, received);
 		});
 	});
@@ -152,6 +145,15 @@ export function holding(): InterpExtension {
 				);
 			},
 		},
+	);
+}
+
+export function approvingByNote(): InterpExtension {
+	return extension((hooks) =>
+		hooks.invoke.use(async (ctx, next) => {
+			if (ctx.action !== "approve") return next(ctx);
+			ctx.interp.conversation.append("approver", "approved, carry on");
+		}),
 	);
 }
 

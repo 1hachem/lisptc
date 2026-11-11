@@ -1,3 +1,4 @@
+import { effect } from "@repo/interpreter/effects";
 import type { Interp } from "@repo/interpreter/lisp";
 import { llmSlot, type Observed } from "@repo/interpreter/observe";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
@@ -17,9 +18,11 @@ export function observedExtension(): InterpExtension {
 
 export function answering(): InterpExtension {
 	return extension((hooks) =>
-		hooks.answered.use((ctx, out, next) =>
-			ctx.code.includes("(") ? next(ctx, out) : true,
-		),
+		hooks.evalStep.use((ctx, next) => {
+			if (!ctx.code.includes("("))
+				effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+			return next(ctx);
+		}),
 	);
 }
 

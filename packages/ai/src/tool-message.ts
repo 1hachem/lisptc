@@ -14,7 +14,6 @@ export interface ToolOutcome {
 	error: boolean;
 	failed: boolean;
 	failure?: string;
-	riding?: string;
 	results: readonly string[];
 	quiet?: boolean;
 }
@@ -24,7 +23,6 @@ export function toolMessage(outcome: ToolOutcome, id: string): ToolMessage {
 	if (outcome.display !== "") extras.display = outcome.display;
 	if (outcome.failed) extras.failed = true;
 	if (outcome.failure) extras.failure = outcome.failure;
-	if (outcome.riding !== undefined) extras.riding = outcome.riding;
 	if (outcome.results.length > 0) extras.results = [...outcome.results];
 	if (outcome.quiet) extras.quiet = true;
 	return {

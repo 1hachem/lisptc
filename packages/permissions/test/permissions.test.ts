@@ -792,6 +792,24 @@ describe("an approval asked in a session that was restored from its image", () =
 		expect((await later.step(UPCASE)).held).toBe(true);
 	});
 
+	it("applies a change to the config once it is approved", async () => {
+		const tighten = "(permission/deny string-upcase)";
+		const asked = session("");
+		const [request] = (await asked.step(tighten)).requests;
+		const later = session("");
+		restore(later.interp, snapshot(asked.interp));
+
+		const decided = await later.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+
+		expect(decided.message).toContain("it is applied");
+		expect(later.host.store.source()).toContain(tighten);
+		expect((await later.step(UPCASE)).failed).toBe(true);
+	});
+
 	it("is not kept once decided, so a later restore cannot answer it twice", async () => {
 		const { later, request } = await restoredAsk();
 		await later.invoke(DECIDE_ACTION, {

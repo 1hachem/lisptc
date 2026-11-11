@@ -72,7 +72,9 @@ describe("permissions over the memory extension", () => {
 			scope: "once",
 		});
 		expect(decided.failed).toBe(false);
-		expect(decided.message).toContain("run it again exactly as before");
+		expect(decided.notes.map((said) => said.content).join("\n")).toContain(
+			"run it again exactly as before",
+		);
 		expect(await printed(resumed, "(memory/forget-all)")).toContain("1");
 	});
 });

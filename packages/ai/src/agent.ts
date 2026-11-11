@@ -2,6 +2,7 @@ import {
 	AIMessage,
 	type BaseMessage,
 	HumanMessage,
+	ChatMessage as RoleMessage,
 	SystemMessage,
 } from "@langchain/core/messages";
 import type { ModelDelta, ModelUsage } from "@repo/interpreter/session";
@@ -23,6 +24,8 @@ export interface AgentConfig {
 
 function toLangchain(message: ChatMessage): BaseMessage {
 	if (message.role === "system") return new SystemMessage(message.content);
+	if (message.role === "developer")
+		return new RoleMessage(message.content, "developer");
 	if (message.role === "assistant") return new AIMessage(message.content);
 	return new HumanMessage(message.content);
 }

@@ -75,7 +75,7 @@ describe("a REPL built from a list of its own", () => {
 		expect((await bank.store.get("k"))?.body).toBe("a note worth keeping");
 	});
 
-	it("emits a fired memory for the model and records it in the journal, never in the REPL output", async () => {
+	it("notes a fired memory for the model and records it in the journal, never in the REPL output", async () => {
 		const bank = new MemoryBank(new VolatileStore());
 		const r = memoryRepl([
 			compactionExtension(compactionHost),
@@ -83,9 +83,12 @@ describe("a REPL built from a list of its own", () => {
 		]);
 		await r.eval(`(memory/remember "k" "the note" :on '(step))`);
 
-		const { model, entries, emitted } = await r.evalOutput("(+ 1 1)");
+		const { model, entries, notes } = await r.evalOutput("(+ 1 1)");
 
-		expect(emitted).toContain("k: the note");
+		expect(notes).toEqual([
+			expect.objectContaining({ role: "system", source: "memory" }),
+		]);
+		expect(notes[0]?.content).toContain("k: the note");
 		expect(view(entries, memoryKind)).toEqual([
 			{ key: "k", body: "the note", on: "step" },
 		]);

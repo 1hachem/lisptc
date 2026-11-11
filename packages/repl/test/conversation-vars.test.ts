@@ -1,20 +1,15 @@
+import type { Said } from "@repo/interpreter/conversation";
 import { describe, expect, it } from "vitest";
 import { agentRepl, memoryRepl } from "./helpers.ts";
 
-function sampleVars() {
-	return {
-		conversation: [
-			{ role: "user", content: "hi" },
-			{ role: "assistant", content: "(+ 1 2)" },
-		],
-		"user-messages": ["hi"],
-		"assistant-messages": ["(+ 1 2)"],
-	};
-}
+const sample: Said[] = [
+	{ role: "user", content: "hi" },
+	{ role: "assistant", content: "(+ 1 2)" },
+];
 
-const echoed = async (code: string, vars = sampleVars()): Promise<string> => {
+const echoed = async (code: string, said = sample): Promise<string> => {
 	const r = agentRepl();
-	r.setConversationVars(vars);
+	r.seed(said, 0);
 	return (await r.evalOutput(code)).user;
 };
 
@@ -40,38 +35,61 @@ describe("AgentRepl conversation variables", () => {
 
 	it("refuses to let code reassign a conversation global", async () => {
 		const r = agentRepl();
-		r.setConversationVars(sampleVars());
+		r.seed(sample, 0);
 		const out = await r.evalOutput("(setq conversation 1)");
 		expect(out.failed).toBe(true);
-		expect(out.user).toContain("read-only global owned by repl");
+		expect(out.user).toContain("read-only global owned by conversation");
 		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
 			"2\n",
 		);
 	});
 
-	it("reset() keeps the injected globals (post-error survival)", async () => {
+	it("reset() keeps the seeded conversation (post-error survival)", async () => {
 		const r = agentRepl();
-		r.setConversationVars(sampleVars());
+		r.seed(sample, 0);
 		r.reset();
 		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
 			"2\n",
 		);
 	});
 
-	it("an empty snapshot yields nil lists", async () => {
-		const empty = {
-			conversation: [],
-			"user-messages": [],
-			"assistant-messages": [],
-		};
-		expect(await echoed("(echo (length conversation))", empty)).toBe("0\n");
-		expect(await echoed("(echo (length user-messages))", empty)).toBe("0\n");
+	it("counts the steps the host says were taken, and keeps the count over a reset", async () => {
+		const r = agentRepl();
+		r.seed(sample, 3);
+		expect((await r.evalOutput("(echo steps-taken)")).user).toBe("3\n");
+		r.reset();
+		expect((await r.evalOutput("(echo steps-taken)")).user).toBe("3\n");
+	});
+
+	it("an empty conversation yields nil lists", async () => {
+		expect(await echoed("(echo (length conversation))", [])).toBe("0\n");
+		expect(await echoed("(echo (length user-messages))", [])).toBe("0\n");
+	});
+
+	it("shows a note an extension appended, with its source, and hands it over once", async () => {
+		const r = agentRepl();
+		r.seed(sample, 0);
+		r.interp.conversation.append("memory", "k: v");
+
+		expect(
+			(
+				await r.evalOutput(
+					'(echo (cdr (assoc "source" (car (last conversation)))))',
+				)
+			).user,
+		).toBe("memory\n");
+		expect((await r.evalOutput("(echo (length user-messages))")).user).toBe(
+			"1\n",
+		);
+		expect((await r.beginStep()).notes).toEqual([]);
 	});
 });
 
-describe("MemoryRepl (language-only base)", () => {
-	it("has no conversation globals — they are an AgentRepl feature", async () => {
+describe("MemoryRepl", () => {
+	it("starts with an empty conversation", async () => {
 		const r = memoryRepl();
-		expect(await r.eval("(progn conversation)")).toContain("void variable");
+		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
+			"0\n",
+		);
 	});
 });
