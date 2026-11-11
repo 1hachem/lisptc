@@ -32,7 +32,8 @@ export function noted(note: Said): TranscriptEntry {
 
 export function toLlmMessages(transcript: TranscriptEntry[]): ChatMessage[] {
 	return transcript.map((e) => ({
-		role: e.role === "tool" ? "user" : e.role,
+		role:
+			e.role === "tool" ? "user" : e.role === "system" ? "developer" : e.role,
 		content: modelContent(e),
 	}));
 }

@@ -306,7 +306,7 @@ describe("the agent turn", () => {
 		]);
 		expect(seen[0].messages).toEqual([
 			{ role: "user", content: "what is 1 + 2?" },
-			{ role: "system", content: "you are a pirate" },
+			{ role: "developer", content: "you are a pirate" },
 		]);
 		expect(
 			seen[1].messages.filter((m) => m.content === "you are a pirate"),
@@ -327,7 +327,7 @@ describe("the agent turn", () => {
 
 		expect(seen[0].messages).toEqual([
 			{ role: "user", content: "what is 1 + 2?" },
-			{ role: "system", content: "the user also said: in hex" },
+			{ role: "developer", content: "the user also said: in hex" },
 		]);
 	});
 
@@ -355,7 +355,7 @@ describe("the agent turn", () => {
 		await drain(history, { repl });
 
 		expect(seen[0].messages[1]).toEqual({
-			role: "system",
+			role: "developer",
 			content: "you are a pirate",
 		});
 		expect(
