@@ -297,6 +297,22 @@ describe("sleeping and deleting", () => {
 });
 
 describe("the table it keeps in step", () => {
+	it("keeps a chat's own instance apart in every row", async () => {
+		const own = server();
+		own.metadata.name = serverName("ws1", own.spec.server, "chat-a");
+		own.spec.instance = "chat-a";
+		const w = world(own);
+
+		await reconcile(w.target, w.deps(1000));
+		w.fake.runPods();
+		await reconcile(w.target, w.deps(1001));
+
+		expect(w.sink.servers.map((row) => row.instance)).toEqual(
+			w.sink.servers.map(() => "chat-a"),
+		);
+		expect(w.sink.servers.length).toBeGreaterThan(0);
+	});
+
 	it("sends a new reason even when the phase stays the same", async () => {
 		const w = world();
 		await reconcile(w.target, w.deps(1000));

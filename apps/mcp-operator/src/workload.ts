@@ -333,6 +333,10 @@ export function prepullFor(
 }
 
 export function ownerOf(server: McpServer): RowOwner {
-	const { workspace, server: name } = server.spec;
-	return { workspace, server: name };
+	const { workspace, server: name, instance } = server.spec;
+	return {
+		workspace,
+		server: name,
+		...(instance ? { instance } : {}),
+	};
 }

@@ -13,16 +13,17 @@ async function signedReporter() {
 	const alice = await signIn(t, "alice@example.com");
 	const workspaceId = alice.workspace;
 	const report = reportsOf(workspaceId, () => alice.as as ReportsClient);
-	const phaseOf = async (server: string) =>
+	const chatId = await alice.as.mutation(api.chats.create, { workspaceId });
+	const phaseOf = async (server: string, instance?: string) =>
 		(await alice.as.query(api.mcpServers.list, { workspaceId })).servers.find(
-			(row) => row.server === server,
+			(row) => row.server === server && row.instance === instance,
 		)?.phase;
 	const sweepAfter = async (ms: number) => {
 		for (let left = ms; left > 0; left -= MCP_REPORT_BEAT_MS)
 			await vi.advanceTimersByTimeAsync(Math.min(left, MCP_REPORT_BEAT_MS));
 		await t.mutation(internal.mcpServers.sweep, {});
 	};
-	return { report, phaseOf, sweepAfter };
+	return { report, phaseOf, sweepAfter, chatId };
 }
 
 describe("what a session's hosts report", () => {
@@ -56,5 +57,20 @@ describe("what a session's hosts report", () => {
 		await sweepAfter(MCP_REPORT_BEAT_MS);
 
 		expect(await phaseOf("notes")).toBeUndefined();
+	});
+
+	it("keeps a chat's own server apart from the workspace's of the same name", async () => {
+		vi.useFakeTimers();
+		const { report, phaseOf, sweepAfter, chatId } = await signedReporter();
+
+		report({ server: "notes", phase: "ready" });
+		report({ server: "notes", instance: chatId, phase: "ready" });
+		report({ server: "notes", instance: chatId, phase: "sleeping" });
+		await sweepAfter(MCP_REPORTER_STALE_MS * 3);
+
+		expect([await phaseOf("notes"), await phaseOf("notes", chatId)]).toEqual([
+			"ready",
+			"sleeping",
+		]);
 	});
 });

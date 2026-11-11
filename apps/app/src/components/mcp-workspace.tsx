@@ -18,8 +18,10 @@ import { requestPanel, requestPanelClosed } from "../lib/panel-requests.ts";
 import { FileMenu } from "./file-menu.tsx";
 import { PageView } from "./file-view.tsx";
 import {
+	type DedicatedMcpServer,
 	type McpPhase,
 	PhaseDot,
+	useDedicatedMcpServers,
 	useWorkspaceMcpServers,
 	type WorkspaceMcpServer,
 } from "./mcp-servers.tsx";
@@ -124,26 +126,32 @@ async function attempt(
 	workspaceId: Id<"workspaces">,
 	server: string,
 	action: McpAction,
+	chatId: string | undefined,
 ): Promise<McpActionResult> {
 	try {
-		return await postMcpAction(workspaceId, server, action);
+		return await postMcpAction(workspaceId, server, action, chatId);
 	} catch (ex) {
 		return { error: ex instanceof Error ? ex.message : String(ex) };
 	}
 }
 
-function useMcpAction(workspaceId: Id<"workspaces">, server: string) {
+function useMcpAction(
+	workspaceId: Id<"workspaces">,
+	server: string,
+	chatId?: string,
+) {
 	const [busy, setBusy] = useState<McpAction | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const perform = async (action: McpAction) => {
 		setBusy(action);
 		setError(null);
 		const link = action === "login" ? window.open("", "_blank") : null;
-		const result = await attempt(workspaceId, server, action);
+		const result = await attempt(workspaceId, server, action, chatId);
 		landLink(link, result);
 		setBusy(null);
 		if ("error" in result) setError(result.error);
-		else if (action === "remove") requestPanelClosed(mcpPage(server));
+		else if (action === "remove" && chatId === undefined)
+			requestPanelClosed(mcpPage(server));
 		return result;
 	};
 	const run = async (action: McpAction) => {
@@ -188,6 +196,56 @@ function McpFile({
 	);
 }
 
+function DedicatedMcpFile({
+	workspaceId,
+	entry,
+}: {
+	workspaceId: Id<"workspaces">;
+	entry: DedicatedMcpServer;
+}) {
+	const shown = useShown();
+	const chat = entry.chatTitle ?? "a chat";
+	const page: PanelContent = {
+		kind: "chat",
+		chatId: entry.chatId,
+		title: chat,
+	};
+	const { runOrThrow } = useMcpAction(workspaceId, entry.server, entry.chatId);
+	const startable = startState([entry.phase]) === undefined;
+	return (
+		<TreeFile
+			name={`${entry.server} · ${chat}`}
+			icon={McpServerIcon}
+			iconLabel={`dedicated to ${chat}`}
+			depth={1}
+			selected={shown(page)}
+			onDragStart={dragsAs(page)}
+			trailing={
+				<span className="flex items-center gap-1.5">
+					<span
+						title={
+							entry.reason ? `${entry.phase}: ${entry.reason}` : entry.phase
+						}
+						className="flex items-center"
+					>
+						<PhaseDot phase={entry.phase} />
+						<span className="sr-only">{entry.phase}</span>
+					</span>
+					<FileMenu
+						name={`${entry.server} · ${chat}`}
+						confirm={`delete ${entry.server} and everything it holds for ${chat}?`}
+						onDelete={() => runOrThrow("remove")}
+						{...(startable
+							? { onRestore: () => runOrThrow("start"), restoreLabel: "start" }
+							: {})}
+					/>
+				</span>
+			}
+			link={linkTo(workspaceId, page)}
+		/>
+	);
+}
+
 function ToolkitFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	const shown = useShown();
 	return (
@@ -210,6 +268,8 @@ export function McpFolder({
 	folder: FolderState<"mcp">;
 }) {
 	const servers = useWorkspaceMcpServers(workspaceId);
+	const dedicated = useDedicatedMcpServers(workspaceId);
+	const none = servers?.length === 0 && dedicated?.length === 0;
 	return (
 		<TreeFolder
 			{...folder}
@@ -217,9 +277,18 @@ export function McpFolder({
 			createLabel="load one from the toolkit"
 		>
 			<ToolkitFile workspaceId={workspaceId} />
-			<Listing items={servers} empty="no mcp servers yet">
+			<Listing items={servers} empty={none ? "no mcp servers yet" : null}>
 				{(entry) => (
 					<McpFile key={entry.server} workspaceId={workspaceId} entry={entry} />
+				)}
+			</Listing>
+			<Listing items={dedicated} empty={null}>
+				{(entry) => (
+					<DedicatedMcpFile
+						key={`${entry.server}\0${entry.chatId}`}
+						workspaceId={workspaceId}
+						entry={entry}
+					/>
 				)}
 			</Listing>
 		</TreeFolder>
@@ -259,9 +328,9 @@ function ActionButton({
 
 type StartState = "starting" | "started" | undefined;
 
-function startState(phase: McpPhase | undefined): StartState {
-	if (phase === "ready") return "started";
-	if (phase === "starting") return "starting";
+function startState(phases: readonly (McpPhase | undefined)[]): StartState {
+	if (phases.includes("ready")) return "started";
+	if (phases.includes("starting")) return "starting";
 	return undefined;
 }
 
@@ -340,7 +409,7 @@ function McpActions({
 				destructive
 				onConfirm={() => void run("remove")}
 			/>
-			<StartButton state={startState(entry?.phase)} busy={busy} run={run} />
+			<StartButton state={startState([entry?.phase])} busy={busy} run={run} />
 			<SignInButton entry={entry} signedIn={signedIn} busy={busy} run={run} />
 			<ActionButton
 				action="remove"
@@ -465,10 +534,12 @@ function ToolkitRow({
 	workspaceId,
 	entry,
 	signedIn,
+	started,
 }: {
 	workspaceId: Id<"workspaces">;
 	entry: WorkspaceMcpServer;
 	signedIn: boolean;
+	started: StartState;
 }) {
 	const { busy, error, run } = useMcpAction(workspaceId, entry.server);
 	return (
@@ -483,7 +554,7 @@ function ToolkitRow({
 					{entry.server}
 				</button>
 				<PhaseDot phase={entry.phase} />
-				<StartButton state={startState(entry.phase)} busy={busy} run={run} />
+				<StartButton state={started} busy={busy} run={run} />
 				<SignInButton entry={entry} signedIn={signedIn} busy={busy} run={run} />
 			</div>
 			{entry.description !== undefined && (
@@ -502,28 +573,39 @@ export function ToolkitPage({
 	workspaceId: Id<"workspaces">;
 }) {
 	const servers = useWorkspaceMcpServers(workspaceId);
+	const dedicated = useDedicatedMcpServers(workspaceId);
 	const toolkit = useToolkit();
 	const signedIn = useSignedIn(workspaceId);
-	const rows = toolkit?.map((listed) => ({
-		entry:
+	const rows = toolkit?.map((listed) => {
+		const entry =
 			withToolkit(
 				servers?.find((found) => found.server === listed.server),
 				listed,
-			) ?? fromToolkit(listed),
-		signedIn: signedInTo(signedIn, listed.server, listed),
-	}));
+			) ?? fromToolkit(listed);
+		return {
+			entry,
+			signedIn: signedInTo(signedIn, listed.server, listed),
+			started: startState([
+				entry.phase,
+				...(dedicated ?? [])
+					.filter((own) => own.server === listed.server)
+					.map((own) => own.phase),
+			]),
+		};
+	});
 	return (
 		<PageView title="mcp/toolkit">
 			{rows === undefined ? (
 				<div className="text-dim">loading…</div>
 			) : (
 				<ul className="flex flex-col gap-3">
-					{rows.map(({ entry, signedIn: ready }) => (
+					{rows.map(({ entry, signedIn: ready, started }) => (
 						<ToolkitRow
 							key={entry.server}
 							workspaceId={workspaceId}
 							entry={entry}
 							signedIn={ready}
+							started={started}
 						/>
 					))}
 				</ul>

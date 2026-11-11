@@ -49,6 +49,7 @@ export interface RemoteSlot {
 export interface McpServerSpec {
 	workspace: string;
 	server: string;
+	instance?: string;
 	mcp?: McpSlot;
 	app?: AppSlot;
 	remote?: RemoteSlot;
@@ -106,12 +107,20 @@ function shortHash(...parts: string[]): string {
 		.slice(0, 8);
 }
 
-export function serverName(workspace: string, server: string): string {
+export function serverName(
+	workspace: string,
+	server: string,
+	instance?: string,
+): string {
 	const base = dnsLabel(
 		`mcp-${dnsLabel(server, 24)}-${dnsLabel(workspace, 24)}`,
 		NAME_MAX - 9,
 	);
-	return `${base}-${shortHash(workspace, server)}`;
+	const hashed =
+		instance === undefined
+			? [workspace, server]
+			: [workspace, server, instance];
+	return `${base}-${shortHash(...hashed)}`;
 }
 
 export function resourcesFor(asked?: Resources): ResourceRequirements {
@@ -142,6 +151,7 @@ export function specFor(
 	run: RunSpec,
 	workspace: string,
 	now: number,
+	instance?: string,
 ): McpServerSpec {
 	const { launch } = run;
 	const mcp: McpSlot = {
@@ -156,6 +166,7 @@ export function specFor(
 	return {
 		workspace,
 		server: run.name,
+		...(instance === undefined ? {} : { instance }),
 		mcp,
 		...(app ? { app } : {}),
 		restarts: 0,

@@ -12,11 +12,12 @@ export async function postMcpAction(
 	workspaceId: string,
 	server: string,
 	action: McpAction,
+	chatId?: string,
 ): Promise<McpActionResult> {
 	const res = await fetch("/api/mcp/action", {
 		method: "POST",
 		headers: await apiHeaders(),
-		body: JSON.stringify({ workspaceId, server, action }),
+		body: JSON.stringify({ workspaceId, chatId, server, action }),
 	});
 	return (await res.json()) as McpActionResult;
 }

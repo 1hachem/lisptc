@@ -9,6 +9,7 @@ import {
 	query,
 } from "./_generated/server.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
+import { existingIn } from "./lib/existing.js";
 import { waitsOnUser } from "./lib/waiting.js";
 import { MAX_SPAWN_DEPTH, STREAMING_LEASE_MS } from "./limits.js";
 import { dropRepl, forkRepl } from "./repls.js";
@@ -424,6 +425,9 @@ async function dropChat(ctx: MutationCtx, chat: Doc<"chats">): Promise<void> {
 	await ctx.scheduler.runAfter(0, internal.views.purge, {
 		chatId: chat._id,
 	});
+	await ctx.scheduler.runAfter(0, internal.mcpServers.purgeInstance, {
+		instance: chat._id,
+	});
 }
 
 export const remove = mutation({
@@ -435,3 +439,5 @@ export const remove = mutation({
 		return null;
 	},
 });
+
+export const existing = existingIn("chats");

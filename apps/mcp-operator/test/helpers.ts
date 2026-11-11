@@ -13,7 +13,7 @@ import {
 	specFor,
 	VERSION,
 } from "@repo/mcp-extension/kubernetes";
-import type { ImageEntry } from "@repo/toolkit";
+import type { ContainerConnConfig } from "@repo/mcp-extension/ports";
 import type { Cluster, Located, Probe, Servers } from "../src/cluster.ts";
 import type { Deps } from "../src/reconcile.ts";
 import type { ServerRow, Snapshot, StatusSink } from "../src/status-sink.ts";
@@ -23,7 +23,7 @@ export const PREFIX = "lisptc-ws-";
 const WORKSPACE = "ws1";
 export const NAMESPACE = `${PREFIX}${WORKSPACE}`;
 
-const browser: ImageEntry = {
+const browser: ContainerConnConfig = {
 	name: "playwright",
 	image: "playwright-mcp",
 	port: 8931,
@@ -37,7 +37,10 @@ const browser: ImageEntry = {
 	},
 };
 
-export function server(conf: ImageEntry = browser, now = 1000): McpServer {
+export function server(
+	conf: ContainerConnConfig = browser,
+	now = 1000,
+): McpServer {
 	const run = runSpecFor(conf);
 	if (!run) throw new Error("no launch");
 	return {

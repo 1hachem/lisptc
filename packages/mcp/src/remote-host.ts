@@ -1,12 +1,15 @@
 import { reachable } from "@repo/containers/start-wait";
 import type { RemoteEntry } from "@repo/toolkit";
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerRef,
-	ServerReporter,
-	ServerState,
+import {
+	type ConnConfig,
+	type McpHost,
+	refKey,
+	refOf,
+	type ServerHandle,
+	type ServerRef,
+	type ServerReporter,
+	type ServerState,
+	subjectOf,
 } from "./ports.ts";
 
 export function remoteServer(conf: ConnConfig): conf is RemoteEntry {
@@ -21,13 +24,13 @@ export class RemoteHost implements McpHost {
 	async ensure(conf: ConnConfig): Promise<ServerHandle> {
 		if (!remoteServer(conf))
 			throw new Error(`${conf.name}: is not a remote server.`);
-		this.dialed.set(conf.name, { name: conf.name });
+		this.dialed.set(refKey(conf), refOf(conf));
 		const origin = new URL(conf.url).origin;
 		this.report(
 			(await reachable(origin))
-				? { server: conf.name, phase: "ready" }
+				? { ...subjectOf(conf), phase: "ready" }
 				: {
-						server: conf.name,
+						...subjectOf(conf),
 						phase: "failed",
 						reason: `${origin} did not answer.`,
 					},
@@ -38,13 +41,13 @@ export class RemoteHost implements McpHost {
 	}
 
 	async stop(server: ServerRef): Promise<void> {
-		if (this.dialed.delete(server.name))
-			this.report({ server: server.name, phase: "gone" });
+		if (this.dialed.delete(refKey(server)))
+			this.report({ ...subjectOf(server), phase: "gone" });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		this.dialed.delete(conf.name);
-		this.report({ server: conf.name, phase: "gone" });
+		this.dialed.delete(refKey(conf));
+		this.report({ ...subjectOf(conf), phase: "gone" });
 	}
 
 	async stopAll(): Promise<void> {
@@ -52,7 +55,7 @@ export class RemoteHost implements McpHost {
 	}
 
 	status(server: ServerRef): ServerState {
-		return this.dialed.has(server.name) ? "running" : "unknown";
+		return this.dialed.has(refKey(server)) ? "running" : "unknown";
 	}
 
 	logs(_server: ServerRef): string {

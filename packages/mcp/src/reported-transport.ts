@@ -1,4 +1,9 @@
-import type { McpTransport, ServerRef, ServerReporter } from "./ports.ts";
+import {
+	type McpTransport,
+	type ServerRef,
+	type ServerReporter,
+	subjectOf,
+} from "./ports.ts";
 
 export interface ReportedTransport {
 	readonly transport: McpTransport;
@@ -11,7 +16,7 @@ export function reportedTransport(
 	report: ServerReporter,
 	ended: () => void,
 ): ReportedTransport {
-	const about = { server: server.name };
+	const about = subjectOf(server);
 	let closing = false;
 	let started = false;
 	let lastError: Error | undefined;

@@ -26,13 +26,14 @@ import {
 	specFor,
 	VERSION,
 } from "./mcp-server-resource.ts";
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerRef,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type McpHost,
+	refKey,
+	type ServerHandle,
+	type ServerRef,
+	type ServerState,
+	type StartWatch,
 } from "./ports.ts";
 import { remoteServer } from "./remote-host.ts";
 
@@ -224,16 +225,18 @@ export class KubernetesHost implements McpHost {
 		watch: StartWatch = {},
 	): Promise<ServerHandle> {
 		if (remoteServer(conf)) return await this.remote(conf);
-		const start = this.starting.get(conf.name) ?? this.begin(conf);
+		const start = this.starting.get(refKey(conf)) ?? this.begin(conf);
 		return await this.join(start, watch);
 	}
 
 	private begin(conf: ConnConfig): Start {
 		const start = new Start((watch) =>
-			this.serving(conf, watch).finally(() => this.starting.delete(conf.name)),
+			this.serving(conf, watch).finally(() =>
+				this.starting.delete(refKey(conf)),
+			),
 		);
 		start.run.catch(() => {});
-		this.starting.set(conf.name, start);
+		this.starting.set(refKey(conf), start);
 		return start;
 	}
 
@@ -258,19 +261,21 @@ export class KubernetesHost implements McpHost {
 	}
 
 	async stop(server: ServerRef): Promise<void> {
-		await this.starting.get(server.name)?.run.catch(() => {});
-		const followed = this.followed.get(server.name);
+		await this.starting.get(refKey(server))?.run.catch(() => {});
+		const followed = this.followed.get(refKey(server));
 		if (!followed) return;
 		this.unfollow(followed);
 		await this.store.patchSpec(followed.name, { lastUsed: 0 });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
-		await this.starting.get(conf.name)?.run.catch(() => {});
-		const followed = this.followed.get(conf.name);
+		await this.starting.get(refKey(conf))?.run.catch(() => {});
+		const followed = this.followed.get(refKey(conf));
 		if (followed) this.unfollow(followed);
-		this.followed.delete(conf.name);
-		await this.store.remove(serverName(this.options.scope, conf.name));
+		this.followed.delete(refKey(conf));
+		await this.store.remove(
+			serverName(this.options.scope, conf.name, instanceOf(conf)),
+		);
 	}
 
 	async stopAll(): Promise<void> {
@@ -289,15 +294,15 @@ export class KubernetesHost implements McpHost {
 	}
 
 	status(server: ServerRef): ServerState {
-		return this.followed.get(server.name)?.state ?? "unknown";
+		return this.followed.get(refKey(server))?.state ?? "unknown";
 	}
 
 	logs(server: ServerRef): string {
-		return this.followed.get(server.name)?.logs ?? "";
+		return this.followed.get(refKey(server))?.logs ?? "";
 	}
 
 	used(server: ServerRef): void {
-		const followed = this.followed.get(server.name);
+		const followed = this.followed.get(refKey(server));
 		if (!followed) return;
 		const now = this.clock();
 		if (followed.state !== "running" || now - followed.touched < TOUCH_SECONDS)
@@ -307,7 +312,7 @@ export class KubernetesHost implements McpHost {
 	}
 
 	async asleep(server: ServerRef): Promise<boolean> {
-		const followed = this.followed.get(server.name);
+		const followed = this.followed.get(refKey(server));
 		if (!followed) return false;
 		if (followed.state !== "running") return false;
 		const live = await this.store.get(followed.name);
@@ -334,8 +339,9 @@ export class KubernetesHost implements McpHost {
 			throw new Error(
 				`${conf.name}: sets env, which a server on the cluster cannot take.`,
 			);
-		const name = serverName(scope, conf.name);
-		const wanted = specFor(run, scope, this.clock());
+		const instance = instanceOf(conf);
+		const name = serverName(scope, conf.name, instance);
+		const wanted = specFor(run, scope, this.clock(), instance);
 
 		const live = await this.store.get(name);
 		const server = live
@@ -350,13 +356,13 @@ export class KubernetesHost implements McpHost {
 					spec: wanted,
 				});
 
-		const followed: Followed = this.followed.get(conf.name) ?? {
+		const followed: Followed = this.followed.get(refKey(conf)) ?? {
 			name,
 			state: "running",
 			logs: "",
 			touched: 0,
 		};
-		this.followed.set(conf.name, followed);
+		this.followed.set(refKey(conf), followed);
 		const url = await this.answering(conf.name, server, followed, watch);
 		this.follow(followed);
 		const headers = "headers" in conf ? conf.headers : undefined;
@@ -379,13 +385,13 @@ export class KubernetesHost implements McpHost {
 				metadata: { name },
 				spec: wanted,
 			});
-		const followed: Followed = this.followed.get(conf.name) ?? {
+		const followed: Followed = this.followed.get(refKey(conf)) ?? {
 			name,
 			state: "running",
 			logs: "",
 			touched: 0,
 		};
-		this.followed.set(conf.name, followed);
+		this.followed.set(refKey(conf), followed);
 		this.follow(followed);
 		return conf.headers
 			? { url: conf.url, headers: conf.headers }
@@ -422,6 +428,10 @@ export class KubernetesHost implements McpHost {
 		followed.state = "running";
 		followed.touched = this.clock();
 	}
+}
+
+function instanceOf(conf: ConnConfig): string | undefined {
+	return "instance" in conf ? conf.instance : undefined;
 }
 
 function standing(

@@ -16,10 +16,12 @@ function run(
 	{
 		servers = [],
 		workspaces = ["ws1", "ws2"],
+		chats = [],
 		lookup,
 	}: {
 		servers?: McpServer[];
 		workspaces?: string[];
+		chats?: string[];
 		lookup?: () => Promise<ReadonlySet<string>>;
 	} = {},
 ) {
@@ -31,6 +33,8 @@ function run(
 		existing:
 			lookup ??
 			(async (ids) => new Set(ids.filter((id) => workspaces.includes(id)))),
+		existingChats: async (ids) =>
+			new Set(ids.filter((id) => chats.includes(id))),
 		removeServer: async (name) => {
 			retired.push(name);
 		},
@@ -157,6 +161,25 @@ describe("the sweep", () => {
 		await run(fake, 1000).done;
 
 		expect(fake.namespaces.has(`${PREFIX}gone`)).toBe(false);
+	});
+
+	it("retires a chat's own server once the chat is deleted, keeping the rest", async () => {
+		const fake = fakeCluster();
+		managedNamespace(fake, NAMESPACE, "ws1");
+		const shared = server(undefined, 1000);
+		const ownOf = (chat: string): McpServer => ({
+			...shared,
+			metadata: { ...shared.metadata, name: `own-${chat}` },
+			spec: { ...shared.spec, instance: chat },
+		});
+
+		const { done, retired } = run(fake, 1000, {
+			servers: [shared, ownOf("kept"), ownOf("deleted")],
+			chats: ["kept"],
+		});
+		await done;
+
+		expect(retired).toEqual(["own-deleted"]);
 	});
 
 	it("deletes nothing when it cannot tell which workspaces still exist", async () => {

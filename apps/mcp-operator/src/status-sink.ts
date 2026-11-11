@@ -3,6 +3,7 @@ export type ServerRowPhase = "starting" | "ready" | "sleeping" | "failed";
 export interface RowOwner {
 	workspace: string;
 	server: string;
+	instance?: string;
 }
 
 export interface ServerRow extends RowOwner {
@@ -19,6 +20,6 @@ export interface StatusSink {
 	reconcile(snapshot: Snapshot): Promise<void>;
 }
 
-export interface Workspaces {
+export interface Existing {
 	existing(ids: readonly string[]): Promise<ReadonlySet<string>>;
 }

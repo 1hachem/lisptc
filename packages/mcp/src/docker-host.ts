@@ -1,14 +1,17 @@
 import { DockerRunner, type RunningContainer } from "@repo/containers/docker";
 import { type RunSpec, runSpecFor } from "@repo/containers/launch";
-import type {
-	AddressHandle,
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerRef,
-	ServerReporter,
-	ServerState,
-	StartWatch,
+import {
+	type AddressHandle,
+	type ConnConfig,
+	type McpHost,
+	refKey,
+	refOf,
+	type ServerHandle,
+	type ServerRef,
+	type ServerReporter,
+	type ServerState,
+	type StartWatch,
+	subjectOf,
 } from "./ports.ts";
 
 interface Served {
@@ -27,25 +30,25 @@ export class DockerHost implements McpHost {
 		const spec = runSpecFor(conf);
 		if (spec === undefined)
 			throw new Error(`${conf.name}: has no container to run.`);
-		const running = this.served.get(conf.name);
+		const running = this.served.get(refKey(conf));
 		if (running) return running.handle;
 		return await this.start(conf, spec, watch);
 	}
 
 	async stop(server: ServerRef): Promise<void> {
 		if (await this.drop(server))
-			this.report({ server: server.name, phase: "sleeping" });
+			this.report({ ...subjectOf(server), phase: "sleeping" });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
 		await this.drop(conf);
-		this.report({ server: conf.name, phase: "gone" });
+		this.report({ ...subjectOf(conf), phase: "gone" });
 	}
 
 	private async drop(server: ServerRef): Promise<boolean> {
-		const served = this.served.get(server.name);
+		const served = this.served.get(refKey(server));
 		if (!served) return false;
-		this.served.delete(server.name);
+		this.served.delete(refKey(server));
 		await served.container.stop();
 		return true;
 	}
@@ -56,11 +59,11 @@ export class DockerHost implements McpHost {
 	}
 
 	status(server: ServerRef): ServerState {
-		return this.served.has(server.name) ? "running" : "unknown";
+		return this.served.has(refKey(server)) ? "running" : "unknown";
 	}
 
 	logs(server: ServerRef): string {
-		return this.served.get(server.name)?.container.logs() ?? "";
+		return this.served.get(refKey(server))?.container.logs() ?? "";
 	}
 
 	used(_server: ServerRef): void {}
@@ -74,8 +77,8 @@ export class DockerHost implements McpHost {
 		spec: RunSpec,
 		watch?: StartWatch,
 	): Promise<ServerHandle> {
-		const key = conf.name;
-		this.report({ server: conf.name, phase: "starting" });
+		const key = refKey(conf);
+		this.report({ ...subjectOf(conf), phase: "starting" });
 		try {
 			watch?.progress?.(`${conf.name} is starting its container`);
 			let served: Served | undefined;
@@ -84,24 +87,24 @@ export class DockerHost implements McpHost {
 				(reason) => {
 					if (served === undefined || this.served.get(key) !== served) return;
 					this.served.delete(key);
-					this.report({ server: conf.name, phase: "failed", reason });
+					this.report({ ...subjectOf(conf), phase: "failed", reason });
 				},
 				watch,
 			);
 			const headers = "headers" in conf ? conf.headers : undefined;
 			served = {
-				server: { name: conf.name },
+				server: refOf(conf),
 				container,
 				handle: headers
 					? { url: container.url, headers }
 					: { url: container.url },
 			};
 			this.served.set(key, served);
-			this.report({ server: conf.name, phase: "ready" });
+			this.report({ ...subjectOf(conf), phase: "ready" });
 			return served.handle;
 		} catch (ex) {
 			this.report({
-				server: conf.name,
+				...subjectOf(conf),
 				phase: "failed",
 				reason: ex instanceof Error ? ex.message : String(ex),
 			});

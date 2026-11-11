@@ -25,6 +25,8 @@ import {
 	type OAuthConnConfig,
 	type OAuthStore,
 	oauthKey,
+	refKey,
+	refOf,
 	type ServerHandle,
 	type ServerRef,
 	type StartWatch,
@@ -217,7 +219,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 			throw new Error("connected but the server exposed no tools");
 		}
 		const serverId = randomUUID();
-		clients.set(serverId, { client, server: { name: conf.name } });
+		clients.set(serverId, { client, server: refOf(conf) });
 		const version = client.getServerVersion();
 		const icons = version?.icons as Icon[] | undefined;
 		const description = serverDescription(
@@ -290,7 +292,7 @@ export function mcpClient(ports: McpClientPorts): McpClient {
 
 		async remove(conf: ConnConfig): Promise<void> {
 			for (const [serverId, entry] of clients)
-				if (entry.server.name === conf.name) {
+				if (refKey(entry.server) === refKey(conf)) {
 					clients.delete(serverId);
 					await entry.client.close().catch(() => {});
 				}

@@ -1,10 +1,11 @@
-import type {
-	ConnConfig,
-	McpHost,
-	ServerHandle,
-	ServerRef,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type McpHost,
+	refKey,
+	type ServerHandle,
+	type ServerRef,
+	type ServerState,
+	type StartWatch,
 } from "./ports.ts";
 
 export interface HostRoute {
@@ -19,7 +20,7 @@ export class RoutedHost implements McpHost {
 
 	async ensure(conf: ConnConfig, watch?: StartWatch): Promise<ServerHandle> {
 		const host = this.hostOf(conf);
-		this.owners.set(conf.name, host);
+		this.owners.set(refKey(conf), host);
 		return await host.ensure(conf, watch);
 	}
 
@@ -29,7 +30,7 @@ export class RoutedHost implements McpHost {
 
 	async remove(conf: ConnConfig): Promise<void> {
 		await this.hostOf(conf).remove(conf);
-		this.owners.delete(conf.name);
+		this.owners.delete(refKey(conf));
 	}
 
 	async stopAll(): Promise<void> {
@@ -57,7 +58,7 @@ export class RoutedHost implements McpHost {
 	}
 
 	private ownerOf(server: ServerRef): McpHost | undefined {
-		return this.owners.get(server.name);
+		return this.owners.get(refKey(server));
 	}
 
 	private hostOf(conf: ConnConfig): McpHost {

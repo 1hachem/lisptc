@@ -17,7 +17,7 @@ import {
 } from "@repo/mcp-extension/kubernetes";
 import { clientCluster, clientServers } from "./cluster.ts";
 import { Controller } from "./controller.ts";
-import { convexSink, convexWorkspaces } from "./convex-sink.ts";
+import { convexChats, convexSink, convexWorkspaces } from "./convex-sink.ts";
 import {
 	ownRepositories,
 	prepull,
@@ -70,6 +70,7 @@ const controller = new Controller({
 	servers: clientServers(config, release),
 	sink: convexSink(env.CONVEX_URL, env.CONVEX_ADMIN_KEY),
 	workspaces: convexWorkspaces(env.CONVEX_URL, env.CONVEX_ADMIN_KEY),
+	chats: convexChats(env.CONVEX_URL, env.CONVEX_ADMIN_KEY),
 	placement: {
 		prefix: env.LISPTC_MCP_NAMESPACE_PREFIX,
 		release,

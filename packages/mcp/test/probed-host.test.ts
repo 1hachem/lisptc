@@ -1,9 +1,9 @@
-import type { ImageEntry } from "@repo/toolkit";
 import { describe, expect, it } from "vitest";
+import type { ContainerConnConfig } from "../src/ports.ts";
 import { type HostCandidate, ProbedHost } from "../src/probed-host.ts";
 import { recordingHost } from "./helpers.ts";
 
-const browser: ImageEntry = {
+const browser: ContainerConnConfig = {
 	name: "browser",
 	image: "ghcr.io/1hachem/lisptc-mcp-playwright:main",
 	port: 8931,

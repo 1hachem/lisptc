@@ -8,8 +8,13 @@ export type McpAction = (typeof MCP_ACTIONS)[number];
 
 export const MCP_SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
-const FORMS: Record<McpAction, (server: string) => string> = {
-	start: (server) => `(load-mcp "${server}")`,
+export type McpScope = "workspace" | "dedicated";
+
+const FORMS: Record<McpAction, (server: string, scope: McpScope) => string> = {
+	start: (server, scope) =>
+		scope === "dedicated"
+			? `(load-mcp "${server}" :dedicated t)`
+			: `(load-mcp "${server}")`,
 	remove: (server) => `(remove-mcp "${server}")`,
 	login: (server) => `(login "${server}" :url t)`,
 	logout: (server) => `(logout "${server}")`,
@@ -28,10 +33,11 @@ export async function runMcpAction(
 	repl: AgentRepl,
 	server: string,
 	action: McpAction,
+	scope: McpScope = "workspace",
 ): Promise<McpActionResult> {
 	if (!MCP_SERVER_NAME.test(server))
 		return { error: `not a server name: ${server}` };
-	const out = await repl.evalOutput(FORMS[action](server));
+	const out = await repl.evalOutput(FORMS[action](server, scope));
 	if (out.failed || out.held)
 		return { error: out.failure ?? out.message ?? `${action} did not finish` };
 	const url = action === "login" ? urlIn(out.results) : undefined;

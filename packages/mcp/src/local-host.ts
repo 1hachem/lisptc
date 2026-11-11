@@ -6,15 +6,18 @@ import {
 	waitForStart,
 } from "@repo/containers/start-wait";
 import type { LaunchedEntry, RemoteEntry } from "@repo/toolkit";
-import type {
-	ConnConfig,
-	McpHost,
-	McpTransport,
-	ServerHandle,
-	ServerRef,
-	ServerReporter,
-	ServerState,
-	StartWatch,
+import {
+	type ConnConfig,
+	type McpHost,
+	type McpTransport,
+	refKey,
+	refOf,
+	type ServerHandle,
+	type ServerRef,
+	type ServerReporter,
+	type ServerState,
+	type StartWatch,
+	subjectOf,
 } from "./ports.ts";
 import {
 	type ReportedTransport,
@@ -119,7 +122,7 @@ export class LocalProcessHost implements McpHost {
 				`${conf.name}: runs as a container image and the host started none`,
 			);
 		const { command, args, env } = conf;
-		const server = { name: conf.name };
+		const server = refOf(conf);
 		return {
 			transport: () => {
 				const stdio = new StdioClientTransport({
@@ -132,7 +135,7 @@ export class LocalProcessHost implements McpHost {
 					},
 				});
 				const piped: Piped = {
-					key: server.name,
+					key: refKey(server),
 					reported: reportedTransport(
 						server,
 						stdio as unknown as McpTransport,
@@ -148,12 +151,12 @@ export class LocalProcessHost implements McpHost {
 
 	async stop(server: ServerRef): Promise<void> {
 		if (await this.drop(server))
-			this.report({ server: server.name, phase: "sleeping" });
+			this.report({ ...subjectOf(server), phase: "sleeping" });
 	}
 
 	async remove(conf: ConnConfig): Promise<void> {
 		await this.drop(conf);
-		this.report({ server: conf.name, phase: "gone" });
+		this.report({ ...subjectOf(conf), phase: "gone" });
 	}
 
 	private async drop(ref: ServerRef): Promise<boolean> {
@@ -175,7 +178,7 @@ export class LocalProcessHost implements McpHost {
 	}
 
 	status(ref: ServerRef): ServerState {
-		const key = ref.name;
+		const key = refKey(ref);
 		for (const piped of this.piped) if (piped.key === key) return "running";
 		const server = this.started.get(ref.name);
 		if (!server) return "unknown";

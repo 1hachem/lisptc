@@ -449,3 +449,111 @@ describe("the MCP servers of a host that stops reporting", () => {
 		).toMatchObject([{ server: "notes", phase: "ready" }]);
 	});
 });
+
+describe("the MCP servers a chat runs of its own", () => {
+	async function chatOf(alice: Signed) {
+		return await alice.as.mutation(api.chats.create, {
+			workspaceId: alice.workspace,
+		});
+	}
+
+	async function rows(alice: Signed) {
+		const { servers } = await alice.as.query(api.mcpServers.list, {
+			workspaceId: alice.workspace,
+		});
+		return servers
+			.map(({ server, instance, phase }) => ({ server, instance, phase }))
+			.sort((a, b) => (a.instance ?? "").localeCompare(b.instance ?? ""));
+	}
+
+	it("keeps a chat's own server in a row of its own, beside the workspace's", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await chatOf(alice);
+		const workspaceId = alice.workspace;
+
+		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
+			workspaceId,
+			server: "playwright",
+			phase: "ready",
+		});
+		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
+			workspaceId,
+			server: "playwright",
+			instance: chatId,
+			phase: "starting",
+		});
+
+		expect(await rows(alice)).toEqual([
+			{ server: "playwright", instance: undefined, phase: "ready" },
+			{ server: "playwright", instance: chatId, phase: "starting" },
+		]);
+	});
+
+	it("keeps a reaped chat server as sleeping", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await chatOf(alice);
+
+		await t.mutation(internal.mcpServers.observeServer, {
+			workspaceId: alice.workspace,
+			server: "playwright",
+			instance: chatId,
+			phase: "sleeping",
+		});
+
+		expect(await rows(alice)).toEqual([
+			{ server: "playwright", instance: chatId, phase: "sleeping" },
+		]);
+	});
+
+	it("drops a chat's servers once the chat is deleted, and takes no report about them after", async () => {
+		vi.useFakeTimers();
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const chatId = await chatOf(alice);
+		const workspaceId = alice.workspace;
+		await t.mutation(internal.mcpServers.observeServer, {
+			workspaceId,
+			server: "playwright",
+			instance: chatId,
+			phase: "sleeping",
+		});
+
+		await alice.as.mutation(api.chats.remove, { chatId });
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
+			workspaceId,
+			server: "playwright",
+			instance: chatId,
+			phase: "ready",
+		});
+		await t.mutation(internal.mcpServers.reconcile, {
+			servers: [
+				{ workspaceId, server: "playwright", instance: chatId, phase: "ready" },
+			],
+		});
+
+		expect(await rows(alice)).toEqual([]);
+	});
+
+	it("takes no report about a chat of another workspace", async () => {
+		const t = harness();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const bobsChat = await chatOf(bob);
+
+		await alice.as.mutation(api.mcpServers.report, {
+			reporter: "agent-1",
+			workspaceId: alice.workspace,
+			server: "playwright",
+			instance: bobsChat,
+			phase: "ready",
+		});
+
+		expect(await rows(alice)).toEqual([]);
+	});
+});
