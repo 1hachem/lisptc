@@ -598,9 +598,9 @@ describe("the trace", () => {
 		},
 		{
 			id: "m1",
-			type: "entry",
-			content: "",
-			additional_kwargs: entry("memory", { key: "remembered", body: "b" }),
+			type: "system",
+			content: "remembered: MEMORY-MARK",
+			additional_kwargs: { source: "memory:remembered", noted: true },
 		},
 		{
 			id: "a1",
@@ -653,7 +653,7 @@ describe("the trace", () => {
 		ui: "UI-MARK",
 		attachments: "USER-FILE.pdf",
 		thinking: "THINKING-MARK",
-		memory: "1 memory recalled",
+		memory: "MEMORY-MARK",
 		asks: "ASKS-MARK",
 		system: "SYSTEM-MARK",
 		agents: "AGENTS-MARK",

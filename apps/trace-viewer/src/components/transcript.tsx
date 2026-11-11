@@ -10,15 +10,10 @@ import {
 } from "@repo/components";
 import { MessageFeedback } from "@repo/components/message-feedback.tsx";
 import { MessageJudgements } from "@repo/components/message-judgements.tsx";
-import { MessageMemories } from "@repo/components/message-memories.tsx";
 import type { ReportRow, TranscriptLine } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
 import { reviewProperties, runId, traceEvents } from "@repo/evals/review";
-import {
-	type FiredMemory,
-	type Recognized,
-	recognizedKind,
-} from "@repo/journal-catalog/memory";
+import { type Recognized, recognizedKind } from "@repo/journal-catalog/memory";
 import { systemPromptKind } from "@repo/journal-catalog/system";
 import { WHEN_FIRES_AT } from "@repo/memory-extension/ports";
 import { view } from "@repo/shared/journal";
@@ -42,6 +37,13 @@ function messageOf(line: TranscriptLine, at: number): ChatMessage {
 			type: "entry",
 			content: "",
 			additional_kwargs: { kind: line.kind, value: line.value },
+		};
+	if (line.role === "system")
+		return {
+			id,
+			type: "system",
+			content: line.content,
+			additional_kwargs: { source: line.source ?? "system", noted: true },
 		};
 	return { id, type: LINE_TYPE[line.role], content: line.content };
 }
@@ -156,27 +158,20 @@ function evalSlots(
 			if (at === undefined || isToolMessage(message)) return null;
 			return <Feedback capture={review(at, {})} />;
 		},
-		memories: (memories: FiredMemory[], message) => {
+		entry: (message) => {
 			const recognition = recognizedOf(message);
+			if (!reflex || recognition === undefined) return null;
 			const at = indexOf(message);
 			return (
 				<div className="group relative flex flex-col gap-1">
-					<MessageMemories
-						memories={memories}
-						{...(recognition === undefined
-							? {}
-							: { selected: new Set(memories.map((memory) => memory.key)) })}
-					/>
-					{reflex && recognition !== undefined && (
-						<RecognitionLog recognized={recognition} />
-					)}
+					<RecognitionLog recognized={recognition} />
 					{at !== undefined && (
 						<Feedback
 							capture={review(
 								at,
 								memoryReviewProperties({
-									memories,
-									...(recognition === undefined ? {} : { recognition }),
+									memories: recognition.fired ?? [],
+									recognition,
 								}),
 							)}
 						/>

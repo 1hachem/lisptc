@@ -77,6 +77,14 @@ const entry = (id: string, kind: string, value: unknown) =>
 		additional_kwargs: { kind, value },
 	}) as ChatMessage;
 
+const note = (id: string, source: string, content: string) =>
+	({
+		id,
+		type: "system",
+		content,
+		additional_kwargs: { source, noted: true },
+	}) as ChatMessage;
+
 const step = (...entries: ChatMessage[]): ChatMessage[] => [
 	{ id: "h1", type: "human", content: "open my browser" } as ChatMessage,
 	...entries,
@@ -84,8 +92,25 @@ const step = (...entries: ChatMessage[]): ChatMessage[] => [
 	{ id: "t1", type: "tool", content: "" } as ChatMessage,
 ];
 
+const markOf = (host: HTMLElement, text: string) =>
+	[...host.querySelectorAll("[data-trace-message]")]
+		.find((row) => row.textContent?.includes(text))
+		?.querySelector("svg")
+		?.getAttribute("aria-label");
+
 describe("memories in the trace", () => {
-	it("shows what one recognition fired as a single row", async () => {
+	it("marks a memory the agent was sent as a memory, not as the system", async () => {
+		const host = await mount([
+			note("n1", "memory:browser/local", "browser/local: load it locally\n"),
+			note("s1", "system", "the user stopped the run"),
+			...step(),
+		]);
+
+		expect(markOf(host, "load it locally")).toBe("memory");
+		expect(markOf(host, "the user stopped the run")).toBe("system");
+	});
+
+	it("draws no recalled row for what a recognition fired", async () => {
 		const host = await mount(
 			step(
 				entry("j1", "recognized", {
@@ -93,35 +118,13 @@ describe("memories in the trace", () => {
 					scores: { "browser work": 0.9 },
 					fired: [
 						{ key: "browser/local", body: "load it locally", on: "when" },
-						{ key: "browser/flags", body: "pass :quiet t" },
-						{ key: "browser/tabs", body: "one tab per page" },
 					],
 				}),
-			),
-		);
-
-		expect(host.textContent).toContain("3 memories recalled");
-		expect(host.textContent).not.toContain("1 memory recalled");
-	});
-
-	it("shows a memory another trigger fired on a row of its own", async () => {
-		const host = await mount(
-			step(entry("m1", "memory", { key: "deploy/notes", body: "use task" })),
-		);
-
-		expect(host.textContent).toContain("1 memory recalled");
-	});
-
-	it("shows nothing for a recognition that fired no memory", async () => {
-		const host = await mount(
-			step(
-				entry("j1", "recognized", {
-					message: "open my browser",
-					scores: { "browser work": 0.1 },
-				}),
+				entry("m1", "memory", { key: "deploy/notes", body: "use task" }),
 			),
 		);
 
 		expect(host.textContent).not.toContain("recalled");
+		expect(host.textContent).not.toContain("deploy/notes");
 	});
 });

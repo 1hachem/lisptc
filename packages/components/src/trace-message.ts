@@ -1,3 +1,4 @@
+import { isMemorySource } from "@repo/journal-catalog/memory";
 import type { Entry } from "@repo/shared/journal";
 import { envelopeOf, type MessageKwargs } from "@repo/shared/messages";
 
@@ -56,6 +57,13 @@ export function isParentMessage(message: ChatMessage): boolean {
 		isSystemMessage(message) &&
 		(envelopeOf(message.additional_kwargs).source?.startsWith("agent:") ??
 			false)
+	);
+}
+
+export function isMemoryMessage(message: ChatMessage): boolean {
+	return (
+		isSystemMessage(message) &&
+		isMemorySource(envelopeOf(message.additional_kwargs).source)
 	);
 }
 

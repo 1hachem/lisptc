@@ -72,7 +72,7 @@ export const CHANNELS: Channel[] = [
 		id: "memory",
 		icon: Brain02Icon,
 		label: "memories",
-		hint: "what a step recalled",
+		hint: "memories that fired, as the agent read them",
 		text: "text-orange",
 	},
 	{

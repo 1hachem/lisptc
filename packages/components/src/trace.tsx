@@ -1,11 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-	type FiredMemory,
-	memoryKind,
-	recognizedKind,
-} from "@repo/journal-catalog/memory";
-import { view } from "@repo/shared/journal";
-import {
 	type ComponentProps,
 	createContext,
 	Fragment,
@@ -19,18 +13,19 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { MessageMemories } from "./message-memories.tsx";
 import {
 	CHANNELS,
+	type ChannelId,
 	channelOf,
 	EVERY_CHANNEL,
 	type Shown,
 } from "./trace-channels.ts";
 import { ChannelsShown, Revealed, useChannels } from "./trace-context.tsx";
-import { entriesOfMessage, isEntryMessage } from "./trace-entries.ts";
+import { isEntryMessage } from "./trace-entries.ts";
 import { messageMatches } from "./trace-find.ts";
 import {
 	type ChatMessage,
+	isMemoryMessage,
 	isParentMessage,
 	isSystemMessage,
 	messageText,
@@ -48,7 +43,7 @@ export interface TraceSlots {
 	meta?(meta: StepMeta | undefined): ReactNode;
 	attachments?(message: ChatMessage): ReactNode;
 	child?(child: TraceChild): ReactNode;
-	memories?(memories: FiredMemory[], message: ChatMessage): ReactNode;
+	entry?(message: ChatMessage): ReactNode;
 	aside?(message: ChatMessage): ReactNode;
 }
 
@@ -150,17 +145,6 @@ function ChannelToggles({
 			))}
 		</div>
 	);
-}
-
-function shownMemories(
-	message: ChatMessage,
-	shown: Shown,
-): FiredMemory[] | undefined {
-	if (!shown.memory) return undefined;
-	const entries = entriesOfMessage(message);
-	const memory = view(entries, memoryKind).at(-1);
-	if (memory !== undefined) return [memory];
-	return view(entries, recognizedKind).at(-1)?.fired;
 }
 
 function TraceLine({ message }: { message: ChatMessage }) {
@@ -287,17 +271,23 @@ function useClipped(line: RefObject<HTMLElement | null>, text: string) {
 	return clipped;
 }
 
-type MessageKind = "agent" | "system" | "you";
+type MessageKind = "agent" | "memory" | "system" | "you";
 
-function messageKind(parent: boolean, system: boolean): MessageKind {
-	if (parent) return "agent";
-	return system ? "system" : "you";
+const MARK_CHANNEL = {
+	agent: "agents",
+	memory: "memory",
+	system: "system",
+	you: "user",
+} as const satisfies Record<MessageKind, ChannelId>;
+
+function messageKind(message: ChatMessage): MessageKind {
+	if (isParentMessage(message)) return "agent";
+	if (isMemoryMessage(message)) return "memory";
+	return isSystemMessage(message) ? "system" : "you";
 }
 
 function MessageMark({ kind }: { kind: MessageKind }) {
-	const marked = channelOf(
-		kind === "agent" ? "agents" : kind === "system" ? "system" : "user",
-	);
+	const marked = channelOf(MARK_CHANNEL[kind]);
 	return (
 		<HugeiconsIcon
 			icon={marked.icon}
@@ -343,11 +333,9 @@ function MessageEntry({
 	const line = useRef<HTMLSpanElement>(null);
 	const text = messageText(message);
 	const clipped = useClipped(line, text);
-	const parent = isParentMessage(message);
-	const system = isSystemMessage(message);
-	if (parent ? !shown.agents : system ? !shown.system : !shown.user)
-		return null;
-	const kind = messageKind(parent, system);
+	const kind = messageKind(message);
+	if (!shown[MARK_CHANNEL[kind]]) return null;
+	const system = kind === "system" || kind === "memory";
 	const attached = shown.attachments ? slots.attachments?.(message) : null;
 	const foldable =
 		open || clipped || text.trim().includes("\n") || attached != null;
@@ -417,25 +405,26 @@ export function TraceSteps({ messages }: { messages: readonly ChatMessage[] }) {
 interface StepRow {
 	at: number;
 	message: ChatMessage;
-	memories?: FiredMemory[];
+	drawn?: ReactNode;
 }
 
-function stepRows(messages: readonly ChatMessage[], shown: Shown): StepRow[] {
+function stepRows(
+	messages: readonly ChatMessage[],
+	slots: TraceSlots,
+): StepRow[] {
 	return messages.flatMap((message, at) => {
 		if (!isEntryMessage(message)) return [{ at, message }];
-		const memories = shownMemories(message, shown);
-		return memories === undefined ? [] : [{ at, message, memories }];
+		const drawn = slots.entry?.(message);
+		return drawn == null ? [] : [{ at, message, drawn }];
 	});
 }
 
 function TraceEntries({
 	entries,
 	flashing,
-	focused,
 }: {
 	entries: readonly TraceEntry[];
 	flashing?: string;
-	focused?: string;
 }) {
 	const shown = useChannels();
 	const slots = useContext(Slots);
@@ -471,21 +460,10 @@ function TraceEntries({
 						className="flex min-w-0 flex-col gap-2"
 					>
 						<StepDivider step={step} />
-						{stepRows(step.messages, shown).map(({ at, message, memories }) => (
+						{stepRows(step.messages, slots).map(({ at, message, drawn }) => (
 							<Fragment key={message.id ?? at}>
 								<TracedMessage message={message} flashing={flashing}>
-									{memories === undefined ? (
-										<TraceLine message={message} />
-									) : (
-										(slots.memories?.(memories, message) ?? (
-											<MessageMemories
-												memories={memories}
-												focused={
-													message.id !== undefined && message.id === focused
-												}
-											/>
-										))
-									)}
+									{drawn ?? <TraceLine message={message} />}
 								</TracedMessage>
 								{shown.agents &&
 									step.children
@@ -596,11 +574,7 @@ export function Trace({
 							className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]"
 						>
 							<div className="mx-auto w-full max-w-[680px]">
-								<TraceEntries
-									entries={entries}
-									flashing={flashing}
-									focused={turn}
-								/>
+								<TraceEntries entries={entries} flashing={flashing} />
 							</div>
 						</div>
 					</section>
