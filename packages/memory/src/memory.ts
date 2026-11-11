@@ -33,6 +33,9 @@ import {
 import {
 	type FiredMemory,
 	memoryKind,
+	memorySource,
+	notedMemoryKey,
+	notedMemorySource,
 	recognizedKind,
 } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
@@ -176,9 +179,6 @@ function conversationOf(interp: Interp): Turn[] {
 	});
 }
 
-const SOURCE = "memory";
-const NOTED_PREFIX = `${SOURCE}:`;
-
 function notedKeys(interp: Interp): Set<string> {
 	const said = interp.getGlobal(newSym("conversation"));
 	const keys = new Set<string>();
@@ -187,12 +187,13 @@ function notedKeys(interp: Interp): Set<string> {
 		for (let at: unknown = turn; at instanceof Cell; at = at.cdr) {
 			const field = at.car;
 			if (
-				field instanceof Cell &&
-				field.car === "source" &&
-				typeof field.cdr === "string" &&
-				field.cdr.startsWith(NOTED_PREFIX)
+				!(field instanceof Cell) ||
+				field.car !== "source" ||
+				typeof field.cdr !== "string"
 			)
-				keys.add(field.cdr.slice(NOTED_PREFIX.length));
+				continue;
+			const key = notedMemoryKey(field.cdr);
+			if (key !== undefined) keys.add(key);
 		}
 	return keys;
 }
@@ -942,28 +943,15 @@ export interface MemoryExtension extends InterpExtension {
 
 const FORGET_ALL = "memory/forget-all";
 
-const HEARD =
-	"these memories fired on what the user said and what just happened. they are private REPL feedback, not the user's words, and the user cannot see them. a body that is a form is a recipe: run it with (memory/replay key).";
-
-const STARTED =
-	"these memories load once, on the user's first message. they are private REPL feedback, not the user's words, and the user cannot see them.";
-
 export const memorySlot = slot<MemoryBank>("memory");
-
-function noteSource(key: string): string {
-	return `${NOTED_PREFIX}${key}`;
-}
 
 function noteFired(
 	conversation: Conversation,
 	memories: readonly FiredMemory[],
 	line: (memory: FiredMemory) => string,
-	heading?: string,
 ): void {
-	if (memories.length === 0) return;
-	if (heading !== undefined) conversation.append(SOURCE, heading);
 	for (const memory of memories)
-		conversation.append(noteSource(memory.key), line(memory));
+		conversation.append(notedMemorySource(memory.key), line(memory));
 }
 
 const keyed = (memory: FiredMemory): string =>
@@ -978,9 +966,8 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 				conversation,
 				yield* bank.start(ctx.interp),
 				(memory) => `${memory.body}\n`,
-				STARTED,
 			);
-			noteFired(conversation, yield* bank.hear(ctx.interp), keyed, HEARD);
+			noteFired(conversation, yield* bank.hear(ctx.interp), keyed);
 			yield* next(ctx);
 		});
 		hooks.evalStep.use(async (ctx, next) => {
@@ -992,7 +979,7 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 				const after = (await driveAsync(bank.endStep())).value;
 				const { conversation } = ctx.interp;
 				noteFired(conversation, [...before.memories, ...after.memories], keyed);
-				conversation.append(SOURCE, before.withheld + after.withheld);
+				conversation.append(memorySource, before.withheld + after.withheld);
 			}
 		});
 	};

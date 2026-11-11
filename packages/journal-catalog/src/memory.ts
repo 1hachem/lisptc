@@ -30,3 +30,21 @@ export const recognizedKind = entryKind({
 	schema: recognized,
 	fold: every,
 });
+
+export const memorySource = "memory";
+
+const notedPrefix = `${memorySource}:`;
+
+export function notedMemorySource(key: string): string {
+	return `${notedPrefix}${key}`;
+}
+
+export function notedMemoryKey(source: string): string | undefined {
+	return source.startsWith(notedPrefix)
+		? source.slice(notedPrefix.length)
+		: undefined;
+}
+
+export function isMemorySource(source: string | undefined): boolean {
+	return source === memorySource || source?.startsWith(notedPrefix) === true;
+}
