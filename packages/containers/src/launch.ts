@@ -78,6 +78,11 @@ export function launchFor(entry: Entry, tag?: string): Launch | undefined {
 	};
 }
 
+export function runSpecFor(
+	entry: ImageEntry | CommandEntry,
+	tag?: string,
+): RunSpec;
+export function runSpecFor(entry: Entry, tag?: string): RunSpec | undefined;
 export function runSpecFor(entry: Entry, tag?: string): RunSpec | undefined {
 	const launch = launchFor(entry, tag);
 	if (launch === undefined) return undefined;

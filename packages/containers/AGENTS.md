@@ -1,7 +1,7 @@
 # @repo/containers
 
 How a toolkit entry runs as a container, and the docker runner that runs one.
-The MCP extension's hosts run their containers through it.
+The MCP extension's hosts and the desktop app both run containers through it.
 
 Turbo tag: `platform`.
 
@@ -18,6 +18,10 @@ answers, stalls or passes its ceiling.
 status, no MCP host, no ref, no chat. A caller that needs to know when a
 container went away passes a callback and keeps its own books, so a host
 built on the runner is a thin layer that reports and keys.
+
+**A runner checks the machine's docker before it runs anything.** A machine
+whose docker is missing or not answering is refused with what to do about it
+on that platform, in `src/docker-trouble.ts`, never with docker's own error.
 
 **A `platform` package depends on `foundation` and `static` packages only.**
 The entry shapes it reads are `@repo/toolkit`'s.

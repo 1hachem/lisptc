@@ -125,7 +125,7 @@ const asChat = (threadId: string) => threadId as Id<"chats">;
 export class ThreadHost {
 	readonly transcript: TranscriptStore;
 	readonly status: ThreadStatus;
-	private readonly workspaces = new Map<Id<"workspaces">, Promise<AgentRepl>>();
+	private readonly workspaces = new Map<string, Promise<AgentRepl>>();
 
 	constructor(private readonly options: ThreadHostOptions) {
 		const { server } = options;
@@ -281,25 +281,34 @@ export class ThreadHost {
 		return await this.build(threadId, images, false);
 	}
 
-	workspace(workspaceId: Id<"workspaces">): Promise<AgentRepl> {
-		const kept = this.workspaces.get(workspaceId);
+	workspace(
+		workspaceId: Id<"workspaces">,
+		callerId: Id<"users">,
+	): Promise<AgentRepl> {
+		const key = `${workspaceId}\0${callerId}`;
+		const kept = this.workspaces.get(key);
 		if (kept !== undefined) return kept;
-		const built = this.buildWorkspace(workspaceId);
-		this.workspaces.set(workspaceId, built);
-		built.catch(() => this.workspaces.delete(workspaceId));
+		const built = this.buildWorkspace(workspaceId, callerId);
+		this.workspaces.set(key, built);
+		built.catch(() => this.workspaces.delete(key));
 		return built;
 	}
 
 	private async buildWorkspace(
 		workspaceId: Id<"workspaces">,
+		callerId: Id<"users">,
 	): Promise<AgentRepl> {
-		const { server, actAs } = this.options;
+		const { server, actAs, desktopFor } = this.options;
 		const userId = await server.query(internal.workspaces.owner, {
 			workspaceId,
 		});
 		const owner = actAs({ userId, workspaceId });
 		return new AgentRepl({
-			extensions: await workspaceExtensions(workspaceId, () => owner),
+			extensions: await workspaceExtensions(
+				workspaceId,
+				() => owner,
+				desktopFor === undefined ? {} : { desktop: desktopFor(callerId) },
+			),
 			images: new MemoryImageStore(),
 		});
 	}

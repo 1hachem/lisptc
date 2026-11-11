@@ -25,7 +25,9 @@ agent keeps it in Convex, whichever container host it runs.
 
 **A server that only runs on the user's machine goes in `@repo/toolkit`'s
 `mcp.toolkit.local.ts`, never in its `mcp.toolkit.ts`.** The bundled manifest
-holds only what a server-side host can run. A local entry is a command. A local
+holds only what a server-side host can run. A local entry is a command, or an
+image the desktop runs on the user's docker, and never one that signs in or
+reads a secret, since neither reaches the user's machine. A local
 entry that reuses a bundled name is that server's local setup: it is loaded only
 by `:local t`, so the agent never has to write the command line itself.
 

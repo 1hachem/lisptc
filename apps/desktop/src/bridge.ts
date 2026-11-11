@@ -1,3 +1,4 @@
+import { DockerRunner } from "@repo/containers/docker";
 import {
 	type DesktopMessage,
 	type Machine,
@@ -9,7 +10,7 @@ import {
 import type { DesktopPreferences } from "@repo/shared/desktop";
 import { type Cookie, session } from "electron";
 import { LocalServer } from "./local-server.ts";
-import { loginPathAdopted } from "./login-path.ts";
+import { openerFor } from "./openers.ts";
 
 const MIN_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
@@ -45,6 +46,7 @@ export type ConnectionState =
 
 export class DesktopBridge {
 	private readonly servers = new Map<string, LocalServer>();
+	private readonly runner = new DockerRunner();
 	private socket: WebSocket | undefined;
 	private retryMs = MIN_RETRY_MS;
 	private stopped = false;
@@ -116,6 +118,7 @@ export class DesktopBridge {
 		const servers = [...this.servers.values()];
 		this.servers.clear();
 		await Promise.all(servers.map((server) => server.stop()));
+		await this.runner.reap();
 	}
 
 	private async renew(): Promise<void> {
@@ -237,23 +240,24 @@ export class DesktopBridge {
 		const { id, ...spec } = message;
 		await this.servers.get(spec.name)?.stop();
 		this.servers.delete(spec.name);
-		await loginPathAdopted();
-		const server = new LocalServer(spec, {
+		const server = new LocalServer(openerFor(spec, this.runner), {
 			message: (payload) =>
 				this.send({ type: "rpc", server: spec.name, message: payload }),
 			exited: (error) => this.exited(spec.name, error, server),
 		});
+		this.servers.set(spec.name, server);
 		try {
 			await server.start();
-			this.servers.set(spec.name, server);
 			this.send({ type: "opened", id, ok: true });
 		} catch (error) {
+			if (this.servers.get(spec.name) === server)
+				this.servers.delete(spec.name);
 			await server.stop();
 			this.send({
 				type: "opened",
 				id,
 				ok: false,
-				error: `could not start "${spec.name}": ${String(error)}`,
+				error: `could not start "${spec.name}": ${error instanceof Error ? error.message : String(error)}`,
 			});
 		}
 	}
