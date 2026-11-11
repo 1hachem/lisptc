@@ -16,10 +16,12 @@ import {
 	ANCHOR_IDS,
 	type AnchorId,
 	anchors,
+	FILLABLE_ANCHOR,
 	isAnchor,
 	isPage,
 	MARK_SIZES,
 	MARKS,
+	MAX_FILL_CHARS,
 	MAX_LABEL_CHARS,
 	type Mark,
 	type MarkSize,
@@ -83,6 +85,22 @@ function sayOf(x: unknown): string {
 	if (x.length > MAX_SAY_CHARS)
 		throw new EvalException(
 			`tour step :say is longer than ${MAX_SAY_CHARS} characters`,
+			x.length,
+		);
+	return x;
+}
+
+function fillOf(anchor: AnchorId, x: unknown): string {
+	if (anchor !== FILLABLE_ANCHOR)
+		throw new EvalException(
+			`ui/point :fill only works on ${FILLABLE_ANCHOR}`,
+			anchor,
+		);
+	if (typeof x !== "string" || x.trim() === "")
+		throw new EvalException("ui/point :fill needs a string", x ?? null);
+	if (x.length > MAX_FILL_CHARS)
+		throw new EvalException(
+			`ui/point :fill is longer than ${MAX_FILL_CHARS} characters`,
 			x.length,
 		);
 	return x;
@@ -180,13 +198,22 @@ export function registerTours(
 	interp.defGen(
 		"ui/point",
 		-2,
-		'(ui/point anchor [:open page] [:mark "oval"] [:size "small"] [:click t])',
-		`Draw a short scribbled mark on one part of the app for a few seconds, with no overlay; say what it is in your reply. \`anchor\` is one of ${ANCHOR_IDS.join(" ")}. \`:mark\` is ${MARKS.join(" or ")}: an arrow at it (default) or an oval round it. \`:size\` is ${MARK_SIZES.join(" ")}, medium by default: how big the arrow is, or how loose the oval. \`:click t\` shows the pointer clicking the anchor. \`:open\` is one of ${PAGE_IDS.join(" ")}: the pointer clicks the anchor, then the page opens beside the chat, as if the user clicked it. Returns the anchor.`,
+		'(ui/point anchor [:open page] [:fill text] [:mark "oval"] [:size "small"] [:click t])',
+		`Draw a short scribbled mark on one part of the app for a few seconds, with no overlay; say what it is in your reply. \`anchor\` is one of ${ANCHOR_IDS.join(" ")}. \`:mark\` is ${MARKS.join(" or ")}: an arrow at it (default) or an oval round it. \`:size\` is ${MARK_SIZES.join(" ")}, medium by default: how big the arrow is, or how loose the oval. \`:click t\` shows the pointer clicking the anchor. \`:open\` is one of ${PAGE_IDS.join(" ")}: the pointer clicks the anchor, then the page opens beside the chat, as if the user clicked it. \`:fill\` works on ${FILLABLE_ANCHOR} only: once the pointer is done, the text is put in the message box for the user to send, such as a slash command. Returns the anchor.`,
 		z.tuple([zAny, zList]),
 		function* ([target, rest]): Eval {
 			const anchor = anchorOf(target);
-			const opts = plistOptions(rest, ["open", "mark", "size", "click"]);
+			const opts = plistOptions(rest, [
+				"open",
+				"fill",
+				"mark",
+				"size",
+				"click",
+			]);
 			const open = opts.has("open") ? pageOf(opts.get("open")) : undefined;
+			const fill = opts.has("fill")
+				? fillOf(anchor, opts.get("fill"))
+				: undefined;
 			const mark = opts.has("mark") ? markOf(opts.get("mark")) : "arrow";
 			const size = opts.has("size") ? sizeOf(opts.get("size")) : "medium";
 			const click =
@@ -198,6 +225,7 @@ export function registerTours(
 					size,
 					click,
 					...(open === undefined ? {} : { open }),
+					...(fill === undefined ? {} : { fill }),
 				}),
 			);
 			return anchor;

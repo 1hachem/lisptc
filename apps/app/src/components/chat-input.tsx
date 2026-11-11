@@ -17,6 +17,7 @@ import {
 } from "../lib/attachments.ts";
 import { useDraft, useKeys, useRecall } from "../lib/chat-draft.ts";
 import { useMenus, usePick, usePromptSearch } from "../lib/chat-menus.ts";
+import { useComposerRequests } from "../lib/composer-requests.ts";
 import { useDropZone } from "../lib/drop-zone.ts";
 import type { InputHelper } from "../lib/input-helpers.ts";
 import { useNotice } from "../lib/notice.ts";
@@ -250,6 +251,16 @@ function useComposer({
 		attach,
 	});
 	const stops = streaming?.active === true && empty;
+	const fill = useCallback(
+		(target: Element, next: string) => {
+			const root = editor.getRootElement();
+			if (root === null || !target.contains(root)) return;
+			replace(next);
+			editor.focus();
+		},
+		[editor, replace],
+	);
+	useComposerRequests(fill);
 
 	useKeys({
 		disabled: busy,

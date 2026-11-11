@@ -12,6 +12,7 @@ import {
 	useUnpointableWarning,
 } from "../lib/anchors.ts";
 import { postMessage } from "../lib/chat.tsx";
+import { requestComposerText } from "../lib/composer-requests.ts";
 import { NEW_CHAT, type PanelContent, panelTab } from "../lib/panel-ops.ts";
 import { requestPanelOps } from "../lib/panel-requests.ts";
 import { usePreferences } from "../lib/preferences.ts";
@@ -147,7 +148,9 @@ function PointAt({ pointer }: { pointer: Pointer }) {
 		pointed.add(pointer._id);
 		if (pointer.open !== undefined && isPage(pointer.open))
 			openBeside(pageContent(pointer.open));
-	}, [finished, pointer._id, pointer.open]);
+		if (pointer.fill !== undefined && element !== undefined)
+			requestComposerText(element, pointer.fill);
+	}, [finished, element, pointer._id, pointer.open, pointer.fill]);
 	if (finished || element === undefined) return null;
 	return (
 		<TourPointer

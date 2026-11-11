@@ -106,6 +106,21 @@ describe("a pointer", () => {
 		expect(pointer.safeParse({ anchor: "account" }).success).toBe(false);
 		expect(pointer.safeParse({ ...arrow, size: "huge" }).success).toBe(false);
 	});
+
+	it("fills only the message box", () => {
+		const arrow = { mark: "arrow", size: "medium", click: false };
+		expect(
+			pointer.safeParse({ ...arrow, anchor: "composer", fill: "/trace" })
+				.success,
+		).toBe(true);
+		expect(
+			pointer.safeParse({ ...arrow, anchor: "account", fill: "/trace" })
+				.success,
+		).toBe(false);
+		expect(
+			pointer.safeParse({ ...arrow, anchor: "composer", fill: "" }).success,
+		).toBe(false);
+	});
 });
 
 describe("a tour's buttons", () => {

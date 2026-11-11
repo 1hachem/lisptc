@@ -350,6 +350,7 @@ export default defineSchema({
 		size: pointerSize,
 		click: v.boolean(),
 		open: v.optional(v.string()),
+		fill: v.optional(v.string()),
 		expiresAt: v.number(),
 	})
 		.index("by_user", ["userId"])

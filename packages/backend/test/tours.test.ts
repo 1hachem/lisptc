@@ -195,4 +195,34 @@ describe("a pointer", () => {
 			}),
 		).rejects.toThrow(/POINTER_INVALID/);
 	});
+
+	it("carries the text it fills the message box with", async () => {
+		const { alice, chatId } = await touring();
+		await alice.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+			fill: "/trace",
+		});
+		expect(await alice.as.query(api.tours.pointer, {})).toMatchObject({
+			anchor: "composer",
+			fill: "/trace",
+		});
+	});
+
+	it("refuses a fill on anything but the message box", async () => {
+		const { alice, chatId } = await touring();
+		await expect(
+			alice.as.mutation(api.tours.point, {
+				chatId,
+				anchor: "account",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+				fill: "/trace",
+			}),
+		).rejects.toThrow(/POINTER_INVALID/);
+	});
 });

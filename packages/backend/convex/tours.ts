@@ -218,11 +218,14 @@ export const point = mutation({
 		size: pointerSize,
 		click: v.boolean(),
 		open: v.optional(v.string()),
+		fill: v.optional(v.string()),
 	},
 	returns: v.null(),
-	handler: async (ctx, { chatId, anchor, mark, size, click, open }) => {
+	handler: async (ctx, { chatId, anchor, mark, size, click, open, fill }) => {
 		const { user, chat } = await requireChat(ctx, chatId);
-		if (!wirePointer.safeParse({ anchor, mark, size, click, open }).success)
+		if (
+			!wirePointer.safeParse({ anchor, mark, size, click, open, fill }).success
+		)
 			throw new ConvexError({ code: "POINTER_INVALID" });
 		const held = await ctx.db
 			.query("pointers")
@@ -238,6 +241,7 @@ export const point = mutation({
 			size,
 			click,
 			open,
+			fill,
 			expiresAt: Date.now() + POINTER_TTL_MS,
 		});
 		await ctx.scheduler.runAfter(POINTER_TTL_MS, internal.tours.forgetPointer, {
@@ -266,6 +270,7 @@ export const pointer = query({
 			size: pointerSize,
 			click: v.boolean(),
 			open: v.optional(v.string()),
+			fill: v.optional(v.string()),
 		}),
 		v.null(),
 	),
@@ -276,8 +281,8 @@ export const pointer = query({
 			.withIndex("by_user", (q) => q.eq("userId", user._id))
 			.first();
 		if (row === null || row.expiresAt <= Date.now()) return null;
-		const { _id, anchor, mark, size, click, open } = row;
-		return { _id, anchor, mark, size, click, open };
+		const { _id, anchor, mark, size, click, open, fill } = row;
+		return { _id, anchor, mark, size, click, open, fill };
 	},
 });
 

@@ -376,13 +376,23 @@ export const MARK_SIZES = ["small", "medium", "large"] as const;
 
 export type MarkSize = (typeof MARK_SIZES)[number];
 
-export const pointer = z.strictObject({
-	anchor: z.enum(ANCHOR_IDS as [AnchorId, ...AnchorId[]]),
-	mark: z.enum(MARKS),
-	size: z.enum(MARK_SIZES),
-	click: z.boolean(),
-	open: z.enum(PAGE_IDS as [PageId, ...PageId[]]).optional(),
-});
+export const FILLABLE_ANCHOR = "composer" satisfies AnchorId;
+
+export const MAX_FILL_CHARS = 200;
+
+export const pointer = z
+	.strictObject({
+		anchor: z.enum(ANCHOR_IDS as [AnchorId, ...AnchorId[]]),
+		mark: z.enum(MARKS),
+		size: z.enum(MARK_SIZES),
+		click: z.boolean(),
+		open: z.enum(PAGE_IDS as [PageId, ...PageId[]]).optional(),
+		fill: z.string().min(1).max(MAX_FILL_CHARS).optional(),
+	})
+	.refine(
+		({ anchor, fill }) => fill === undefined || anchor === FILLABLE_ANCHOR,
+		{ path: ["fill"], message: `only ${FILLABLE_ANCHOR} takes a fill` },
+	);
 
 export type Pointer = z.infer<typeof pointer>;
 

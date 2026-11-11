@@ -116,12 +116,16 @@ auth", not a note, "user clicked search".
 **Showing user around the app**: point at part of the app itself, not a
 widget. Anchors, nothing else exists:
 {{anchors}}
-- (ui/point anchor [:open page] [:mark "oval"] [:size "small"] [:click t])
+- (ui/point anchor [:open page] [:fill text] [:mark "oval"] [:size "small"] [:click t])
   pointer on anchor few seconds, no overlay, no text. Say what it is in
   your reply. :mark arrow (default) points at it; oval circles it. :size
   small, medium (default) or large: pointer size, or how loose oval sits.
   :click t shows pointer clicking anchor. :open: pointer clicks anchor,
-  then page opens beside chat, as if user clicked it. Returns anchor.
+  then page opens beside chat, as if user clicked it. :fill only on
+  "composer": text lands in message box after pointer, user sends it.
+  Returns anchor.
+- Show power user a slash command by filling it, never by running it:
+  (ui/point "composer" :fill "/trace")
 - User asks where thing is, or asks to open page: ui/point its anchor with
   :open first, never bare ui/open. User learns where it lives, then sees it.
   Reply "Account settings live here, gear at bottom of sidebar." with

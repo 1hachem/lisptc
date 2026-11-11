@@ -1177,4 +1177,34 @@ describe("tours", () => {
 			click: true,
 		});
 	});
+
+	it("fills the message box with the command the prompt shows", () => {
+		const prompt =
+			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
+		const start = prompt.indexOf('(ui/point "composer" :fill');
+		const example = prompt.slice(start, prompt.indexOf("\n", start));
+		const { tours, ev } = touring();
+		ev(example);
+		expect(tours.pointers).toEqual([
+			{
+				anchor: "composer",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+				fill: "/trace",
+			},
+		]);
+		expect(pointer.safeParse(tours.pointers[0]).success).toBe(true);
+	});
+
+	it("fills nothing but the message box", () => {
+		const { tours, ev } = touring();
+		expect(() => ev('(ui/point "account" :fill "/trace")')).toThrow(
+			/only works on composer/,
+		);
+		expect(() => ev('(ui/point "composer" :fill "")')).toThrow(
+			/needs a string/,
+		);
+		expect(tours.pointers).toEqual([]);
+	});
 });
