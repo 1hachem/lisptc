@@ -3,7 +3,7 @@
 (memory "internal/semantic/rules" :when "the agent is about to use a % form, or must choose between a % form and its plain twin"
   "Bare = < member find stay exact: % only where written. Numbers and equal values answer without call, so (%= 2 2.0) free. Same question twice in session = same answer, no second call.
 % forms answer yes/no, pick, rate, measure. Rewrite, summarize, extract stay write, summarize, extract. % forms on ids, keys, enum strings: wrong tool, use plain form.
-Call can fail: try with fallback where wrong guess is costly. Option, every % call: :timeout ms, default 30000.")
+Call can fail: try with fallback where wrong guess is costly. Option, every % call: :timeout ms, default {{timeout-ms}}.")
 
 (memory "internal/semantic/judge" :when "the agent must classify, pick a category for, or rate a text or value by meaning and needs the raw probability or score, or set its own threshold"
   "Base, raw numbers for own threshold:
@@ -14,13 +14,13 @@ Call can fail: try with fallback where wrong guess is costly. Option, every % ca
   keyword, string, or (option . \"what it means\") . :none value adds \"none of
   these\", returns value when chosen. :min p returns :none value when best
   option less likely than p. :question \"...\" says what is picked.
-- (%score x \"urgency\") gives rating 0..4 on very low..very high. Own levels:
+- (%score x \"urgency\") gives rating 0..{{top-level}} on {{lowest-level}}..{{highest-level}}. Own levels:
 (%score x \"urgency\" '(\"can wait\" \"today\" \"right now\")) gives 0..2. Compare
   scores only on same levels.
 - (%score-each items \"urgency\" [levels]) gives one score per item, one call.")
 
 (memory "internal/semantic/predicates" :when "the agent must test by meaning whether two texts say the same, which is bigger by some quality, whether a value is a kind of thing, whether facts are enough to act, or whether a text mentions something; or an exact test just missed a match it should have caught"
-  "Predicates, t or nil, take :min p (default 0.5) :
+  "Predicates, t or nil, take :min p (default {{min}}) :
 
 - (%= \"Hi there!\" \"Hello!\") , (%/= a b) ; :context \"politeness\" compares only by that.
 - (%< \"a cat\" \"a horse\" :by \"size\") , %> %<= %>= ; numbers compare exact.
@@ -57,15 +57,15 @@ t clause runs when nothing fits; no t clause gives nil.")
 - (%embed x) gives vector, list of numbers.
 - (%similarity a b) gives cosine, near 1 = same meaning. Raw number for own threshold.
 - (%remove-duplicates xs) drops element meaning same as earlier one, first kept;
-  :min similarity, default 0.8.
+  :min similarity, default {{duplicate-similarity}}.
 - (%cluster xs) gives groups, list of lists, list order kept; :min similarity,
-  default 0.47. Raise :min for tighter groups.
+  default {{cluster-similarity}}. Raise :min for tighter groups.
 - (%sort xs :near q) orders by meaning distance from q, closest first:
 (head (%sort issues :near \"billing problems\") 5) = five closest.
 (%min xs :near q) = closest, (%max xs :near q) = farthest.
 - (%similarity-each x items) gives one similarity per item, one call.
 - (%outliers xs) gives elements nothing else in xs is close to; :min
-  similarity, default 0.47.
+  similarity, default {{outlier-similarity}}.
 - (%choose x options :examples '((:billing \"I was charged twice\")
     (:technical \"app crashes\"))) picks option with nearest example, no
   probability call; :min = least similarity.")

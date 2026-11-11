@@ -60,12 +60,31 @@ const NONE_LABEL = "none";
 
 const DEFAULT_LEVELS = ["very low", "low", "moderate", "high", "very high"];
 
+function filledMemories(host: SemanticHost): string {
+	const fills: Record<string, string> = {
+		"timeout-ms": String(SEMANTIC_TIMEOUT_MS),
+		"top-level": String(DEFAULT_LEVELS.length - 1),
+		"lowest-level": DEFAULT_LEVELS[0] ?? "",
+		"highest-level": DEFAULT_LEVELS.at(-1) ?? "",
+		min: String(DEFAULT_MIN),
+		"duplicate-similarity": String(DUPLICATE_SIMILARITY),
+		"cluster-similarity": String(CLUSTER_SIMILARITY),
+		"outlier-similarity": String(OUTLIER_SIMILARITY),
+	};
+	return host.memories().replace(/\{\{([a-z-]+)\}\}/g, (_, name: string) => {
+		const fill = fills[name];
+		if (fill === undefined)
+			throw new Error(`no value fills {{${name}}} in the semantic memories`);
+		return fill;
+	});
+}
+
 export function semanticExtension(host: SemanticHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerSemantic(interp, host),
 		{
 			prompt: host.prompt(),
-			memories: host.memories(),
+			memories: filledMemories(host),
 		},
 	);
 }

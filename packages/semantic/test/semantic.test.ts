@@ -1,5 +1,7 @@
 import type { JudgeRequest } from "@repo/shared/system-one";
 import { describe, expect, it } from "vitest";
+import { semanticExtension } from "../src/semantic.ts";
+import { semanticHost } from "../src/semantic-host.ts";
 import { itemAt, judging, picked, rated, yes } from "./helpers.ts";
 
 function item(req: JudgeRequest, id: string): unknown {
@@ -235,5 +237,11 @@ describe("branching", () => {
 				`(%case "35C and humid" (:hot "stay in") (:mild "walk") (t "look again"))`,
 			),
 		).toBe('"stay in"');
+	});
+});
+
+describe("the memories", () => {
+	it("fill every value they take from code", () => {
+		expect(semanticExtension(semanticHost).memories).not.toMatch(/\{\{|\}\}/);
 	});
 });
