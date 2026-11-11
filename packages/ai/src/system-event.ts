@@ -2,6 +2,7 @@ export interface SystemEvent {
 	source: string;
 	text: string;
 	failed?: true;
+	noted?: true;
 }
 
 const TAG_OPENING = /<(?=\s*\/?\s*system-event)/gi;

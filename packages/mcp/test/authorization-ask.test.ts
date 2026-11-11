@@ -1,7 +1,8 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { type Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { openSession } from "@repo/interpreter/session";
 import { type Asks, asksKind } from "@repo/journal-catalog/asks";
@@ -26,7 +27,7 @@ const loginClient: McpClient = {
 
 function session() {
 	const extension = mcpExtension({ ...mcpHost, client: loginClient });
-	const interp = new Interp({ extensions: [extension] });
+	const interp = new ConversationInterpreter({ extensions: [extension] });
 	runSync(interp, prelude);
 	return { interp, hooks: openSession([extension]) };
 }
@@ -83,7 +84,7 @@ describe("a load that needs a login", () => {
 		expect(asksOf(buffer).answered).toEqual({
 			"s-123": { accepted: true, label: "Authorized" },
 		});
-		expect(hooks.message.run(() => undefined, buffer)).toContain(
+		expect(interp.conversation.said().at(-1)?.content).toContain(
 			'(load-mcp "acme")',
 		);
 	});

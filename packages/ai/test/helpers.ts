@@ -5,7 +5,7 @@ import { journal } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { note, output } from "@repo/interpreter/topics";
+import { output } from "@repo/interpreter/topics";
 import { systemPromptKind } from "@repo/journal-catalog/system";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
@@ -47,16 +47,6 @@ const answersOnForms = extension((hooks) =>
 		ctx.code.includes("(") ? next(ctx, out) : true,
 	),
 );
-
-export function noting(text: string): InterpExtension {
-	const skipped = { model: { kind: "skipped" as const, text } };
-	return extension((hooks) =>
-		hooks.evalStep.use((ctx, next) => {
-			note.emit(ctx.interp.channels, skipped);
-			return next(ctx);
-		}),
-	);
-}
 
 export function reporting(text: string): InterpExtension {
 	return extension((hooks) => {
@@ -154,6 +144,15 @@ export function holding(): InterpExtension {
 				);
 			},
 		},
+	);
+}
+
+export function approvingByNote(): InterpExtension {
+	return extension((hooks) =>
+		hooks.invoke.use(async (ctx, next) => {
+			if (ctx.action !== "approve") return next(ctx);
+			ctx.interp.conversation.append("approver", "approved, carry on");
+		}),
 	);
 }
 

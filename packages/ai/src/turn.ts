@@ -23,7 +23,6 @@ import {
 	evalCode,
 	isUserPrompt,
 	noted,
-	proseFeedbackContent,
 	replResultContent,
 	said,
 	stripFences,
@@ -76,6 +75,7 @@ export type TurnEvent =
 			content: string;
 			source?: string;
 			failed?: true;
+			noted?: true;
 	  }
 	| { type: "evaluated"; message: ToolMessage }
 	| { type: "halt"; answer: string; steps: number }
@@ -135,8 +135,19 @@ async function* takeSteers({
 	for (const envelope of (await inbox?.()) ?? []) {
 		if (envelope.kind === "event") {
 			const { id, source, text, failed } = envelope;
-			yield { type: "steered", id, content: text, source, failed };
-			transcript.push({ role: "user", content: text, event: { source } });
+			yield {
+				type: "steered",
+				id,
+				content: text,
+				source,
+				failed,
+				noted: envelope.noted,
+			};
+			transcript.push(
+				envelope.noted
+					? noted({ role: "system", content: text, source })
+					: { role: "user", content: text, event: { source } },
+			);
 			taken += 1;
 			continue;
 		}
@@ -238,10 +249,6 @@ async function* openTurn(
 	config: AgentConfig | undefined,
 ): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
 	const { repl, transcript, trace, signal } = turn;
-	const withheld = repl.takeProseFeedback();
-	if (withheld)
-		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
-
 	repl.seed(said(transcript));
 	const started = await repl.turnStart(turn.telemetry.turnStart);
 	yield* recorded(started.entries);

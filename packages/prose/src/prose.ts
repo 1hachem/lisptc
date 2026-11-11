@@ -54,12 +54,26 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				...proseSkipped(interp, code),
 			]);
 			hooks.answered.use((ctx, out, next) => {
-				if (formsOnly(ctx.code).trim() === "") return true;
-				if (out.model !== "" || out.skipped.length === 0) return next(ctx, out);
-				return !isTruncated(ctx.code);
+				const answered =
+					formsOnly(ctx.code).trim() === "" ||
+					(out.model !== "" || out.skipped.length === 0
+						? next(ctx, out)
+						: !isTruncated(ctx.code));
+				if (answered && out.skipped.length > 0)
+					ctx.interp.conversation.append("prose", ranNothing(out.skipped));
+				return answered;
 			});
 		},
 	});
+}
+
+function ranNothing(skipped: readonly string[]): string {
+	return [
+		"your previous reply ran nothing: a parenthesis in prose is read as prose.",
+		...skipped.map((what) => `skipped ${what}`),
+		"put parentheses only around code you mean to run.",
+		"this note is not from the user. Do not mention it, apologise for it, or explain it. Answer the user's next message without repeating that shape.",
+	].join("\n");
 }
 
 function proseJudge(interp: Interp): FormJudge {

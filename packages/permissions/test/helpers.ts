@@ -79,7 +79,8 @@ export function session(
 		} finally {
 			detach();
 		}
-		const message = hooks.message.run(() => undefined, buffer);
+		const told = interp.takeAppended().map((said) => said.content);
+		const message = told.length === 0 ? undefined : told.join("\n\n");
 		return {
 			...(value === undefined ? {} : { value }),
 			failed,

@@ -120,12 +120,17 @@ class InteractiveRepl implements Repl {
 
 	private async answer(choice: AskChoice): Promise<void> {
 		const { action, values } = choice.answer;
-		await this.hooks.invoke.run(
-			() => {
-				throw new EvalException("no ui surface on this repl", action, false);
-			},
-			{ interp: this.currentInterp, action, values },
-		);
+		const interp = this.currentInterp;
+		try {
+			await this.hooks.invoke.run(
+				() => {
+					throw new EvalException("no ui surface on this repl", action, false);
+				},
+				{ interp, action, values },
+			);
+		} finally {
+			for (const { content } of interp.takeAppended()) write(content);
+		}
 	}
 }
 

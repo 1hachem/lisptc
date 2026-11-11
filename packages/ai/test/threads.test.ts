@@ -6,7 +6,7 @@ import type { AgentDelta } from "../src/agent.ts";
 import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
 import type { ChatMessageInput, WireMessage } from "../src/stream.ts";
 import { type Lineage, Threads, type ThreadsOptions } from "../src/threads.ts";
-import { holding, testRepl, unprompted } from "./helpers.ts";
+import { approvingByNote, holding, testRepl, unprompted } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as string[],
@@ -58,22 +58,6 @@ class World {
 								...(this.stored.get(id) ?? []),
 								...messages,
 							]);
-						},
-						revise: async (id, message, kwargs) => {
-							this.stored.set(
-								id,
-								(this.stored.get(id) ?? []).map((m) =>
-									m.id === message
-										? {
-												...m,
-												additional_kwargs: {
-													...m.additional_kwargs,
-													...kwargs,
-												},
-											}
-										: m,
-								),
-							);
 						},
 					},
 					status: { start: async () => {}, settle: async () => {} },
@@ -482,5 +466,23 @@ describe("a thread's budget", () => {
 		await threads.answer("root", "approve", {});
 
 		await vi.waitFor(() => expect(world.heard("root", "approve")).toBe(true));
+	});
+
+	test("wake the caller's thread with the note an answer appended", async () => {
+		const world = new World();
+		world.extensions = [approvingByNote()];
+		const threads = world.threads();
+
+		await threads.answer("root", "approve", {});
+
+		await vi.waitFor(() =>
+			expect(world.told("root", "approver")).toMatchObject([
+				{
+					type: "system",
+					content: "approved, carry on",
+					additional_kwargs: { noted: true },
+				},
+			]),
+		);
 	});
 });

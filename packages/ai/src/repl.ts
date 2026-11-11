@@ -62,18 +62,6 @@ export function replResultContent(output: string, error: boolean): string {
 	});
 }
 
-export function proseFeedbackContent(feedback: string): string {
-	return replResultContent(
-		[
-			"your previous reply ran nothing — a parenthesis in prose is read as prose:",
-			feedback.trimEnd(),
-			"put parentheses only around code you mean to run.",
-			"this note is private: it is not from the user and the user cannot see it. Do not mention it, apologise for it, or explain it — just answer the user's message without repeating that shape.",
-		].join("\n"),
-		false,
-	);
-}
-
 async function outcomeOf(
 	repl: AgentRepl,
 	run: () => Promise<EvalOutput>,

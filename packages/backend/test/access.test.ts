@@ -1582,6 +1582,24 @@ describe("chat listing", () => {
 			expect(await status()).toBe("waiting");
 		});
 
+		it("still waits on an ask that an extension note follows", async () => {
+			const { alice, chatId, status } = await opened(testDeployment());
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [
+					asking,
+					{
+						type: "system" as const,
+						content: "memory fired",
+						id: "n1",
+						kwargs: { source: "memory", noted: true },
+					},
+				],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
+		});
+
 		it("waits on an open question until the user answers it", async () => {
 			const { alice, chatId, status } = await opened(testDeployment());
 			const question = {

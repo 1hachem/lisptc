@@ -10,7 +10,8 @@ async function latestTurn(ctx: QueryCtx, chatId: Id<"chats">) {
 		.query("messages")
 		.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
 		.order("desc")) {
-		if (message.type === "human" || message.type === "system") break;
+		if (message.type === "human") break;
+		if (message.type === "system" && message.kwargs?.noted !== true) break;
 		turn.push({ type: message.type, additional_kwargs: message.kwargs });
 	}
 	return turn.reverse();

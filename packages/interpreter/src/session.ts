@@ -68,7 +68,7 @@ export interface AgentEnd {
 }
 
 export interface ActionContext {
-	readonly interp: Interp;
+	readonly interp: ConversationInterp;
 	readonly action: string;
 	readonly values: Record<string, unknown>;
 }
