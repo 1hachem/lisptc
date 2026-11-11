@@ -23,11 +23,21 @@ apply_patch)
 	;;
 Bash)
 	command=$(jq -r '.tool_input.command // ""' <<<"$payload")
-	grep -Eq "$generated" <<<"$command" || exit 0
+	cwd=$(jq -r '.cwd // ""' <<<"$payload")
+	if grep -Eq '/convex/_generated(/|$)' <<<"$cwd" \
+		|| grep -Eq '(^|[^[:alnum:]_-])cd[[:space:]]+[^|;&]*_generated' <<<"$command"; then
+		path=''
+		redirect='>{1,2}[[:space:]]*[^[:space:]&|;/]'
+	elif grep -Eq "$generated" <<<"$command"; then
+		path='convex/_generated/'
+		redirect='>{1,2}[[:space:]]*[^[:space:]&|;]*convex/_generated/'
+	else
+		exit 0
+	fi
 	if grep -Eq '(^|[^[:alnum:]_-])(sed|perl)[[:space:]]+([^|;&]*[[:space:]])?-[[:alnum:]]*i' <<<"$command" \
-		|| grep -Eq '>{1,2}[[:space:]]*[^[:space:]&|;]*convex/_generated/' <<<"$command" \
-		|| grep -Eq '(^|[^[:alnum:]_-])(tee|cp|mv|rm|truncate|install|ln|touch|patch|dd)[[:space:]][^|;&]*convex/_generated/' <<<"$command" \
-		|| grep -Eq 'git[[:space:]]+(checkout|restore)[^|;&]*convex/_generated/' <<<"$command"; then
+		|| grep -Eq "$redirect" <<<"$command" \
+		|| grep -Eq "(^|[^[:alnum:]_-])(tee|cp|mv|rm|truncate|install|ln|touch|patch|dd)[[:space:]][^|;&]*${path}" <<<"$command" \
+		|| grep -Eq "git[[:space:]]+(checkout|restore)[^|;&]*${path}" <<<"$command"; then
 		block
 	fi
 	;;
