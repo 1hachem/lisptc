@@ -1,8 +1,8 @@
-import { annotate, viewKey } from "@repo/interpreter/annotations";
 import { type Channels, topic } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
+import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -20,6 +20,7 @@ import { plistOptions } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { viewKind } from "@repo/journal-catalog/view";
 import type { PromptSource } from "@repo/shared/host";
 import {
 	ACTION_PROPS,
@@ -287,7 +288,10 @@ export class UiSurface {
 	render(node: UiNode): RenderedView {
 		const view = this.place(this.viewId(), node);
 		const channels = this.channels;
-		if (channels) rendered.emit(channels, { user: view });
+		if (channels) {
+			rendered.emit(channels, { user: view });
+			record(channels, viewKind, { viewId: view.viewId });
+		}
 		return view;
 	}
 
@@ -690,15 +694,6 @@ export function uiExtension(
 				hooks.invoke.use(async (ctx) => {
 					surface.enter(ctx.action);
 					await surface.invoke(ctx.action, ctx.values);
-				});
-				hooks.annotate.use((buffer, into, next) => {
-					const view = buffer.collect(rendered).at(-1);
-					return next(
-						buffer,
-						view === undefined
-							? into
-							: annotate(into, viewKey, { viewId: view.viewId }),
-					);
 				});
 				hooks.message.use(
 					(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),

@@ -4,18 +4,11 @@ import type { ReactNode } from "react";
 import { CHAT_MIN_WIDTH, SIDE_TRACE_MIN_WIDTH } from "../lib/panel-ops.ts";
 import { Chat } from "./chat.tsx";
 
-export function ChatSurface({
-	toggle,
-	trace,
-}: {
-	toggle: ReactNode;
-	trace: ReactNode;
-}) {
+export function ChatSurface({ trace }: { trace: ReactNode }) {
 	return (
 		<ResizablePanelGroup orientation="horizontal">
 			<ResizablePanel id="chat" minSize={CHAT_MIN_WIDTH}>
-				<div className="relative flex h-full min-h-0 min-w-0 flex-col">
-					{toggle}
+				<div className="flex h-full min-h-0 min-w-0 flex-col">
 					<Chat />
 				</div>
 			</ResizablePanel>

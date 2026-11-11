@@ -19,10 +19,10 @@ describe("a message envelope", () => {
 		});
 	});
 
-	test("keeps what a step annotated beside the turn's numbers in its meta", () => {
+	test("keeps an unknown field beside the turn's numbers in its meta", () => {
 		expect(
-			envelopeOf({ meta: { durationMs: 5, steps: "2", memories: [] } }).meta,
-		).toEqual({ durationMs: 5, memories: [] });
+			envelopeOf({ meta: { durationMs: 5, steps: "2", region: "eu" } }).meta,
+		).toEqual({ durationMs: 5, region: "eu" });
 	});
 
 	test("is empty for a message with nothing attached", () => {

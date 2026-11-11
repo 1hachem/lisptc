@@ -5,6 +5,9 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    {{- if .Values.dev.enabled }}
+    tilt.dev/down-policy: keep
+    {{- end }}
 spec:
   instances: {{ .Values.postgres.instances }}
   imageName: {{ .Values.postgres.image }}

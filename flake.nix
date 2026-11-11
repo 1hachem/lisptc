@@ -96,13 +96,21 @@
           helmfile
           yq-go
           k9s
+          tilt
           unstable.spec-kit
+          git-town
         ];
 
         # Use the Nix browsers instead of downloaded ones; skip host-dep validation.
         PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
         PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
         ELECTRON_OVERRIDE_DIST_PATH = "${unstable.electron}/bin";
+
+        # Vitest defaults to one worker per core, per package, and turbo runs
+        # several packages at once, which starves a laptop. CI does not enter
+        # this shell, so it keeps full parallelism.
+        VITEST_MAX_FORKS = "2";
+        VITEST_MAX_THREADS = "2";
 
         shellHook = ''
           export PLAYWRIGHT_MCP_EXECUTABLE="$(echo "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome)"

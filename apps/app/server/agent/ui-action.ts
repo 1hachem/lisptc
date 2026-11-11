@@ -15,14 +15,18 @@ const uiActionSchema = z.object({
 	values: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
 });
 
-async function annotateMessage(
+async function recordEntries(
 	convex: ReturnType<typeof convexAs>,
 	chatId: Id<"chats">,
-	id: string,
-	kwargs: UiActionResult["annotations"],
+	about: string,
+	entries: UiActionResult["entries"],
 ): Promise<void> {
-	if (kwargs === undefined || Object.keys(kwargs).length === 0) return;
-	await convex.mutation(api.messages.annotate, { chatId, id, kwargs });
+	if (entries.length === 0) return;
+	await convex.mutation(api.messages.record, {
+		chatId,
+		about,
+		entries: entries.map(({ kind, value }) => ({ kind, value })),
+	});
 }
 
 export const uiAction = {
@@ -34,9 +38,9 @@ export const uiAction = {
 		const convex = convexAs(context.session);
 		await convex.query(api.chats.get, { chatId });
 		const result = await answer(chatId, action, values ?? {}, messageId);
-		const { annotations, ...reply } = result;
+		const { entries, ...reply } = result;
 		if (messageId !== undefined)
-			await annotateMessage(convex, chatId, messageId, annotations);
+			await recordEntries(convex, chatId, messageId, entries);
 		console.log(
 			`ui action chat=${chatId} action=${action}${result.message ? " sent" : ""}${result.error ? " error" : ""}`,
 		);

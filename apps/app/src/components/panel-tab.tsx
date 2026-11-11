@@ -1,12 +1,5 @@
-import {
-	PanelRightCloseIcon,
-	PanelRightOpenIcon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@repo/backend/dataModel";
 import { GlyphCycle } from "@repo/components";
-import { Button } from "@repo/ui";
-import { anchorOf } from "@repo/ui-catalog";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { AgentProvider } from "../lib/agent.tsx";
 import { ChatProvider } from "../lib/chat.tsx";
@@ -48,34 +41,11 @@ function Column({ children }: { children: ReactNode }) {
 	return <div className="flex h-full min-h-0 flex-col">{children}</div>;
 }
 
-function SideTraceToggle() {
-	const control = useSideTrace();
-	if (control === null) return null;
-	const open = control.trace.shown === "open";
-	return (
-		<Button
-			{...anchorOf("chat/trace")}
-			type="button"
-			variant="ghost"
-			size="icon-sm"
-			data-side-trace-toggle
-			aria-pressed={open}
-			aria-label={open ? "collapse trace" : "open trace"}
-			title={open ? "collapse trace" : "open trace"}
-			onClick={control.toggle}
-			className="absolute top-2 right-2 z-10 text-dim"
-		>
-			<HugeiconsIcon icon={open ? PanelRightCloseIcon : PanelRightOpenIcon} />
-		</Button>
-	);
-}
-
 function ChatWithTrace({ chatId }: { chatId: Id<"chats"> | null }) {
 	const control = useSideTrace();
 	const open = chatId !== null && control?.trace.shown === "open";
 	return (
 		<ChatSurface
-			toggle={chatId !== null && <SideTraceToggle />}
 			trace={open && <TraceView chatId={chatId} turn={control?.trace.turn} />}
 		/>
 	);

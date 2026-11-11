@@ -22,7 +22,7 @@ import { api } from "@repo/backend/api";
 import type { Doc, Id } from "@repo/backend/dataModel";
 import {
 	FileTree,
-	SortableTree,
+	SortableSide,
 	TreeCommand,
 	TreeFile,
 	TreeFolder,
@@ -34,15 +34,20 @@ import {
 	type SidebarFolder,
 } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useEffect,
+	useState,
+} from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { writeBoolPref } from "../lib/prefs.ts";
-import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
-import type { SidebarEntry } from "../lib/sidebar-order.ts";
+import type { SidebarEntry, SidebarSide } from "../lib/sidebar-order.ts";
 import { folderCookie, folderOpen } from "../lib/sidebar-prefetch.ts";
 import { ChatFolder } from "./chat-folder.tsx";
 import {
@@ -144,7 +149,11 @@ export function openFolder(entry: SidebarEntry) {
 	for (const open of folderOpeners) open(entry);
 }
 
-function useFolders() {
+type Folders = <F extends SidebarFolder>(folder: F) => FolderState<F>;
+
+const FoldersContext = createContext<Folders | null>(null);
+
+export function FoldersProvider({ children }: { children: ReactNode }) {
 	const [opened, setOpened] = useState(
 		() =>
 			Object.fromEntries(
@@ -159,7 +168,9 @@ function useFolders() {
 			folderOpeners.delete(open);
 		};
 	}, []);
-	return <F extends SidebarFolder>(folder: F): FolderState<F> => ({
+	const folders: Folders = <F extends SidebarFolder>(
+		folder: F,
+	): FolderState<F> => ({
 		name: folder,
 		icon: FOLDER_ICONS[folder],
 		toggleAnchor: FOLDER_ANCHORS[folder],
@@ -170,6 +181,21 @@ function useFolders() {
 			setOpened((prev) => ({ ...prev, [folder]: next }));
 		},
 	});
+	return <FoldersContext value={folders}>{children}</FoldersContext>;
+}
+
+function useFolders(): Folders {
+	const folders = useContext(FoldersContext);
+	if (folders === null)
+		throw new Error("useFolders must be used within a FoldersProvider");
+	return folders;
+}
+
+export function useCloseFolder() {
+	const folder = useFolders();
+	return (entry: SidebarEntry) => {
+		if (isFolder(entry) && folder(entry).open) folder(entry).onToggle();
+	};
 }
 
 function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
@@ -282,7 +308,6 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 			name="home"
 			icon={Home01Icon}
 			selected={false}
-			onDragStart={dragsAs(NEW_CHAT)}
 			link={linkTo(workspaceId, NEW_CHAT)}
 		/>
 	);
@@ -290,11 +315,15 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 
 const ROOT_FILES: Record<
 	"readme" | "settings" | "preferences",
-	{ name: SidebarEntry; icon?: IconSvgElement }
+	{ name: SidebarEntry; title: string; icon?: IconSvgElement }
 > = {
-	readme: { name: "README.md", icon: InformationCircleIcon },
-	settings: { name: "settings" },
-	preferences: { name: "preferences" },
+	readme: {
+		name: "README.md",
+		title: "README.md",
+		icon: InformationCircleIcon,
+	},
+	settings: { name: "settings", title: "settings" },
+	preferences: { name: "preferences", title: "preferences" },
 };
 
 function RootFile({
@@ -308,7 +337,7 @@ function RootFile({
 	const content: PanelContent = {
 		kind: "page",
 		page,
-		title: ROOT_FILES[page].name,
+		title: ROOT_FILES[page].title,
 	};
 	return (
 		<TreeFile
@@ -316,7 +345,6 @@ function RootFile({
 			name={ROOT_FILES[page].name}
 			icon={ROOT_FILES[page].icon}
 			selected={shown(content)}
-			onDragStart={dragsAs(content)}
 			link={linkTo(workspaceId, content)}
 		/>
 	);
@@ -324,8 +352,10 @@ function RootFile({
 
 export function WorkspaceTree({
 	workspaceId,
+	side,
 }: {
 	workspaceId: Id<"workspaces">;
+	side: SidebarSide;
 }) {
 	const newChat = useNewChat();
 	const folder = useFolders();
@@ -335,9 +365,6 @@ export function WorkspaceTree({
 	const { data: onboardings } = useQuery(
 		convexQuery(api.onboardings.list, { workspaceId }),
 	);
-
-	const { shown, reorder } = useSidebarOrder();
-	const { motion } = useSidebarMotion();
 
 	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
 		<TreeFolder
@@ -413,16 +440,9 @@ export function WorkspaceTree({
 
 	return (
 		<FileTree>
-			<SortableTree
-				order={shown}
-				onReorder={reorder}
-				onPickUp={(name) => {
-					if (isFolder(name) && folder(name).open) folder(name).onToggle();
-				}}
-				motion={motion}
-			>
+			<SortableSide<SidebarEntry> side={side} className="min-h-24">
 				{(name) => entries[name]()}
-			</SortableTree>
+			</SortableSide>
 		</FileTree>
 	);
 }

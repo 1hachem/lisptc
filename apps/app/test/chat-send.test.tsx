@@ -122,24 +122,20 @@ describe("sending from the chat", () => {
 
 	it("sends a message about a file that carries only attachments", async () => {
 		const chat = mount(CHAT);
-		const annotations = {
+		const received = {
 			attachments: [{ folder: "attachments", name: "spec.pdf" }],
 		};
 		let sent: boolean | undefined;
 		await act(async () => {
 			sent = await chat
 				.getState()
-				.sendAbout(
-					{ path: "knowledge/a.md", source: "# a" },
-					"  ",
-					annotations,
-				);
+				.sendAbout({ path: "knowledge/a.md", source: "# a" }, "  ", received);
 		});
 		expect(sent).toBe(true);
 		expect(world.submit).toHaveBeenCalledWith(
 			expect.objectContaining({
 				chatId: CHAT,
-				annotations,
+				received,
 				message: expect.stringContaining("knowledge/a.md"),
 			}),
 		);

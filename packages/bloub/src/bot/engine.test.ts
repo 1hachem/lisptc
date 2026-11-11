@@ -490,7 +490,7 @@ describe("changement d etat pendant un fondu", () => {
 		}
 	});
 
-	it("ne change rien a une lecture espacee", () => {
+	it("continue d animer le corps apres des changements espaces", () => {
 		const suite: Array<[StateId, number]> = [
 			["thinking", 1],
 			["wink", 2],

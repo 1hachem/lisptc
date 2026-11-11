@@ -1,10 +1,11 @@
 import { writeFileSync } from "node:fs";
 import { evalsEnv } from "@repo/env/evals";
-import type { ProviderName } from "@repo/shared/providers";
+import type { CataloguedChoice, ProviderName } from "@repo/shared/providers";
 import { test } from "vitest";
 import type {
 	CaseInfo,
 	CheckOutcome,
+	EntryLine,
 	Grade,
 	MockedServer,
 	Report,
@@ -14,7 +15,7 @@ import type {
 } from "./report.ts";
 import { reportSchema } from "./report.ts";
 import { shardPath } from "./shards.ts";
-import { evalMatrix, reachable, type Target } from "./targets.ts";
+import { evalMatrix, reachable } from "./targets.ts";
 
 export type SeedEntry = { user: string } | { assistant: string };
 
@@ -28,18 +29,19 @@ export type TranscriptEntry =
 	| { role: "assistant"; content: string }
 	| { role: "tool"; content: string; riding?: string };
 
+export interface EvalEntry {
+	readonly kind: string;
+	readonly value: unknown;
+}
+
 export type EvalTurnEvent =
 	| {
 			type: "assistant";
 			code: string;
 			meta: { inputTokens?: number; outputTokens?: number };
 	  }
-	| { type: "collected"; annotations: Record<string, unknown> }
-	| {
-			type: "result";
-			output: string;
-			annotations: { step: Record<string, unknown> };
-	  }
+	| { type: "entry"; entry: EvalEntry }
+	| { type: "result"; output: string }
 	| { type: "halt"; answer: string }
 	| { type: "silent" }
 	| { type: "failed"; message: string };
@@ -47,7 +49,7 @@ export type EvalTurnEvent =
 export interface EvalResult {
 	output: string;
 	error: boolean;
-	annotations: { step: Record<string, unknown> };
+	entries: readonly EvalEntry[];
 	emitted: string;
 }
 
@@ -60,7 +62,7 @@ export interface AgentDriver<Repl> {
 		options: {
 			repl: Repl;
 			maxSteps: number;
-			target: Target;
+			target: CataloguedChoice;
 			system: string;
 		},
 	): AsyncIterable<EvalTurnEvent>;
@@ -153,8 +155,31 @@ function grade(
 }
 
 function speaker(line: TranscriptLine): string {
+	if (line.role === "entry") return line.kind;
 	if (line.role === "user") return "user";
 	return line.role === "assistant" ? "agent" : "repl";
+}
+
+function record(value: unknown): Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+function entryText({ kind, value }: EvalEntry): string {
+	const fields = record(value);
+	if (kind === "memory" && typeof fields.key === "string")
+		return `${fields.key}: ${typeof fields.body === "string" ? fields.body : ""}`;
+	return JSON.stringify(value) ?? "";
+}
+
+export function entryLine(entry: EvalEntry): EntryLine {
+	return {
+		role: "entry",
+		kind: entry.kind,
+		value: entry.value,
+		content: entryText(entry),
+	};
 }
 
 export function formatRun(name: string, run: ReportRow): string {
@@ -170,9 +195,14 @@ export function formatRun(name: string, run: ReportRow): string {
 		`${run.grade.toUpperCase()} · ${ending} · ${run.inputTokens} in / ${run.outputTokens} out · ${run.durationMs}ms`,
 		RULE,
 	];
+	const width = Math.max(
+		5,
+		...run.transcript.map((line) => speaker(line).length),
+	);
+	const gutter = `\n${" ".repeat(width)} │ `;
 	for (const line of run.transcript) {
 		out.push(
-			`${speaker(line).padEnd(5)} │ ${line.content.trimEnd().split("\n").join("\n      │ ")}`,
+			`${speaker(line).padEnd(width)} │ ${line.content.trimEnd().split("\n").join(gutter)}`,
 		);
 	}
 	out.push(RULE);
@@ -280,7 +310,7 @@ async function replaySeed<Repl>(
 			see({ role: "user", content: entry.user });
 			continue;
 		}
-		const { output, error, annotations, emitted } = await agent.eval(
+		const { output, error, entries, emitted } = await agent.eval(
 			repl,
 			entry.assistant,
 		);
@@ -291,7 +321,8 @@ async function replaySeed<Repl>(
 			...(emitted === "" ? {} : { riding: emitted }),
 		});
 		see({ role: "assistant", content: entry.assistant });
-		see({ role: "tool", content: output }, annotations.step);
+		for (const recorded of entries) see(entryLine(recorded));
+		see({ role: "tool", content: output });
 	}
 }
 
@@ -304,10 +335,7 @@ interface Tally {
 	outputTokens: number;
 }
 
-type See = (
-	line: TranscriptLine,
-	annotations?: Record<string, unknown>,
-) => void;
+type See = (line: TranscriptLine) => void;
 
 async function runPrelude<Repl>(
 	agent: AgentDriver<Repl>,
@@ -336,23 +364,21 @@ async function followTurn(
 		inputTokens: 0,
 		outputTokens: 0,
 	};
-	let collected: Record<string, unknown> = {};
 	for await (const event of events) {
 		switch (event.type) {
 			case "assistant":
 				tally.steps += 1;
 				trace.beginStep(tally.steps);
 				trace.reply(event.code);
-				see({ role: "assistant", content: event.code }, collected);
-				collected = {};
+				see({ role: "assistant", content: event.code });
 				tally.inputTokens = event.meta.inputTokens ?? tally.inputTokens;
 				tally.outputTokens += event.meta.outputTokens ?? 0;
 				break;
-			case "collected":
-				collected = { ...collected, ...event.annotations };
+			case "entry":
+				see(entryLine(event.entry));
 				break;
 			case "result":
-				see({ role: "tool", content: event.output }, event.annotations.step);
+				see({ role: "tool", content: event.output });
 				checks.evaluate(tally.steps);
 				break;
 			case "halt":
@@ -374,15 +400,13 @@ async function followTurn(
 export async function runCase<Spec extends EvalSpec, Repl>(
 	runtime: EvalRuntime<Spec, Repl>,
 	spec: Spec,
-	target: Target,
+	target: CataloguedChoice,
 ): Promise<RunResult> {
 	const { repl, trace, checks } = runtime.open(spec);
 	const transcript: TranscriptEntry[] = [];
 	const seen: TranscriptLine[] = [];
-	const see: See = (line, annotations = {}) => {
-		seen.push(
-			Object.keys(annotations).length === 0 ? line : { ...line, annotations },
-		);
+	const see: See = (line) => {
+		seen.push(line);
 	};
 
 	await runPrelude(runtime.agent, repl, trace, spec.prelude);

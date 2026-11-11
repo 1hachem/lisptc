@@ -26,6 +26,7 @@ const SET_KEYS = [
 	"metadata",
 	"input",
 	"sidebar",
+	"sidebar-right",
 	"hidden",
 	"status-bar",
 	"status-bar-hidden",
@@ -61,7 +62,14 @@ const SET_ARGS = [
 		type: "list",
 		required: false,
 		description:
-			'the order of the sidebar\'s top-level entries, as ("name" ...); entries not named follow in their current order',
+			'the left sidebar\'s entries, top first, as ("name" ...); a named entry on the right moves left, and entries not named follow in their current order',
+	},
+	{
+		name: "sidebar-right",
+		type: "list",
+		required: false,
+		description:
+			'the right sidebar\'s entries, top first, as ("name" ...); a named entry on the left moves right, and entries not named follow in their current order',
 	},
 	{
 		name: "hidden",
@@ -131,6 +139,7 @@ export function preferencesList(preferences: Preferences): List {
 		["metadata", togglesList(preferences.metadata)],
 		["input", togglesList(preferences.input)],
 		["sidebar", arrayToList([...(preferences.sidebar ?? [])])],
+		["sidebar-right", arrayToList([...(preferences.sidebarRight ?? [])])],
 		["hidden", arrayToList([...(preferences.hidden ?? [])])],
 		["status-bar", arrayToList([...(preferences.statusBar ?? [])])],
 		[
@@ -213,6 +222,28 @@ function ordered(
 	return [...named, ...(known ?? []).filter((name) => !named.includes(name))];
 }
 
+function sidebarSides(
+	toLeft: unknown,
+	toRight: unknown,
+	left: readonly string[],
+	right: readonly string[],
+): { left: string[]; right: string[] } {
+	const known = [...left, ...right];
+	const namedLeft = names("sidebar", "sidebar entry", toLeft, known);
+	const namedRight = names("sidebar-right", "sidebar entry", toRight, known);
+	const both = namedLeft.find((name) => namedRight.includes(name));
+	if (both !== undefined)
+		throw new EvalException(
+			"a sidebar entry goes in :sidebar or :sidebar-right, not both",
+			both,
+		);
+	const placed = new Set([...namedLeft, ...namedRight]);
+	return {
+		left: [...namedLeft, ...left.filter((name) => !placed.has(name))],
+		right: [...namedRight, ...right.filter((name) => !placed.has(name))],
+	};
+}
+
 function statusBarSlots(stored: readonly string[] | undefined): string[] {
 	const kept = (stored ?? []).filter((name) => STATUS_BAR_SLOTS.includes(name));
 	return [
@@ -242,7 +273,7 @@ export function registerPreferences(
 		"preferences",
 		0,
 		"(preferences)",
-		'Return the user\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). They belong to the user, not the workspace, and the app applies them live. The theme is a workspace setting, see (settings).',
+		'Return this workspace\'s preferences as a plist: (:font id :metadata (:id t ...) :input (:id t ...) :sidebar ("name" ...) :sidebar-right ("name" ...) :hidden ("name" ...) :status-bar ("name" ...) :status-bar-hidden ("name" ...) :motion id :panel-motion t :trace-beside-chat nil :trace-link t). Each workspace keeps its own, as it keeps its theme, and the app applies them live. The theme itself is read with (settings).',
 		z.tuple([]),
 		function* (): Eval {
 			return preferencesList(yield* settled(store.read()));
@@ -252,14 +283,14 @@ export function registerPreferences(
 	interp.defGen(
 		"preferences/set",
 		-1,
-		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
-		"Change the user's preferences. Only the keys given change; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
+		'(preferences/set [:font id] [:metadata (:id t ...)] [:input (:id t ...)] [:sidebar ("name" ...)] [:sidebar-right ("name" ...)] [:hidden ("name" ...)] [:status-bar ("name" ...)] [:status-bar-hidden ("name" ...)] [:motion id] [:panel-motion t] [:trace-beside-chat t] [:trace-link t])',
+		"Change this workspace's preferences. Only the keys given change, and other workspaces keep theirs; a toggle not named keeps its value. The app re-renders at once. Returns the preferences after the change.",
 		z.tuple([zList]),
 		function* ([rest]): Eval {
 			const options = plistOptions(rest, SET_KEYS);
 			if (options.size === 0)
 				throw new EvalException(
-					"nothing to set, give one of :font :metadata :input :sidebar :hidden :status-bar :status-bar-hidden :motion :panel-motion :trace-beside-chat :trace-link",
+					"nothing to set, give one of :font :metadata :input :sidebar :sidebar-right :hidden :status-bar :status-bar-hidden :motion :panel-motion :trace-beside-chat :trace-link",
 					null,
 				);
 			const current = yield* settled(store.read());
@@ -274,19 +305,24 @@ export function registerPreferences(
 				);
 			if (options.has("input"))
 				change.input = toggled("input", options.get("input"), current.input);
-			if (options.has("sidebar"))
-				change.sidebar = ordered(
-					"sidebar",
-					"sidebar entry",
-					options.get("sidebar"),
-					current.sidebar,
+			const left = current.sidebar ?? [];
+			const right = current.sidebarRight ?? [];
+			if (options.has("sidebar") || options.has("sidebar-right")) {
+				const sides = sidebarSides(
+					options.has("sidebar") ? options.get("sidebar") : null,
+					options.has("sidebar-right") ? options.get("sidebar-right") : null,
+					left,
+					right,
 				);
+				change.sidebar = sides.left;
+				change.sidebarRight = sides.right;
+			}
 			if (options.has("hidden"))
 				change.hidden = names(
 					"hidden",
 					"sidebar entry",
 					options.get("hidden"),
-					current.sidebar,
+					[...left, ...right],
 				);
 			if (options.has("status-bar"))
 				change.statusBar = ordered(

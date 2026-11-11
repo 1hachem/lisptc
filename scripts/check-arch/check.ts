@@ -46,6 +46,7 @@ const EXTENSION_FILES = [
 	"packages/llm/src/llm.ts",
 	"packages/mcp/src/mcp.ts",
 	"packages/mcp/src/ports.ts",
+	"packages/semantic/src/semantic.ts",
 ];
 
 export function isExtensionModule(file: string): boolean {

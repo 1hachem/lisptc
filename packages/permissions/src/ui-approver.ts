@@ -1,8 +1,9 @@
-import { type Ask, asking } from "@repo/interpreter/asks";
 import { EvalException } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
 import type { SessionHooks } from "@repo/interpreter/session";
+import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
 import { resolveApproval } from "./approvals.ts";
-import { decided, lapsed, requested, settled } from "./channel.ts";
+import { decided, lapsed, settled } from "./channel.ts";
 import type { ApprovalRequest, Approvals, Approver, Scope } from "./ports.ts";
 
 export const DECIDE_ACTION = "permissions/decide";
@@ -65,6 +66,9 @@ function approvalAsk(request: ApprovalRequest): Ask {
 
 export const uiApprover: Approver = {
 	kind: "ui",
+	ask(request, channels) {
+		record(channels, asksKind, { open: [approvalAsk(request)] });
+	},
 	session(hooks: SessionHooks, approvals: Approvals): void {
 		hooks.invoke.use(async (ctx, next) => {
 			if (ctx.action !== DECIDE_ACTION) return next(ctx);
@@ -79,6 +83,11 @@ export const uiApprover: Approver = {
 			});
 			if (resolution === undefined) {
 				lapsed.emit(ctx.interp.channels, { user: id });
+				record(
+					ctx.interp.channels,
+					asksKind,
+					answering(id, { accepted: false, label: EXPIRED }),
+				);
 				throw new EvalException(
 					"no such approval request, or it was already decided",
 					id,
@@ -92,28 +101,17 @@ export const uiApprover: Approver = {
 					scope: resolution.decision.scope,
 				},
 			});
+			const { approved: accepted, scope: decidedScope } = resolution.decision;
+			record(
+				ctx.interp.channels,
+				asksKind,
+				answering(id, {
+					accepted,
+					label: accepted ? DONE[decidedScope] : DONE.denied,
+				}),
+			);
 			decided.emit(ctx.interp.channels, { user: resolution.message });
 		});
-		hooks.annotate.use((buffer, into, next) =>
-			next(
-				buffer,
-				asking(into, {
-					open: buffer.collect(requested).map(approvalAsk),
-					answered: Object.fromEntries([
-						...buffer
-							.collect(lapsed)
-							.map((id) => [id, { accepted: false, label: EXPIRED }]),
-						...buffer.collect(settled).map((d) => [
-							d.id,
-							{
-								accepted: d.approved,
-								label: d.approved ? DONE[d.scope] : DONE.denied,
-							},
-						]),
-					]),
-				}),
-			),
-		);
 		hooks.message.use((buffer, next) => {
 			const messages = buffer.collect(decided);
 			return messages.length === 0 ? next(buffer) : messages.join("\n\n");

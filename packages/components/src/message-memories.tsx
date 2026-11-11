@@ -1,8 +1,7 @@
 "use client";
 
+import type { FiredMemory } from "@repo/journal-catalog/memory";
 import { useEffect, useState } from "react";
-import type { Marker } from "./file-tree.tsx";
-import type { FiredMemory } from "./memories.ts";
 
 const TRIGGER_COLORS: Record<string, string> = {
 	error: "bg-red",
@@ -56,12 +55,10 @@ export function MessageMemories({
 	memories,
 	onOpen,
 	focused = false,
-	anchor,
 }: {
 	memories: FiredMemory[];
 	onOpen?: () => void;
 	focused?: boolean;
-	anchor?: Marker;
 }) {
 	const [open, setOpen] = useState(focused);
 	useEffect(() => {
@@ -76,7 +73,7 @@ export function MessageMemories({
 	const hidden = count - stacked.length;
 
 	return (
-		<div {...anchor} className="mt-1 select-none text-[11px] leading-[1.7]">
+		<div className="mt-1 select-none text-[11px] leading-[1.7]">
 			<button
 				type="button"
 				onClick={() => (onOpen ? onOpen() : setOpen(!open))}

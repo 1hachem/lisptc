@@ -25,8 +25,9 @@ belongs in an assertion. If the reason cannot survive in the code, the code is
 what to change.
 
 The only prose that stays is what is written for someone who is not reading the
-code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, and what an
-agent runner itself reads under `.agents/` and `.github/`.
+code: the root `README.md`, a package's own README.md, the `AGENTS.md` files, the
+feature specs under `specs/` with the Spec Kit files under `.specify/`, and what
+an agent runner itself reads under `.agents/` and `.github/`.
 
 ## The IO goes out to an agent
 
@@ -98,9 +99,10 @@ A change to the language surface is not done until they still pass.
 The test cluster is not a workspace either, and it answers to `task` as well.
 What it runs is deployed from `main` alone, except a pull request labeled
 `preview`, which runs in a namespace of its own until the label or the pull
-request goes away. A service added to the local stack is not deployed until the
-cluster runs it too, and a URL the stack derives from its hostnames has to be
-derived for a preview as well.
+request goes away. The local stack is the cluster's own chart, which Tilt runs
+in the `lisptc-dev` namespace with `values-dev.yaml`, so a
+service is added to the chart and nowhere else. A URL the stack derives from its
+hostnames has to be derived for a preview and for `dev` as well.
 
 ### Packages
 
@@ -126,6 +128,7 @@ named only at a composition root:
 - `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.
 - `packages/prose` (`@repo/prose-extension`) — the prose the model writes around its forms.
 - `packages/secrets` (`@repo/secrets-extension`) — the secret registry.
+- `packages/semantic` (`@repo/semantic-extension`) — the `%` forms: comparisons, picks and ratings judged by meaning.
 - `packages/ui-extension` (`@repo/ui-extension`) — the UI surface.
 - `packages/workspace` (`@repo/workspace-extension`) — the workspace's settings and its chats.
 - `packages/checks` (`@repo/checks`) — the check extension: the DSL an eval case is written in.
@@ -136,9 +139,11 @@ Everything else:
 - `packages/ai` (`@repo/ai`) — the agent loop and what it runs on.
 - `packages/evals` (`@repo/evals`) — the eval driver, the report it writes, and everything that reads one back.
 - `packages/shared` (`@repo/shared`) — the utility layer, with zod as its only dependency.
+- `packages/models` (`@repo/models`) — how the code reaches a model vendor: the chat providers and the System One models.
 - `packages/desktop-protocol` (`@repo/desktop-protocol`) — the wire between the desktop app and the app server.
 - `packages/toolkit` (`@repo/toolkit`) — the bundled MCP toolkit manifest, read by the MCP extension.
 - `packages/ui-catalog` (`@repo/ui-catalog`) — the widgets a view may hold, which the UI extension builds against and the frontend draws against.
+- `packages/journal-catalog` (`@repo/journal-catalog`): the journal entries a view may read, which an extension records against and the views above the seam read against.
 - `packages/syntax` (`@repo/syntax`) — the lisptc language for the highlighter.
 - `packages/tree-sitter` (`@repo/tree-sitter`) — the tree-sitter grammar, compiled by nix for `ptcfmt`.
 - `packages/language-service` (`@repo/language-service`) — completions, hover, errors and call hints over lisptc text, for the language server and the chat input alike.
@@ -191,6 +196,9 @@ interpreter  →  extensions  →  repl front-ends  →  agent  →  apps
   ships, and `apps/app/AGENTS.md` carries that rule.
 - `@repo/shared` carries zod and no other dependency. `@repo/ui` carries no
   workspace package.
+- A package tagged `platform` is a vendor adapter, like `@repo/models`. It
+  depends on `foundation` and `static` packages only, and an extension, the
+  runtime, the backend and an app may each depend on it.
 - A package tagged `static` is data, like `@repo/toolkit`. It depends on zod or
   a `foundation` package at most, and every package and app may depend on it.
 - `@repo/backend` depends on no workspace package that reads it, and nothing
@@ -246,8 +254,10 @@ bytes without knowing which extension produced them, or that it exists.
 
 Three kinds of thing cross the seam, and each has exactly one mechanism. Reach
 for the matching one, never for an import: behaviour goes through a chain, a
-capability goes through a slot, data goes through an annotation. Needing
-something new is never a reason to import across the seam.
+capability goes through a slot, data goes through the journal. A fact is
+recorded as its own entry when it happens, never folded onto a step, and each
+view filters the journal for the kinds it shows. Needing something new is never
+a reason to import across the seam.
 
 `check:arch` holds it in three rules: a function that takes an extension and
 digs a field out of it fails everywhere by shape; the files allowed to run the
@@ -330,6 +340,25 @@ instead; their own `AGENTS.md` says so.
 A package with shared test helpers has them in `test/helpers.ts`, and a test
 should use them rather than assembling the world by hand.
 
+**A test pins behaviour, never the implementation.** It drives what a caller
+drives: Lisp through the REPL, a module through its exports, a component
+through what a user does to it, a Convex function through `api`. It asserts what
+that caller gets back: the value, the error it can tell apart, the text a user
+reads, the row read back through a public query. A refactor that keeps the
+behaviour leaves every test green.
+
+So a test does not assert the wording of a prompt or a message, a field or id
+the caller never reads, a raw row, a `data-*` attribute, a class name, the shape
+of the markup, or what a fake was handed and how often. It does not compare a
+constant with itself, or compute the expected value the way the code does. When
+a behaviour can only be seen through one of those, it lacks a public surface,
+and that is what to add. A test's title says what its body checks.
+
+A fake that stands in for a port is the exception. What an extension hands its
+host is that extension's output, so a test may assert the call a port receives,
+such as the command a server is launched with. It still asserts nothing the
+port's contract leaves out.
+
 A test belongs to the package that owns what it asserts. A surface an extension
 owns is tested in that extension's package, never in the interpreter, whose
 helpers build an interpreter with nothing installed. A runtime package's tests
@@ -368,7 +397,7 @@ pnpm repl                    # turbo run repl (run the interpreter REPL directly
 
 task check:agents            # judge the AGENTS.md prose a PR adds (needs the /actions/agents-md secrets)
 task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
-task up                      # build and run the whole stack in docker, with live reload
+task up                      # run the whole stack on the local k3s under tilt, in lisptc-dev, with live reload
 task test                    # the vitest suites and the nix flake checks together
 task test:nix                # the nix flake checks, the ptcfmt formatter test included
 task test:nvim               # the nvim integration test
@@ -399,8 +428,31 @@ there fails the same way locally, under the command it names.
 **Do not run the checks yourself before a push.** `.husky/pre-push` runs them
 and refuses a push that fails, and CI runs them again. When the user asks to
 push, push. If the hook or CI fails, read the failure, fix it, and push again
-without being asked. While the work is still moving, check a change with the
-tests and the typecheck of the package it touches, and nothing wider.
+without being asked.
+
+## When to verify
+
+**Do not run the typecheck or the test suites yourself.** CI runs both on every
+push. The machine the work runs on is small, and a run competes with everything
+else on it. Edit and keep going.
+
+Run the typecheck only when you are stuck: a step cannot go on without knowing
+whether the last one compiles, or something is broken and the type errors are
+the lead you need. Filter it to the one package in question.
+
+Run a test only to answer a question about the code in front of you: a bug you
+are debugging, new logic you need to see work, or whether a change broke what
+it touches. Run the test file or the test name that answers it, inside the
+package that owns it, never a whole package's suite when one file will do.
+
+Either one goes through `script`, and never across the repo: no root
+`pnpm test` or `pnpm typecheck`, and no `task test`.
+
+After a push, the verdict is read off CI. Wait for the run in the background
+(`gh pr checks --watch`, or `gh run watch` for a branch with no pull request),
+and once it finishes, have `script` pull the failed logs (`gh run view
+--log-failed`). Fix every test and type error it reports and push again without
+being asked.
 
 ## Commits
 
@@ -478,6 +530,15 @@ An issue states:
 Leave priority, assignee and cycle to the user unless they named them. Search
 for an open issue covering the same thing first, and comment on it instead of
 opening a duplicate.
+
+## Specs
+
+A spec under `specs/` is written in concise language, for whoever plans and
+tests the feature. Each decision is stated once, in the fewest words that keep
+it testable. A user story does not restate a requirement, an edge case does not
+restate either, and the clarifications log keeps the answer, not the
+discussion. No fluff, no background the code already gives, and no section kept
+for its heading: a template section that does not apply is removed.
 
 ## Writing Style
 

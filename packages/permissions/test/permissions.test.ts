@@ -1,4 +1,7 @@
 import type { Hold } from "@repo/interpreter/drive";
+import { restore, snapshot } from "@repo/interpreter/image";
+import { asksKind } from "@repo/journal-catalog/asks";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it, vi } from "vitest";
 import { resolveApproval } from "../src/approvals.ts";
 import { SessionRules } from "../src/permissions.ts";
@@ -39,7 +42,7 @@ describe("the permissions guard", () => {
 		expect(() => session("(permission/default deny)")).not.toThrow();
 	});
 
-	it("asks, emits the request on its channel and annotates the step", async () => {
+	it("asks, emits the request on its channel and records the ask", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const run = await s.step(UPCASE);
 		expect(run.failed).toBe(false);
@@ -50,23 +53,21 @@ describe("the permissions guard", () => {
 			expect.objectContaining({ name: "string-upcase", args: '"a"' }),
 		]);
 		expect(run.requests[0].change).toBeUndefined();
-		expect(run.annotations.output).toEqual({
-			asks: {
-				open: [
-					{
-						id: run.requests[0].id,
-						title: "string-upcase",
-						detail: '"a"',
-						prompt: "This call needs your approval.",
-						choices: [
-							"Deny",
-							"Always allow",
-							"Allow for session",
-							"Allow once",
-						].map((label) => expect.objectContaining({ label })),
-					},
-				],
-			},
+		expect(view(run.entries, asksKind)).toEqual({
+			open: [
+				{
+					id: run.requests[0].id,
+					title: "string-upcase",
+					detail: '"a"',
+					prompt: "This call needs your approval.",
+					choices: [
+						"Deny",
+						"Always allow",
+						"Allow for session",
+						"Allow once",
+					].map((label) => expect.objectContaining({ label })),
+				},
+			],
 		});
 	});
 
@@ -185,8 +186,8 @@ describe("the permissions guard", () => {
 			id: "nope",
 			approved: true,
 		});
-		expect(decided.annotations.output).toEqual({
-			asks: { answered: { nope: { accepted: false, label: "Expired" } } },
+		expect(view(decided.entries, asksKind)).toEqual({
+			answered: { nope: { accepted: false, label: "Expired" } },
 		});
 	});
 
@@ -286,7 +287,7 @@ describe("a bound the session cannot change", () => {
 		expect((await s.step("(+ 1 2)")).value).toBe("3");
 	});
 
-	it("hides a server's tool the config shows", () => {
+	it("hides a server the config hides", () => {
 		const s = session("", undefined, undefined, [
 			"(permission/hide-server fx)",
 		]);
@@ -312,10 +313,8 @@ describe("evaluating a permissions form", () => {
 				reason: "changes the permissions config",
 			}),
 		]);
-		expect(asked.annotations.output).toEqual({
-			asks: {
-				open: [expect.objectContaining({ answerApplies: true })],
-			},
+		expect(view(asked.entries, asksKind)).toEqual({
+			open: [expect.objectContaining({ answerApplies: true })],
 		});
 		expect((await s.step(UPCASE)).value).toBe('"A"');
 		expect(s.host.store.source()).toBe("");
@@ -720,20 +719,13 @@ describe("reporting a decision", () => {
 			approved: true,
 			scope: "once",
 		});
-		expect(decided.annotations).toEqual({
-			step: {},
-			output: {
-				asks: {
-					answered: { [request.id]: { accepted: true, label: "Allowed" } },
-				},
-			},
+		expect(decided.entries).toHaveLength(1);
+		expect(view(decided.entries, asksKind)).toEqual({
+			answered: { [request.id]: { accepted: true, label: "Allowed" } },
 		});
 		expect(decided.message).toMatch(/approved/);
-		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
-		expect((await s.step("(+ 1 2)")).annotations).toEqual({
-			step: {},
-			output: {},
-		});
+		expect((await s.turnStart()).entries).toEqual([]);
+		expect((await s.step("(+ 1 2)")).entries).toEqual([]);
 	});
 
 	it("reports a denial as a decision too", async () => {
@@ -743,13 +735,11 @@ describe("reporting a decision", () => {
 			id: request.id,
 			approved: false,
 		});
-		expect(denied.annotations.output).toEqual({
-			asks: {
-				answered: { [request.id]: { accepted: false, label: "Denied" } },
-			},
+		expect(view(denied.entries, asksKind)).toEqual({
+			answered: { [request.id]: { accepted: false, label: "Denied" } },
 		});
 		expect(denied.message).toMatch(/denied/);
-		expect((await s.turnStart()).annotations).toEqual({ step: {}, output: {} });
+		expect((await s.turnStart()).entries).toEqual([]);
 	});
 });
 
@@ -761,5 +751,61 @@ describe("following the saved config", () => {
 		store.save("(permission/server fx (hide echo))");
 		expect(rules.decide("eval").verdict).toBe("allow");
 		expect(rules.tool("fx", "echo")).toBe(false);
+	});
+});
+
+describe("an approval asked in a session that was restored from its image", () => {
+	async function restoredAsk() {
+		const asked = session("(permission/ask string-upcase)");
+		const [request] = (await asked.step(UPCASE)).requests;
+		const image = snapshot(asked.interp);
+		const later = session("(permission/ask string-upcase)");
+		restore(later.interp, image);
+		return { later, request };
+	}
+
+	it("is answered rather than expired, and the next run of the call goes through", async () => {
+		const { later, request } = await restoredAsk();
+		const decided = await later.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(decided.failed).toBe(false);
+		expect(view(decided.entries, asksKind).answered).toEqual({
+			[request.id]: { accepted: true, label: "Allowed" },
+		});
+		expect(decided.message).toContain("run it again exactly as before");
+		expect((await later.step(UPCASE)).value).toBe('"A"');
+		expect((await later.step(UPCASE)).held).toBe(true);
+	});
+
+	it("can be denied, and the call is not let through", async () => {
+		const { later, request } = await restoredAsk();
+		const decided = await later.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: false,
+			scope: "once",
+		});
+		expect(decided.failed).toBe(false);
+		expect(decided.message).toContain("denied string-upcase");
+		expect((await later.step(UPCASE)).held).toBe(true);
+	});
+
+	it("is not kept once decided, so a later restore cannot answer it twice", async () => {
+		const { later, request } = await restoredAsk();
+		await later.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		const again = session("(permission/ask string-upcase)");
+		restore(again.interp, snapshot(later.interp));
+		const twice = await again.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+		expect(twice.failed).toBe(true);
 	});
 });

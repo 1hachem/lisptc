@@ -32,6 +32,8 @@ import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
+import { semanticExtension } from "@repo/semantic-extension";
+import { semanticHost } from "@repo/semantic-extension/host";
 import { fonts } from "@repo/ui/fonts.ts";
 import { motions } from "@repo/ui/motions.ts";
 import { defaultThemeId, themes } from "@repo/ui/themes";
@@ -147,7 +149,7 @@ export async function workspaceExtensions(
 	);
 	const preferences = preferencesExtension(
 		preferencesHostFor({
-			store: new ConvexPreferencesStore(connect),
+			store: new ConvexPreferencesStore(workspaceId, connect),
 			fonts,
 			motions,
 			...(desktop === undefined
@@ -197,6 +199,7 @@ export async function workspaceExtensions(
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),
+		semanticExtension(semanticHost),
 		compactionExtension(compactionHost),
 		memory,
 		workspace,

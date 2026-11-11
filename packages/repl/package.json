@@ -22,6 +22,7 @@
   "dependencies": {
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/language-service": "workspace:*",
     "@repo/shared": "workspace:*"
   },

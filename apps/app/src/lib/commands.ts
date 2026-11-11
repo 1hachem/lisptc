@@ -5,6 +5,9 @@ import { useChatStore } from "./chat.tsx";
 import { useNewChat } from "./chats.ts";
 import { useForkPicker } from "./fork-picker.tsx";
 import { useModelPicker } from "./model-picker.tsx";
+import type { PanelContent } from "./panel-ops.ts";
+import { requestPanel } from "./panel-requests.ts";
+import { useSideTrace } from "./side-trace.tsx";
 import { schemeVariant } from "./theme-uses.ts";
 import { transcript } from "./transcript.ts";
 import { useUI } from "./ui.tsx";
@@ -30,12 +33,7 @@ export const commands: Command[] = [
 	{ name: "/light", desc: "switch to the light variant of the theme" },
 	{ name: "/model", desc: "choose the model this workspace runs on" },
 	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
-	{
-		name: "/preferences",
-		desc: "toggle the preferences panel",
-		desktopOnly: true,
-		aliases: ["/panel", "/right"],
-	},
+	{ name: "/preferences", desc: "open the preferences page" },
 	{ name: "/prompt", desc: "search the prompts sent in this workspace" },
 	{
 		name: "/revert",
@@ -44,12 +42,25 @@ export const commands: Command[] = [
 	},
 	{
 		name: "/sidebar",
-		desc: "toggle the sidebar",
+		desc: "toggle the left sidebar",
 		desktopOnly: true,
 		aliases: ["/left"],
 	},
+	{
+		name: "/right",
+		desc: "toggle the right sidebar",
+		desktopOnly: true,
+		aliases: ["/panel"],
+	},
 	{ name: "/theme", desc: "choose the colour theme" },
+	{ name: "/trace", desc: "toggle the trace beside this chat" },
 ];
+
+const PREFERENCES: PanelContent = {
+	kind: "page",
+	page: "preferences",
+	title: "preferences",
+};
 
 export function matchesCommand(command: Command, typed: string): boolean {
 	const query = typed.toLowerCase();
@@ -93,6 +104,7 @@ export function useCommandRunner() {
 	const { theme, chooseTheme, openThemePicker, openFontPicker } =
 		useAppearance();
 	const { openForkPicker } = useForkPicker();
+	const sideTrace = useSideTrace();
 
 	return useCallback(
 		async (name: string): Promise<string | null> => {
@@ -112,13 +124,20 @@ export function useCommandRunner() {
 				},
 				"/copy": () => copyConversation(transcript(store.getState().messages)),
 				"/sidebar": quietly(toggleLeft),
-				"/preferences": quietly(toggleRight),
+				"/right": quietly(toggleRight),
+				"/preferences": quietly(() => requestPanel(PREFERENCES)),
 				"/model": quietly(openModelPicker),
 				"/theme": quietly(openThemePicker),
 				"/font": quietly(openFontPicker),
 				"/revert": () => {
 					if (store.getState().chatId === null) return "nothing to revert yet";
 					openForkPicker();
+					return null;
+				},
+				"/trace": () => {
+					if (store.getState().chatId === null || sideTrace === null)
+						return "nothing to trace yet";
+					sideTrace.toggle();
 					return null;
 				},
 				"/dark": () => switchScheme("dark"),
@@ -137,6 +156,7 @@ export function useCommandRunner() {
 			openThemePicker,
 			openFontPicker,
 			openForkPicker,
+			sideTrace,
 		],
 	);
 }

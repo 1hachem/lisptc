@@ -1,4 +1,4 @@
-import type { Question } from "@repo/interpreter/annotations";
+import type { Question } from "@repo/journal-catalog/intent";
 import { Button } from "@repo/ui";
 import { anchorOf } from "@repo/ui-catalog";
 import { useCallback, useEffect, useRef, useState } from "react";

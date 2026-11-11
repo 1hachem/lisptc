@@ -1,3 +1,4 @@
+import { ENTRY_TYPE } from "@repo/shared/journal";
 import { lighten } from "@repo/shared/messages";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, type Infer, v } from "convex/values";
@@ -183,7 +184,15 @@ export const append = mutation({
 		await appendTo(ctx, (await requireChat(ctx, chatId)).chat, messages),
 });
 
-export async function annotateIn(
+async function settleWaiting(
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+): Promise<void> {
+	if (chat.status === "waiting" && !(await waitsOnUser(ctx, chat._id)))
+		await ctx.db.patch(chat._id, { status: undefined });
+}
+
+export async function reviseIn(
 	ctx: MutationCtx,
 	chat: Doc<"chats">,
 	id: string,
@@ -203,20 +212,31 @@ export async function annotateIn(
 		kwargs: clamped.kwargs,
 		truncated: clamped.truncated || row.truncated ? true : undefined,
 	});
-	if (chat.status === "waiting" && !(await waitsOnUser(ctx, chatId)))
-		await ctx.db.patch(chatId, { status: undefined });
+	await settleWaiting(ctx, chat);
 }
 
-export const annotate = mutation({
+const entry = v.object({ kind: v.string(), value: v.any() });
+
+export const record = mutation({
 	args: {
 		chatId: v.id("chats"),
-		id: v.string(),
-		kwargs: v.record(v.string(), v.any()),
+		about: v.optional(v.string()),
+		entries: v.array(entry),
 	},
-	returns: v.null(),
-	handler: async (ctx, { chatId, id, kwargs }) => {
-		await annotateIn(ctx, (await requireChat(ctx, chatId)).chat, id, kwargs);
-		return null;
+	returns: v.array(v.id("messages")),
+	handler: async (ctx, { chatId, about, entries }) => {
+		const { chat } = await requireChat(ctx, chatId);
+		const ids = await appendTo(
+			ctx,
+			chat,
+			entries.map(({ kind, value }) => ({
+				type: ENTRY_TYPE,
+				content: "",
+				kwargs: about === undefined ? { kind, value } : { kind, value, about },
+			})),
+		);
+		await settleWaiting(ctx, chat);
+		return ids;
 	},
 });
 

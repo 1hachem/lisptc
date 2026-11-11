@@ -14,15 +14,6 @@ import { llmHost } from "../src/llm-host.ts";
 
 type Reply = (req: LlmRequest) => LlmResult | string;
 
-const PROVIDERS = [
-	{ name: "digitalocean", model: "gemma-4-31B-it", ready: true },
-	{
-		name: "openrouter",
-		model: "google/gemma-4-31b-it",
-		ready: false,
-	},
-];
-
 function llmInterp(reply: Reply = () => "ok") {
 	const seen: LlmRequest[] = [];
 	const traced: LlmCall[] = [];
@@ -34,7 +25,7 @@ function llmInterp(reply: Reply = () => "ok") {
 	const interp = new Interp({
 		extensions: [
 			llmExtension(
-				{ ...llmHost, generate, providers: () => PROVIDERS },
+				{ ...llmHost, generate },
 				{ observe: (call) => traced.push(call) },
 			),
 		],
@@ -56,12 +47,10 @@ async function failure(interp: Interp, code: string): Promise<string> {
 	throw new Error("expected a failure");
 }
 
-describe("llm/complete", () => {
+describe("write", () => {
 	it("returns the reply as a string", async () => {
 		const { interp, seen } = llmInterp(() => "hello there");
-		expect(await evalStr(interp, '(llm/complete "greet me")')).toBe(
-			'"hello there"',
-		);
+		expect(await evalStr(interp, '(write "greet me")')).toBe('"hello there"');
 		expect(seen).toEqual([
 			{ messages: [{ role: "user", content: "greet me" }] },
 		]);
@@ -71,7 +60,7 @@ describe("llm/complete", () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			`(llm/complete "explain monads"
+			`(write "explain monads"
 			   :system "You are a Haskell expert."
 			   :provider :openrouter
 			   :model "google/gemma-4-31b-it"
@@ -94,18 +83,15 @@ describe("llm/complete", () => {
 
 	it("rejects an unknown option and a prompt that is not a value", async () => {
 		const { interp } = llmInterp();
-		expect(await failure(interp, '(llm/complete "hi" :temp 0.2)')).toContain(
+		expect(await failure(interp, '(write "hi" :temp 0.2)')).toContain(
 			"unknown option",
 		);
-		expect(await failure(interp, "(llm/complete (lambda (x) x))")).toContain(
+		expect(await failure(interp, "(write (lambda (x) x))")).toContain(
 			"the prompt must be a string or Lisp data",
 		);
 	});
 
 	it("reports a timeout instead of hanging", async () => {
-		const { interp } = llmInterp(() => {
-			throw new Error("unreachable");
-		});
 		const stuck = new Interp({
 			extensions: [
 				llmExtension({
@@ -115,21 +101,20 @@ describe("llm/complete", () => {
 			],
 		});
 		runSync(stuck, prelude);
-		expect(await failure(stuck, '(llm/complete "hi" :timeout 10)')).toContain(
-			"llm timed out",
+		expect(await failure(stuck, '(write "hi" :timeout 10)')).toContain(
+			"write timed out",
 		);
-		expect(interp).toBeDefined();
 	});
 });
 
-describe("*llm-defaults* and with-llm", () => {
+describe("*writing-defaults* and with-writing", () => {
 	it("starts every call from the defaults, with the call site winning", async () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			`(setq *llm-defaults* (list :provider :openrouter :max-tokens 50))
-			 (llm/complete "one")
-			 (llm/complete "two" :max-tokens 500)`,
+			`(setq *writing-defaults* (list :provider :openrouter :max-tokens 50))
+			 (write "one")
+			 (write "two" :max-tokens 500)`,
 		);
 		expect(seen[0].provider).toBe("openrouter");
 		expect(seen[0].maxTokens).toBe(50);
@@ -141,12 +126,12 @@ describe("*llm-defaults* and with-llm", () => {
 		expect(
 			await evalStr(
 				interp,
-				`(with-llm (:provider :openrouter :max-tokens 20)
-				   (llm/complete "inside"))`,
+				`(with-writing (:provider :openrouter :max-tokens 20)
+				   (write "inside"))`,
 			),
 		).toBe('"ok"');
 		expect(seen[0].provider).toBe("openrouter");
-		expect(await evalStr(interp, "(identity *llm-defaults*)")).toBe("nil");
+		expect(await evalStr(interp, "(identity *writing-defaults*)")).toBe("nil");
 	});
 
 	it("restores the defaults when the body raises", async () => {
@@ -154,11 +139,11 @@ describe("*llm-defaults* and with-llm", () => {
 		expect(
 			await evalStr(
 				interp,
-				`(try (with-llm (:provider :openrouter) (error "boom"))
+				`(try (with-writing (:provider :openrouter) (error "boom"))
 				      (catch (e) e))`,
 			),
 		).toBe('"boom"');
-		expect(await evalStr(interp, "(identity *llm-defaults*)")).toBe("nil");
+		expect(await evalStr(interp, "(identity *writing-defaults*)")).toBe("nil");
 	});
 
 	it("rejects a malformed default list", async () => {
@@ -166,19 +151,19 @@ describe("*llm-defaults* and with-llm", () => {
 		expect(
 			await failure(
 				interp,
-				'(progn (setq *llm-defaults* (list :nonsense 1)) (llm/complete "hi"))',
+				'(progn (setq *writing-defaults* (list :nonsense 1)) (write "hi"))',
 			),
 		).toContain("unknown option");
 	});
 });
 
-describe("llm/chat", () => {
+describe("converse", () => {
 	it("sends messages built with message, and bare strings as user turns", async () => {
 		const { interp, seen } = llmInterp(() => "a dialect of Lisp");
 		expect(
 			await evalStr(
 				interp,
-				`(llm/chat (list (message :system "Be terse.")
+				`(converse (list (message :system "Be terse.")
 				                 (message :user "What is lisptc?")
 				                 "one sentence"))`,
 			),
@@ -194,7 +179,7 @@ describe("llm/chat", () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			`(llm/chat (list (list (cons "role" "user") (cons "content" "hi"))))`,
+			`(converse (list (list (cons "role" "user") (cons "content" "hi"))))`,
 		);
 		expect(seen[0].messages).toEqual([{ role: "user", content: "hi" }]);
 	});
@@ -202,15 +187,15 @@ describe("llm/chat", () => {
 	it("rejects an unknown role and a message with no content", async () => {
 		const { interp } = llmInterp();
 		expect(
-			await failure(interp, '(llm/chat (list (message :bot "hi")))'),
+			await failure(interp, '(converse (list (message :bot "hi")))'),
 		).toContain("unknown role");
 		expect(
-			await failure(interp, '(llm/chat (list (list (cons "role" "user"))))'),
+			await failure(interp, '(converse (list (list (cons "role" "user"))))'),
 		).toContain('needs both "role" and "content"');
 	});
 });
 
-describe("llm/extract", () => {
+describe("extract", () => {
 	it("turns a shape into a json schema and the answer into an alist", async () => {
 		const { interp, seen } = llmInterp(() => ({
 			text: "{}",
@@ -219,7 +204,7 @@ describe("llm/extract", () => {
 		expect(
 			await evalStr(
 				interp,
-				`(llm/extract "Ada Lovelace, born 1815, wrote about maths"
+				`(extract "Ada Lovelace, born 1815, wrote about maths"
 				   (list (cons "name" "the person's full name")
 				         (cons "born" :integer)
 				         (cons "tags" (list :list :string))
@@ -250,7 +235,7 @@ describe("llm/extract", () => {
 		expect(
 			await evalStr(
 				interp,
-				'(llm/extract "one and two" (list :list :string) :instructions "the words")',
+				'(extract "one and two" (list :list :string) :instructions "the words")',
 			),
 		).toBe('("one" "two")');
 		expect(seen[0].schema?.schema).toEqual({
@@ -267,7 +252,7 @@ describe("llm/extract", () => {
 		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
 		await runAsync(
 			interp,
-			`(llm/extract "an issue"
+			`(extract "an issue"
 			   (list (cons "state" (list :enum "open" "closed"))
 			         (cons "author" (list (cons "name" :string)))))`,
 		);
@@ -286,7 +271,7 @@ describe("llm/extract", () => {
 	it("rejects an unknown field type", async () => {
 		const { interp } = llmInterp();
 		expect(
-			await failure(interp, '(llm/extract "x" (list (cons "a" :date)))'),
+			await failure(interp, '(extract "x" (list (cons "a" :date)))'),
 		).toContain("unknown field type");
 	});
 });
@@ -296,7 +281,7 @@ describe("the shape macro", () => {
 		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
 		await runAsync(
 			interp,
-			`(llm/extract "an issue"
+			`(extract "an issue"
 			   (shape (title "the issue title")
 			          (stars :integer)
 			          (state (:enum "open" "closed"))
@@ -321,7 +306,7 @@ describe("the shape macro", () => {
 		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
 		await runAsync(
 			interp,
-			`(llm/extract "issues"
+			`(extract "issues"
 			   (shape (owner (name :string) (email (:optional :string)))
 			          (items (:list (id :number) (title :string)))))`,
 		);
@@ -360,7 +345,7 @@ describe("a value that is not a string", () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			'(llm/complete (list (cons "id" 1) (cons "title" "auth bug")))',
+			'(write (list (cons "id" 1) (cons "title" "auth bug")))',
 		);
 		expect(seen[0].messages[0].content).toBe(
 			'(("id" . 1) ("title" . "auth bug"))',
@@ -369,11 +354,11 @@ describe("a value that is not a string", () => {
 
 	it("works for a message content, a :system and the text to read", async () => {
 		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
-		await runAsync(interp, "(llm/chat (list (message :user (list 1 2))))");
+		await runAsync(interp, "(converse (list (message :user (list 1 2))))");
 		expect(seen[0].messages[0].content).toBe("(1 2)");
 		await runAsync(
 			interp,
-			'(llm/extract (list "a" "b") (shape (n :integer)) :system (list :terse))',
+			'(extract (list "a" "b") (shape (n :integer)) :system (list :terse))',
 		);
 		expect(seen[1].messages[0].content).toBe("(:terse)");
 		expect(seen[1].messages[1].content).toBe('("a" "b")');
@@ -381,7 +366,7 @@ describe("a value that is not a string", () => {
 
 	it("still refuses nil, so a missing value is not sent as text", async () => {
 		const { interp } = llmInterp();
-		expect(await failure(interp, "(llm/complete nil)")).toContain(
+		expect(await failure(interp, "(write nil)")).toContain(
 			"the prompt must not be nil",
 		);
 	});
@@ -423,24 +408,24 @@ describe("the summarization macros", () => {
 		expect(seen[0].maxTokens).toBe(100);
 	});
 
-	it("takes its provider from with-llm", async () => {
+	it("takes its provider from with-writing", async () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			'(with-llm (:provider :openrouter) (summarize-each (list "a")))',
+			'(with-writing (:provider :openrouter) (summarize-each (list "a")))',
 		);
 		expect(seen[0].provider).toBe("openrouter");
 	});
 });
 
-describe("llm/answer", () => {
+describe("answer", () => {
 	it("asks the question against the context, and only the context", async () => {
 		const { interp, seen } = llmInterp(() => "Ada Lovelace");
 		expect(
 			await evalStr(
 				interp,
 				`(progn (setq page "Ada Lovelace wrote the first algorithm.")
-				        (llm/answer "Who wrote it?" page))`,
+				        (answer "Who wrote it?" page))`,
 			),
 		).toBe('"Ada Lovelace"');
 		expect(seen[0].messages[1].content).toBe(
@@ -454,23 +439,21 @@ describe("llm/answer", () => {
 
 	it("returns nil when the context does not answer it", async () => {
 		const { interp } = llmInterp(() => "NOT-IN-CONTEXT");
-		expect(await evalStr(interp, '(llm/answer "When?" "no dates here")')).toBe(
+		expect(await evalStr(interp, '(answer "When?" "no dates here")')).toBe(
 			"nil",
 		);
 	});
 
 	it("still returns nil when the model punctuates the sentinel", async () => {
 		const { interp } = llmInterp(() => "NOT-IN-CONTEXT.");
-		expect(await evalStr(interp, '(llm/answer "When?" "no dates")')).toBe(
-			"nil",
-		);
+		expect(await evalStr(interp, '(answer "When?" "no dates")')).toBe("nil");
 	});
 
 	it("reads a list of records as its context", async () => {
 		const { interp, seen } = llmInterp(() => "ENG-12");
 		await runAsync(
 			interp,
-			`(llm/answer "Which issue mentions auth?"
+			`(answer "Which issue mentions auth?"
 			             (list (cons "id" "ENG-12") (cons "title" "auth token")))`,
 		);
 		expect(seen[0].messages[1].content).toContain(
@@ -482,7 +465,7 @@ describe("llm/answer", () => {
 		const { interp, seen } = llmInterp();
 		await runAsync(
 			interp,
-			'(llm/answer "q" "ctx" :words 10 :provider :openrouter :temperature 0.0)',
+			'(answer "q" "ctx" :words 10 :provider :openrouter :temperature 0.0)',
 		);
 		expect(seen[0].messages[0].content).toContain("at most 10 words");
 		expect(seen[0]).toMatchObject({
@@ -494,17 +477,63 @@ describe("llm/answer", () => {
 
 	it("traces as the built-in that ran it", async () => {
 		const { interp, traced } = llmInterp();
-		await runAsync(interp, '(llm/answer "q" "ctx")');
-		expect(traced.map((call) => call.builtin)).toEqual(["llm/complete"]);
+		await runAsync(interp, '(answer "q" "ctx")');
+		expect(traced.map((call) => call.builtin)).toEqual(["write"]);
 	});
 });
 
-describe("llm/providers", () => {
-	it("reports each provider, its default model and whether it is usable", async () => {
-		const { interp } = llmInterp();
-		expect(await evalStr(interp, "(llm/providers)")).toBe(
-			'((:digitalocean "gemma-4-31B-it" :ready) (:openrouter "google/gemma-4-31b-it" :no-api-key))',
+const GENERATIVE = [
+	"invert",
+	"negate",
+	"blend",
+	"strip",
+	"open-with",
+	"close-with",
+	"conclude",
+	"either",
+	"one-of",
+];
+
+describe("the generative operators", () => {
+	it.each(
+		GENERATIVE.filter((f) => ["invert", "negate"].includes(f)),
+	)("%s rewrites one value and returns the model's text", async (form) => {
+		const { interp, seen } = llmInterp(() => "rewritten");
+		expect(await evalStr(interp, `(${form} (list :a 1))`)).toBe('"rewritten"');
+		expect(seen).toHaveLength(1);
+		expect(seen[0].messages[0].content).toContain("(:a 1)");
+	});
+
+	it.each(
+		GENERATIVE.filter((f) => !["invert", "negate"].includes(f)),
+	)("%s sends both values and returns the model's text", async (form) => {
+		const { interp, seen } = llmInterp(() => "combined");
+		expect(await evalStr(interp, `(${form} "alpha" "beta")`)).toBe(
+			'"combined"',
 		);
+		expect(seen).toHaveLength(1);
+		const content = seen[0].messages[0].content;
+		expect(content.indexOf("alpha")).toBeGreaterThan(-1);
+		expect(content.indexOf("beta")).toBeGreaterThan(content.indexOf("alpha"));
+	});
+
+	it("passes its options on to write", async () => {
+		const { interp, seen } = llmInterp();
+		await runAsync(
+			interp,
+			'(strip "Hello my enemy" "enemy" :provider :openrouter :max-tokens 20)',
+		);
+		expect(seen[0].provider).toBe("openrouter");
+		expect(seen[0].maxTokens).toBe(20);
+	});
+
+	it("takes its provider from with-writing", async () => {
+		const { interp, seen } = llmInterp();
+		await runAsync(
+			interp,
+			'(with-writing (:provider :openrouter) (negate "I am happy."))',
+		);
+		expect(seen[0].provider).toBe("openrouter");
 	});
 });
 
@@ -513,16 +542,16 @@ describe("documentation", () => {
 		const { interp } = llmInterp();
 		const docs = interp.docs();
 		for (const name of [
-			"llm/complete",
-			"llm/chat",
-			"llm/extract",
-			"llm/providers",
+			"write",
+			"converse",
+			"extract",
 			"message",
 			"summarize",
 			"summarize-each",
-			"llm/answer",
-			"with-llm",
-			"*llm-defaults*",
+			"answer",
+			"with-writing",
+			"*writing-defaults*",
+			...GENERATIVE,
 		])
 			expect(docs.has(name), name).toBe(true);
 		const undocumented = interp
@@ -541,10 +570,10 @@ describe("the observer", () => {
 			inputTokens: 11,
 			outputTokens: 7,
 		}));
-		await runAsync(interp, '(llm/complete "greet me" :max-tokens 20)');
+		await runAsync(interp, '(write "greet me" :max-tokens 20)');
 		expect(traced).toHaveLength(1);
 		expect(traced[0]).toMatchObject({
-			builtin: "llm/complete",
+			builtin: "write",
 			provider: "openrouter",
 			model: "a-small-one",
 			messages: [{ role: "user", content: "greet me" }],
@@ -561,12 +590,12 @@ describe("the observer", () => {
 		const { interp, traced } = llmInterp(() => ({ text: "{}", value: {} }));
 		await runAsync(
 			interp,
-			`(progn (llm/chat (list (message :user "hi")))
-			        (llm/extract "x" (list (cons "a" :string))))`,
+			`(progn (converse (list (message :user "hi")))
+			        (extract "x" (list (cons "a" :string))))`,
 		);
 		expect(traced.map((call) => [call.builtin, call.structured])).toEqual([
-			["llm/chat", false],
-			["llm/extract", true],
+			["converse", false],
+			["extract", true],
 		]);
 	});
 
@@ -588,12 +617,12 @@ describe("the observer", () => {
 			],
 		});
 		runSync(interp, prelude);
-		await expect(runAsync(interp, '(llm/complete "hi")')).rejects.toThrow(
+		await expect(runAsync(interp, '(write "hi")')).rejects.toThrow(
 			/upstream is down/,
 		);
 		expect(failed).toHaveLength(1);
 		expect(failed[0]).toMatchObject({
-			builtin: "llm/complete",
+			builtin: "write",
 			error: "upstream is down",
 		});
 		expect(failed[0].output).toBeUndefined();
@@ -613,8 +642,6 @@ describe("the observer", () => {
 			],
 		});
 		runSync(interp, prelude);
-		expect(str((await runAsync(interp, '(llm/complete "hi")')).value)).toBe(
-			'"fine"',
-		);
+		expect(str((await runAsync(interp, '(write "hi")')).value)).toBe('"fine"');
 	});
 });

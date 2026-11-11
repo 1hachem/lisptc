@@ -11,18 +11,6 @@ function quoted(text: string): string {
 	return JSON.stringify(text);
 }
 
-export function memorySource(
-	memory: Pick<Doc<"memories">, "key" | "body" | "on" | "links">,
-): string {
-	const lines = [`(memory/remember ${quoted(memory.key)}`, `  ${memory.body}`];
-	if (memory.on !== undefined) lines.push(`  :on ${memory.on}`);
-	if (memory.links.length > 0)
-		lines.push(
-			`  :links (${memory.links.map((l) => quoted(l.key)).join(" ")})`,
-		);
-	return `${lines.join("\n")})`;
-}
-
 export function onboardingSource(
 	onboarding: Pick<Doc<"onboardings">, "name" | "about" | "script">,
 ): string {

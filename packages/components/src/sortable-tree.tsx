@@ -5,7 +5,6 @@ import {
 	closestCenter,
 	DndContext,
 	type DragEndEvent,
-	DragOverlay,
 	type DragStartEvent,
 	KeyboardSensor,
 	MeasuringStrategy,
@@ -38,6 +37,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { CursorDragOverlay } from "./cursor-drag-overlay.tsx";
 
 const DRAG_AFTER_PX = 4;
 const LIFT_SCALE = 1.02;
@@ -162,7 +162,7 @@ const DRAGGING_CLASS: Record<MotionId, string> = {
 	none: "relative z-10 bg-bg2",
 };
 
-function SortableEntry({
+export function SortableEntry({
 	id,
 	motion,
 	className = "",
@@ -227,7 +227,6 @@ export function SortableTree<Id extends string>({
 }) {
 	const reduced = usePrefersReducedMotion();
 	const shown: MotionId = reduced ? "none" : motion;
-	const [root, setRoot] = useState<HTMLDivElement | null>(null);
 	const [dragged, setDragged] = useState<Id>();
 	const [dropped, setDropped] = useState<{
 		next: readonly Id[];
@@ -257,9 +256,8 @@ export function SortableTree<Id extends string>({
 		setDropped({ next, over: given });
 		onReorder(next);
 	};
-	const zoom = root?.currentCSSZoom ?? 1;
 	return (
-		<div ref={setRoot} data-motion={shown} className={className}>
+		<div data-motion={shown} className={className}>
 			<DndContext
 				sensors={sensors}
 				measuring={REMEASURE_AS_ENTRIES_COLLAPSE}
@@ -282,18 +280,13 @@ export function SortableTree<Id extends string>({
 					))}
 				</SortableContext>
 				{shown === "overlay" && (
-					<div style={{ zoom: 1 / zoom }}>
-						<DragOverlay dropAnimation={SETTLE}>
-							{dragged && (
-								<div
-									style={{ zoom }}
-									className="cursor-grabbing bg-bg2 shadow-lg"
-								>
-									<EntryDragged value>{children(dragged)}</EntryDragged>
-								</div>
-							)}
-						</DragOverlay>
-					</div>
+					<CursorDragOverlay dropAnimation={SETTLE}>
+						{dragged && (
+							<div className="cursor-grabbing bg-bg2 shadow-lg">
+								<EntryDragged value>{children(dragged)}</EntryDragged>
+							</div>
+						)}
+					</CursorDragOverlay>
 				)}
 			</DndContext>
 		</div>

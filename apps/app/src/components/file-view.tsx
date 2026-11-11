@@ -31,6 +31,36 @@ function FileBody({
 	);
 }
 
+export function PageView({
+	title,
+	actions,
+	fill = false,
+	children,
+}: {
+	title: string;
+	actions?: ReactNode;
+	fill?: boolean;
+	children: ReactNode;
+}) {
+	const layout = fill ? LAYOUT.fill : LAYOUT.scroll;
+	return (
+		<div
+			{...contentRegion}
+			className={`min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] px-8 pt-6 pb-7 ${layout.outer}`}
+		>
+			<div
+				className={`mx-auto flex w-full max-w-[680px] flex-col gap-3 ${layout.inner}`}
+			>
+				<div className="flex items-baseline gap-3 font-mono text-[11.5px] text-dim">
+					<span className="min-w-0 flex-1 truncate">{title}</span>
+					{actions}
+				</div>
+				{children}
+			</div>
+		</div>
+	);
+}
+
 export function FileView({
 	file,
 	missing,
@@ -44,21 +74,9 @@ export function FileView({
 	body?: ReactNode;
 	fill?: boolean;
 }) {
-	const layout = fill ? LAYOUT.fill : LAYOUT.scroll;
 	return (
-		<div
-			{...contentRegion}
-			className={`min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] px-8 pt-6 pb-7 ${layout.outer}`}
-		>
-			<div
-				className={`mx-auto flex w-full max-w-[680px] flex-col gap-3 ${layout.inner}`}
-			>
-				<div className="flex items-baseline gap-3 font-mono text-[11.5px] text-dim">
-					<span className="min-w-0 flex-1 truncate">{file?.path ?? ""}</span>
-					{actions}
-				</div>
-				<FileBody file={file} missing={missing} body={body} />
-			</div>
-		</div>
+		<PageView title={file?.path ?? ""} actions={actions} fill={fill}>
+			<FileBody file={file} missing={missing} body={body} />
+		</PageView>
 	);
 }

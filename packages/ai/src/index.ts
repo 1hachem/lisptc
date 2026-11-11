@@ -7,19 +7,18 @@ export {
 export { Budget, type Limits, type Usage } from "./budget.ts";
 export { type Envelope, type Mailbox, MemoryMailbox } from "./mailbox.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
-export type { ModelOptions, Provider } from "./provider/core.ts";
-export { getProvider, providers } from "./provider/registry.ts";
 export {
 	evalCode,
 	replResultContent,
 	type TranscriptEntry,
 } from "./repl.ts";
 export { type ReplSource, type Repls, replFrom } from "./repl-store.ts";
-export type {
-	ChatInput,
-	ChatMessageInput,
-	TurnOutcome,
-	WireMessage,
+export {
+	type ChatInput,
+	type ChatMessageInput,
+	entryMessage,
+	type TurnOutcome,
+	type WireMessage,
 } from "./stream.ts";
 export { renderSystemEvent, type SystemEvent } from "./system-event.ts";
 export {

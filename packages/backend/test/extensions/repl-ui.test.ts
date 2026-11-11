@@ -1,5 +1,7 @@
 import { Compactor } from "@repo/compaction-extension";
+import { viewKind } from "@repo/journal-catalog/view";
 import type { EvalOutput } from "@repo/repl/repl";
+import { view } from "@repo/shared/journal";
 import { MemoryViewStore, type PanelOp } from "@repo/ui-extension";
 import { describe, expect, it } from "vitest";
 import { agentRepl, memoryRepl, modelFacing } from "./helpers.ts";
@@ -16,13 +18,13 @@ const PANEL = `
 (ui/render (panel))
 `;
 
-const view = (out: EvalOutput): unknown => out.annotations.output.ui;
+const shownView = (out: EvalOutput): unknown => view(out.entries, viewKind);
 
 function stored() {
 	const views = new MemoryViewStore();
 	const r = memoryRepl(modelFacing(undefined, undefined, undefined, views));
 	const node = (out: EvalOutput): unknown => {
-		const ref = view(out) as { viewId: string } | undefined;
+		const ref = shownView(out) as { viewId: string } | undefined;
 		return ref === undefined ? undefined : views.views.get(ref.viewId);
 	};
 	const label = (out: EvalOutput): unknown =>
@@ -38,13 +40,13 @@ describe("a step that renders", () => {
 	it("hands the view back beside the output", async () => {
 		const out = await memoryRepl().evalOutput(PANEL);
 		const { model } = out;
-		expect(view(out)).toBeDefined();
+		expect(shownView(out)).toBeDefined();
 		expect(model).toContain("rendered stack");
 		expect(model).not.toContain("ui/button");
 	});
 
 	it("reports no view for a step that rendered none", async () => {
-		expect(view(await memoryRepl().evalOutput("(+ 1 2)"))).toBeUndefined();
+		expect(shownView(await memoryRepl().evalOutput("(+ 1 2)"))).toBeUndefined();
 	});
 
 	it("renders a widget handed to echo instead of printing it", async () => {
@@ -94,7 +96,7 @@ describe("a step that opens panel tabs", () => {
 			},
 			{ op: "close", tab: "file:knowledge/q3.pdf" },
 		]);
-		expect(out.annotations.output).not.toHaveProperty("panel");
+		expect(out.entries.map((entry) => entry.kind)).not.toContain("panel");
 	});
 
 	it("fails the step when the panel port refuses an op", async () => {
@@ -136,7 +138,9 @@ describe("a view while its step runs", () => {
 		await r.evalOutput(
 			'(ui/render (ui/text "a")) (ui/render (ui/text "b"))',
 			undefined,
-			(output) => pushed.push(output.ui),
+			(entry) => {
+				if (entry.kind === viewKind.name) pushed.push(entry.value);
+			},
 		);
 		expect(pushed.length).toBeGreaterThan(0);
 		for (const ui of pushed) expect(ui).toEqual({ viewId: "v1" });
@@ -149,7 +153,7 @@ describe("driving the view", () => {
 		const first = await r.evalOutput(PANEL);
 		expect(label(first)).toBe("count 0");
 		const clicked = await r.invokeUi("a1");
-		expect(view(clicked)).toEqual(view(first));
+		expect(shownView(clicked)).toEqual(shownView(first));
 		expect(label(clicked)).toBe("count 1");
 		expect(label(await r.invokeUi(buttonAction(clicked)))).toBe("count 2");
 	});
@@ -158,7 +162,7 @@ describe("driving the view", () => {
 		const { r } = stored();
 		const one = await r.evalOutput('(ui/render (ui/text "a"))');
 		const two = await r.evalOutput('(ui/render (ui/text "b"))');
-		expect(view(one)).not.toEqual(view(two));
+		expect(shownView(one)).not.toEqual(shownView(two));
 	});
 
 	it("passes a submitted form's fields to its handler", async () => {
@@ -187,7 +191,7 @@ describe("driving the view", () => {
 		expect(out.model).toMatch(/no-such-fn/);
 		expect(out.user).toMatch(/no-such-fn/);
 		expect(out.failure).toMatch(/no-such-fn/);
-		expect(view(out)).toBeUndefined();
+		expect(shownView(out)).toBeUndefined();
 	});
 
 	it("reports an unknown action instead of silently doing nothing", async () => {
@@ -213,7 +217,7 @@ describe("handing a turn back to the agent", () => {
 		`);
 		const out = await r.invokeUi("a1", { q: "auth" });
 		expect(out.message).toBe("find auth");
-		expect(view(out)).toBeDefined();
+		expect(shownView(out)).toBeDefined();
 	});
 
 	it("reports no message for a click that only rendered", async () => {

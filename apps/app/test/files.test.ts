@@ -1,35 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
 	fileContext,
-	memorySource,
 	onboardingSource,
 	permissionRules,
 	withoutRule,
 } from "../src/lib/files.ts";
-
-describe("memorySource", () => {
-	it("writes a bare memory as the remember call that stores it", () => {
-		expect(memorySource({ key: "tone", body: '"be brief"', links: [] })).toBe(
-			'(memory/remember "tone"\n  "be brief")',
-		);
-	});
-
-	it("carries the trigger as a form and the links as keys", () => {
-		expect(
-			memorySource({
-				key: "retry",
-				body: "(retry 3)",
-				on: '(error "timeout")',
-				links: [
-					{ key: "net", weight: 0.4 },
-					{ key: 'say "hi"', weight: 1 },
-				],
-			}),
-		).toBe(
-			'(memory/remember "retry"\n  (retry 3)\n  :on (error "timeout")\n  :links ("net" "say \\"hi\\""))',
-		);
-	});
-});
 
 describe("onboardingSource", () => {
 	it("writes an onboarding as the create call that saves it", () => {

@@ -2,95 +2,23 @@ import { convexQuery } from "@convex-dev/react-query";
 import { Logout01Icon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
-import { SortableTree } from "@repo/components";
 import {
 	Sidebar,
 	SidebarContent,
 	SidebarFooter,
 	SidebarHeader,
-	SidebarMenuButton,
 	SidebarRail,
 	useSidebar,
 } from "@repo/ui";
 import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNewChat } from "../lib/chats.ts";
-import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
-import { requestPanel } from "../lib/panel-requests.ts";
-import { useSidebarMotion, useSidebarOrder } from "../lib/sidebar.ts";
-import type { SidebarEntry } from "../lib/sidebar-order.ts";
+import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
+import { EntryRail, TREE_ROW } from "./entry-rail.tsx";
 import { PanelLink } from "./panel-link.tsx";
 import { WorkspaceMenu, WorkspaceRailMenu } from "./workspace-menu.tsx";
-import {
-	ENTRY_ANCHORS,
-	ENTRY_ICONS,
-	openFolder,
-	WorkspaceTree,
-} from "./workspace-tree.tsx";
-
-const TREE_ROW = "flex h-[calc(1lh+0.5rem)] items-center text-[11.5px]";
-
-const PAGES: Partial<Record<SidebarEntry, PanelContent>> = {
-	home: NEW_CHAT,
-	"README.md": { kind: "page", page: "readme", title: "README.md" },
-	settings: { kind: "page", page: "settings", title: "settings" },
-	preferences: {
-		kind: "page",
-		page: "preferences",
-		title: "preferences",
-	},
-};
-
-function useRailPick() {
-	const { setOpen } = useSidebar();
-	const newChat = useNewChat();
-	return (entry: SidebarEntry) => {
-		if (entry === "new_chat") return newChat();
-		const page = PAGES[entry];
-		if (page !== undefined) return requestPanel(page);
-		openFolder(entry);
-		setOpen(true);
-	};
-}
-
-function RailEntry({
-	entry,
-	pick,
-}: {
-	entry: SidebarEntry;
-	pick: (entry: SidebarEntry) => void;
-}) {
-	return (
-		<SidebarMenuButton
-			{...ENTRY_ANCHORS[entry]}
-			tooltip={entry}
-			className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
-			onClick={() => pick(entry)}
-		>
-			<HugeiconsIcon icon={ENTRY_ICONS[entry]} />
-			<span>{entry}</span>
-		</SidebarMenuButton>
-	);
-}
-
-function EntryRail() {
-	const { shown, reorder } = useSidebarOrder();
-	const { motion } = useSidebarMotion();
-	const pick = useRailPick();
-	return (
-		<div className="flex w-full flex-col items-center">
-			<SortableTree order={shown} onReorder={reorder} motion={motion}>
-				{(entry) => (
-					<div className={TREE_ROW}>
-						<RailEntry entry={entry} pick={pick} />
-					</div>
-				)}
-			</SortableTree>
-		</div>
-	);
-}
+import { WorkspaceTree } from "./workspace-tree.tsx";
 
 const ACCOUNT: PanelContent = {
 	kind: "page",
@@ -204,10 +132,12 @@ export function LeftSidebar({ onSignOut }: { onSignOut: () => void }) {
 			<SidebarContent>
 				{expanded ? (
 					<div className="min-h-0 flex-1 overflow-y-auto px-1.5 text-[11.5px]">
-						{workspace && <WorkspaceTree workspaceId={workspace._id} />}
+						{workspace && (
+							<WorkspaceTree workspaceId={workspace._id} side="left" />
+						)}
 					</div>
 				) : (
-					<EntryRail />
+					<EntryRail side="left" />
 				)}
 			</SidebarContent>
 			<UserRow expanded={expanded} onSignOut={onSignOut} />

@@ -1,8 +1,10 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -13,7 +15,9 @@ import {
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { type InterpExtension, openSession } from "@repo/interpreter/session";
+import { memoryKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import {
 	FORGET_BELOW,
@@ -195,6 +199,19 @@ describe("triggers", () => {
 		expect(await f.step(`(string-join '("a") ",")`)).toContain(
 			"tools: list first",
 		);
+	});
+
+	it("records each memory it fires as a journal entry, when it fires", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "always" "here" :on '(step))`);
+		const buffer = bufferTransport();
+		f.interp.channels.pipe(buffer);
+
+		await f.step("(+ 1 1)");
+
+		expect(view(buffer.collect(journal), memoryKind)).toEqual([
+			{ key: "always", body: "here", on: "step" },
+		]);
 	});
 
 	it("finds a call nested inside a binding form", async () => {

@@ -43,16 +43,6 @@
         ]
       },
       {
-        "matcher": "Grep|Glob|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks/io-budget.sh\"",
-            "statusMessage": "Checking the IO budget"
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {

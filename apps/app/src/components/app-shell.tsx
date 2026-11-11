@@ -2,9 +2,10 @@ import { SidebarProvider } from "@repo/ui";
 import type { CSSProperties } from "react";
 import { useNoSwipeNavigation } from "../lib/swipe-guard.ts";
 import { useUI } from "../lib/ui.tsx";
+import { EntrySidebars } from "./entry-sidebars.tsx";
 import { LeftSidebar } from "./left-sidebar.tsx";
 import { Onboarding } from "./onboarding.tsx";
-import { PreferencesPanel } from "./preferences-panel.tsx";
+import { RightSidebar } from "./right-sidebar.tsx";
 
 const SIDEBAR_SIZE = {
 	"--sidebar-width": "190px",
@@ -23,27 +24,29 @@ export function AppShell({
 
 	return (
 		<div className="h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
-			<SidebarProvider
-				open={leftOpen}
-				onOpenChange={setLeftOpen}
-				style={SIDEBAR_SIZE}
-				className="h-full min-h-0"
-			>
-				<LeftSidebar onSignOut={onSignOut} />
-				<Onboarding />
+			<EntrySidebars>
 				<SidebarProvider
-					open={rightOpen}
-					onOpenChange={setRightOpen}
-					shortcut={null}
+					open={leftOpen}
+					onOpenChange={setLeftOpen}
 					style={SIDEBAR_SIZE}
-					className="h-full min-h-0 min-w-0 flex-1"
+					className="h-full min-h-0"
 				>
-					<main className="flex h-full min-w-0 flex-1 flex-col">
-						{children}
-					</main>
-					<PreferencesPanel />
+					<LeftSidebar onSignOut={onSignOut} />
+					<Onboarding />
+					<SidebarProvider
+						open={rightOpen}
+						onOpenChange={setRightOpen}
+						shortcut={null}
+						style={SIDEBAR_SIZE}
+						className="h-full min-h-0 min-w-0 flex-1"
+					>
+						<main className="flex h-full min-w-0 flex-1 flex-col">
+							{children}
+						</main>
+						<RightSidebar />
+					</SidebarProvider>
 				</SidebarProvider>
-			</SidebarProvider>
+			</EntrySidebars>
 		</div>
 	);
 }
