@@ -72,6 +72,7 @@ export class ConversationInterpreter
 			"How much of the conversation the model has been handed.",
 		);
 		this.write([]);
+		this.live("steps-taken", 0n);
 		this.conversation = {
 			said: () => this.said(),
 			append: (source, content) => {
@@ -81,15 +82,17 @@ export class ConversationInterpreter
 		};
 	}
 
-	seed(said: readonly Said[]): void {
+	seed(said: readonly Said[], stepsTaken: number): void {
 		const untaken = this.said().slice(this.taken.get());
 		this.write([...said, ...untaken]);
 		this.taken.set(said.length);
+		this.live("steps-taken", BigInt(stepsTaken));
 	}
 
 	carryFrom(previous: ConversationInterpreter): void {
 		this.write(previous.said());
 		this.taken.set(previous.taken.get());
+		this.live("steps-taken", previous.getGlobal(newSym("steps-taken")));
 	}
 
 	takeAppended(): Said[] {
@@ -113,7 +116,6 @@ export class ConversationInterpreter
 		this.live("conversation", arrayToList(said.map(toAlist)));
 		this.live("user-messages", arrayToList(user));
 		this.live("assistant-messages", arrayToList(assistant));
-		this.live("steps-taken", assistant.length);
 	}
 
 	private live(name: string, value: unknown): void {

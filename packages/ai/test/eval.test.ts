@@ -143,9 +143,9 @@ describe("a user message", () => {
 describe("a step the host broke on", () => {
 	const broken = testRepls([
 		extension((hooks) =>
-			hooks.stepOutput.use((ctx, out, next) => {
+			hooks.evalStep.use(async (ctx, next) => {
+				await next(ctx);
 				if (ctx.code.includes("boom")) throw new Error("host broke");
-				return next(ctx, out);
 			}),
 		),
 	]);

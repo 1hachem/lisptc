@@ -26,9 +26,9 @@ function opaque(): InterpExtension {
 function breaking(): InterpExtension {
 	return Object.assign((_: Interp) => {}, {
 		session(hooks: SessionHooks): void {
-			hooks.stepOutput.use((ctx, out, next) => {
+			hooks.evalStep.use(async (ctx, next) => {
+				await next(ctx);
 				if (ctx.code.includes("boom")) throw new Error("host broke");
-				return next(ctx, out);
 			});
 		},
 	});
@@ -163,7 +163,7 @@ describe("checkpoints", () => {
 	it("keeps the conversation globals in the image, still sealed", async () => {
 		const images = new MemoryImageStore();
 		const first = new AgentRepl({ extensions: [], images });
-		first.seed([{ role: "user", content: "hi" }]);
+		first.seed([{ role: "user", content: "hi" }], 0);
 		await first.evalOutput("(setq seen (length user-messages))");
 		await settle();
 		const second = new AgentRepl({ extensions: [], images });

@@ -264,7 +264,7 @@ export class Compactor {
 	endStep(): string {
 		const { dropped } = this.budget.get();
 		if (dropped === 0) return "";
-		return `... ${dropped} more word${dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through\n`;
+		return `... ${dropped} more word${dropped === 1 ? "" : "s"} of echo output not shown to you (a step may echo ${this.limit} words); echo less, or echo a named value you can page through`;
 	}
 
 	private get remaining(): number {
@@ -890,14 +890,11 @@ function compactionSession(
 	return (hooks) => {
 		hooks.evalStep.use(async (ctx, next) => {
 			compactor.beginStep();
-			await next(ctx);
-		});
-		hooks.stepOutput.use((ctx, out, next) => {
-			const withheld = compactor.endStep();
-			return next(
-				ctx,
-				withheld === "" ? out : { ...out, model: out.model + withheld },
-			);
+			try {
+				await next(ctx);
+			} finally {
+				ctx.interp.conversation.append("compaction", compactor.endStep());
+			}
 		});
 		hooks.stepError.use((_ctx, text) => compactor.error(text));
 	};

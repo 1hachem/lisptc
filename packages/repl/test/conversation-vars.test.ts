@@ -9,7 +9,7 @@ const sample: Said[] = [
 
 const echoed = async (code: string, said = sample): Promise<string> => {
 	const r = agentRepl();
-	r.seed(said);
+	r.seed(said, 0);
 	return (await r.evalOutput(code)).user;
 };
 
@@ -35,7 +35,7 @@ describe("AgentRepl conversation variables", () => {
 
 	it("refuses to let code reassign a conversation global", async () => {
 		const r = agentRepl();
-		r.seed(sample);
+		r.seed(sample, 0);
 		const out = await r.evalOutput("(setq conversation 1)");
 		expect(out.failed).toBe(true);
 		expect(out.user).toContain("read-only global owned by conversation");
@@ -46,11 +46,19 @@ describe("AgentRepl conversation variables", () => {
 
 	it("reset() keeps the seeded conversation (post-error survival)", async () => {
 		const r = agentRepl();
-		r.seed(sample);
+		r.seed(sample, 0);
 		r.reset();
 		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
 			"2\n",
 		);
+	});
+
+	it("counts the steps the host says were taken, and keeps the count over a reset", async () => {
+		const r = agentRepl();
+		r.seed(sample, 3);
+		expect((await r.evalOutput("(echo steps-taken)")).user).toBe("3\n");
+		r.reset();
+		expect((await r.evalOutput("(echo steps-taken)")).user).toBe("3\n");
 	});
 
 	it("an empty conversation yields nil lists", async () => {
@@ -60,7 +68,7 @@ describe("AgentRepl conversation variables", () => {
 
 	it("shows a note an extension appended, with its source, and hands it over once", async () => {
 		const r = agentRepl();
-		r.seed(sample);
+		r.seed(sample, 0);
 		r.interp.conversation.append("memory", "k: v");
 
 		expect(

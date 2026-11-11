@@ -1,5 +1,5 @@
 import type { Channels } from "@repo/interpreter/channels";
-import { ends } from "@repo/interpreter/effects";
+import { effect, ends } from "@repo/interpreter/effects";
 import { journal } from "@repo/interpreter/journal";
 import {
 	type AgentTurn,
@@ -41,19 +41,20 @@ describe("an extension hooking the session", () => {
 		expect(seen).toEqual(["before (+ 1 1)", "after"]);
 	});
 
-	it("adds to what the model is shown, beside what the human read", async () => {
+	it("hands over what an extension noted during a step, beside what the human read", async () => {
 		const r = new MemoryRepl({
 			extensions: [
 				extension((hooks) => {
-					hooks.stepOutput.use((ctx, out, next) =>
-						next(ctx, { ...out, model: `${out.model}and one more thing\n` }),
-					);
+					hooks.evalStep.use(async (ctx, next) => {
+						await next(ctx);
+						ctx.interp.conversation.append("test", "and one more thing");
+					});
 				}),
 			],
 		});
 
-		const { model, user } = await r.evalOutput('(echo "hi")');
-		expect(model).toBe("and one more thing\n");
+		const { notes, user } = await r.evalOutput('(echo "hi")');
+		expect(notes.map((n) => n.content)).toEqual(["and one more thing"]);
 		expect(user).toBe("hi\n");
 	});
 
@@ -69,9 +70,16 @@ describe("an extension hooking the session", () => {
 		expect(await r.eval("(nope)")).toBe("nope\n");
 	});
 
-	it("decides that a step ended the turn", async () => {
+	it("lets a step end the turn", async () => {
 		const r = new AgentRepl({
-			extensions: [extension((hooks) => hooks.answered.use(() => true))],
+			extensions: [
+				extension((hooks) =>
+					hooks.evalStep.use(async (ctx, next) => {
+						await next(ctx);
+						effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+					}),
+				),
+			],
 		});
 
 		const out = await r.evalOutput('(echo "hi")');

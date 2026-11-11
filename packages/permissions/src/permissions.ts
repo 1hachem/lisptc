@@ -175,6 +175,7 @@ const heldRequest = z.object({
 	args: z.string(),
 	reason: z.string().optional(),
 	at: z.number(),
+	change: z.literal(true).optional(),
 });
 
 function parsedRequests(source: string): ApprovalRequest[] {
@@ -201,6 +202,11 @@ export function permissionsExtension(
 	let armed = 0;
 	let issued = 0;
 	const pendingOf = new WeakMap<Interp, State<ApprovalRequest[]>>();
+	const awaiting = new Map<string, Cell>();
+	const holding = new Map<
+		string,
+		{ readonly name: string; readonly hold: Hold }
+	>();
 
 	function stillOpen(): Set<string> {
 		return new Set(host.approvals.pending().map((request) => request.id));
@@ -208,9 +214,12 @@ export function permissionsExtension(
 
 	function adopt(interp: Interp): void {
 		const open = stillOpen();
-		for (const request of pendingOf.get(interp)?.get() ?? [])
-			if (!open.has(request.id))
-				host.approvals.open({ ...request, restored: true });
+		for (const request of pendingOf.get(interp)?.get() ?? []) {
+			if (open.has(request.id)) continue;
+			const form = request.change ? readOne(request.name) : undefined;
+			if (form instanceof Cell) awaiting.set(request.id, form);
+			host.approvals.open({ ...request, restored: true });
+		}
 	}
 
 	function prune(interp: Interp): void {
@@ -224,7 +233,7 @@ export function permissionsExtension(
 
 	function keep(interp: Interp, request: ApprovalRequest): void {
 		const pending = pendingOf.get(interp);
-		if (pending === undefined || request.change) return;
+		if (pending === undefined) return;
 		pending.set([
 			...pending.get().filter((held) => held.name !== request.name),
 			request,
@@ -251,12 +260,6 @@ export function permissionsExtension(
 			armed--;
 		}
 	}
-
-	const awaiting = new Map<string, Cell>();
-	const holding = new Map<
-		string,
-		{ readonly name: string; readonly hold: Hold }
-	>();
 
 	host.approvals.onResolved((request, decision) => {
 		const saving =

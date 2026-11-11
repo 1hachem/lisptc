@@ -178,11 +178,10 @@ async function* takeSteers({
 }
 
 async function* prepareStep(
-	repl: AgentRepl,
-	transcript: TranscriptEntry[],
+	{ repl, transcript, steps }: Turn,
 	stepId: string,
 ): AsyncGenerator<TurnEvent> {
-	repl.seed(said(transcript));
+	repl.seed(said(transcript), steps);
 	const { notes, entries } = await repl.beginStep();
 	yield* recorded(entries, stepId);
 	yield* noting(transcript, notes);
@@ -249,7 +248,7 @@ async function* openTurn(
 	config: AgentConfig | undefined,
 ): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
 	const { repl, transcript, trace, signal } = turn;
-	repl.seed(said(transcript));
+	repl.seed(said(transcript), 0);
 	const started = await repl.turnStart(turn.telemetry.turnStart);
 	yield* recorded(started.entries);
 	yield* noting(transcript, started.notes);
@@ -334,6 +333,7 @@ async function* evaluateStep(
 		meta: stepMeta(startedAt, reply.usage, ran),
 	};
 	transcript.push({ role: "assistant", content: code });
+	repl.seed(said(transcript), turn.steps);
 
 	const evalStartedAt = Date.now();
 	const { output, display, error, effects, notes, failed, held, results } =
@@ -382,6 +382,7 @@ async function* settle(turn: Turn): AsyncGenerator<TurnEvent, boolean> {
 	const { repl, transcript, signal, steps, maxSteps } = turn;
 	if (signal?.aborted) return false;
 	const taken = steps > 0 ? yield* takeSteers(turn) : 0;
+	repl.seed(said(transcript), steps);
 	const settled = await repl.beforeSettle(taken > 0);
 	yield* recorded(settled.entries);
 	yield* noting(transcript, settled.notes);
@@ -399,9 +400,9 @@ async function* runStep(
 	turn: Turn,
 	opened: { system: string; call: ModelCall },
 ): AsyncGenerator<TurnEvent, Stepped> {
-	const { repl, transcript } = turn;
+	const { transcript } = turn;
 	const stepId = crypto.randomUUID();
-	yield* prepareStep(repl, transcript, stepId);
+	yield* prepareStep(turn, stepId);
 	const startedAt = Date.now();
 	const messages = toLlmMessages(transcript);
 	const reply = yield* callModel(

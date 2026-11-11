@@ -17,7 +17,7 @@ import {
 	type Hold,
 	settled,
 } from "@repo/interpreter/drive";
-import { type Effect, effect } from "@repo/interpreter/effects";
+import { type Effect, effect, ends } from "@repo/interpreter/effects";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import {
 	type Chain,
@@ -169,8 +169,10 @@ function skipNotes(skipped: string[]): string {
 	return skipped.map((what) => `skipped ${what}\n`).join("");
 }
 
-function render(result: StepResult): EvalOutput {
-	const notes = skipNotes(result.skipped);
+function render(
+	result: StepResult,
+	notes = skipNotes(result.skipped),
+): EvalOutput {
 	return {
 		model: result.model + notes,
 		user: result.user + notes,
@@ -439,10 +441,10 @@ export class MemoryRepl implements InMemoryRepl {
 		}
 		const { skipped, failed, held } = partition(buffer.collect(note));
 		const holding = held.map((n) => `held: ${n.text}\n`).join("");
-		const bounded = this.hooks.stepOutput.run((_c, out) => out, ctx, {
+		const bounded: Bounded = {
 			model: buffer.collectText("model"),
 			user: buffer.collectText("user"),
-		});
+		};
 		const error = this.errorOf(ctx, thrown, failed);
 		const carriedError = this.errorOf(ctx, carriedThrown, failed);
 		const message = this.hooks.message.run(noOpinion, buffer);
@@ -552,32 +554,7 @@ export class AgentRepl extends MemoryRepl {
 	): Promise<EvalOutput> {
 		const result = await this.evaluate(code, origin, live);
 		if (result.held) return ending(render(result));
-		if (!this.answered(code, result)) return render(result);
-		return {
-			model: result.model,
-			user: result.user,
-			entries: result.entries,
-			effects: [...result.effects, END],
-			notes: result.notes,
-			failed: result.failed,
-			failure: result.failure,
-			held: result.held,
-			message: result.message,
-			results: result.results,
-		};
-	}
-
-	private answered(code: string, result: StepResult): boolean {
-		return this.hooks.answered.run(
-			() => false,
-			{ interp: this.interp, code },
-			{
-				model: result.model,
-				user: result.user,
-				skipped: result.skipped,
-				failed: result.failed,
-			},
-		);
+		return ends(result.effects) ? render(result, "") : render(result);
 	}
 
 	unrun(code: string): Skipped[] {
@@ -653,8 +630,8 @@ export class AgentRepl extends MemoryRepl {
 		};
 	}
 
-	seed(said: readonly Said[]): void {
-		this.interp.seed(said);
+	seed(said: readonly Said[], stepsTaken: number): void {
+		this.interp.seed(said, stepsTaken);
 	}
 }
 

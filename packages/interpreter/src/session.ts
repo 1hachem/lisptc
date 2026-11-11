@@ -18,11 +18,6 @@ export interface StepContext {
 	readonly code: string;
 }
 
-export interface StepOutcome extends Bounded {
-	readonly skipped: readonly string[];
-	readonly failed: boolean;
-}
-
 export interface ModelUsage {
 	readonly input: number;
 	readonly output: number;
@@ -97,9 +92,7 @@ export interface SessionHooks {
 	readonly answer: Chain<[interp: Interp, code: string], string>;
 	readonly settled: Chain<[turn: AgentTurn, end: AgentEnd], void>;
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
-	readonly stepOutput: Chain<[ctx: StepContext, out: Bounded], Bounded>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
-	readonly answered: Chain<[ctx: StepContext, out: StepOutcome], boolean>;
 	readonly unrun: Chain<[interp: Interp, code: string], Skipped[]>;
 	readonly message: Chain<[buffer: ChannelBuffer], string | undefined>;
 	readonly invoke: Chain<[ctx: ActionContext], Promise<void>>;
@@ -117,9 +110,7 @@ export function newSessionHooks(): SessionHooks {
 		answer: new Chain(),
 		settled: new Chain(),
 		evalStep: new Chain(),
-		stepOutput: new Chain(),
 		stepError: new Chain(),
-		answered: new Chain(),
 		unrun: new Chain(),
 		message: new Chain(),
 		invoke: new Chain(),
