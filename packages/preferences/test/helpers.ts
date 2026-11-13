@@ -40,10 +40,6 @@ export async function world(
 				preferencesHostFor({
 					store,
 					fonts: [{ id: "geist", name: "Geist" }],
-					motions: [
-						{ id: "slide", name: "rows slide" },
-						{ id: "lift", name: "the row lifts" },
-					],
 					...(desktop === undefined ? {} : { desktop }),
 				}),
 			),

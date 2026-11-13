@@ -12,7 +12,7 @@ import {
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { dragsAs, type PanelContent } from "../lib/panel-ops.ts";
+import type { PanelContent } from "../lib/panel-ops.ts";
 import { useWorkspace } from "../lib/workspace.tsx";
 import { EntryRail, TREE_ROW } from "./entry-rail.tsx";
 import { PanelLink } from "./panel-link.tsx";
@@ -48,7 +48,7 @@ function SettingsLink({ expanded }: { expanded: boolean }) {
 			className={`${expanded ? "ml-auto" : ""} flex-none text-dim hover:text-fg`}
 			title="settings"
 			label="settings"
-			onDragStart={dragsAs(ACCOUNT)}
+			carries
 		>
 			<HugeiconsIcon className="size-icon-sm" icon={Settings01Icon} />
 		</PanelLink>

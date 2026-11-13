@@ -12,7 +12,6 @@ export interface Preferences {
 	hidden?: string[];
 	statusBar?: string[];
 	statusBarHidden?: string[];
-	motion?: string;
 	panelMotion?: boolean;
 	traceBesideChat?: boolean;
 	traceLink?: boolean;
@@ -37,7 +36,6 @@ export interface DesktopPreferencesPort {
 export interface PreferencesHost {
 	store: PreferencesStore;
 	fonts: readonly Choice[];
-	motions: readonly Choice[];
 	desktop?: DesktopPreferencesPort;
 	prompt: PromptSource;
 }

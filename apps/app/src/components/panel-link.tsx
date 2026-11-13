@@ -1,7 +1,8 @@
 import type { Id } from "@repo/backend/dataModel";
+import { useDragSource } from "@repo/components";
 import { Link, useParams } from "@tanstack/react-router";
-import type { DragEvent, MouseEvent, ReactNode } from "react";
-import type { PanelContent } from "../lib/panel-ops.ts";
+import type { MouseEvent, ReactNode } from "react";
+import { type PanelContent, panelCarry } from "../lib/panel-ops.ts";
 import { panelPath } from "../lib/panel-paths.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
 
@@ -21,7 +22,7 @@ export function PanelLink({
 	className,
 	title,
 	label,
-	onDragStart,
+	carries = false,
 	onClick,
 	children,
 }: {
@@ -30,18 +31,19 @@ export function PanelLink({
 	className?: string;
 	title?: string;
 	label?: string;
-	onDragStart?: (event: DragEvent) => void;
+	carries?: boolean;
 	onClick?: () => void;
 	children: ReactNode;
 }) {
+	const source = useDragSource(() => panelCarry(content));
 	return (
 		<Link
+			{...(carries ? source : {})}
 			to="/app/$workspaceId/$"
 			params={{ workspaceId, _splat: panelPath(content) ?? "" }}
 			className={className}
 			title={title}
 			aria-label={label}
-			onDragStart={onDragStart}
 			onClick={(event) => {
 				onClick?.();
 				if (!opensInPlace(event)) return;

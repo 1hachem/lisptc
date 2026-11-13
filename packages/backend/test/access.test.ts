@@ -1327,7 +1327,7 @@ describe("preferences access", () => {
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.preferences.put, {
 			workspaceId,
-			preferences: { motion: "lift", input: { lisp: true } },
+			preferences: { statusBarHidden: ["clock"], input: { lisp: true } },
 		});
 		await alice.as.mutation(api.preferences.put, {
 			workspaceId,
@@ -1338,7 +1338,7 @@ describe("preferences access", () => {
 			preferences: { metadata: { tokens: true } },
 		});
 		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual({
-			motion: "lift",
+			statusBarHidden: ["clock"],
 			font: "mono",
 			metadata: { ...DEFAULT_TOGGLES.metadata, tokens: true },
 			input: { ...DEFAULT_TOGGLES.input, lisp: false },

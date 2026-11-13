@@ -3,7 +3,7 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { TreeFile, TreeFolder } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
-import { dragsAs, sourcePanel } from "../lib/panel-ops.ts";
+import { panelCarry, sourcePanel } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { FileMenu } from "./file-menu.tsx";
 import { linkTo, useShown } from "./panel-link.tsx";
@@ -27,7 +27,7 @@ function SourceFile({
 			name={name}
 			depth={1}
 			selected={shown(panel)}
-			onDragStart={dragsAs(panel)}
+			carry={panelCarry(panel)}
 			trailing={
 				<FileMenu
 					name={name}

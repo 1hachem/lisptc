@@ -1,12 +1,13 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { useDragSource } from "@repo/components";
 import { type PropsOf, type Tag, widgetOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
 import { useChatSession } from "../lib/chat.tsx";
-import { startPanelDrag } from "../lib/panel-ops.ts";
+import { panelCarry } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
 import { type ViewNode, viewNode } from "../lib/ui-node.ts";
@@ -83,14 +84,14 @@ function FieldLabel({
 function FileLink({ props }: WidgetProps<"file-link">) {
 	const { openFile } = usePanels();
 	const { folder, name } = props;
+	const source = useDragSource(() =>
+		panelCarry({ kind: "file", folder, name }),
+	);
 	return (
 		<button
+			{...source}
 			type="button"
 			title={`${folder}/${name}`}
-			draggable
-			onDragStart={(event) =>
-				startPanelDrag(event.dataTransfer, { kind: "file", folder, name })
-			}
 			onClick={() => openFile(folder, name)}
 			className="w-fit cursor-pointer text-left text-accent underline decoration-dim/50 hover:decoration-accent"
 		>

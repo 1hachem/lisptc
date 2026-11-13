@@ -1,10 +1,8 @@
 import { defaultFontId, defaultThemeId, fonts, themes } from "@repo/ui";
-import { defaultMotionId, isMotion, type MotionId } from "@repo/ui/motions.ts";
 
 export interface StoredChoices {
 	theme?: string;
 	font?: string;
-	motion?: string;
 }
 
 function offered(list: readonly { id: string }[], id: string | undefined) {
@@ -17,10 +15,6 @@ export function themeOf(stored: StoredChoices | undefined): string {
 
 export function fontOf(stored: StoredChoices | undefined): string {
 	return offered(fonts, stored?.font) ?? defaultFontId;
-}
-
-export function motionOf(stored: StoredChoices | undefined): MotionId {
-	return isMotion(stored?.motion) ? stored.motion : defaultMotionId;
 }
 
 export function togglesOf<Id extends string>(

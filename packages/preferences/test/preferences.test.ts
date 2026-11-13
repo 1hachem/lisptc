@@ -21,7 +21,6 @@ const HELD = {
 		"clock",
 	],
 	statusBarHidden: [],
-	motion: "slide",
 	panelMotion: true,
 	traceBesideChat: false,
 	traceLink: true,
@@ -48,24 +47,21 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :sidebar-right ("tests" "ui") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
+			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :sidebar-right ("tests" "ui") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock") :status-bar-hidden nil :panel-motion t :trace-beside-chat nil :trace-link t)',
 		);
 	});
 
-	it("lists the fonts and motions there are to choose from", async () => {
+	it("lists the fonts there are to choose from", async () => {
 		const { ev } = await world();
 		expect(await ev("(fonts)")).toBe('(("geist" . "Geist"))');
-		expect(await ev("(motions)")).toBe(
-			'(("slide" . "rows slide") ("lift" . "the row lifts"))',
-		);
 	});
 });
 
 describe("changing preferences", () => {
 	it("changes only the keys it is given", async () => {
 		const { ev, store } = await world(HELD);
-		await ev('(preferences/set :motion "lift")');
-		expect(store.read()).toEqual({ ...HELD, motion: "lift" });
+		await ev("(preferences/set :panel-motion nil)");
+		expect(store.read()).toEqual({ ...HELD, panelMotion: false });
 	});
 
 	it("has no theme to set, the theme being the workspace's", async () => {
@@ -258,15 +254,6 @@ describe("changing preferences", () => {
 		expect(store.read()).toEqual(HELD);
 	});
 
-	it("sets how the sidebar animates a drag, and refuses a motion it does not offer", async () => {
-		const { ev, store } = await world(HELD);
-		await ev('(preferences/set :motion "lift")');
-		expect(store.read().motion).toBe("lift");
-		await expect(ev('(preferences/set :motion "spin")')).rejects.toThrow(
-			/unknown motion, see \(motions\)/,
-		);
-	});
-
 	it("turns panel animation off and back on", async () => {
 		const { ev, store } = await world(HELD);
 		await ev("(preferences/set :panel-motion nil)");
@@ -311,12 +298,7 @@ describe("changing preferences", () => {
 describe("the prompt", () => {
 	it("teaches the forms it installs", () => {
 		const prompt = preferencesHost.prompt();
-		for (const form of [
-			"(preferences)",
-			"(preferences/set",
-			"(fonts)",
-			"(motions)",
-		])
+		for (const form of ["(preferences)", "(preferences/set", "(fonts)"])
 			expect(prompt).toContain(form);
 	});
 });

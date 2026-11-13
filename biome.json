@@ -53,8 +53,16 @@
           "options": {
             "paths": {
               "@dnd-kit/core": {
-                "importNames": ["DragOverlay"],
-                "message": "The page runs under CSS zoom, and a bare DragOverlay trails behind the cursor under it. Wrap the overlay in CursorDragOverlay from packages/components/src/cursor-drag-overlay.tsx."
+                "message": "Drags go through DragLayer in packages/components/src/drag-layer.tsx, on @repo/dragology."
+              },
+              "@dnd-kit/sortable": {
+                "message": "Drags go through DragLayer in packages/components/src/drag-layer.tsx, on @repo/dragology."
+              },
+              "@dnd-kit/utilities": {
+                "message": "Drags go through DragLayer in packages/components/src/drag-layer.tsx, on @repo/dragology."
+              },
+              "@dnd-kit/modifiers": {
+                "message": "Drags go through DragLayer in packages/components/src/drag-layer.tsx, on @repo/dragology."
               }
             }
           }
@@ -142,11 +150,32 @@
       }
     },
     {
-      "includes": ["packages/components/src/cursor-drag-overlay.tsx"],
+      "includes": ["packages/dragology/**"],
       "linter": {
         "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off",
+            "useButtonType": "off"
+          },
+          "complexity": {
+            "useLiteralKeys": "off",
+            "useOptionalChain": "off"
+          },
+          "correctness": {
+            "useJsxKeyInIterable": "off"
+          },
           "style": {
-            "noRestrictedImports": "off"
+            "noNonNullAssertion": "off",
+            "useTemplate": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "off",
+            "noArrayIndexKey": "off",
+            "noGlobalIsNan": "off",
+            "noAssignInExpressions": "off",
+            "useIterableCallbackReturn": "off",
+            "noImplicitAnyLet": "off",
+            "noNonNullAssertedOptionalChain": "off"
           }
         }
       }

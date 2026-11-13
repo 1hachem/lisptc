@@ -1,6 +1,6 @@
 # @repo/bloub
 
-The avatar component and its engine. It carries the repo's only lint and
+The avatar component and its engine. It carries its own lint and
 tsconfig carve-outs, so read this file before changing how it is built.
 
 Turbo tag: `foundation`.

@@ -1,19 +1,6 @@
 "use client";
 
 import {
-	DndContext,
-	type DragEndEvent,
-	type DragMoveEvent,
-	type DragStartEvent,
-	MeasuringStrategy,
-	PointerSensor,
-	pointerWithin,
-	useDraggable,
-	useDroppable,
-	useSensor,
-	useSensors,
-} from "@dnd-kit/core";
-import {
 	ArrowLeftRightIcon,
 	ArrowUpDownIcon,
 	Cancel01Icon,
@@ -25,6 +12,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+	allTabs,
 	closePane,
 	closeTab,
 	type Direction,
@@ -56,34 +44,34 @@ import {
 } from "@repo/ui";
 import {
 	type ComponentProps,
-	createContext,
 	type ReactNode,
 	type Ref,
 	type RefObject,
-	useContext,
 	useEffect,
-	useMemo,
+	useId,
 	useRef,
 	useState,
 } from "react";
-import { createPortal } from "react-dom";
-import { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
+import {
+	type Carried,
+	carriedAs,
+	type DropSpot,
+	type Rect,
+	rectOf,
+	useCarried,
+	useDragSource,
+	useDropSpots,
+} from "./drag-layer.tsx";
 
-const DRAG_AFTER_PX = 4;
 const ZOOMS_IN =
 	"group-data-[animated=true]/split:animate-zoom-in motion-reduce:animate-none";
 const SLIDES_IN =
 	"group-data-[animated=true]/split:animate-slide-in motion-reduce:animate-none";
 const SLIDES_SHORT =
 	"group-data-[animated=true]/split:animate-slide-short motion-reduce:animate-none";
-const FADES =
-	"group-data-[animated=true]/split:animate-fade motion-reduce:animate-none";
-const CURSOR_GAP = 8;
-const UNZOOMED = "calc(1 / var(--app-zoom, 1))";
-const REZOOMED = "var(--app-zoom, 1)";
-const MEASURE_WHILE_DRAGGING = {
-	droppable: { strategy: MeasuringStrategy.Always },
-};
+const EDGE_BAND = 0.25;
+const VIEW_EDGE_PX = 12;
+const MARK_PX = 2;
 type GroupHandle =
 	NonNullable<
 		ComponentProps<typeof ResizablePanelGroup>["groupRef"]
@@ -97,25 +85,6 @@ const PAGE_AFTER = 0.2;
 const GESTURE_IDLE_MS = 220;
 const COAST_STEPS = 3;
 const EDGES: Edge[] = ["left", "right", "top", "bottom"];
-const EDGE_ZONE: Record<Edge, string> = {
-	left: "inset-y-0 left-0 w-1/4",
-	right: "inset-y-0 right-0 w-1/4",
-	top: "inset-x-0 top-0 h-1/4",
-	bottom: "inset-x-0 bottom-0 h-1/4",
-};
-const VIEW_EDGE_ZONE: Record<Edge, string> = {
-	left: "inset-y-0 left-0 w-3",
-	right: "inset-y-0 right-0 w-3",
-	top: "inset-x-0 top-0 h-3",
-	bottom: "inset-x-0 bottom-0 h-3",
-};
-const EDGE_LANDS: Record<Edge, string> = {
-	left: "inset-y-0 left-0 w-1/2",
-	right: "inset-y-0 right-0 w-1/2",
-	top: "inset-x-0 top-0 h-1/2",
-	bottom: "inset-x-0 bottom-0 h-1/2",
-};
-
 type Axis = "width" | "height";
 
 interface Maximized {
@@ -128,13 +97,6 @@ const AXIS_OF: Record<"row" | "column", Axis> = {
 	column: "height",
 };
 
-interface External {
-	type: string;
-	drop: (drop: Drop, data: DataTransfer) => void;
-}
-
-const ExternalDrop = createContext<External | null>(null);
-
 export interface SplitViewProps<T> {
 	layout: SplitLayout<T>;
 	onChange: (layout: SplitLayout<T>) => void;
@@ -143,8 +105,8 @@ export interface SplitViewProps<T> {
 	animated?: boolean;
 	placeholder?: ReactNode;
 	external?: {
-		type: string;
-		read: (data: DataTransfer) => Tab<T> | undefined;
+		kind: string;
+		read: (payload: unknown) => Tab<T> | undefined;
 	};
 	footer?: (indicator: ReactNode) => ReactNode;
 	minWidth?: (content: T) => number;
@@ -162,22 +124,41 @@ export function SplitView<T>({
 	minWidth,
 }: SplitViewProps<T>) {
 	const { moved, entrance } = useEntrance(layout);
-	const outside = useNativeDrag(external?.type);
-	const accepts = useExternalDrop(external, layout, onChange);
-	const sensors = useSensors(
-		useSensor(PointerSensor, {
-			activationConstraint: { distance: DRAG_AFTER_PX },
-		}),
-	);
-	const { dragged, pointer, handlers } = useTabDrag(layout, onChange, moved);
-	const dragging = dragged !== null || outside;
-	const pager = usePagedScroll(layout.root !== null);
+	const tabKind = `tabs${useId()}`;
+	const stage = useRef<HTMLDivElement>(null);
+	const carried = useCarried();
+	const dragging =
+		carriedAs(carried, tabKind) ||
+		(external !== undefined && carriedAs(carried, external.kind));
+	const [live, setLive] = useState<{ layout: SplitLayout<T>; tab: string }>();
+	useDropSpots((held) => {
+		const tab = tabCarried(held, tabKind, layout, external);
+		if (!tab || !stage.current) return [];
+		const landed = (drop: Drop) =>
+			tab.moving
+				? moveTab(layout, tab.tab.id, drop)
+				: dropTab(layout, tab.tab, drop);
+		return splitSpots(
+			stage.current,
+			layout,
+			(drop) => {
+				setLive(undefined);
+				if (tab.moving) moved.current = tab.tab.id;
+				onChange(landed(drop));
+			},
+			(drop) => setLive(drop && { layout: landed(drop), tab: tab.tab.id }),
+		);
+	});
+	const shown = live?.layout ?? layout;
+	const pager = usePagedScroll(shown.root !== null);
 	const [held, maximize] = useState<Maximized | null>(null);
 	const maximized =
-		held !== null && paneIds(layout.root).includes(held.pane) ? held : null;
+		held !== null && paneIds(shown.root).includes(held.pane) ? held : null;
 	const view = {
-		layout,
+		layout: shown,
+		previewing: live?.tab,
 		dragging,
+		tabKind,
 		onChange,
 		renderTab,
 		tabLabel,
@@ -187,28 +168,134 @@ export function SplitView<T>({
 		minWidth,
 	};
 	return (
-		<ExternalDrop.Provider value={accepts}>
-			<DndContext
-				sensors={sensors}
-				collisionDetection={pointerWithin}
-				measuring={MEASURE_WHILE_DRAGGING}
-				{...handlers}
-			>
-				<div className="flex h-full min-h-0 flex-col">
-					<Stage
-						layout={layout}
-						view={view}
-						pager={pager}
-						animated={animated}
-						placeholder={placeholder}
-					/>
-					{footer?.(<PageIndicator layout={layout} pager={pager} />)}
-				</div>
-				{dragged && (
-					<DragGhost label={tabLabel(dragged.content)} pointer={pointer} />
-				)}
-			</DndContext>
-		</ExternalDrop.Provider>
+		<div className="flex h-full min-h-0 flex-col">
+			<Stage
+				stage={stage}
+				layout={shown}
+				view={view}
+				pager={pager}
+				animated={animated}
+				placeholder={placeholder}
+			/>
+			{footer?.(<PageIndicator layout={shown} pager={pager} />)}
+		</div>
+	);
+}
+
+function tabCarried<T>(
+	carried: Carried,
+	tabKind: string,
+	layout: SplitLayout<T>,
+	external: SplitViewProps<T>["external"],
+): { tab: Tab<T>; moving: boolean } | undefined {
+	if (carried.kind === tabKind) {
+		const tab = allTabs(layout).find((t) => t.id === carried.payload);
+		return tab && { tab, moving: true };
+	}
+	if (external && carried.kind === external.kind) {
+		const tab = external.read(carried.payload);
+		return tab && { tab, moving: false };
+	}
+	return undefined;
+}
+
+function clipped(rect: Rect, to: Rect): Rect {
+	const left = Math.max(rect.left, to.left);
+	const top = Math.max(rect.top, to.top);
+	const right = Math.min(rect.left + rect.width, to.left + to.width);
+	const bottom = Math.min(rect.top + rect.height, to.top + to.height);
+	return {
+		left,
+		top,
+		width: Math.max(0, right - left),
+		height: Math.max(0, bottom - top),
+	};
+}
+
+function edgeOf(rect: Rect, edge: Edge, depth: number): Rect {
+	switch (edge) {
+		case "left":
+			return { ...rect, width: depth };
+		case "right":
+			return { ...rect, left: rect.left + rect.width - depth, width: depth };
+		case "top":
+			return { ...rect, height: depth };
+		case "bottom":
+			return { ...rect, top: rect.top + rect.height - depth, height: depth };
+	}
+}
+
+function halfOf(rect: Rect, edge: Edge): Rect {
+	const across = edge === "left" || edge === "right";
+	return edgeOf(rect, edge, (across ? rect.width : rect.height) / 2);
+}
+
+function bandOf(rect: Rect, edge: Edge): Rect {
+	const across = edge === "left" || edge === "right";
+	return edgeOf(rect, edge, (across ? rect.width : rect.height) * EDGE_BAND);
+}
+
+function middleOf(rect: Rect): Rect {
+	return {
+		left: rect.left + rect.width * EDGE_BAND,
+		top: rect.top + rect.height * EDGE_BAND,
+		width: rect.width * (1 - 2 * EDGE_BAND),
+		height: rect.height * (1 - 2 * EDGE_BAND),
+	};
+}
+
+export function splitSpots<T>(
+	stage: Element,
+	layout: SplitLayout<T>,
+	drop: (drop: Drop) => void,
+	preview?: (drop: Drop | undefined) => void,
+): DropSpot[] {
+	const landing = (hit: Rect, shows: Rect, at: Drop): DropSpot =>
+		preview
+			? {
+					hit,
+					enter: () => preview(at),
+					leave: () => preview(undefined),
+					drop: () => drop(at),
+				}
+			: { hit, shows, drop: () => drop(at) };
+	const area = rectOf(stage);
+	const root = layout.root;
+	if (!root) return [landing(area, area, { pane: "" })];
+	const view = EDGES.map((edge) =>
+		landing(edgeOf(area, edge, VIEW_EDGE_PX), halfOf(area, edge), {
+			node: root.id,
+			edge,
+		}),
+	);
+	const slots = [...stage.querySelectorAll("[data-tab-slot]")].map(
+		(slot): DropSpot => {
+			const rect = clipped(rectOf(slot), area);
+			const pane = slot.getAttribute("data-pane") ?? "";
+			const index = Number(slot.getAttribute("data-tab-slot"));
+			return landing(
+				rect,
+				{ ...rect, left: rect.left - MARK_PX / 2, width: MARK_PX },
+				{ pane, index },
+			);
+		},
+	);
+	const bodies = [...stage.querySelectorAll("[data-pane-body]")].map(
+		(body) => ({
+			pane: body.getAttribute("data-pane-body") ?? "",
+			rect: clipped(rectOf(body), area),
+		}),
+	);
+	const edges = bodies.flatMap(({ pane, rect }) =>
+		EDGES.map((edge) =>
+			landing(bandOf(rect, edge), halfOf(rect, edge), { pane, edge }),
+		),
+	);
+	const centers = bodies.map(({ pane, rect }) =>
+		landing(middleOf(rect), rect, { pane }),
+	);
+	return [...view, ...slots, ...edges, ...centers].filter(
+		(spot) => spot.hit.width > 0 && spot.hit.height > 0,
 	);
 }
 
@@ -226,66 +313,15 @@ function useEntrance<T>(layout: SplitLayout<T>) {
 	return { moved, entrance };
 }
 
-function useTabDrag<T>(
-	layout: SplitLayout<T>,
-	onChange: (layout: SplitLayout<T>) => void,
-	moved: RefObject<string | null>,
-) {
-	const [dragged, setDragged] = useState<Tab<T> | null>(null);
-	const [pointer, setPointer] = useState({ x: 0, y: 0 });
-	const origin = useRef({ x: 0, y: 0 });
-	const onDragStart = (event: DragStartEvent) => {
-		const start = event.activatorEvent as PointerEvent;
-		origin.current = { x: start.clientX, y: start.clientY };
-		setPointer(origin.current);
-		setDragged((event.active.data.current?.tab as Tab<T>) ?? null);
-	};
-	const onDragMove = (event: DragMoveEvent) =>
-		setPointer({
-			x: origin.current.x + event.delta.x,
-			y: origin.current.y + event.delta.y,
-		});
-	const onDragEnd = (event: DragEndEvent) => {
-		setDragged(null);
-		const drop = event.over?.data.current?.drop as Drop | undefined;
-		moved.current = String(event.active.id);
-		if (drop) onChange(moveTab(layout, String(event.active.id), drop));
-	};
-	const onDragCancel = () => setDragged(null);
-	return {
-		dragged,
-		pointer,
-		handlers: { onDragStart, onDragMove, onDragEnd, onDragCancel },
-	};
-}
-
-function useExternalDrop<T>(
-	external: SplitViewProps<T>["external"],
-	layout: SplitLayout<T>,
-	onChange: (layout: SplitLayout<T>) => void,
-): External | null {
-	return useMemo<External | null>(
-		() =>
-			external === undefined
-				? null
-				: {
-						type: external.type,
-						drop: (drop, data) => {
-							const tab = external.read(data);
-							if (tab) onChange(dropTab(layout, tab, drop));
-						},
-					},
-		[external, layout, onChange],
-	);
-}
-
 function Stage<T>({
+	stage,
 	layout,
 	view,
 	pager,
 	animated,
 	placeholder,
 }: {
+	stage: RefObject<HTMLDivElement | null>;
 	layout: SplitLayout<T>;
 	view: View<T>;
 	pager: RefObject<HTMLDivElement | null>;
@@ -294,6 +330,7 @@ function Stage<T>({
 }) {
 	return (
 		<div
+			ref={stage}
 			data-animated={animated}
 			className="group/split relative min-h-0 flex-1"
 		>
@@ -306,49 +343,7 @@ function Stage<T>({
 					{placeholder}
 				</div>
 			)}
-			{view.dragging && !layout.root && (
-				<Zone id="view" drop={{ pane: "" }} hit="inset-0" lands="inset-0" />
-			)}
-			{view.dragging &&
-				layout.root &&
-				EDGES.map((edge) => (
-					<Zone
-						key={edge}
-						id={`view:${edge}`}
-						drop={{ node: (layout.root as Node<T>).id, edge }}
-						hit={`z-20 ${VIEW_EDGE_ZONE[edge]}`}
-						lands={`z-20 ${EDGE_LANDS[edge]}`}
-					/>
-				))}
 		</div>
-	);
-}
-
-function DragGhost({
-	label,
-	pointer,
-}: {
-	label: string;
-	pointer: { x: number; y: number };
-}) {
-	if (typeof document === "undefined") return null;
-	return createPortal(
-		<div
-			className="pointer-events-none fixed z-50"
-			style={{
-				zoom: UNZOOMED,
-				left: pointer.x + CURSOR_GAP,
-				top: pointer.y + CURSOR_GAP,
-			}}
-		>
-			<div
-				className="flex h-row items-center rounded-md border border-border bg-bg2 px-2 text-fg shadow-sm"
-				style={{ zoom: REZOOMED }}
-			>
-				{label}
-			</div>
-		</div>,
-		document.body,
 	);
 }
 
@@ -522,7 +517,9 @@ function usePagedScroll(shown: boolean) {
 
 interface View<T> {
 	layout: SplitLayout<T>;
+	previewing: string | undefined;
 	dragging: boolean;
+	tabKind: string;
 	onChange: (layout: SplitLayout<T>) => void;
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
@@ -762,7 +759,9 @@ function Split({ first, children }: { first: boolean; children: ReactNode }) {
 function PaneView<T>({
 	pane,
 	layout,
+	previewing,
 	dragging,
+	tabKind,
 	onChange,
 	renderTab,
 	tabLabel,
@@ -772,7 +771,9 @@ function PaneView<T>({
 }: {
 	pane: Pane<T>;
 	layout: SplitLayout<T>;
+	previewing: string | undefined;
 	dragging: boolean;
+	tabKind: string;
 	onChange: (layout: SplitLayout<T>) => void;
 	renderTab: (content: T, id: string) => ReactNode;
 	tabLabel: (content: T) => string;
@@ -828,14 +829,16 @@ function PaneView<T>({
 						<TabHandle
 							key={tab.id}
 							tab={tab}
-							drop={{ pane: pane.id, index }}
+							kind={tabKind}
+							pane={pane.id}
+							index={index}
 							label={tabLabel(tab.content)}
 							onClose={
 								tab.fixed ? undefined : () => onChange(closeTab(layout, tab.id))
 							}
 						/>
 					))}
-					<StripEnd drop={{ pane: pane.id, index: pane.tabs.length }} />
+					<StripEnd pane={pane.id} index={pane.tabs.length} />
 				</TabsList>
 				<DropdownMenu>
 					<DropdownMenuTrigger
@@ -904,7 +907,7 @@ function PaneView<T>({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>
-			<div className="relative min-h-0 flex-1">
+			<div data-pane-body={pane.id} className="relative min-h-0 flex-1">
 				{pane.tabs.length === 0 && <EmptyPane />}
 				{pane.tabs.map((tab) => (
 					<TabsContent
@@ -912,30 +915,21 @@ function PaneView<T>({
 						value={tab.id}
 						className={`absolute inset-0 overflow-auto ${SLIDES_SHORT} ${dragging ? "pointer-events-none" : ""}`}
 					>
-						{renderTab(tab.content, tab.id)}
+						{tab.id === previewing ? (
+							<Arriving />
+						) : (
+							renderTab(tab.content, tab.id)
+						)}
 					</TabsContent>
 				))}
-				{dragging && (
-					<>
-						<Zone
-							id={`center:${pane.id}`}
-							drop={{ pane: pane.id }}
-							hit="inset-1/4"
-							lands="inset-0"
-						/>
-						{EDGES.map((edge) => (
-							<Zone
-								key={edge}
-								id={`edge:${pane.id}:${edge}`}
-								drop={{ pane: pane.id, edge }}
-								hit={EDGE_ZONE[edge]}
-								lands={EDGE_LANDS[edge]}
-							/>
-						))}
-					</>
-				)}
 			</div>
 		</Tabs>
+	);
+}
+
+function Arriving() {
+	return (
+		<div className="absolute inset-2 rounded-md border-2 border-accent border-dashed bg-accent/10" />
 	);
 }
 
@@ -948,52 +942,39 @@ function EmptyPane() {
 	);
 }
 
-function useTarget(id: string, drop: Drop) {
-	const target = useDroppable({ id, data: { drop } });
-	const external = useContext(ExternalDrop);
-	const native = useNativeDropTarget(external?.type, (data) =>
-		external?.drop(drop, data),
-	);
-	return {
-		ref: target.setNodeRef,
-		over: target.isOver || native.over,
-		native: native.handlers,
-	};
-}
-
-function InsertMark({ shown }: { shown: boolean }) {
-	return shown ? (
-		<span className="pointer-events-none absolute inset-y-1 left-0 w-0.5 bg-accent" />
-	) : null;
-}
-
 function TabHandle<T>({
 	tab,
-	drop,
+	kind,
+	pane,
+	index,
 	label,
 	onClose,
 }: {
 	tab: Tab<T>;
-	drop: Drop;
+	kind: string;
+	pane: string;
+	index: number;
 	label: string;
 	onClose?: () => void;
 }) {
-	const drag = useDraggable({ id: tab.id, data: { tab } });
-	const target = useTarget(`tab:${tab.id}`, drop);
+	const carried = useCarried();
+	const dragged = carried?.kind === kind && carried.payload === tab.id;
+	const source = useDragSource(() => ({
+		kind,
+		payload: tab.id,
+		ghost: <TabGhost label={label} />,
+	}));
 	return (
 		<div
-			ref={target.ref}
-			{...target.native}
+			data-tab-slot={index}
+			data-pane={pane}
 			className="group/tab relative flex h-full flex-none items-center border-border border-r has-[[data-state=active]]:bg-background dark:has-[[data-state=active]]:bg-input/30"
 		>
-			<InsertMark shown={target.over} />
 			<TabsTrigger
-				ref={drag.setNodeRef}
-				{...drag.listeners}
-				{...drag.attributes}
+				{...source}
 				value={tab.id}
 				title={label}
-				className={`h-full max-w-48 flex-none truncate rounded-none border-0 shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent ${drag.isDragging ? "opacity-40" : ""}`}
+				className={`h-full max-w-48 flex-none truncate rounded-none border-0 shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent ${dragged ? "opacity-40" : ""}`}
 			>
 				<span className="truncate">{label}</span>
 			</TabsTrigger>
@@ -1011,48 +992,20 @@ function TabHandle<T>({
 	);
 }
 
-function StripEnd({ drop }: { drop: { pane: string; index: number } }) {
-	const target = useTarget(`end:${drop.pane}`, drop);
+function TabGhost({ label }: { label: string }) {
 	return (
-		<div
-			ref={target.ref}
-			{...target.native}
-			className="relative h-full min-w-6 flex-1"
-		>
-			<InsertMark shown={target.over} />
+		<div className="flex h-full items-center rounded-md border border-border bg-bg2 px-2 text-fg">
+			<span className="truncate">{label}</span>
 		</div>
 	);
 }
 
-function Zone({
-	id,
-	drop,
-	hit,
-	lands,
-}: {
-	id: string;
-	drop: Drop;
-	hit: string;
-	lands: string;
-}) {
-	const target = useTarget(id, drop);
-	return (
-		<>
-			<div
-				ref={target.ref}
-				{...target.native}
-				data-drop={id}
-				className={`absolute ${hit}`}
-			/>
-			{target.over && <DropPreview className={lands} />}
-		</>
-	);
-}
-
-export function DropPreview({ className }: { className: string }) {
+function StripEnd({ pane, index }: { pane: string; index: number }) {
 	return (
 		<div
-			className={`pointer-events-none absolute z-10 rounded-sm border-2 border-accent bg-accent/15 ${FADES} ${className}`}
+			data-tab-slot={index}
+			data-pane={pane}
+			className="relative h-full min-w-6 flex-1"
 		/>
 	);
 }

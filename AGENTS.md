@@ -150,7 +150,8 @@ Everything else:
 - `packages/backend` (`@repo/backend`) — the Convex deployment, and the auth instance whose database is Convex itself.
 - `packages/ui` (`@repo/ui`) — the base design system.
 - `packages/components` (`@repo/components`) — the components we wrote, on top of `@repo/ui`.
-- `packages/bloub` (`@repo/bloub`) — the avatar component and its engine. Carries the repo's only carve-outs.
+- `packages/bloub` (`@repo/bloub`) — the avatar component and its engine. Carries lint and tsconfig carve-outs.
+- `packages/dragology` (`@repo/dragology`) — the vendored drag library every drag runs on. Carries a lint carve-out.
 - `packages/tsconfigs` — shared tsconfig bases.
 
 ### Apps

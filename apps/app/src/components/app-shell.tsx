@@ -1,3 +1,4 @@
+import { DragLayer } from "@repo/components";
 import { SidebarProvider } from "@repo/ui";
 import type { CSSProperties } from "react";
 import { useNoSwipeNavigation } from "../lib/swipe-guard.ts";
@@ -23,28 +24,30 @@ export function AppShell({
 
 	return (
 		<div className="h-full overflow-hidden bg-bg font-mono text-[13px] text-fg leading-[1.7]">
-			<EntrySidebars>
-				<SidebarProvider
-					open={leftOpen}
-					onOpenChange={setLeftOpen}
-					style={SIDEBAR_SIZE}
-					className="h-full min-h-0"
-				>
-					<LeftSidebar onSignOut={onSignOut} />
+			<DragLayer>
+				<EntrySidebars>
 					<SidebarProvider
-						open={rightOpen}
-						onOpenChange={setRightOpen}
-						shortcut={null}
+						open={leftOpen}
+						onOpenChange={setLeftOpen}
 						style={SIDEBAR_SIZE}
-						className="h-full min-h-0 min-w-0 flex-1"
+						className="h-full min-h-0"
 					>
-						<main className="flex h-full min-w-0 flex-1 flex-col">
-							{children}
-						</main>
-						<RightSidebar />
+						<LeftSidebar onSignOut={onSignOut} />
+						<SidebarProvider
+							open={rightOpen}
+							onOpenChange={setRightOpen}
+							shortcut={null}
+							style={SIDEBAR_SIZE}
+							className="h-full min-h-0 min-w-0 flex-1"
+						>
+							<main className="flex h-full min-w-0 flex-1 flex-col">
+								{children}
+							</main>
+							<RightSidebar />
+						</SidebarProvider>
 					</SidebarProvider>
-				</SidebarProvider>
-			</EntrySidebars>
+				</EntrySidebars>
+			</DragLayer>
 		</div>
 	);
 }

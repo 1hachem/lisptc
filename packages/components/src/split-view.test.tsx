@@ -3,6 +3,8 @@
 import {
 	allTabs,
 	closeTab,
+	type Drop,
+	dropTab,
 	emptyLayout,
 	type Node,
 	openTab,
@@ -12,7 +14,8 @@ import {
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it } from "vitest";
-import { pagedStop, SplitView, widthFloor } from "./split-view.tsx";
+import { hitAt } from "./drag-layer.tsx";
+import { pagedStop, SplitView, splitSpots, widthFloor } from "./split-view.tsx";
 
 beforeAll(() => {
 	(
@@ -45,18 +48,51 @@ function view(layout: SplitLayout<string>, changes: SplitLayout<string>[]) {
 	);
 }
 
-const PANEL = "application/x-panel";
+function placed(
+	element: Element | null,
+	left: number,
+	top: number,
+	width: number,
+	height: number,
+) {
+	if (!element) throw new Error("nothing to place");
+	element.getBoundingClientRect = () =>
+		({
+			left,
+			top,
+			width,
+			height,
+			right: left + width,
+			bottom: top + height,
+			x: left,
+			y: top,
+		}) as DOMRect;
+}
 
-function dragEvent(type: string, types = [PANEL]) {
-	const event = new Event(type, { bubbles: true, cancelable: true });
-	Object.defineProperty(event, "dataTransfer", {
-		value: {
-			types,
-			dropEffect: "none",
-			getData: (key: string) => (key === PANEL ? "b" : ""),
-		},
+function stageOf(host: HTMLElement): Element {
+	const stage = host.querySelector("[data-animated]");
+	if (!stage) throw new Error("no stage");
+	return stage;
+}
+
+function dropAt<T>(
+	host: HTMLElement,
+	layout: SplitLayout<T>,
+	x: number,
+	y: number,
+): Drop | undefined {
+	let dropped: Drop | undefined;
+	const spots = splitSpots(stageOf(host), layout, (drop) => {
+		dropped = drop;
 	});
-	return event;
+	spots[
+		hitAt(
+			spots.map((spot) => spot.hit),
+			x,
+			y,
+		)
+	]?.drop();
+	return dropped;
 }
 
 const two = openTab(
@@ -229,48 +265,6 @@ describe("SplitView", () => {
 		expect(host.textContent).toContain("body of b");
 	});
 
-	it("splits below with a file dragged in from outside, previewing where it lands", async () => {
-		const changes: SplitLayout<string>[] = [];
-		const one = openTab(emptyLayout<string>(), { id: "a", content: "a" });
-		const host = await mounted(
-			<SplitView
-				layout={one}
-				onChange={(next) => changes.push(next)}
-				renderTab={(content) => <p>body of {content}</p>}
-				tabLabel={(content) => content}
-				external={{
-					type: PANEL,
-					read: (data) => {
-						const id = data.getData(PANEL);
-						return id ? { id, content: id } : undefined;
-					},
-				}}
-			/>,
-		);
-		await act(async () => host.dispatchEvent(dragEvent("dragenter")));
-		const pane = one.root?.id as string;
-		const bottom = host.querySelector(
-			`[data-drop="edge:${pane}:bottom"]`,
-		) as HTMLElement;
-		expect(bottom).not.toBeNull();
-		await act(async () => bottom.dispatchEvent(dragEvent("dragover")));
-		expect(host.querySelector(".bg-accent\\/15")).not.toBeNull();
-		await act(async () => bottom.dispatchEvent(dragEvent("drop")));
-		const root = changes.at(-1)?.root;
-		expect(root?.kind === "split" && root.direction).toBe("column");
-		expect(
-			allTabs(changes.at(-1) as SplitLayout<string>).map((t) => t.id),
-		).toEqual(["a", "b"]);
-	});
-
-	it("ignores a drag that carries something else, like a file from the desktop", async () => {
-		const host = await mounted(view(two, []));
-		await act(async () =>
-			host.dispatchEvent(dragEvent("dragenter", ["Files"])),
-		);
-		expect(host.querySelector("[data-drop]")).toBeNull();
-	});
-
 	it("zooms in only the pane an opening creates, not the ones already there", async () => {
 		const host = document.createElement("div");
 		document.body.append(host);
@@ -314,30 +308,55 @@ describe("SplitView", () => {
 		expect(host.textContent).toContain("drag anything in here");
 	});
 
+	it("splits below when a tab is dropped in the lower quarter of a pane", async () => {
+		const one = openTab(emptyLayout<string>(), { id: "a", content: "a" });
+		const host = await mounted(view(one, []));
+		placed(stageOf(host), 0, 0, 400, 300);
+		placed(host.querySelector("[data-pane-body]"), 0, 30, 400, 270);
+		const drop = dropAt(host, one, 200, 260);
+		expect(drop).toEqual({ pane: one.root?.id, edge: "bottom" });
+		const root = dropTab(one, { id: "b", content: "b" }, drop as Drop).root;
+		expect(root?.kind === "split" && root.direction).toBe("column");
+	});
+
+	it("joins a pane when a tab is dropped in its middle", async () => {
+		const one = openTab(emptyLayout<string>(), { id: "a", content: "a" });
+		const host = await mounted(view(one, []));
+		placed(stageOf(host), 0, 0, 400, 300);
+		placed(host.querySelector("[data-pane-body]"), 0, 30, 400, 270);
+		expect(dropAt(host, one, 200, 160)).toEqual({ pane: one.root?.id });
+	});
+
+	it("inserts a tab where the strip slot under the pointer is", async () => {
+		const host = await mounted(view(two, []));
+		placed(stageOf(host), 0, 0, 800, 300);
+		const slots = host.querySelectorAll("[data-tab-slot]");
+		for (const [index, slot] of [...slots].entries())
+			placed(slot, index * 100, 0, 100, 30);
+		placed(
+			host.querySelectorAll("[data-pane-body]")[0] ?? null,
+			0,
+			30,
+			400,
+			270,
+		);
+		const first = slots[0]?.getAttribute("data-pane");
+		expect(dropAt(host, two, 50, 15)).toEqual({ pane: first, index: 0 });
+	});
+
 	it("shows its placeholder when nothing is open, and takes a drop over it", async () => {
-		const changes: SplitLayout<string>[] = [];
 		const host = await mounted(
 			<SplitView
 				layout={emptyLayout<string>()}
-				onChange={(next) => changes.push(next)}
+				onChange={() => {}}
 				renderTab={(content) => content}
 				tabLabel={(content) => content}
 				placeholder={<p>come on</p>}
-				external={{
-					type: PANEL,
-					read: (data) => ({ id: "b", content: data.getData(PANEL) }),
-				}}
 			/>,
 		);
 		expect(host.textContent).toContain("come on");
-		await act(async () => {
-			window.dispatchEvent(dragEvent("dragenter"));
-		});
-		const zone = host.querySelector('[data-drop="view"]') as HTMLElement;
-		await act(async () => {
-			zone.dispatchEvent(dragEvent("drop"));
-		});
-		expect(allTabs(changes[0]).map((t) => t.id)).toEqual(["b"]);
+		placed(stageOf(host), 0, 0, 400, 300);
+		expect(dropAt(host, emptyLayout<string>(), 120, 80)).toEqual({ pane: "" });
 	});
 
 	it("closes a tab through its close button", async () => {

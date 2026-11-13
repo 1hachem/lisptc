@@ -9,7 +9,7 @@ import { ENTRY_ICONS, openFolderOnMount } from "./workspace-tree.tsx";
 
 export const TREE_ROW = "flex h-[calc(1lh+0.5rem)] items-center text-[11.5px]";
 
-const PAGES: Partial<Record<SidebarEntry, PanelContent>> = {
+export const ENTRY_PAGES: Partial<Record<SidebarEntry, PanelContent>> = {
 	home: NEW_CHAT,
 	"README.md": { kind: "page", page: "readme", title: "README.md" },
 	settings: { kind: "page", page: "settings", title: "settings" },
@@ -25,7 +25,7 @@ function useRailPick() {
 	const newChat = useNewChat();
 	return (entry: SidebarEntry) => {
 		if (entry === "new_chat") return newChat();
-		const page = PAGES[entry];
+		const page = ENTRY_PAGES[entry];
 		if (page !== undefined) return requestPanel(page);
 		openFolderOnMount(entry);
 		setOpen(true);
