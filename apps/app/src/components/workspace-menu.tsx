@@ -221,8 +221,8 @@ export function WorkspaceMenu({
 											const landing = await removeWorkspace({
 												workspaceId: workspace._id,
 											});
-											await refresh();
 											await open(landing);
+											await refresh();
 										});
 									}}
 								/>
