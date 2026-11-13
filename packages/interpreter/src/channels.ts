@@ -1,3 +1,5 @@
+import { type Clock, systemClock } from "@repo/shared/host";
+
 export const AUDIENCES = ["user", "model", "harness"] as const;
 
 export type Audience = (typeof AUDIENCES)[number];
@@ -60,6 +62,7 @@ export class Channels {
 	private readonly anyone = new Set<Listener>();
 	private readonly transports = new Set<ChannelTransport>();
 	step = 0;
+	clock: Clock = systemClock;
 
 	on(topic: string, listener: Listener): () => void {
 		let set = this.listeners.get(topic);

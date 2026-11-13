@@ -25,12 +25,9 @@ async function activityOf(
 	generate: Generate,
 	code: string,
 ): Promise<{ activity: ActivityEntry[]; states: string[] }> {
-	const extension = llmExtension({
-		...llmHost,
-		generate,
-		clock: ticking(1000, 25),
-	});
+	const extension = llmExtension({ ...llmHost, generate });
 	const interp = new Interp({ extensions: [extension] });
+	interp.channels.clock = ticking(1000, 25);
 	runSync(interp, prelude);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);

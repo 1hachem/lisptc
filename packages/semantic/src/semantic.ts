@@ -14,13 +14,11 @@ import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
 import { str } from "@repo/interpreter/print";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
+import { type Phase, timed } from "@repo/interpreter/timed";
 import { withTimeout } from "@repo/interpreter/timeout";
-import {
-	type ActivityEntry,
-	activityKind,
-} from "@repo/journal-catalog/activity";
+import { activityKind } from "@repo/journal-catalog/activity";
 import type { EmbeddingModel } from "@repo/shared/embedding";
-import type { Clock, PromptSource } from "@repo/shared/host";
+import type { PromptSource } from "@repo/shared/host";
 import type {
 	JudgeRequest,
 	JudgeResult,
@@ -43,7 +41,6 @@ export const OUTLIER_SIMILARITY = 0.47;
 export interface SemanticHost {
 	systemOne: SystemOneModel;
 	embedder: EmbeddingModel;
-	clock: Clock;
 	prompt: PromptSource;
 }
 
@@ -74,7 +71,7 @@ type Track = <T>(
 	run: (signal: AbortSignal) => Promise<T>,
 ) => Promise<T>;
 
-function tracker(interp: Interp, host: SemanticHost): Track {
+function tracker(interp: Interp): Track {
 	const calls = interp.state(
 		"semantic/calls",
 		callSeqCodec,
@@ -85,35 +82,24 @@ function tracker(interp: Interp, host: SemanticHost): Track {
 		const n = calls.get() + 1;
 		calls.set(n);
 		const id = `semantic-${n}`;
-		const startedAt = host.clock.now();
-		const announce = (
-			state: ActivityEntry["state"],
-			ms?: number,
-			error?: unknown,
-		): void =>
+		const announce = ({ error, ...phase }: Phase): void =>
 			record(interp.channels, activityKind, {
 				kind: "semantic",
 				icon: "meaning",
 				label: form,
-				state,
+				...phase,
 				...(error === undefined ? {} : { error: messageOf(error) }),
 				id,
-				startedAt,
-				...(ms === undefined ? {} : { ms }),
 			});
-		announce("started");
 		const controller = new AbortController();
-		return withTimeout(run(controller.signal), timeoutOf(opts), form).then(
-			(res) => {
-				announce("done", host.clock.now() - startedAt);
-				return res;
-			},
-			(ex) => {
-				announce("failed", host.clock.now() - startedAt, ex);
-				controller.abort();
-				throw ex;
-			},
-		);
+		return timed(
+			interp.channels.clock,
+			() => withTimeout(run(controller.signal), timeoutOf(opts), form),
+			announce,
+		).catch((ex: unknown) => {
+			controller.abort();
+			throw ex;
+		});
 	};
 }
 
@@ -464,7 +450,7 @@ const SUBJECTS: Subject[] = [
 ];
 
 export function registerSemantic(interp: Interp, host: SemanticHost): void {
-	const track = tracker(interp, host);
+	const track = tracker(interp);
 	const ask = asker(track, host);
 	const embed = embedder(track, host);
 

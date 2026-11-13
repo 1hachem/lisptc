@@ -41,10 +41,10 @@ async function activityOf(
 				},
 			},
 			maxDownloadBytes: 1024,
-			clock: ticking(1000, 25),
 		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
+	interp.channels.clock = ticking(1000, 25);
 	await runAsync(interp, prelude);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);

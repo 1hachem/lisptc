@@ -31,11 +31,9 @@ import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { type Phase, timed } from "@repo/interpreter/timed";
 import { withTimeout } from "@repo/interpreter/timeout";
-import {
-	type ActivityEntry,
-	activityKind,
-} from "@repo/journal-catalog/activity";
+import { activityKind } from "@repo/journal-catalog/activity";
 import type { Clock, PromptSource } from "@repo/shared/host";
 import { type ChatMessage, ROLES, type Role } from "@repo/shared/messages";
 import { z } from "zod";
@@ -47,30 +45,17 @@ const callSeqCodec: StateCodec<number> = {
 	fromLisp: (x) => Number(x),
 };
 
-interface Timing {
-	readonly startedAt: number;
-	readonly ms?: number;
-}
-
-type Announce = (
-	id: string,
-	builtin: string,
-	state: ActivityEntry["state"],
-	target: { provider?: string; model?: string },
-	timing: Timing,
-	error?: unknown,
-) => void;
+type Announce = (id: string, builtin: string, phase: Phase) => void;
 
 function announcer(interp: Interp): Announce {
-	return (id, builtin, state, { provider, model }, timing, error) =>
+	return (id, builtin, { error, ...phase }) =>
 		record(interp.channels, activityKind, {
 			kind: "llm",
 			icon: "model",
 			label: builtin,
-			state,
+			...phase,
 			...(error === undefined ? {} : { error: messageOf(error) }),
 			id,
-			...timing,
 		});
 }
 
@@ -105,7 +90,6 @@ export type Generate = (
 
 export interface LlmHost {
 	generate: Generate;
-	clock: Clock;
 	prompt: PromptSource;
 }
 
@@ -444,7 +428,7 @@ function traceOf(
 
 function caller(
 	generate: Generate,
-	clock: Clock,
+	clock: () => Clock,
 	observe: () => LlmObserver | undefined,
 	calls: State<number>,
 	announce: Announce,
@@ -460,37 +444,19 @@ function caller(
 		const n = calls.get() + 1;
 		calls.set(n);
 		const id = `llm-${n}`;
-		const startedAt = clock.now();
-		announce(id, builtin, "started", req, { startedAt });
 		const controller = new AbortController();
-		return withTimeout(
-			generate(req, controller.signal),
-			timeoutMs,
-			builtin,
-		).then(
-			(res) => {
-				const ms = clock.now() - startedAt;
-				announce(
-					id,
-					builtin,
-					"done",
-					{
-						provider: res.provider ?? req.provider,
-						model: res.model ?? req.model,
-					},
-					{ startedAt, ms },
-				);
-				report(traceOf(builtin, req, ms, res, undefined));
-				return res;
+		return timed(
+			clock(),
+			() => withTimeout(generate(req, controller.signal), timeoutMs, builtin),
+			(phase, res) => {
+				announce(id, builtin, phase);
+				if (phase.ms !== undefined)
+					report(traceOf(builtin, req, phase.ms, res, phase.error));
 			},
-			(ex) => {
-				const ms = clock.now() - startedAt;
-				announce(id, builtin, "failed", req, { startedAt, ms }, ex);
-				controller.abort();
-				report(traceOf(builtin, req, ms, undefined, ex));
-				throw ex;
-			},
-		);
+		).catch((ex: unknown) => {
+			controller.abort();
+			throw ex;
+		});
 	};
 }
 
@@ -513,7 +479,7 @@ export function registerLlm(
 	);
 	const call = caller(
 		host.generate,
-		host.clock,
+		() => interp.channels.clock,
 		observe,
 		calls,
 		announcer(interp),

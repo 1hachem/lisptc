@@ -1,4 +1,3 @@
-import { type Clock, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { getDocumentProxy } from "unpdf";
 import type {
@@ -90,7 +89,6 @@ export function knowledgeHostFor(options: {
 	store: KnowledgeStore;
 	maxDownloadBytes: number;
 	downloader?: Downloader;
-	clock?: Clock;
 	pdf?: PdfReader;
 }): KnowledgeHost {
 	return {
@@ -98,6 +96,5 @@ export function knowledgeHostFor(options: {
 		downloader: options.downloader ?? httpDownloader(options.maxDownloadBytes),
 		pdf: options.pdf ?? unpdfReader(MAX_PDF_PAGES),
 		prompt: knowledgePrompt,
-		clock: options.clock ?? systemClock,
 	};
 }

@@ -25,15 +25,15 @@ import { keyName, parsePlist } from "@repo/interpreter/plist";
 import type { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { type Phase, timed } from "@repo/interpreter/timed";
 import { withTimeout } from "@repo/interpreter/timeout";
 import type { ToJson } from "@repo/interpreter/types";
 import {
-	type ActivityEntry,
 	type ActivityImage,
 	activityKind,
 } from "@repo/journal-catalog/activity";
 import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
-import type { Clock, PromptSource } from "@repo/shared/host";
+import type { PromptSource } from "@repo/shared/host";
 import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
 import {
@@ -317,7 +317,6 @@ export interface McpExtensionHost {
 	toolkit: ToolkitRegistry;
 	search: SearchEngine;
 	prompt: PromptSource;
-	clock: Clock;
 	policy?: McpPolicy;
 	machine?: UserMachine;
 	commands?: boolean;
@@ -688,11 +687,10 @@ interface Wiring {
 	readonly policy: McpPolicy;
 	readonly reconnect: (entry: ServerEntry) => Promise<unknown>;
 	readonly calls: State<number>;
-	readonly clock: Clock;
 }
 
 function callTool(
-	{ interp, client, servers, calls, clock }: Wiring,
+	{ interp, client, servers, calls }: Wiring,
 	ref: ToolRef,
 	f: unknown[],
 ): Promise<unknown> {
@@ -716,39 +714,31 @@ function callTool(
 	calls.set(n);
 	const detail = toolDetail(tool.description);
 	const icon = iconOf(tool.icons, entry.icons);
-	const startedAt = clock.now();
-	const report = (state: ActivityEntry["state"], error?: unknown): void =>
+	const report = ({ error, ...phase }: Phase): void =>
 		record(interp.channels, activityKind, {
 			kind: "mcp",
 			icon,
 			label: toolLabel(ref.server, tool),
 			...(detail === undefined ? {} : { detail }),
-			state,
+			...phase,
 			...(error === undefined ? {} : { error: messageOf(error) }),
 			id: `mcp-${n}`,
-			startedAt,
-			...(state === "started" ? {} : { ms: clock.now() - startedAt }),
 		});
-	report("started");
-	return withTimeout(
-		client.callTool({
-			serverId: entry.serverId,
-			tool: tool.name,
-			args,
-			timeoutMs,
-		}),
-		timeoutMs,
-		name,
-	).then(
-		(value) => {
-			report("done");
-			return jsonToLisp(value);
-		},
-		(error: unknown) => {
-			report("failed", error);
-			throw error;
-		},
-	);
+	return timed(
+		interp.channels.clock,
+		() =>
+			withTimeout(
+				client.callTool({
+					serverId: entry.serverId,
+					tool: tool.name,
+					args,
+					timeoutMs,
+				}),
+				timeoutMs,
+				name,
+			),
+		report,
+	).then(jsonToLisp);
 }
 
 function timeoutOf(name: string, given: unknown): number {
@@ -851,16 +841,10 @@ export function registerMcp(
 	interp: Interp,
 	host: Pick<
 		McpExtensionHost,
-		| "client"
-		| "toolkit"
-		| "search"
-		| "policy"
-		| "clock"
-		| "machine"
-		| "commands"
+		"client" | "toolkit" | "search" | "policy" | "machine" | "commands"
 	>,
 ): void {
-	const { client, toolkit, search, clock } = host;
+	const { client, toolkit, search } = host;
 	const policy = host.policy ?? openPolicy;
 	const commands = host.commands === true;
 
@@ -928,8 +912,8 @@ export function registerMcp(
 		admitServer(policy, name);
 		const n = loads.get() + 1;
 		loads.set(n);
-		const startedAt = clock.now();
-		const report = (state: ActivityEntry["state"], error?: unknown): void =>
+		const report = ({ state, error, ...timing }: Phase): void => {
+			const held = error instanceof StepHold;
 			record(interp.channels, activityKind, {
 				kind: "mcp",
 				icon: iconOf(
@@ -937,31 +921,21 @@ export function registerMcp(
 					manifestIcons(conf),
 				),
 				label: `load-mcp · ${name}`,
-				state,
-				...(state === "held" ? { detail: "requires auth" } : {}),
-				...(error === undefined ? {} : { error: messageOf(error) }),
+				state: held ? "held" : state,
+				...(held ? { detail: "requires auth" } : {}),
+				...(error === undefined || held ? {} : { error: messageOf(error) }),
 				id: `mcp-load-${n}`,
-				startedAt,
-				...(state === "started" ? {} : { ms: clock.now() - startedAt }),
+				...timing,
 			});
-		report("started");
-		const promise = interp.async.start((signal) => connect(args, signal), {
-			kind: "load-mcp",
-			args: [args],
-		});
+		};
+		const promise = interp.async.start(
+			(signal) =>
+				timed(interp.channels.clock, () => connect(args, signal), report),
+			{ kind: "load-mcp", args: [args] },
+		);
 		loading.add(promise);
 		const forget = () => loading.delete(promise);
-		void interp.async.promiseOf(promise).then(
-			() => {
-				forget();
-				report("done");
-			},
-			(error: unknown) => {
-				forget();
-				if (error instanceof StepHold) report("held");
-				else report("failed", error);
-			},
-		);
+		void interp.async.promiseOf(promise).then(forget, forget);
 		return promise;
 	}
 
@@ -1008,7 +982,6 @@ export function registerMcp(
 		policy,
 		reconnect,
 		calls,
-		clock,
 	};
 
 	interp.defGen(

@@ -75,9 +75,9 @@ async function session(icons?: Icon[]) {
 	const extension = mcpExtension({
 		...mcpHost,
 		client: fakeClient(icons),
-		clock: ticking(1000, 25),
 	});
 	const interp = new Interp({ extensions: [extension] });
+	interp.channels.clock = ticking(1000, 25);
 	runSync(interp, prelude);
 	await (runSync(
 		interp,
@@ -171,9 +171,9 @@ describe("loading a server", () => {
 		const extension = mcpExtension({
 			...mcpHost,
 			client: fakeClient(),
-			clock: ticking(1000, 25),
 		});
 		const interp = new Interp({ extensions: [extension] });
+		interp.channels.clock = ticking(1000, 25);
 		runSync(interp, prelude);
 		const buffer = bufferTransport();
 		const detach = interp.channels.pipe(buffer);
