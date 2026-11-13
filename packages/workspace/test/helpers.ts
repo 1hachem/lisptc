@@ -47,7 +47,14 @@ export const THEMES: ThemeChoice[] = [
 function heldChats(): HeldChat[] {
 	return [
 		{ id: "c1", title: "fix login", lines: [] },
-		{ id: "c2", title: "plan q4", lines: [] },
+		{
+			id: "c2",
+			title: "plan q4",
+			lines: [
+				{ role: "human", text: "why does the login redirect loop" },
+				{ role: "ai", text: "the cookie is dropped" },
+			],
+		},
 		{
 			id: "c3",
 			title: "login copy",
