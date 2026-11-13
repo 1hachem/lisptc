@@ -2,9 +2,11 @@ import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { LangChainCallbackHandler } from "@posthog/ai/langchain";
 import { analyticsEnv } from "@repo/env/analytics";
 import type { LlmCall } from "@repo/interpreter/observe";
-import { PostHog } from "posthog-node";
+import { type EventMessage, PostHog } from "posthog-node";
 
 const PRIVACY_MODE = analyticsEnv.POSTHOG_PRIVACY_MODE;
+
+const REDACTED = "[redacted]";
 
 const FLUSH_TIMEOUT_MS = 5_000;
 
@@ -14,6 +16,23 @@ interface TelemetryGlobals {
 }
 
 const globals = globalThis as typeof globalThis & TelemetryGlobals;
+
+function redactExceptionMessages(
+	event: EventMessage | null,
+): EventMessage | null {
+	const list = event?.properties?.$exception_list;
+	if (event?.event !== "$exception" || !Array.isArray(list)) return event;
+	return {
+		...event,
+		properties: {
+			...event.properties,
+			$exception_list: list.map((exception) => ({
+				...exception,
+				value: REDACTED,
+			})),
+		},
+	};
+}
 
 function posthog(): PostHog | null {
 	if (globals.__lisptcPosthog !== undefined) return globals.__lisptcPosthog;
@@ -28,6 +47,7 @@ function posthog(): PostHog | null {
 		flushAt: 20,
 		flushInterval: 5_000,
 		enableExceptionAutocapture: true,
+		...(PRIVACY_MODE ? { before_send: redactExceptionMessages } : {}),
 	});
 	return globals.__lisptcPosthog;
 }
