@@ -45,7 +45,7 @@ function failStep(
 		step(interp, code);
 		hooks.stepError.run(
 			(_c, text) => ({ model: text, user: text }),
-			{ interp, code },
+			{ interp, code, author: "assistant" },
 			"boom\n",
 		);
 	});
