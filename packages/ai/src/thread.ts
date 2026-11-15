@@ -3,17 +3,20 @@ import type { Awaitable } from "@repo/shared/host";
 import type { AgentConfig } from "./agent.ts";
 import { exhausted, type Limits, type Usage } from "./budget.ts";
 import { evalMessage } from "./eval.ts";
-import type { Envelope, Mailbox } from "./mailbox.ts";
 import {
 	type ChatMessageInput,
+	envelopeLine,
+	lineWire,
+	noteLine,
+	type WireMessage,
+} from "./line.ts";
+import type { Envelope, Mailbox } from "./mailbox.ts";
+import {
 	entryMessage,
-	noteMessage,
 	streamTurn,
-	systemEventMessage,
 	type ThreadState,
 	type TurnOutcome,
 	Watchers,
-	type WireMessage,
 } from "./stream.ts";
 import { runAgentTurn, type TurnEvent } from "./turn.ts";
 
@@ -68,16 +71,10 @@ interface Tracked {
 const WITHDRAWN: TurnOutcome = { stopped: "withdrawn before a turn took it" };
 
 function openingMessage(envelope: Envelope): WireMessage {
-	if (envelope.kind === "event")
-		return systemEventMessage(envelope, envelope.id);
-	return {
-		id: envelope.id,
-		type: "human",
-		content: envelope.text,
-		...(envelope.received === undefined
-			? {}
-			: { additional_kwargs: envelope.received }),
-	};
+	const message = lineWire(envelopeLine(envelope), envelope.id);
+	return envelope.kind === "user" && envelope.received !== undefined
+		? { ...message, additional_kwargs: envelope.received }
+		: message;
 }
 
 function stepCap(...caps: (number | undefined)[]): { maxSteps?: number } {
@@ -200,7 +197,7 @@ export class Thread {
 
 	private taken(envelope: Envelope): void {
 		if (envelope.kind === "event" && envelope.replyTo !== undefined)
-			this.relay(systemEventMessage(envelope, envelope.id));
+			this.relay(lineWire(envelopeLine(envelope), envelope.id));
 	}
 
 	private async drive(): Promise<void> {
@@ -367,7 +364,7 @@ export class Thread {
 					evaluated.message,
 					...evaluated.entries.map((entry) => entryMessage(entry)),
 					...evaluated.notes.map((note) =>
-						noteMessage(note, crypto.randomUUID()),
+						lineWire(noteLine(note), crypto.randomUUID()),
 					),
 				]);
 				quiet = evaluated.quiet;

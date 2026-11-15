@@ -35,7 +35,7 @@ describe("the loop and the journal", () => {
 		turn = 0;
 		const events: TurnEvent[] = [];
 		for await (const event of runAgentTurn(
-			[{ role: "user", content: "what is 1 + 2?" }],
+			[{ kind: "user", text: "what is 1 + 2?" }],
 			{ repl: testRepl([journaling]) },
 		))
 			events.push(event);
@@ -54,7 +54,7 @@ describe("the loop and the journal", () => {
 		turn = 0;
 		const events: TurnEvent[] = [];
 		for await (const event of runAgentTurn(
-			[{ role: "user", content: "what is 1 + 2?" }],
+			[{ kind: "user", text: "what is 1 + 2?" }],
 			{ repl: testRepl([journaling]) },
 		))
 			events.push(event);

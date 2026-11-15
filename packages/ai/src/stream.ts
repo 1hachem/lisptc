@@ -1,34 +1,23 @@
-import type { Said } from "@repo/interpreter/conversation";
 import { ENTRY_TYPE, type Entry, type Received } from "@repo/shared/journal";
 import {
 	contentToText,
 	ENVELOPE_KEYS,
-	envelopeOf,
 	lighten,
 	type MessageKwargs,
 } from "@repo/shared/messages";
-import { isUserPrompt, type TranscriptEntry, userRanEvent } from "./repl.ts";
-import type { SystemEvent } from "./system-event.ts";
+import {
+	type ChatMessageInput,
+	type Line,
+	lineWire,
+	type WireMessage,
+	wireLines,
+	wireType,
+} from "./line.ts";
 import { toolMessage } from "./tool-message.ts";
 import type { TurnEvent } from "./turn.ts";
 
-export interface ChatMessageInput {
-	id?: string;
-	type?: string;
-	role?: string;
-	content?: unknown;
-	additional_kwargs?: MessageKwargs;
-}
-
 export interface ChatInput {
 	messages?: ChatMessageInput[];
-}
-
-export interface WireMessage {
-	type: string;
-	content: string;
-	id: string;
-	additional_kwargs?: MessageKwargs;
 }
 
 const encoder = new TextEncoder();
@@ -59,58 +48,6 @@ function sse(event: string, data: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function agentRole(type: string | undefined): TranscriptEntry["role"] {
-	if (type === "ai" || type === "assistant") return "assistant";
-	if (type === "system") return "system";
-	if (type === "tool") return "tool";
-	return "user";
-}
-
-function wireType(
-	type: string | undefined,
-): "human" | "ai" | "system" | "tool" | typeof ENTRY_TYPE {
-	if (type === ENTRY_TYPE) return ENTRY_TYPE;
-	if (type === "ai" || type === "assistant") return "ai";
-	if (type === "system") return "system";
-	if (type === "tool") return "tool";
-	return "human";
-}
-
-export function systemEventMessage(
-	event: SystemEvent,
-	id: string,
-): WireMessage {
-	return {
-		type: "system",
-		content: event.text,
-		id,
-		additional_kwargs: {
-			source: event.source,
-			...(event.failed ? { failed: true } : {}),
-			...(event.noted ? { noted: true } : {}),
-		},
-	};
-}
-
-export function noteMessage(note: Said, id: string): WireMessage {
-	return {
-		type: "system",
-		content: note.content,
-		id,
-		additional_kwargs: { source: note.source ?? "system", noted: true },
-	};
-}
-
-function toEntry(m: ChatMessageInput): TranscriptEntry {
-	const content = contentToText(m.content);
-	const role = agentRole(m.type ?? m.role);
-	if (role !== "system") return { role, content };
-	const { source = "system", noted } = envelopeOf(m.additional_kwargs);
-	return noted
-		? { role: "system", content, source }
-		: { role: "user", content, event: { source } };
-}
-
 function received(input: ChatInput): Received | undefined {
 	const newest = input.messages?.at(-1);
 	if (newest === undefined || wireType(newest.type ?? newest.role) !== "human")
@@ -119,23 +56,6 @@ function received(input: ChatInput): Received | undefined {
 		([key]) => !ENVELOPE.has(key),
 	);
 	return carried.length === 0 ? undefined : Object.fromEntries(carried);
-}
-
-function toTranscript(input: ChatInput): TranscriptEntry[] {
-	const transcript: TranscriptEntry[] = [];
-	const read = (input.messages ?? []).filter(
-		(m) =>
-			wireType(m.type ?? m.role) !== ENTRY_TYPE &&
-			(agentRole(m.type ?? m.role) !== "tool" ||
-				envelopeOf(m.additional_kwargs).quiet !== true),
-	);
-	for (const entry of read.map(toEntry)) {
-		const previous = transcript.at(-1);
-		if (entry.role === "tool" && previous && isUserPrompt(previous))
-			transcript.push(userRanEvent(entry));
-		else transcript.push(entry);
-	}
-	return transcript;
 }
 
 export interface TurnStreamOptions {
@@ -151,7 +71,7 @@ export interface TurnStreamOptions {
 }
 
 export type TurnRun = (
-	transcript: TranscriptEntry[],
+	lines: Line[],
 	received: Received | undefined,
 	signal: AbortSignal,
 ) => AsyncIterable<TurnEvent>;
@@ -277,25 +197,13 @@ class TurnWire {
 				this.recordEntry(event.entry);
 				return this.snapshotSoon();
 			case "steered":
-				this.wire.push(
-					event.source === undefined
-						? { type: "human", content: event.content, id: event.id }
-						: systemEventMessage(
-								{
-									source: event.source,
-									text: event.content,
-									failed: event.failed,
-									noted: event.noted,
-								},
-								event.id,
-							),
-				);
+				this.wire.push(lineWire(event.line, event.id));
 				return this.snapshot();
 			case "evaluated":
 				this.wire.push(event.message);
 				return this.snapshot();
 			case "noted":
-				this.wire.push(noteMessage(event.note, crypto.randomUUID()));
+				this.wire.push(lineWire(event.note, crypto.randomUUID()));
 				return this.snapshot();
 			case "assistant":
 				this.assistant(event);
@@ -420,7 +328,7 @@ export function streamTurn(
 				turn.snapshot();
 				if (!quiet)
 					for await (const event of run(
-						toTranscript(input),
+						wireLines(input.messages ?? []),
 						received(input),
 						abort.signal,
 					))

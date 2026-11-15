@@ -157,6 +157,15 @@ export function approvingByNote(): InterpExtension {
 	);
 }
 
+export function refusingByNote(): InterpExtension {
+	return extension((hooks) =>
+		hooks.invoke.use(async (ctx, next) => {
+			ctx.interp.conversation.append("refuser", "refused, try another way");
+			return next(ctx);
+		}),
+	);
+}
+
 export type ChatStreamOptions = Omit<TurnOptions, "received"> &
 	TurnStreamOptions;
 
@@ -167,8 +176,8 @@ export function streamChat(
 	const { onStep, onTurn, quiet, onOutcome, signal, ...turn } = options;
 	return streamTurn(
 		input,
-		(transcript, received, aborted) =>
-			runAgentTurn(transcript, { ...turn, signal: aborted, received }),
+		(lines, received, aborted) =>
+			runAgentTurn(lines, { ...turn, signal: aborted, received }),
 		{ signal, onStep, onTurn, quiet, onOutcome },
 	);
 }

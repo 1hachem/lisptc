@@ -10,7 +10,7 @@ import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import type { TranscriptEntry } from "../src/repl.ts";
+import type { Line } from "../src/line.ts";
 import type { TurnEvent } from "../src/turn.ts";
 import {
 	asking,
@@ -113,11 +113,11 @@ describe("the agent turn", () => {
 	});
 
 	async function drain(
-		transcript: TranscriptEntry[],
+		lines: Line[],
 		options: Partial<Parameters<typeof runAgentTurn>[1]> = {},
 	): Promise<TurnEvent[]> {
 		const events: TurnEvent[] = [];
-		for await (const event of runAgentTurn(transcript, {
+		for await (const event of runAgentTurn(lines, {
 			repl: testRepl(),
 			...options,
 		}))
@@ -125,7 +125,7 @@ describe("the agent turn", () => {
 		return events;
 	}
 
-	const ask: TranscriptEntry[] = [{ role: "user", content: "what is 1 + 2?" }];
+	const ask: Line[] = [{ kind: "user", text: "what is 1 + 2?" }];
 
 	test("a step whose code throws is captured as an error span", async () => {
 		script = [[{ text: "(car 5)" }], [{ text: "done." }]];
@@ -160,9 +160,9 @@ describe("the agent turn", () => {
 		];
 
 		const events = await drain([
-			{ role: "user", content: "hi" },
-			{ role: "assistant", content: "(+ 1 1)" },
-			{ role: "assistant", content: "hello." },
+			{ kind: "user", text: "hi" },
+			{ kind: "assistant", text: "(+ 1 1)" },
+			{ kind: "assistant", text: "hello." },
 			...ask,
 		]);
 
@@ -320,7 +320,7 @@ describe("the agent turn", () => {
 		expect(events.filter((e) => e.type === "noted")).toEqual([
 			{
 				type: "noted",
-				note: { role: "system", content: "you are a pirate", source: "test" },
+				note: { kind: "note", source: "test", text: "you are a pirate" },
 			},
 		]);
 		expect(seen[0].messages).toEqual([
@@ -363,11 +363,11 @@ describe("the agent turn", () => {
 
 	test("a note from an earlier turn reaches the model in place, and is not something the user said", async () => {
 		script = [[{ text: "three." }]];
-		const history: TranscriptEntry[] = [
-			{ role: "user", content: "hello" },
-			{ role: "system", content: "you are a pirate", source: "test" },
-			{ role: "assistant", content: "ahoy." },
-			{ role: "user", content: "what is 1 + 2?" },
+		const history: Line[] = [
+			{ kind: "user", text: "hello" },
+			{ kind: "note", source: "test", text: "you are a pirate" },
+			{ kind: "assistant", text: "ahoy." },
+			{ kind: "user", text: "what is 1 + 2?" },
 		];
 		const repl = testRepl();
 
@@ -405,7 +405,7 @@ describe("the agent turn", () => {
 		expect(events[3]).toEqual({
 			type: "steered",
 			id: "s1",
-			content: "use hex",
+			line: { kind: "user", text: "use hex" },
 		});
 		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });
 		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
@@ -458,6 +458,22 @@ describe("the agent turn", () => {
 		expect(seen[1].messages.at(-1)).toMatchObject({
 			content: '<system-event source="agent:r">(+ 40 2)</system-event>',
 		});
+	});
+
+	test("an event is in the conversation the code reads, under its source", async () => {
+		script = [
+			[{ text: '(echo (cdr (assoc "source" (car conversation))))' }],
+			[{ text: "done." }],
+		];
+
+		const events = await drain([
+			{ kind: "event", source: "oauth", text: "linear connected" },
+			...ask,
+		]);
+
+		expect(
+			events.flatMap((e) => (e.type === "result" ? [e.display] : [])),
+		).toEqual(["oauth\n"]);
 	});
 
 	test("the inbox is not read before the first step", async () => {
@@ -536,15 +552,27 @@ describe("the agent turn", () => {
 		});
 	});
 
-	test("a note left between turns reaches the model, and the caller's transcript is untouched", async () => {
+	test("a note left between turns reaches the model on its first call, and the caller's lines are untouched", async () => {
 		const repl = testRepl();
 		repl.interp.conversation.append("stub", "a note left between turns");
-		script = [[{ text: "three." }]];
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 
-		await drain(ask, { repl });
+		const events = await drain(ask, { repl });
 
-		const sent = seen[0].messages;
-		expect(sent.at(-1)?.content).toContain("a note left between turns");
+		expect(events.filter((e) => e.type === "noted")).toEqual([
+			{
+				type: "noted",
+				note: {
+					kind: "note",
+					source: "stub",
+					text: "a note left between turns",
+				},
+			},
+		]);
+		expect(seen[0].messages.at(-1)).toEqual({
+			role: "developer",
+			content: "a note left between turns",
+		});
 		expect(ask).toHaveLength(1);
 	});
 

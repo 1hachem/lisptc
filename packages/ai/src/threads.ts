@@ -3,13 +3,9 @@ import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import { envelopeOf } from "@repo/shared/messages";
 import { Budget, type Limits } from "./budget.ts";
+import { envelopeLine, lineWire, noteLine, type WireMessage } from "./line.ts";
 import type { Envelope } from "./mailbox.ts";
-import {
-	entryMessage,
-	systemEventMessage,
-	type TurnOutcome,
-	type WireMessage,
-} from "./stream.ts";
+import { entryMessage, type TurnOutcome } from "./stream.ts";
 import { type PostOptions, Thread, type ThreadPorts } from "./thread.ts";
 import { type UiActionResult, uiActionOn } from "./ui-action.ts";
 
@@ -246,7 +242,12 @@ export class Threads {
 		if (asker.asked !== undefined)
 			for (const entry of result.entries)
 				await this.get(target).place(entryMessage(entry));
-		if (!result.error) await this.tell(target, action, notes, result.message);
+		await this.tell(
+			target,
+			action,
+			notes,
+			result.error ? undefined : result.message,
+		);
 		return result;
 	}
 
@@ -256,11 +257,11 @@ export class Threads {
 		notes: readonly Said[],
 		message: string | undefined,
 	): Promise<void> {
-		const told: Extract<Envelope, { kind: "event" }>[] = notes.map((note) => ({
+		const told: Envelope[] = notes.map(noteLine).map(({ source, text }) => ({
 			kind: "event",
 			id: crypto.randomUUID(),
-			source: note.source ?? action,
-			text: note.content,
+			source,
+			text,
 			noted: true,
 		}));
 		if (message !== undefined)
@@ -273,7 +274,9 @@ export class Threads {
 		const waking = told.pop();
 		if (waking === undefined) return;
 		for (const envelope of told)
-			await this.get(target).place(systemEventMessage(envelope, envelope.id));
+			await this.get(target).place(
+				lineWire(envelopeLine(envelope), envelope.id),
+			);
 		await this.followUp(target, waking);
 	}
 

@@ -3,10 +3,15 @@ import type { AgentRepl } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
+import type { ChatMessageInput, WireMessage } from "../src/line.ts";
 import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
-import type { ChatMessageInput, WireMessage } from "../src/stream.ts";
 import { type Lineage, Threads, type ThreadsOptions } from "../src/threads.ts";
-import { approvingByNote, holding, testRepl } from "./helpers.ts";
+import {
+	approvingByNote,
+	holding,
+	refusingByNote,
+	testRepl,
+} from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as string[],
@@ -480,6 +485,25 @@ describe("a thread's budget", () => {
 				{
 					type: "system",
 					content: "approved, carry on",
+					additional_kwargs: { noted: true },
+				},
+			]),
+		);
+	});
+
+	test("wake the caller's thread with the note an answer left before it failed", async () => {
+		const world = new World();
+		world.extensions = [refusingByNote()];
+		const threads = world.threads();
+
+		const answered = await threads.answer("root", "refuse", {});
+
+		expect(answered.error).toBe(true);
+		await vi.waitFor(() =>
+			expect(world.told("root", "refuser")).toMatchObject([
+				{
+					type: "system",
+					content: "refused, try another way",
 					additional_kwargs: { noted: true },
 				},
 			]),

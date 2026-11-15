@@ -3,7 +3,7 @@ import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, ModelDelta } from "@repo/interpreter/session";
 import { ENTRY_TYPE } from "@repo/shared/journal";
 import { describe, expect, test, vi } from "vitest";
-import type { WireMessage } from "../src/stream.ts";
+import type { WireMessage } from "../src/line.ts";
 import { recording, streamChat, testRepl } from "./helpers.ts";
 
 const TURNS: ModelDelta[][] = [

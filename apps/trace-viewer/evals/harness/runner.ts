@@ -1,5 +1,6 @@
 import {
 	evalCode,
+	type Line,
 	replResultContent,
 	runAgentTurn,
 	systemPromptFor,
@@ -88,6 +89,22 @@ function open(spec: TraceViewerEvalSpec): EvalRunContext<AgentRepl> {
 	};
 }
 
+function lineOf(entry: TranscriptEntry): Line {
+	switch (entry.role) {
+		case "user":
+		case "assistant":
+			return { kind: entry.role, text: entry.content };
+		case "tool":
+			return { kind: "result", text: entry.content };
+		case "system":
+			return {
+				kind: "note",
+				source: entry.source ?? "system",
+				text: entry.content,
+			};
+	}
+}
+
 const runtime = {
 	agent: {
 		eval: (repl: AgentRepl, code: string) => evalCode(repl, code),
@@ -102,7 +119,7 @@ const runtime = {
 				system: string;
 			},
 		) {
-			for await (const event of runAgentTurn(transcript, {
+			for await (const event of runAgentTurn(transcript.map(lineOf), {
 				repl: options.repl,
 				maxSteps: options.maxSteps,
 				config: {

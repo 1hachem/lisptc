@@ -1,8 +1,8 @@
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
+import type { ChatMessageInput, WireMessage } from "../src/line.ts";
 import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
-import type { ChatMessageInput, WireMessage } from "../src/stream.ts";
 import {
 	Thread,
 	type TranscriptStore,
