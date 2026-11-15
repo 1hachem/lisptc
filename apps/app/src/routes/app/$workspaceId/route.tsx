@@ -6,16 +6,14 @@ import {
 	notFound,
 	Outlet,
 	redirect,
-	useNavigate,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { AppLoading } from "../../../components/app-loading.tsx";
 import { PanelSplit } from "../../../components/panel-split.tsx";
 import { prefetchPanels } from "../../../lib/panel-prefetch.ts";
 import { PanelsProvider } from "../../../lib/panels.tsx";
 import { preferencesQuery } from "../../../lib/preferences.ts";
 import { prefetchSidebar } from "../../../lib/sidebar-prefetch.ts";
-import { useWorkspace } from "../../../lib/workspace.tsx";
+import { landingWorkspace, useWorkspace } from "../../../lib/workspace.tsx";
 
 export const Route = createFileRoute("/app/$workspaceId")({
 	params: {
@@ -38,8 +36,8 @@ export const Route = createFileRoute("/app/$workspaceId")({
 			convexQuery(api.workspaces.list, {}),
 		);
 		if (workspaces.every((workspace) => workspace._id !== params.workspaceId)) {
-			const [landing] = workspaces;
-			if (landing === undefined) throw notFound();
+			const landing = landingWorkspace(workspaces);
+			if (landing === null) throw notFound();
 			throw redirect({
 				to: "/app/$workspaceId",
 				params: { workspaceId: landing._id },
@@ -55,21 +53,9 @@ export const Route = createFileRoute("/app/$workspaceId")({
 
 function WorkspaceLayout() {
 	const { workspaceId } = Route.useParams();
-	const navigate = useNavigate();
 	const { workspace } = useWorkspace();
-	const landing =
-		workspace !== null && workspace._id !== workspaceId ? workspace._id : null;
-
-	useEffect(() => {
-		if (landing === null) return;
-		void navigate({
-			to: "/app/$workspaceId",
-			params: { workspaceId: landing },
-			replace: true,
-		});
-	}, [landing, navigate]);
-
-	if (landing !== null) return <AppLoading />;
+	if (workspace !== null && workspace._id !== workspaceId)
+		return <AppLoading />;
 	return (
 		<PanelsProvider workspaceId={workspaceId}>
 			<PanelSplit />
