@@ -1,4 +1,4 @@
-import type { Said } from "@repo/interpreter/conversation";
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import type { Effect } from "@repo/interpreter/effects";
 import type { AgentRepl, EvalOutput, LiveEntries } from "@repo/repl/repl";
 import type { Entry } from "@repo/shared/journal";
@@ -26,7 +26,7 @@ async function outcomeOf(
 	error: boolean;
 	entries: readonly Entry[];
 	effects: readonly Effect[];
-	notes: readonly Said[];
+	notes: readonly ConversationRecord[];
 	failed: boolean;
 	failure: string;
 	held: boolean;

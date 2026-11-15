@@ -1,4 +1,4 @@
-import type { Said } from "@repo/interpreter/conversation";
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import { ends } from "@repo/interpreter/effects";
 import type {
 	AgentFailure,
@@ -21,11 +21,10 @@ import {
 	isPrompt,
 	type Line,
 	lineChat,
-	lineSaid,
-	type NoteLine,
-	noteLine,
+	lineRecord,
 	type PostedLine,
 	ranByUser,
+	recordLine,
 } from "./line.ts";
 import type { Envelope } from "./mailbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -67,7 +66,7 @@ export type TurnEvent =
 			results: readonly string[];
 	  }
 	| { type: "entry"; entry: Entry }
-	| { type: "noted"; note: NoteLine }
+	| { type: "noted"; line: PostedLine }
 	| { type: "steered"; id: string; line: PostedLine }
 	| { type: "evaluated"; message: ToolMessage }
 	| { type: "halt"; answer: string; steps: number }
@@ -108,20 +107,23 @@ function stepMeta(
 }
 
 interface Noted {
-	readonly notes: readonly Said[];
+	readonly notes: readonly ConversationRecord[];
 	readonly entries: readonly Entry[];
 }
 
-function* noting(lines: Line[], notes: readonly Said[]): Generator<TurnEvent> {
-	for (const said of notes) {
-		const note = noteLine(said);
-		lines.push(note);
-		yield { type: "noted", note };
+function* noting(
+	lines: Line[],
+	notes: readonly ConversationRecord[],
+): Generator<TurnEvent> {
+	for (const record of notes) {
+		const line = recordLine(record);
+		lines.push(line);
+		yield { type: "noted", line };
 	}
 }
 
 function seed({ repl, lines, steps }: Turn): void {
-	repl.seed(lines.map(lineSaid), steps);
+	repl.seed(lines.map(lineRecord), steps);
 }
 
 async function* through<T extends Noted>(

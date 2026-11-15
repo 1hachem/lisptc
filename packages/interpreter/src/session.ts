@@ -2,7 +2,6 @@ import type { Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
 import type { Reader } from "./channels.ts";
-import type { ChannelBuffer } from "./channels-host.ts";
 import type { ConversationInterp } from "./conversation.ts";
 import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
@@ -97,7 +96,6 @@ export interface SessionHooks {
 	readonly evalStep: Chain<[ctx: StepContext], Promise<void>>;
 	readonly stepError: Chain<[ctx: StepContext, text: string], Bounded>;
 	readonly unrun: Chain<[interp: Interp, code: string], Skipped[]>;
-	readonly message: Chain<[buffer: ChannelBuffer], string | undefined>;
 	readonly invoke: Chain<[ctx: ActionContext], Promise<void>>;
 	fill<T>(of: Slot<T>, value: T): void;
 	filled<T>(of: Slot<T>): T | undefined;
@@ -115,7 +113,6 @@ export function newSessionHooks(): SessionHooks {
 		evalStep: new Chain(),
 		stepError: new Chain(),
 		unrun: new Chain(),
-		message: new Chain(),
 		invoke: new Chain(),
 		fill<T>(of: Slot<T>, value: T): void {
 			slots.set(of.name, value);

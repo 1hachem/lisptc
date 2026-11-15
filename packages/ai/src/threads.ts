@@ -1,9 +1,14 @@
-import type { Said } from "@repo/interpreter/conversation";
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import { envelopeOf } from "@repo/shared/messages";
 import { Budget, type Limits } from "./budget.ts";
-import { envelopeLine, lineWire, noteLine, type WireMessage } from "./line.ts";
+import {
+	envelopeLine,
+	lineWire,
+	recordLine,
+	type WireMessage,
+} from "./line.ts";
 import type { Envelope } from "./mailbox.ts";
 import { entryMessage, type TurnOutcome } from "./stream.ts";
 import { type PostOptions, Thread, type ThreadPorts } from "./thread.ts";
@@ -242,35 +247,23 @@ export class Threads {
 		if (asker.asked !== undefined)
 			for (const entry of result.entries)
 				await this.get(target).place(entryMessage(entry));
-		await this.tell(
-			target,
-			action,
-			notes,
-			result.error ? undefined : result.message,
-		);
+		await this.tell(target, notes);
 		return result;
 	}
 
 	private async tell(
 		target: string,
-		action: string,
-		notes: readonly Said[],
-		message: string | undefined,
+		notes: readonly ConversationRecord[],
 	): Promise<void> {
-		const told: Envelope[] = notes.map(noteLine).map(({ source, text }) => ({
-			kind: "event",
-			id: crypto.randomUUID(),
-			source,
-			text,
-			noted: true,
-		}));
-		if (message !== undefined)
-			told.push({
+		const told: Envelope[] = notes
+			.map(recordLine)
+			.map(({ kind, source, text }) => ({
 				kind: "event",
 				id: crypto.randomUUID(),
-				source: action,
-				text: message,
-			});
+				source,
+				text,
+				...(kind === "note" ? { noted: true as const } : {}),
+			}));
 		const waking = told.pop();
 		if (waking === undefined) return;
 		for (const envelope of told)

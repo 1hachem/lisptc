@@ -64,16 +64,28 @@ describe("a parked step", () => {
 		expect(resumed.held).toBe(false);
 		expect(resumed.user).toContain("after");
 		expect(resumed.user).not.toContain("before");
-		expect(resumed.message).toContain("carried on");
+		expect(resumed.notes).toEqual([
+			{
+				role: "system",
+				source: "held-step",
+				content: expect.stringContaining("carried on"),
+			},
+		]);
 	});
 
-	it("reports a refused call in the message, without failing the decision", async () => {
+	it("reports a refused call in a note, without failing the decision", async () => {
 		const r = memoryRepl([parking()]);
 		await r.evalOutput(PARKED);
 		const resumed = await r.invokeUi("refuse");
 		expect(resumed.failed).toBe(false);
 		expect(resumed.user).not.toContain("after");
-		expect(resumed.message).toContain("refused");
+		expect(resumed.notes).toEqual([
+			{
+				role: "system",
+				source: "held-step",
+				content: expect.stringContaining("refused"),
+			},
+		]);
 	});
 
 	it("runs other steps while one waits", async () => {

@@ -10,7 +10,7 @@ import {
 import {
 	appended,
 	ConversationInterpreter,
-	type Said,
+	type ConversationRecord,
 } from "@repo/interpreter/conversation";
 import {
 	driveAsync,
@@ -20,11 +20,7 @@ import {
 } from "@repo/interpreter/drive";
 import { type Effect, effect, ends } from "@repo/interpreter/effects";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
-import {
-	type Chain,
-	type Middleware,
-	noOpinion,
-} from "@repo/interpreter/hooks";
+import type { Chain, Middleware } from "@repo/interpreter/hooks";
 import { type Image, restore, snapshot } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
 import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
@@ -75,11 +71,10 @@ function liveEntries(live: LiveEntries): ChannelTransport {
 export interface EvalOutput extends Bounded {
 	entries: readonly Entry[];
 	effects: readonly Effect[];
-	notes: readonly Said[];
+	notes: readonly ConversationRecord[];
 	failed: boolean;
 	failure?: string;
 	held: boolean;
-	message?: string;
 	results: readonly string[];
 }
 
@@ -183,7 +178,6 @@ function render(
 		notes: result.notes,
 		failed: result.failed,
 		held: result.held,
-		message: result.message,
 		results: result.results,
 		failure: result.failure,
 	};
@@ -399,14 +393,14 @@ export class MemoryRepl implements InMemoryRepl {
 		for (const envelope of envelopes) this.betweenSteps?.handled.add(envelope);
 	}
 
-	protected notedBetweenSteps(): Said[] {
+	protected notedBetweenSteps(): ConversationRecord[] {
 		const between = this.betweenSteps;
 		if (between === undefined) return [];
 		const fresh = between.buffer.envelopes.filter(
 			(e) => e.topic === appended.name && !between.handled.has(e),
 		);
 		this.handledBetweenSteps(fresh);
-		return fresh.map((e) => e.payload as Said);
+		return fresh.map((e) => e.payload as ConversationRecord);
 	}
 
 	private takeBetweenSteps(channels: Channels): readonly Envelope[] {
@@ -465,22 +459,19 @@ export class MemoryRepl implements InMemoryRepl {
 		};
 		const error = this.errorOf(ctx, thrown, failed);
 		const carriedError = this.errorOf(ctx, carriedThrown, failed);
-		const message = this.hooks.message.run(noOpinion, buffer);
+		const notes = buffer.collect(appended);
 		return {
 			envelopes: buffer.envelopes,
 			model: carried ? error.model : bounded.model + error.model + holding,
 			user: bounded.user + carriedError.user + error.user,
-			notes: buffer.collect(appended),
+			notes: carried
+				? [...notes, carriedOn(bounded.model + carriedError.model + holding)]
+				: notes,
 			entries: buffer.collect(journal),
 			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
 			failure: carriedError.user + error.user,
 			held: held.length > 0,
-			message: carried
-				? [message, carriedOn(bounded.model + carriedError.model + holding)]
-						.filter((m) => m !== undefined)
-						.join("\n\n")
-				: message,
 			results,
 			skipped,
 		};
@@ -550,7 +541,7 @@ export class MemoryRepl implements InMemoryRepl {
 }
 
 interface Noted {
-	readonly notes: readonly Said[];
+	readonly notes: readonly ConversationRecord[];
 	readonly entries: readonly Entry[];
 }
 
@@ -648,8 +639,8 @@ export class AgentRepl extends MemoryRepl {
 		};
 	}
 
-	seed(said: readonly Said[], stepsTaken: number): void {
-		this.interp.seed(said, stepsTaken);
+	seed(records: readonly ConversationRecord[], stepsTaken: number): void {
+		this.interp.seed(records, stepsTaken);
 	}
 }
 
@@ -664,8 +655,13 @@ function outermost<A extends unknown[], R>(
 	return around === undefined ? chain : chain.wrappedBy(around);
 }
 
-function carriedOn(printed: string): string {
-	return printed.trim() === ""
-		? "The held step carried on and finished."
-		: `The held step carried on:\n${printed}`;
+function carriedOn(printed: string): ConversationRecord {
+	return {
+		role: "system",
+		source: "held-step",
+		content:
+			printed.trim() === ""
+				? "The held step carried on and finished."
+				: `The held step carried on:\n${printed}`,
+	};
 }

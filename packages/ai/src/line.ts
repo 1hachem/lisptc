@@ -1,4 +1,4 @@
-import type { Said } from "@repo/interpreter/conversation";
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import { ENTRY_TYPE } from "@repo/shared/journal";
 import {
 	type ChatMessage,
@@ -24,7 +24,7 @@ export interface WireMessage {
 	additional_kwargs?: MessageKwargs;
 }
 
-export interface NoteLine {
+interface NoteLine {
 	readonly kind: "note";
 	readonly source: string;
 	readonly text: string;
@@ -55,11 +55,11 @@ export function isPrompt(line: Line): boolean {
 	return line.kind === "user";
 }
 
-export function noteLine(said: Said): NoteLine {
+export function recordLine(record: ConversationRecord): EventLine | NoteLine {
 	return {
-		kind: "note",
-		source: said.source ?? UNSOURCED,
-		text: said.content,
+		kind: record.role === "user" ? "event" : "note",
+		source: record.source ?? UNSOURCED,
+		text: record.content,
 	};
 }
 
@@ -75,7 +75,7 @@ export function envelopeLine(envelope: Envelope): PostedLine {
 	};
 }
 
-export function lineSaid(line: Line): Said {
+export function lineRecord(line: Line): ConversationRecord {
 	switch (line.kind) {
 		case "user":
 		case "assistant":

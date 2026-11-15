@@ -203,7 +203,7 @@ class TurnWire {
 				this.wire.push(event.message);
 				return this.snapshot();
 			case "noted":
-				this.wire.push(lineWire(event.note, crypto.randomUUID()));
+				this.wire.push(lineWire(event.line, crypto.randomUUID()));
 				return this.snapshot();
 			case "assistant":
 				this.assistant(event);

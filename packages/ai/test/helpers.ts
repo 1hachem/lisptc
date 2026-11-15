@@ -1,4 +1,4 @@
-import { type Channels, topic } from "@repo/interpreter/channels";
+import type { Channels } from "@repo/interpreter/channels";
 import { effect } from "@repo/interpreter/effects";
 import { StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
@@ -120,8 +120,6 @@ export function testRepls(
 	return new TestRepls(extensions);
 }
 
-const approved = topic<string>("approved");
-
 export function holding(): InterpExtension {
 	return Object.assign(
 		(interp: Interp) => {
@@ -137,12 +135,9 @@ export function holding(): InterpExtension {
 			session: (hooks: SessionHooks) => {
 				hooks.invoke.use(async (ctx, next) => {
 					if (ctx.action !== "approve") return next(ctx);
-					approved.emit(ctx.interp.channels, { user: "approved, carry on" });
+					ctx.interp.conversation.request(ctx.action, "approved, carry on");
 					recording(ctx.interp.channels, "decided", "approve");
 				});
-				hooks.message.use(
-					(buffer, next) => buffer.collect(approved)[0] ?? next(buffer),
-				);
 			},
 		},
 	);

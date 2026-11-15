@@ -409,10 +409,7 @@ describe("a thread's budget", () => {
 
 		const answered = await threads.answer("root", "approve", {}, asked()?.id);
 
-		expect(answered).toMatchObject({
-			error: false,
-			message: "approved, carry on",
-		});
+		expect(answered.error).toBe(false);
 		expect(await finished).toEqual({ answer: "done." });
 		expect(world.heard("grand", "approve")).toBe(true);
 		expect(world.heard("root", "approve")).toBe(false);

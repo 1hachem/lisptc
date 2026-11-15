@@ -100,7 +100,7 @@ describe("checkpoints", () => {
 		const out = await r.evalOutput("(setq h (opaque))");
 		await settle();
 		expect(images.origins()).toEqual([]);
-		expect(out.message).toBeUndefined();
+		expect(out.notes).toEqual([]);
 	});
 
 	it("recovers to the last checkpoint after a step the host broke on", async () => {
@@ -138,7 +138,7 @@ describe("checkpoints", () => {
 		}
 		const images = new FlakyStore();
 		const r = repl(images);
-		expect((await r.evalOutput("(setq a 1)")).message).toBeUndefined();
+		expect((await r.evalOutput("(setq a 1)")).notes).toEqual([]);
 		await r.evalOutput("(setq a 2)", "second");
 		await settle();
 		expect(images.origins()).toEqual(["second"]);

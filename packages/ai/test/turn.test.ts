@@ -320,7 +320,7 @@ describe("the agent turn", () => {
 		expect(events.filter((e) => e.type === "noted")).toEqual([
 			{
 				type: "noted",
-				note: { kind: "note", source: "test", text: "you are a pirate" },
+				line: { kind: "note", source: "test", text: "you are a pirate" },
 			},
 		]);
 		expect(seen[0].messages).toEqual([
@@ -379,7 +379,7 @@ describe("the agent turn", () => {
 		});
 		expect(
 			repl.interp.conversation
-				.said()
+				.records()
 				.filter((s) => s.role === "user")
 				.map((s) => s.content),
 		).toEqual(["hello", "what is 1 + 2?"]);
@@ -562,7 +562,7 @@ describe("the agent turn", () => {
 		expect(events.filter((e) => e.type === "noted")).toEqual([
 			{
 				type: "noted",
-				note: {
+				line: {
 					kind: "note",
 					source: "stub",
 					text: "a note left between turns",

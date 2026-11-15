@@ -68,8 +68,8 @@ turn, answer normally:
 Send for judgement, handle in Lisp for work. Prose request, or decision or
 step with no code written, needs a turn; filtering, paging, recomputing,
 calling a loaded tool is free. Handler may render AND send: render what user
-sees while you think, then send. Several sends in one handler join into ONE
-message: one click, one thing. Only handlers deliver: ui/send in your own step
+sees while you think, then send. Each send in one handler is own
+message: one click, one thing, so send once. Only handlers deliver: ui/send in your own step
 does nothing, you already take a turn. Write a request, "search the issues for
 auth", not a note, "user clicked search".
 

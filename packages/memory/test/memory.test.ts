@@ -89,7 +89,7 @@ async function ev(f: Fixture, code: string): Promise<string> {
 
 function said(f: Fixture, text: string): void {
 	f.interp.seed(
-		[...f.interp.conversation.said(), { role: "user", content: text }],
+		[...f.interp.conversation.records(), { role: "user", content: text }],
 		0,
 	);
 }

@@ -1,15 +1,15 @@
-import type { Said } from "@repo/interpreter/conversation";
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import { describe, expect, it } from "vitest";
 import { agentRepl, extension, memoryRepl } from "./helpers.ts";
 
-const sample: Said[] = [
+const sample: ConversationRecord[] = [
 	{ role: "user", content: "hi" },
 	{ role: "assistant", content: "(+ 1 2)" },
 ];
 
-const echoed = async (code: string, said = sample): Promise<string> => {
+const echoed = async (code: string, records = sample): Promise<string> => {
 	const r = agentRepl();
-	r.seed(said, 0);
+	r.seed(records, 0);
 	return (await r.evalOutput(code)).user;
 };
 

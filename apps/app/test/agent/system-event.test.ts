@@ -3,7 +3,6 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { type Method, postJson as send } from "../helpers.ts";
 
 const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
-const NOTE = 'I approved (fs/write "a"). Carry on.';
 
 const world = vi.hoisted(() => ({
 	posted: [] as {
@@ -56,7 +55,6 @@ vi.mock("../../server/agent/threads.ts", () => ({
 		return {
 			output: "",
 			error: world.failed,
-			message: NOTE,
 			entries: [{ kind: "asks", value: { decided: true } }],
 		};
 	},
@@ -99,7 +97,7 @@ describe("a ui action", () => {
 			string,
 			unknown
 		>;
-		expect(body.message).toBe(NOTE);
+		expect(body).toEqual({ output: "", error: false });
 		expect(world.answered).toEqual([
 			[CHAT, "permissions/decide", { id: "r1" }, "ask-1"],
 		]);
