@@ -1,4 +1,5 @@
-import { Interp, type InterpOptions, type State } from "./lisp.ts";
+import { topic } from "./channels.ts";
+import { Interp, type InterpOptions } from "./lisp.ts";
 import {
 	arrayToList,
 	Cell,
@@ -20,17 +21,14 @@ export interface Conversation {
 	append(source: string, content: string): void;
 }
 
+export const appended = topic<Said>("conversation");
+
 export type ConversationInterp = Interp & {
 	readonly conversation: Conversation;
 };
 
 const LIVE_DOC = "Read-only live conversation state (auto-updated each step).";
 const OWNER = "conversation";
-
-const COUNT = {
-	toLisp: (n: number) => n,
-	fromLisp: (x: unknown) => (typeof x === "number" ? x : 0),
-};
 
 function toAlist(said: Said): List {
 	const pairs = [
@@ -61,45 +59,29 @@ export class ConversationInterpreter
 	implements ConversationInterp
 {
 	readonly conversation: Conversation;
-	private readonly taken: State<number>;
-
 	constructor(options: InterpOptions = {}) {
 		super(options);
-		this.taken = this.state(
-			"conversation/taken",
-			COUNT,
-			0,
-			"How much of the conversation the model has been handed.",
-		);
 		this.write([]);
 		this.live("steps-taken", 0n);
 		this.conversation = {
 			said: () => this.said(),
 			append: (source, content) => {
 				if (content === "") return;
-				this.write([...this.said(), { role: "system", content, source }]);
+				appended.emit(this.channels, {
+					model: { role: "system", content, source },
+				});
 			},
 		};
 	}
 
 	seed(said: readonly Said[], stepsTaken: number): void {
-		const untaken = this.said().slice(this.taken.get());
-		this.write([...said, ...untaken]);
-		this.taken.set(said.length);
+		this.write(said);
 		this.live("steps-taken", BigInt(stepsTaken));
 	}
 
 	carryFrom(previous: ConversationInterpreter): void {
 		this.write(previous.said());
-		this.taken.set(previous.taken.get());
 		this.live("steps-taken", previous.getGlobal(newSym("steps-taken")));
-	}
-
-	takeAppended(): Said[] {
-		const all = this.said();
-		const fresh = all.slice(this.taken.get());
-		this.taken.set(all.length);
-		return fresh;
 	}
 
 	private said(): readonly Said[] {

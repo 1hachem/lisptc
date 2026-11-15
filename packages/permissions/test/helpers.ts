@@ -1,5 +1,8 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import {
+	appended,
+	ConversationInterpreter,
+} from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
@@ -79,7 +82,7 @@ export function session(
 		} finally {
 			detach();
 		}
-		const told = interp.takeAppended().map((said) => said.content);
+		const told = buffer.collect(appended).map((said) => said.content);
 		const message = told.length === 0 ? undefined : told.join("\n\n");
 		return {
 			...(value === undefined ? {} : { value }),
@@ -108,7 +111,7 @@ export function session(
 					async () => {
 						value = (await runAsync(interp, code)).value;
 					},
-					{ interp, code },
+					{ interp, code, author: "assistant" },
 				);
 				return value;
 			});

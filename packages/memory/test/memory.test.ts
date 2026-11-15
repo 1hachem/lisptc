@@ -2,7 +2,10 @@ import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import {
+	appended,
+	ConversationInterpreter,
+} from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
@@ -65,11 +68,17 @@ function fixture(
 
 async function opening(f: Fixture): Promise<string> {
 	const hooks = openSession([memoryExtension(memoryHost, { bank: f.bank })]);
-	await drive(
-		hooks.beginStep.run(() => settled(undefined), { interp: f.interp }),
-	);
-	return f.interp
-		.takeAppended()
+	const buffer = bufferTransport();
+	const detach = f.interp.channels.pipe(buffer);
+	try {
+		await drive(
+			hooks.beginStep.run(() => settled(undefined), { interp: f.interp }),
+		);
+	} finally {
+		detach();
+	}
+	return buffer
+		.collect(appended)
 		.map((note) => note.content)
 		.join("");
 }

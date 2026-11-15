@@ -2,7 +2,10 @@ import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import {
+	appended,
+	ConversationInterpreter,
+} from "@repo/interpreter/conversation";
 import { setExit } from "@repo/interpreter/core-builtins";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
@@ -107,13 +110,13 @@ class InteractiveRepl implements Repl {
 				async (ctx) => {
 					await runAsync(ctx.interp, ctx.code);
 				},
-				{ interp, code },
+				{ interp, code, author: "user" },
 			);
 		} catch (ex) {
 			if (!(ex instanceof StepHold)) throw ex;
 		} finally {
 			detach();
-			for (const { content } of interp.takeAppended()) write(content);
+			for (const { content } of buffer.collect(appended)) write(content);
 		}
 		return openAsks(buffer.collect(journal));
 	}
@@ -121,6 +124,8 @@ class InteractiveRepl implements Repl {
 	private async answer(choice: AskChoice): Promise<void> {
 		const { action, values } = choice.answer;
 		const interp = this.currentInterp;
+		const buffer = bufferTransport();
+		const detach = interp.channels.pipe(buffer);
 		try {
 			await this.hooks.invoke.run(
 				() => {
@@ -129,7 +134,8 @@ class InteractiveRepl implements Repl {
 				{ interp, action, values },
 			);
 		} finally {
-			for (const { content } of interp.takeAppended()) write(content);
+			detach();
+			for (const { content } of buffer.collect(appended)) write(content);
 		}
 	}
 }

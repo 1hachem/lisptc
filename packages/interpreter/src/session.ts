@@ -13,9 +13,12 @@ export interface TurnContext {
 	readonly interp: ConversationInterp;
 }
 
+export type Author = "assistant" | "user";
+
 export interface StepContext {
 	readonly interp: ConversationInterp;
 	readonly code: string;
+	readonly author: Author;
 }
 
 export interface ModelUsage {

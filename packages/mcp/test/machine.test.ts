@@ -1,4 +1,8 @@
-import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import { bufferTransport } from "@repo/interpreter/channels-host";
+import {
+	appended,
+	ConversationInterpreter,
+} from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
@@ -38,9 +42,17 @@ function session(online: { value: boolean }) {
 	runSync(interp, prelude);
 	const hooks = openSession([extension]);
 	const step = async (): Promise<string> => {
-		await driveAsync(hooks.beginStep.run(() => settled(undefined), { interp }));
-		return interp
-			.takeAppended()
+		const buffer = bufferTransport();
+		const detach = interp.channels.pipe(buffer);
+		try {
+			await driveAsync(
+				hooks.beginStep.run(() => settled(undefined), { interp }),
+			);
+		} finally {
+			detach();
+		}
+		return buffer
+			.collect(appended)
 			.map((note) => note.content)
 			.join("");
 	};

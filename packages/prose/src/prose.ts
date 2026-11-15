@@ -5,11 +5,7 @@ import type { Interp } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { Reader, readFailure } from "@repo/interpreter/reader";
-import type {
-	InterpExtension,
-	SessionHooks,
-	StepContext,
-} from "@repo/interpreter/session";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { note, output } from "@repo/interpreter/topics";
 import {
 	endOfForm,
@@ -59,7 +55,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				...proseSkipped(interp, code),
 			]);
 			hooks.evalStep.use(async (ctx, next) => {
-				if (!replied(ctx)) return next(ctx);
+				if (ctx.author !== "assistant") return next(ctx);
 				const skipped: string[] = [];
 				let printed = false;
 				let held = false;
@@ -91,14 +87,6 @@ export function proseExtension(host: ProseHost): InterpExtension {
 			});
 		},
 	});
-}
-
-function replied({ interp, code }: StepContext): boolean {
-	const last = interp.conversation
-		.said()
-		.filter((said) => said.role !== "system")
-		.at(-1);
-	return last?.role === "assistant" && last.content === code;
 }
 
 function ranNothing(skipped: readonly string[]): string {

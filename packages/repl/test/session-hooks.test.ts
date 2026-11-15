@@ -41,6 +41,25 @@ describe("an extension hooking the session", () => {
 		expect(seen).toEqual(["before (+ 1 1)", "after"]);
 	});
 
+	it("tells a step who wrote its code, the assistant or the user", async () => {
+		const authors: string[] = [];
+		const r = new AgentRepl({
+			extensions: [
+				extension((hooks) => {
+					hooks.evalStep.use((ctx, next) => {
+						authors.push(ctx.author);
+						return next(ctx);
+					});
+				}),
+			],
+		});
+
+		await r.evalOutput("(+ 1 1)");
+		await r.evalMessage("(+ 1 1)");
+
+		expect(authors).toEqual(["assistant", "user"]);
+	});
+
 	it("hands over what an extension noted during a step, beside what the human read", async () => {
 		const r = new MemoryRepl({
 			extensions: [

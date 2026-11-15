@@ -1,6 +1,6 @@
 import type { Said } from "@repo/interpreter/conversation";
 import { describe, expect, it } from "vitest";
-import { agentRepl, memoryRepl } from "./helpers.ts";
+import { agentRepl, extension, memoryRepl } from "./helpers.ts";
 
 const sample: Said[] = [
 	{ role: "user", content: "hi" },
@@ -66,11 +66,26 @@ describe("AgentRepl conversation variables", () => {
 		expect(await echoed("(echo (length user-messages))", [])).toBe("0\n");
 	});
 
-	it("shows a note an extension appended, with its source, and hands it over once", async () => {
-		const r = agentRepl();
+	it("hands back a note an extension appended, and shows it in the conversation once it is seeded back", async () => {
+		const r = agentRepl([
+			extension((hooks) => {
+				hooks.beginStep.use((ctx, next) => {
+					ctx.interp.conversation.append("memory", "k: v");
+					return next(ctx);
+				});
+			}),
+		]);
 		r.seed(sample, 0);
-		r.interp.conversation.append("memory", "k: v");
 
+		const { notes } = await r.beginStep();
+		expect(notes).toEqual([
+			{ role: "system", content: "k: v", source: "memory" },
+		]);
+		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
+			"2\n",
+		);
+
+		r.seed([...sample, ...notes], 0);
 		expect(
 			(
 				await r.evalOutput(
@@ -81,7 +96,6 @@ describe("AgentRepl conversation variables", () => {
 		expect((await r.evalOutput("(echo (length user-messages))")).user).toBe(
 			"1\n",
 		);
-		expect((await r.beginStep()).notes).toEqual([]);
 	});
 });
 

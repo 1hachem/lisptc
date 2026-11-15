@@ -1,22 +1,21 @@
 import { ends } from "@repo/interpreter/effects";
+import type { EvalOutput } from "@repo/repl/repl";
 import { describe, expect, it } from "vitest";
 import { agentRepl } from "./helpers.ts";
 
-function proseNote(r: ReturnType<typeof agentRepl>): string {
-	return r.interp.conversation
-		.said()
+function proseNote(out: EvalOutput): string {
+	return out.notes
 		.filter((said) => said.source === "prose")
 		.map((said) => said.content)
 		.join("\n");
 }
 
 function replied(r: ReturnType<typeof agentRepl>, code: string) {
-	r.seed([{ role: "assistant", content: code }], 0);
 	return r.evalOutput(code);
 }
 
-async function ended(code: string, r = agentRepl()): Promise<boolean> {
-	return ends((await replied(r, code)).effects);
+async function ended(code: string): Promise<boolean> {
+	return ends((await replied(agentRepl(), code)).effects);
 }
 
 describe("a REPL the model faces", () => {
@@ -77,9 +76,9 @@ describe("a REPL the model faces", () => {
 		});
 
 		it("has no halt built-in — prose replaced it", async () => {
-			const r = agentRepl();
-			expect(await ended("(halt)", r)).toBe(true);
-			expect(proseNote(r)).toContain('"halt" is not defined');
+			const out = await replied(agentRepl(), "(halt)");
+			expect(ends(out.effects)).toBe(true);
+			expect(proseNote(out)).toContain('"halt" is not defined');
 		});
 	});
 });
@@ -109,8 +108,7 @@ describe("prose with parentheses in it", () => {
 		expect(await r.eval('(echo "hi") (lenght lst)')).toMatch(
 			/"lenght" is not defined/,
 		);
-		const answered = agentRepl();
-		await replied(answered, "(lenght lst)");
+		const answered = await replied(agentRepl(), "(lenght lst)");
 		expect(proseNote(answered)).toMatch(/"lenght" is not defined/);
 	});
 
@@ -143,11 +141,12 @@ describe("prose with parentheses in it", () => {
 		});
 
 		it("does not end the loop, and holds nothing back", async () => {
-			const r = agentRepl();
-			expect(await ended('(playwright/browser_navigate :url "test")', r)).toBe(
-				false,
+			const out = await replied(
+				agentRepl(),
+				'(playwright/browser_navigate :url "test")',
 			);
-			expect(proseNote(r)).toBe("");
+			expect(ends(out.effects)).toBe(false);
+			expect(proseNote(out)).toBe("");
 		});
 
 		it("runs once its server defines the binding", async () => {
@@ -161,12 +160,9 @@ describe("prose with parentheses in it", () => {
 
 	describe("the end effect", () => {
 		it("is not raised for code the user ran rather than the model", async () => {
-			const r = agentRepl();
-			r.seed([{ role: "user", content: "all done (see above)" }], 0);
-			expect(ends((await r.evalOutput("all done (see above)")).effects)).toBe(
-				false,
-			);
-			expect(proseNote(r)).toBe("");
+			const out = await agentRepl().evalMessage("all done (see above)");
+			expect(ends(out.effects)).toBe(false);
+			expect(proseNote(out)).toBe("");
 		});
 
 		it("is raised for a reply with no parenthesis at all", async () => {
@@ -184,14 +180,13 @@ describe("prose with parentheses in it", () => {
 		});
 
 		it("is raised for an answer whose aside could not be parsed", async () => {
-			const r = agentRepl();
 			const out = await replied(
-				r,
+				agentRepl(),
 				"And others (including a deprecated `read_file`).",
 			);
 			expect(out.model).toBe("");
 			expect(ends(out.effects)).toBe(true);
-			expect(proseNote(r)).toContain('unexpected ")" on line 1');
+			expect(proseNote(out)).toContain('unexpected ")" on line 1');
 		});
 
 		it("is not raised when a form ran alongside the aside", async () => {
@@ -201,23 +196,21 @@ describe("prose with parentheses in it", () => {
 
 	describe("the note on prose that ran nothing", () => {
 		it("keeps the notes an answer did not return", async () => {
-			const r = agentRepl();
-			expect((await replied(r, "all done (see above)")).model).toBe("");
-			expect(proseNote(r)).toContain(
+			const out = await replied(agentRepl(), "all done (see above)");
+			expect(out.model).toBe("");
+			expect(proseNote(out)).toContain(
 				'skipped (see above) — "see" is not defined, so this was read as prose',
 			);
 		});
 
 		it("holds nothing back from prose with no parenthesis in it", async () => {
-			const r = agentRepl();
-			await replied(r, "the sum is 3");
-			expect(proseNote(r)).toBe("");
+			expect(proseNote(await replied(agentRepl(), "the sum is 3"))).toBe("");
 		});
 
 		it("returns the note for a reply truncated mid-form", async () => {
-			const r = agentRepl();
-			expect((await replied(r, '(princ "hi"')).model).toContain('unclosed "("');
-			expect(proseNote(r)).toBe("");
+			const out = await replied(agentRepl(), '(princ "hi"');
+			expect(out.model).toContain('unclosed "("');
+			expect(proseNote(out)).toBe("");
 		});
 	});
 });
