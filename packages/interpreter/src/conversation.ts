@@ -94,7 +94,9 @@ export class ConversationInterpreter
 	}
 
 	private write(records: readonly ConversationRecord[]): void {
-		const user = records.filter((s) => s.role === "user").map((s) => s.content);
+		const user = records
+			.filter((s) => s.role === "user" && s.source === undefined)
+			.map((s) => s.content);
 		const assistant = records
 			.filter((s) => s.role === "assistant")
 			.map((s) => s.content);

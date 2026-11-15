@@ -320,7 +320,14 @@ describe("the agent turn", () => {
 		expect(events.filter((e) => e.type === "noted")).toEqual([
 			{
 				type: "noted",
-				line: { kind: "note", source: "test", text: "you are a pirate" },
+				line: {
+					kind: "record",
+					record: {
+						role: "system",
+						source: "test",
+						content: "you are a pirate",
+					},
+				},
 			},
 		]);
 		expect(seen[0].messages).toEqual([
@@ -365,7 +372,10 @@ describe("the agent turn", () => {
 		script = [[{ text: "three." }]];
 		const history: Line[] = [
 			{ kind: "user", text: "hello" },
-			{ kind: "note", source: "test", text: "you are a pirate" },
+			{
+				kind: "record",
+				record: { role: "system", source: "test", content: "you are a pirate" },
+			},
 			{ kind: "assistant", text: "ahoy." },
 			{ kind: "user", text: "what is 1 + 2?" },
 		];
@@ -467,7 +477,10 @@ describe("the agent turn", () => {
 		];
 
 		const events = await drain([
-			{ kind: "event", source: "oauth", text: "linear connected" },
+			{
+				kind: "record",
+				record: { role: "user", source: "oauth", content: "linear connected" },
+			},
 			...ask,
 		]);
 
@@ -563,9 +576,12 @@ describe("the agent turn", () => {
 			{
 				type: "noted",
 				line: {
-					kind: "note",
-					source: "stub",
-					text: "a note left between turns",
+					kind: "record",
+					record: {
+						role: "system",
+						source: "stub",
+						content: "a note left between turns",
+					},
 				},
 			},
 		]);

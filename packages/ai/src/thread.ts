@@ -7,7 +7,6 @@ import {
 	type ChatMessageInput,
 	envelopeLine,
 	lineWire,
-	recordLine,
 	type WireMessage,
 } from "./line.ts";
 import type { Envelope, Mailbox } from "./mailbox.ts";
@@ -364,7 +363,7 @@ export class Thread {
 					evaluated.message,
 					...evaluated.entries.map((entry) => entryMessage(entry)),
 					...evaluated.notes.map((note) =>
-						lineWire(recordLine(note), crypto.randomUUID()),
+						lineWire({ kind: "record", record: note }, crypto.randomUUID()),
 					),
 				]);
 				quiet = evaluated.quiet;

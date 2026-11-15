@@ -24,7 +24,6 @@ import {
 	lineRecord,
 	type PostedLine,
 	ranByUser,
-	recordLine,
 } from "./line.ts";
 import type { Envelope } from "./mailbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -116,7 +115,7 @@ function* noting(
 	notes: readonly ConversationRecord[],
 ): Generator<TurnEvent> {
 	for (const record of notes) {
-		const line = recordLine(record);
+		const line = { kind: "record", record } as const;
 		lines.push(line);
 		yield { type: "noted", line };
 	}

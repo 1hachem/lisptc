@@ -98,9 +98,12 @@ function lineOf(entry: TranscriptEntry): Line {
 			return { kind: "result", text: entry.content };
 		case "system":
 			return {
-				kind: "note",
-				source: entry.source ?? "system",
-				text: entry.content,
+				kind: "record",
+				record: {
+					role: "system",
+					content: entry.content,
+					source: entry.source ?? "system",
+				},
 			};
 	}
 }

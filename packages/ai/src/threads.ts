@@ -3,12 +3,7 @@ import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import { envelopeOf } from "@repo/shared/messages";
 import { Budget, type Limits } from "./budget.ts";
-import {
-	envelopeLine,
-	lineWire,
-	recordLine,
-	type WireMessage,
-} from "./line.ts";
+import { envelopeLine, lineWire, type WireMessage } from "./line.ts";
 import type { Envelope } from "./mailbox.ts";
 import { entryMessage, type TurnOutcome } from "./stream.ts";
 import { type PostOptions, Thread, type ThreadPorts } from "./thread.ts";
@@ -255,15 +250,13 @@ export class Threads {
 		target: string,
 		notes: readonly ConversationRecord[],
 	): Promise<void> {
-		const told: Envelope[] = notes
-			.map(recordLine)
-			.map(({ kind, source, text }) => ({
-				kind: "event",
-				id: crypto.randomUUID(),
-				source,
-				text,
-				...(kind === "note" ? { noted: true as const } : {}),
-			}));
+		const told: Envelope[] = notes.map(({ role, content, source }) => ({
+			kind: "event",
+			id: crypto.randomUUID(),
+			source: source ?? "system",
+			text: content,
+			...(role === "user" ? {} : { noted: true as const }),
+		}));
 		const waking = told.pop();
 		if (waking === undefined) return;
 		for (const envelope of told)

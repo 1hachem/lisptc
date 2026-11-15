@@ -24,16 +24,9 @@ export interface WireMessage {
 	additional_kwargs?: MessageKwargs;
 }
 
-interface NoteLine {
-	readonly kind: "note";
-	readonly source: string;
-	readonly text: string;
-}
-
-interface EventLine {
-	readonly kind: "event";
-	readonly source: string;
-	readonly text: string;
+interface RecordLine {
+	readonly kind: "record";
+	readonly record: ConversationRecord;
 	readonly failed?: true;
 }
 
@@ -42,35 +35,27 @@ interface SpokenLine {
 	readonly text: string;
 }
 
-export type Line = SpokenLine | EventLine | NoteLine;
+export type Line = SpokenLine | RecordLine;
 
-export type PostedLine =
-	| (SpokenLine & { readonly kind: "user" })
-	| EventLine
-	| NoteLine;
+type PromptLine = SpokenLine & { readonly kind: "user" };
+
+export type PostedLine = PromptLine | RecordLine;
 
 const UNSOURCED = "system";
 
-export function isPrompt(line: Line): boolean {
+export function isPrompt(line: Line): line is PromptLine {
 	return line.kind === "user";
-}
-
-export function recordLine(record: ConversationRecord): EventLine | NoteLine {
-	return {
-		kind: record.role === "user" ? "event" : "note",
-		source: record.source ?? UNSOURCED,
-		text: record.content,
-	};
 }
 
 export function envelopeLine(envelope: Envelope): PostedLine {
 	if (envelope.kind === "user") return { kind: "user", text: envelope.text };
-	const { source, text } = envelope;
-	if (envelope.noted) return { kind: "note", source, text };
 	return {
-		kind: "event",
-		source,
-		text,
+		kind: "record",
+		record: {
+			role: envelope.noted ? "system" : "user",
+			content: envelope.text,
+			source: envelope.source,
+		},
 		...(envelope.failed ? { failed: true as const } : {}),
 	};
 }
@@ -82,9 +67,8 @@ export function lineRecord(line: Line): ConversationRecord {
 			return { role: line.kind, content: line.text };
 		case "result":
 			return { role: "tool", content: line.text };
-		case "event":
-		case "note":
-			return { role: "system", content: line.text, source: line.source };
+		case "record":
+			return line.record;
 	}
 }
 
@@ -95,23 +79,35 @@ export function lineChat(line: Line): ChatMessage {
 		case "user":
 		case "result":
 			return { role: "user", content: neutraliseSystemEvents(line.text) };
-		case "event":
-			return { role: "user", content: renderSystemEvent(line) };
-		case "note":
-			return { role: "developer", content: neutraliseSystemEvents(line.text) };
+		case "record":
+			return recordChat(line.record);
 	}
+}
+
+function recordChat({
+	role,
+	content,
+	source,
+}: ConversationRecord): ChatMessage {
+	if (role !== "user")
+		return { role: "developer", content: neutraliseSystemEvents(content) };
+	return {
+		role: "user",
+		content: renderSystemEvent({ source: source ?? UNSOURCED, text: content }),
+	};
 }
 
 export function lineWire(line: PostedLine, id: string): WireMessage {
 	if (line.kind === "user") return { type: "human", content: line.text, id };
+	const { role, content, source = UNSOURCED } = line.record;
 	return {
 		type: "system",
-		content: line.text,
+		content,
 		id,
 		additional_kwargs: {
-			source: line.source,
-			...(line.kind === "event" && line.failed ? { failed: true } : {}),
-			...(line.kind === "note" ? { noted: true } : {}),
+			source,
+			...(line.failed ? { failed: true } : {}),
+			...(role === "user" ? {} : { noted: true }),
 		},
 	};
 }
@@ -145,8 +141,11 @@ function wireLine(message: ChatMessageInput): Line | undefined {
 				noted,
 				failed,
 			} = envelopeOf(message.additional_kwargs);
-			if (noted) return { kind: "note", source, text };
-			return { kind: "event", source, text, ...(failed ? { failed } : {}) };
+			return {
+				kind: "record",
+				record: { role: noted ? "system" : "user", content: text, source },
+				...(failed ? { failed } : {}),
+			};
 		}
 	}
 }
@@ -181,13 +180,16 @@ function replOutcome(content: string): { output: string; error: boolean } {
 export function ranByUser(result: string): Line {
 	const { output, error } = replOutcome(result);
 	return {
-		kind: "event",
-		source: "lisp-repl",
-		text: [
-			error
-				? "the user ran the code in their message above, and it failed:"
-				: "the user ran the code in their message above:",
-			output,
-		].join("\n\n"),
+		kind: "record",
+		record: {
+			role: "user",
+			source: "lisp-repl",
+			content: [
+				error
+					? "the user ran the code in their message above, and it failed:"
+					: "the user ran the code in their message above:",
+				output,
+			].join("\n\n"),
+		},
 	};
 }

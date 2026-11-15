@@ -66,6 +66,22 @@ describe("AgentRepl conversation variables", () => {
 		expect(await echoed("(echo (length user-messages))", [])).toBe("0\n");
 	});
 
+	it("keeps what an extension requested for the user out of user-messages, and in the conversation as the user's", async () => {
+		const requested: ConversationRecord[] = [
+			...sample,
+			{ role: "user", content: "ping pressed", source: "ping" },
+		];
+		expect(await echoed("(echo (length user-messages))", requested)).toBe(
+			"1\n",
+		);
+		expect(
+			await echoed(
+				'(echo (cdr (assoc "role" (car (last conversation)))))',
+				requested,
+			),
+		).toBe("user\n");
+	});
+
 	it("hands back a note an extension appended, and shows it in the conversation once it is seeded back", async () => {
 		const r = agentRepl([
 			extension((hooks) => {
