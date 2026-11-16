@@ -2,10 +2,7 @@ import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	appended,
-	ConversationInterpreter,
-} from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { journal } from "@repo/interpreter/journal";
@@ -78,8 +75,8 @@ async function opening(f: Fixture): Promise<string> {
 		detach();
 	}
 	return buffer
-		.collect(appended)
-		.map((note) => note.content)
+		.collect(note)
+		.map((said) => said.content)
 		.join("");
 }
 

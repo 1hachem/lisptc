@@ -1,8 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	appended,
-	ConversationInterpreter,
-} from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
@@ -52,8 +49,8 @@ function session(online: { value: boolean }) {
 			detach();
 		}
 		return buffer
-			.collect(appended)
-			.map((note) => note.content)
+			.collect(note)
+			.map((said) => said.content)
 			.join("");
 	};
 	const listed = () => str(runSync(interp, "(list-toolkit)"));

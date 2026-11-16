@@ -4,7 +4,7 @@ import { bufferTransport } from "../src/channels-host.ts";
 import { EvalException, StepHold } from "../src/errors.ts";
 import { type Interp, runSync } from "../src/lisp.ts";
 import { str } from "../src/print.ts";
-import { note } from "../src/topics.ts";
+import { hitch } from "../src/topics.ts";
 import { freshInterp } from "./helpers.ts";
 
 function holding(): Interp {
@@ -25,7 +25,7 @@ function thrownBy(interp: Interp, code: string): unknown {
 }
 
 describe("a held step", () => {
-	it("stops the remaining top-level forms and emits a held note", () => {
+	it("stops the remaining top-level forms and emits a held hitch", () => {
 		const interp = holding();
 		const buffer = bufferTransport();
 		const detach = interp.channels.pipe(buffer);
@@ -37,7 +37,9 @@ describe("a held step", () => {
 		}
 		expect(thrown).toBeInstanceOf(StepHold);
 		expect(str(runSync(interp, "n"))).toBe("1");
-		expect(buffer.collect(note)).toEqual([{ kind: "held", text: "holding 2" }]);
+		expect(buffer.collect(hitch)).toEqual([
+			{ kind: "held", text: "holding 2" },
+		]);
 	});
 
 	it("is not caught by a lisp try", () => {

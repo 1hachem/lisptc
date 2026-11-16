@@ -9,13 +9,13 @@ import {
 import { ArityException } from "../src/func.ts";
 import { type Interp, runSync } from "../src/lisp.ts";
 import { str } from "../src/print.ts";
-import { type Note, note } from "../src/topics.ts";
+import { type Hitch, hitch } from "../src/topics.ts";
 import { freshInterp } from "./helpers.ts";
 
 interface Run {
 	value: unknown;
 	thrown: unknown;
-	notes: Note[];
+	hitches: Hitch[];
 }
 
 function run(interp: Interp, code: string): Run {
@@ -30,26 +30,26 @@ function run(interp: Interp, code: string): Run {
 	} finally {
 		detach();
 	}
-	return { value, thrown, notes: buffer.collect(note) };
+	return { value, thrown, hitches: buffer.collect(hitch) };
 }
 
 describe("the unhooked failure path is unchanged", () => {
 	it("reports and rethrows an undefined head", () => {
-		const { thrown, notes } = run(freshInterp(), "(no-such-fn 1)");
+		const { thrown, hitches } = run(freshInterp(), "(no-such-fn 1)");
 		expect(thrown).toBeInstanceOf(UnresolvedHead);
-		expect(notes).toEqual([{ kind: "failed", text: String(thrown) }]);
+		expect(hitches).toEqual([{ kind: "failed", text: String(thrown) }]);
 	});
 
 	it("reports and rethrows an undefined head nested in another call", () => {
-		const { thrown, notes } = run(freshInterp(), "(+ 1 (no-such-fn 2))");
+		const { thrown, hitches } = run(freshInterp(), "(+ 1 (no-such-fn 2))");
 		expect(thrown).toBeInstanceOf(UnresolvedHead);
-		expect(notes).toEqual([{ kind: "failed", text: String(thrown) }]);
+		expect(hitches).toEqual([{ kind: "failed", text: String(thrown) }]);
 	});
 
 	it("reports and rethrows an arity failure", () => {
-		const { thrown, notes } = run(freshInterp(), "((lambda (x y) x) 1)");
+		const { thrown, hitches } = run(freshInterp(), "((lambda (x y) x) 1)");
 		expect(thrown).toBeInstanceOf(ArityException);
-		expect(notes).toEqual([{ kind: "failed", text: String(thrown) }]);
+		expect(hitches).toEqual([{ kind: "failed", text: String(thrown) }]);
 	});
 });
 
@@ -102,8 +102,8 @@ describe("a hook decides what a failure reports", () => {
 		interp.hooks.failedForm.use(function* () {
 			return yield* settled({ reported: "did you mean something else?" });
 		});
-		const { thrown, notes } = run(interp, "(no-such-fn)");
-		expect(notes).toEqual([
+		const { thrown, hitches } = run(interp, "(no-such-fn)");
+		expect(hitches).toEqual([
 			{ kind: "failed", text: "did you mean something else?" },
 		]);
 		expect(thrown).toBeInstanceOf(UnresolvedHead);
@@ -114,10 +114,10 @@ describe("a hook decides what a failure reports", () => {
 		interp.hooks.failedForm.use(function* () {
 			return yield* settled({ skipped: "read as prose" });
 		});
-		const { value, thrown, notes } = run(interp, "1 (no-such-fn)");
+		const { value, thrown, hitches } = run(interp, "1 (no-such-fn)");
 		expect(thrown).toBeUndefined();
 		expect(str(value)).toBe("1");
-		expect(notes).toEqual([{ kind: "skipped", text: "read as prose" }]);
+		expect(hitches).toEqual([{ kind: "skipped", text: "read as prose" }]);
 	});
 
 	it("sees a failure that is not a head failure", () => {

@@ -22,7 +22,7 @@ export interface Conversation {
 	request(source: string, content: string): void;
 }
 
-export const appended = topic<ConversationRecord>("conversation");
+export const note = topic<ConversationRecord>("note");
 
 export type ConversationInterp = Interp & {
 	readonly conversation: Conversation;
@@ -74,7 +74,7 @@ export class ConversationInterpreter
 
 	private emit(role: Role, source: string, content: string): void {
 		if (content === "") return;
-		appended.emit(this.channels, { model: { role, content, source } });
+		note.emit(this.channels, { model: { role, content, source } });
 	}
 
 	seed(records: readonly ConversationRecord[], stepsTaken: number): void {

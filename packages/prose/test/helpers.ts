@@ -2,7 +2,7 @@ import { bufferTransport } from "@repo/interpreter/channels-host";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { note } from "@repo/interpreter/topics";
+import { hitch } from "@repo/interpreter/topics";
 import type { ProseHost } from "../src/ports.ts";
 import { proseExtension } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
@@ -72,7 +72,7 @@ export function evWithOutput(
 
 export function collectSkips(interp: Interp): string[] {
 	const skipped: string[] = [];
-	note.on(interp.channels, (n) => {
+	hitch.on(interp.channels, (n) => {
 		if (n.kind === "skipped") skipped.push(n.text);
 	});
 	return skipped;

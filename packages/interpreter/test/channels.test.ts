@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Channels, type Envelope, topic } from "../src/channels.ts";
 import { bufferTransport } from "../src/channels-host.ts";
 import { Interp, runSync } from "../src/lisp.ts";
-import { note, output } from "../src/topics.ts";
+import { hitch, output } from "../src/topics.ts";
 
 const weather = topic<{ sky: string }>("weather");
 
@@ -16,10 +16,10 @@ describe("Channels", () => {
 	it("delivers only to the topic emitted on", () => {
 		const channels = new Channels();
 		const printed = record(channels, output.name);
-		const noted = record(channels, note.name);
+		const hitched = record(channels, hitch.name);
 		output.emit(channels, { user: "printed" });
 		expect(printed.map((e) => e.payload)).toEqual(["printed"]);
-		expect(noted).toEqual([]);
+		expect(hitched).toEqual([]);
 	});
 
 	it("delivers every envelope to an onAny subscriber", () => {
@@ -90,28 +90,28 @@ describe("Channels", () => {
 		expect(seen).toHaveLength(1);
 	});
 
-	it("reports a broken listener as a failed note instead of swallowing it", () => {
+	it("reports a broken listener as a failed hitch instead of swallowing it", () => {
 		const channels = new Channels();
-		const notes: string[] = [];
-		note.on(channels, (n) => notes.push(`${n.kind}: ${n.text}`));
+		const hitches: string[] = [];
+		hitch.on(channels, (n) => hitches.push(`${n.kind}: ${n.text}`));
 		output.on(channels, () => {
 			throw new Error("subscriber is broken");
 		});
 		output.emit(channels, { user: "printed" });
-		expect(notes).toEqual([
+		expect(hitches).toEqual([
 			"failed: a listener on output threw: subscriber is broken",
 		]);
 	});
 
 	it("reports a listener that throws something other than an error", () => {
 		const channels = new Channels();
-		const notes: string[] = [];
-		note.on(channels, (n) => notes.push(n.text));
+		const hitches: string[] = [];
+		hitch.on(channels, (n) => hitches.push(n.text));
 		output.on(channels, () => {
 			throw "not an error";
 		});
 		output.emit(channels, { user: "printed" });
-		expect(notes).toEqual(["a listener on output threw: not an error"]);
+		expect(hitches).toEqual(["a listener on output threw: not an error"]);
 	});
 });
 
@@ -202,10 +202,10 @@ describe("an interp's channels", () => {
 		expect(buffer.envelopes).toEqual([]);
 	});
 
-	it("notes a failing top-level form, and the note reaches a subscriber", () => {
+	it("reports a failing top-level form as a hitch that reaches a subscriber", () => {
 		const interp = new Interp();
 		const failed: string[] = [];
-		note.on(interp.channels, (n) => {
+		hitch.on(interp.channels, (n) => {
 			if (n.kind === "failed") failed.push(n.text);
 		});
 		expect(() => runSync(interp, "(car 1 2 3)")).toThrow();

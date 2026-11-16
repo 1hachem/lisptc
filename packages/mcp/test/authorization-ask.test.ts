@@ -1,8 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	appended,
-	ConversationInterpreter,
-} from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
@@ -87,8 +84,6 @@ describe("a load that needs a login", () => {
 		expect(asksOf(buffer).answered).toEqual({
 			"s-123": { accepted: true, label: "Authorized" },
 		});
-		expect(buffer.collect(appended).at(-1)?.content).toContain(
-			'(load-mcp "acme")',
-		);
+		expect(buffer.collect(note).at(-1)?.content).toContain('(load-mcp "acme")');
 	});
 });

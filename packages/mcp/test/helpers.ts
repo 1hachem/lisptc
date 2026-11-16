@@ -1,6 +1,6 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
-import { note } from "@repo/interpreter/topics";
+import { hitch } from "@repo/interpreter/topics";
 import type { McpExtensionHost } from "../src/mcp.ts";
 import type {
 	ConnConfig,
@@ -49,7 +49,7 @@ export function reportOf(interp: Interp, code: string): string {
 		detach();
 	}
 	return buffer
-		.collect(note)
+		.collect(hitch)
 		.filter((n) => n.kind === "failed")
 		.map((n) => n.text)
 		.join("");

@@ -2,10 +2,7 @@ import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
 import type { ChannelTransport } from "@repo/interpreter/channels";
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	appended,
-	ConversationInterpreter,
-} from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { setExit } from "@repo/interpreter/core-builtins";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
@@ -14,7 +11,7 @@ import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { Reader } from "@repo/interpreter/reader";
 import { openSession } from "@repo/interpreter/session";
-import { type Note, note, output } from "@repo/interpreter/topics";
+import { type Hitch, hitch, output } from "@repo/interpreter/topics";
 import type { Ask, AskChoice } from "@repo/journal-catalog/asks";
 import { openAsks, question, runAsking } from "@repo/repl/asks";
 import type { Repl } from "@repo/repl/repl";
@@ -38,8 +35,8 @@ const stdoutTransport = (): ChannelTransport => ({
 	send(e) {
 		if (e.topic === output.name) {
 			if (e.to.includes("user")) write(String(e.payload));
-		} else if (e.topic === note.name) {
-			const n = e.payload as Note;
+		} else if (e.topic === hitch.name) {
+			const n = e.payload as Hitch;
 			if (n.kind === "skipped") write(`skipped ${n.text}\n`);
 		}
 		return true;
@@ -116,7 +113,7 @@ class InteractiveRepl implements Repl {
 			if (!(ex instanceof StepHold)) throw ex;
 		} finally {
 			detach();
-			for (const { content } of buffer.collect(appended)) write(content);
+			for (const { content } of buffer.collect(note)) write(content);
 		}
 		return openAsks(buffer.collect(journal));
 	}
@@ -135,7 +132,7 @@ class InteractiveRepl implements Repl {
 			);
 		} finally {
 			detach();
-			for (const { content } of buffer.collect(appended)) write(content);
+			for (const { content } of buffer.collect(note)) write(content);
 		}
 	}
 }

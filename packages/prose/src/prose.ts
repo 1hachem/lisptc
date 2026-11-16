@@ -6,7 +6,7 @@ import { Cell } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { Reader, readFailure } from "@repo/interpreter/reader";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { note, output } from "@repo/interpreter/topics";
+import { hitch, output } from "@repo/interpreter/topics";
 import {
 	endOfForm,
 	type FormJudge,
@@ -23,7 +23,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 			next(
 				interp,
 				stripProse(text, (what) =>
-					note.emit(interp.channels, {
+					hitch.emit(interp.channels, {
 						model: { kind: "skipped", text: what },
 					}),
 				),
@@ -59,7 +59,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				const skipped: string[] = [];
 				let printed = false;
 				let held = false;
-				const unskip = note.on(ctx.interp.channels, (n, e) => {
+				const unskip = hitch.on(ctx.interp.channels, (n, e) => {
 					if (n.kind === "held") held = true;
 					if (
 						n.kind === "skipped" &&

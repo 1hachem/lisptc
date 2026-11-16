@@ -8,9 +8,9 @@ import {
 	type ChannelBuffer,
 } from "@repo/interpreter/channels-host";
 import {
-	appended,
 	ConversationInterpreter,
 	type ConversationRecord,
+	note,
 } from "@repo/interpreter/conversation";
 import {
 	driveAsync,
@@ -38,7 +38,7 @@ import {
 	type StepContext,
 	type TurnContext,
 } from "@repo/interpreter/session";
-import { type Note, note } from "@repo/interpreter/topics";
+import { type Hitch, hitch } from "@repo/interpreter/topics";
 import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { Checkpoint, ImageStore } from "./image-store.ts";
@@ -83,15 +83,15 @@ export interface StepResult extends EvalOutput {
 	skipped: string[];
 }
 
-function partition(notes: readonly Note[]): {
+function partition(hitches: readonly Hitch[]): {
 	skipped: string[];
-	failed: Note[];
-	held: Note[];
+	failed: Hitch[];
+	held: Hitch[];
 } {
 	const skipped: string[] = [];
-	const failed: Note[] = [];
-	const held: Note[] = [];
-	for (const n of notes)
+	const failed: Hitch[] = [];
+	const held: Hitch[] = [];
+	for (const n of hitches)
 		switch (n.kind) {
 			case "skipped":
 				if (!skipped.includes(n.text)) skipped.push(n.text);
@@ -104,7 +104,7 @@ function partition(notes: readonly Note[]): {
 				break;
 			default: {
 				const unhandled: never = n.kind;
-				throw new Error(`unhandled note kind ${String(unhandled)}`);
+				throw new Error(`unhandled hitch kind ${String(unhandled)}`);
 			}
 		}
 	return { skipped, failed, held };
@@ -121,7 +121,7 @@ function recordTopLevel(buffer: ChannelBuffer): {
 } {
 	const results: string[] = [];
 	const skips = () =>
-		buffer.collect(note).filter((n) => n.kind === "skipped").length;
+		buffer.collect(hitch).filter((n) => n.kind === "skipped").length;
 	let depth = 0;
 	return {
 		results,
@@ -397,7 +397,7 @@ export class MemoryRepl implements InMemoryRepl {
 		const between = this.betweenSteps;
 		if (between === undefined) return [];
 		const fresh = between.buffer.envelopes.filter(
-			(e) => e.topic === appended.name && !between.handled.has(e),
+			(e) => e.topic === note.name && !between.handled.has(e),
 		);
 		this.handledBetweenSteps(fresh);
 		return fresh.map((e) => e.payload as ConversationRecord);
@@ -451,7 +451,7 @@ export class MemoryRepl implements InMemoryRepl {
 			detach();
 			this.listenBetweenSteps(channels);
 		}
-		const { skipped, failed, held } = partition(buffer.collect(note));
+		const { skipped, failed, held } = partition(buffer.collect(hitch));
 		const holding = held.map((n) => `held: ${n.text}\n`).join("");
 		const bounded: Bounded = {
 			model: buffer.collectText("model"),
@@ -459,7 +459,7 @@ export class MemoryRepl implements InMemoryRepl {
 		};
 		const error = this.errorOf(ctx, thrown, failed);
 		const carriedError = this.errorOf(ctx, carriedThrown, failed);
-		const notes = buffer.collect(appended);
+		const notes = buffer.collect(note);
 		return {
 			envelopes: buffer.envelopes,
 			model: carried ? error.model : bounded.model + error.model + holding,
@@ -480,7 +480,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private errorOf(
 		ctx: StepContext,
 		thrown: unknown,
-		failed: readonly Note[],
+		failed: readonly Hitch[],
 	): Bounded {
 		if (thrown === undefined) return { model: "", user: "" };
 		if (thrown === EndOfFile)
@@ -634,7 +634,7 @@ export class AgentRepl extends MemoryRepl {
 		}
 		return {
 			value,
-			notes: [...earlier, ...buffer.collect(appended)],
+			notes: [...earlier, ...buffer.collect(note)],
 			entries: buffer.collect(journal),
 		};
 	}

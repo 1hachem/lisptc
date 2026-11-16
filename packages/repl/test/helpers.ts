@@ -2,7 +2,7 @@ import { effect } from "@repo/interpreter/effects";
 import type { Interp } from "@repo/interpreter/lisp";
 import { llmSlot, type Observed } from "@repo/interpreter/observe";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
+import { hitch } from "@repo/interpreter/topics";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
 export function extension(
@@ -29,7 +29,7 @@ export function answering(): InterpExtension {
 export function noting(text: string): InterpExtension {
 	return extension((hooks) =>
 		hooks.evalStep.use((ctx, next) => {
-			note.emit(ctx.interp.channels, { model: { kind: "skipped", text } });
+			hitch.emit(ctx.interp.channels, { model: { kind: "skipped", text } });
 			return next(ctx);
 		}),
 	);

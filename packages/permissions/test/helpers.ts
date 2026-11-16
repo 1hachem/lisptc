@@ -1,8 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	appended,
-	ConversationInterpreter,
-} from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
 import { journal } from "@repo/interpreter/journal";
@@ -10,7 +7,7 @@ import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks, type SessionHooks } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
+import { hitch } from "@repo/interpreter/topics";
 import type { Entry } from "@repo/shared/journal";
 import { MemoryApprovals } from "../src/approvals.ts";
 import {
@@ -94,14 +91,14 @@ export function session(
 		} finally {
 			detach();
 		}
-		const told = buffer.collect(appended).map((said) => said.content);
+		const told = buffer.collect(note).map((said) => said.content);
 		const message = told.length === 0 ? undefined : told.join("\n\n");
 		return {
 			...(value === undefined ? {} : { value }),
 			failed,
 			held,
 			report: buffer
-				.collect(note)
+				.collect(hitch)
 				.filter((n) => n.kind !== "skipped")
 				.map((n) => n.text)
 				.join(""),

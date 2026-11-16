@@ -1,7 +1,7 @@
 import type { Interp } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import type { InterpExtension } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
+import { hitch } from "@repo/interpreter/topics";
 // @boundaries-ignore contract type only, never a value
 import type {
 	ConnectResult,
@@ -112,7 +112,7 @@ export class Trace {
 					throw err;
 				}
 			});
-			note.on(interp.channels, (n) => {
+			hitch.on(interp.channels, (n) => {
 				trace.add({
 					kind: "note",
 					step: trace.step,

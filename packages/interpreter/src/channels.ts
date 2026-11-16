@@ -6,7 +6,7 @@ export type Reader = Exclude<Audience, "harness">;
 
 export type Addressed<T> = Partial<Record<Audience, T>>;
 
-export const NOTE_TOPIC = "note";
+export const HITCH_TOPIC = "hitch";
 
 export interface Envelope<T = unknown> {
 	topic: string;
@@ -105,10 +105,10 @@ export class Channels {
 			} catch {
 				this.transports.delete(transport);
 			}
-		if (envelope.topic === NOTE_TOPIC) return;
+		if (envelope.topic === HITCH_TOPIC) return;
 		for (const message of broken)
 			this.emit({
-				topic: NOTE_TOPIC,
+				topic: HITCH_TOPIC,
 				to: ["model"],
 				payload: {
 					kind: "failed",

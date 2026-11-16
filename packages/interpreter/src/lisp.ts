@@ -69,7 +69,7 @@ import { Reader } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
-import { note } from "./topics.ts";
+import { hitch } from "./topics.ts";
 import type { ForeignValue } from "./types.ts";
 
 export type FailedForm =
@@ -435,7 +435,7 @@ export class Interp {
 
 	hold(reason: string): Hold | undefined {
 		if (!this.holds.parkable) return undefined;
-		note.emit(this.channels, { model: { kind: "held", text: reason } });
+		hitch.emit(this.channels, { model: { kind: "held", text: reason } });
 		return this.holds.park(new Hold(reason));
 	}
 
@@ -736,7 +736,7 @@ export function* evalTopLevel(
 		return yield* interp.evalGen(exp, null);
 	} catch (ex) {
 		if (ex instanceof StepHold) {
-			note.emit(interp.channels, { model: { kind: "held", text: ex.reason } });
+			hitch.emit(interp.channels, { model: { kind: "held", text: ex.reason } });
 			throw ex;
 		}
 		const failure =
@@ -751,12 +751,12 @@ export function* evalTopLevel(
 				failure,
 			);
 			if (opinion !== undefined && "skipped" in opinion) {
-				note.emit(interp.channels, {
+				hitch.emit(interp.channels, {
 					model: { kind: "skipped", text: opinion.skipped },
 				});
 				return previous;
 			}
-			note.emit(interp.channels, {
+			hitch.emit(interp.channels, {
 				model: {
 					kind: "failed",
 					text: opinion === undefined ? String(failure) : opinion.reported,

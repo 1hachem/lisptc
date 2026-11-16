@@ -1,8 +1,5 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
-import {
-	appended,
-	ConversationInterpreter,
-} from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { openSession } from "@repo/interpreter/session";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -510,7 +507,7 @@ describe("a message the user attached files to", () => {
 		} finally {
 			detach();
 		}
-		return buffer.collect(appended).map((note) => note.content);
+		return buffer.collect(note).map((said) => said.content);
 	}
 
 	it("tells the model which files came with it", async () => {
