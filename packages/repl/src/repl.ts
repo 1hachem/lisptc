@@ -596,7 +596,8 @@ export class MemoryRepl implements InMemoryRepl {
 	}
 
 	async eval(code: string): Promise<string> {
-		return (await this.evalOutput(code)).model;
+		const { model, notes } = await this.evalOutput(code);
+		return model + notes.map(({ content }) => `${content}\n`).join("");
 	}
 
 	reset(): void {
