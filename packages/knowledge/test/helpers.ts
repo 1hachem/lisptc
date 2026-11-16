@@ -1,4 +1,3 @@
-import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -44,7 +43,7 @@ export async function world(
 	});
 	await runAsync(interp, prelude);
 	const shown: AttachedFile[] = [];
-	journal.on(interp.channels, (entry) =>
+	interp.journal.onAny((entry) =>
 		shown.push(...view([entry], attachmentsKind).flat()),
 	);
 	return {

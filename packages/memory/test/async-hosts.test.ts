@@ -131,7 +131,7 @@ describe("built-ins loading on the first message, over a store that answers with
 			'(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")',
 		);
 		const { bank, interp } = fresh();
-		interp.seed([{ role: "user", content: "hello" }]);
+		interp.seed([{ role: "user", content: "hello" }], 0);
 
 		await driveAsync(bank.hear(interp));
 

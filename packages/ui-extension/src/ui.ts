@@ -1,8 +1,8 @@
-import { type Channels, topic } from "@repo/interpreter/channels";
+import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
-import { record } from "@repo/interpreter/journal";
+import type { Journal } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -72,9 +72,7 @@ const MAX_HANDLERS = 500;
 
 const MAX_MESSAGE_CHARS = 4000;
 
-export function joinMessages(parts: readonly string[]): string | undefined {
-	if (parts.length === 0) return undefined;
-	const text = parts.join("\n\n");
+function bounded(text: string): string {
 	if (text.length <= MAX_MESSAGE_CHARS) return text;
 	return `${text.slice(0, MAX_MESSAGE_CHARS)}\n… (message truncated)`;
 }
@@ -83,10 +81,6 @@ export interface RenderedView {
 	viewId: string;
 	node: UiNode;
 }
-
-export const rendered = topic<RenderedView>("ui");
-
-export const sent = topic<string>("ui-send");
 
 const handlerCodec: StateCodec<[string, unknown][]> = {
 	toLisp: (handlers) =>
@@ -137,14 +131,15 @@ export class UiSurface {
 	private views: State<number> | undefined;
 	private owners: State<[string, string][]> | undefined;
 	private current: string | undefined;
+	private handling: ((text: string) => void) | undefined;
 	private interp: Interp | undefined;
-	private channels: Channels | undefined;
+	private journal: Journal | undefined;
 	private store: ViewStore | undefined;
 
 	bind(interp: Interp, store?: ViewStore): void {
 		this.interp = interp;
 		this.store = store;
-		this.channels = interp.channels;
+		this.journal = interp.journal;
 		this.handlers = interp.state(
 			"ui/handlers",
 			handlerCodec,
@@ -179,10 +174,12 @@ export class UiSurface {
 
 	beginStep(): void {
 		this.current = undefined;
+		this.handling = undefined;
 	}
 
-	enter(action: string): void {
+	enter(action: string, conversation: Conversation): void {
 		this.current = this.ownerOf(action);
+		this.handling = (text) => conversation.request(action, text);
 	}
 
 	private viewId(): string {
@@ -273,17 +270,12 @@ export class UiSurface {
 
 	render(node: UiNode): RenderedView {
 		const view = this.place(this.viewId(), node);
-		const channels = this.channels;
-		if (channels) {
-			rendered.emit(channels, { user: view });
-			record(channels, viewKind, { viewId: view.viewId });
-		}
+		this.journal?.write(viewKind, { viewId: view.viewId });
 		return view;
 	}
 
 	send(text: string): void {
-		const channels = this.channels;
-		if (channels) sent.emit(channels, { model: text });
+		this.handling?.(bounded(text));
 	}
 
 	hasAction(id: string): boolean {
@@ -570,7 +562,7 @@ function registerUi(
 		"ui/send",
 		-1,
 		"(ui/send text...)",
-		'Send a message to the agent from inside a handler, as if the user had typed it: it joins the conversation as a user turn and the agent answers it. This is how a click hands work BACK to the model — a form whose contents are a request rather than a filter, a button that means "now go do it". Arguments are joined like `echo`\'s, so build the message from the field values: (ui/send "search the issues for " (cdr (assoc "q" values))). A handler may render AND send; only handlers deliver, so calling this outside one does nothing.',
+		'Send a message to the agent from inside a handler, as if the user had typed it: it joins the conversation as a user turn and the agent answers it. This is how a click hands work BACK to the model — a form whose contents are a request rather than a filter, a button that means "now go do it". Arguments are joined like `echo`\'s, so build the message from the field values: (ui/send "search the issues for " (cdr (assoc "q" values))). A handler may render AND send, and each send is its own message; only handlers deliver, so calling this outside one does nothing.',
 		z.tuple([zList]),
 		([rest]) => {
 			const parts = (listElements(rest) ?? []).map((x) =>
@@ -677,12 +669,9 @@ export function uiExtension(
 					await next(ctx);
 				});
 				hooks.invoke.use(async (ctx) => {
-					surface.enter(ctx.action);
+					surface.enter(ctx.action, ctx.interp.conversation);
 					await surface.invoke(ctx.action, ctx.values);
 				});
-				hooks.message.use(
-					(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
-				);
 			},
 		},
 	);

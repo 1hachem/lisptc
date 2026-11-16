@@ -1,6 +1,5 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, type Eval } from "@repo/interpreter/drive";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink } from "@repo/interpreter/journal";
 import { type Installable, runAsync, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -112,8 +111,8 @@ function fixture(
 	});
 	runSync(interp, prelude);
 	openSession([extension]);
-	const buffer = bufferTransport();
-	interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	interp.journal.pipe(buffer);
 	const conversation: (Turn & { source?: string })[] = [];
 	const say = (...turns: Turn[]) => {
 		conversation.push(...turns);
@@ -135,7 +134,7 @@ function fixture(
 		interp,
 		bank,
 		entries() {
-			return buffer.collect(journal);
+			return [...buffer.entries];
 		},
 		async hear(text) {
 			const before = interp.getGlobal(newSym("user-messages"));

@@ -168,7 +168,10 @@ describe("permissions over a loaded MCP server", () => {
 		expect(decided.notes.map((said) => said.content).join("\n")).toContain(
 			"approved fx/send_mail",
 		);
-		expect(decided.message).toContain("The held step carried on");
+		expect(decided.notes.at(-1)).toMatchObject({
+			role: "system",
+			content: expect.stringContaining("The held step carried on"),
+		});
 		expect(client.calls.map((c) => c.tool)).toEqual(["send_mail"]);
 
 		const again = await repl.evalOutput('(fx/send_mail :message "hello")');

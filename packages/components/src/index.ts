@@ -43,17 +43,17 @@ export {
 } from "./theme-selector.tsx";
 export { Trace, type TraceSlots, TraceSteps } from "./trace.tsx";
 export {
-	CHANNELS,
-	type Channel,
-	type ChannelId,
-	channelOf,
-	EVERY_CHANNEL,
+	LANES,
+	type Lane,
+	type LaneId,
+	laneOf,
+	EVERY_LANE,
 	type Shown,
-} from "./trace-channels.ts";
+} from "./trace-lanes.ts";
 export {
-	ChannelsShown,
+	LanesShown,
 	Revealed,
-	useChannels,
+	useLanes,
 	useTraced,
 } from "./trace-context.tsx";
 export {

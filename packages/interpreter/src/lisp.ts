@@ -3,7 +3,6 @@ import { dirname, resolve as resolvePath } from "node:path";
 import type { Awaitable } from "@repo/shared/host";
 import type { z } from "zod";
 import { AsyncWork } from "./async.ts";
-import { Channels } from "./channels.ts";
 import { compileFunc, MACRO_EXPANSION_DEPTH } from "./compile.ts";
 import { installCore } from "./core-builtins.ts";
 import {
@@ -17,7 +16,7 @@ import {
 	driveAsync,
 	driveSync,
 	type Eval,
-	Hold,
+	type Hold,
 	Holds,
 	type Outcome,
 	settled,
@@ -44,6 +43,7 @@ import {
 	Macro,
 } from "./func.ts";
 import { Chain } from "./hooks.ts";
+import { hitch, Journal } from "./journal.ts";
 import {
 	assert,
 	Cell,
@@ -70,7 +70,6 @@ import { Reader, readFailure, type SyntaxFailure } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
 import { LANGUAGE_MEMORIES, LANGUAGE_REFERENCE } from "./source.ts";
-import { note } from "./topics.ts";
 import type { ForeignValue } from "./types.ts";
 
 export type FailedForm =
@@ -178,7 +177,7 @@ export class Interp {
 
 	readonly recovery: Recovery = new Recovery();
 
-	readonly channels: Channels = new Channels();
+	readonly journal: Journal = new Journal();
 
 	readonly async: AsyncWork = new AsyncWork();
 
@@ -481,9 +480,9 @@ export class Interp {
 	}
 
 	hold(reason: string): Hold | undefined {
-		if (!this.holds.parkable) return undefined;
-		note.emit(this.channels, { model: { kind: "held", text: reason } });
-		return this.holds.park(new Hold(reason));
+		return this.holds.parkable
+			? this.holds.park(reason, this.journal)
+			: undefined;
 	}
 
 	makeBuiltIn(
@@ -783,7 +782,7 @@ export function* evalTopLevel(
 		return yield* interp.evalGen(exp, null);
 	} catch (ex) {
 		if (ex instanceof StepHold) {
-			note.emit(interp.channels, { model: { kind: "held", text: ex.reason } });
+			interp.journal.write(hitch, { kind: "held", text: ex.reason });
 			throw ex;
 		}
 		const failure =
@@ -798,16 +797,12 @@ export function* evalTopLevel(
 				failure,
 			);
 			if (opinion !== undefined && "skipped" in opinion) {
-				note.emit(interp.channels, {
-					model: { kind: "skipped", text: opinion.skipped },
-				});
+				interp.journal.write(hitch, { kind: "skipped", text: opinion.skipped });
 				return previous;
 			}
-			note.emit(interp.channels, {
-				model: {
-					kind: "failed",
-					text: opinion === undefined ? String(failure) : opinion.reported,
-				},
+			interp.journal.write(hitch, {
+				kind: "failed",
+				text: opinion === undefined ? String(failure) : opinion.reported,
 			});
 		}
 		throw failure;

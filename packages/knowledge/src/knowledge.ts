@@ -1,6 +1,5 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import { zString } from "@repo/interpreter/schema";
@@ -34,7 +33,7 @@ function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 						`no file named ${checked} in ${folder}`,
 						name,
 					);
-				record(interp.channels, attachmentsKind, [{ folder, name: checked }]);
+				interp.journal.write(attachmentsKind, [{ folder, name: checked }]);
 				return checked;
 			},
 		);

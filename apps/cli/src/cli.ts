@@ -1,17 +1,21 @@
 import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
-import type { ChannelTransport } from "@repo/interpreter/channels";
-import { bufferTransport } from "@repo/interpreter/channels-host";
-import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { setExit } from "@repo/interpreter/core-builtins";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
-import { journal } from "@repo/interpreter/journal";
+import {
+	bufferSink,
+	type Hitch,
+	hitch,
+	type Printed,
+	printed,
+	type Sink,
+} from "@repo/interpreter/journal";
 import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { Reader } from "@repo/interpreter/reader";
 import { openSession } from "@repo/interpreter/session";
-import { type Note, note, output } from "@repo/interpreter/topics";
 import type { Ask, AskChoice } from "@repo/journal-catalog/asks";
 import { openAsks, question, runAsking } from "@repo/repl/asks";
 import type { Repl } from "@repo/repl/repl";
@@ -31,12 +35,13 @@ const write = (s: string): void => {
 	process.stdout.write(s);
 };
 
-const stdoutTransport = (): ChannelTransport => ({
+const stdoutSink = (): Sink => ({
 	send(e) {
-		if (e.topic === output.name) {
-			if (e.to.includes("user")) write(String(e.payload));
-		} else if (e.topic === note.name) {
-			const n = e.payload as Note;
+		if (e.kind === printed.name) {
+			const p = e.value as Printed;
+			if (p.to.includes("user")) write(p.text);
+		} else if (e.kind === hitch.name) {
+			const n = e.value as Hitch;
 			if (n.kind === "skipped") write(`skipped ${n.text}\n`);
 		}
 		return true;
@@ -61,7 +66,7 @@ class InteractiveRepl implements Repl {
 			extensions: this.extensions,
 		});
 		runSync(interp, prelude);
-		interp.channels.pipe(stdoutTransport());
+		interp.journal.pipe(stdoutSink());
 		return interp;
 	}
 
@@ -100,27 +105,29 @@ class InteractiveRepl implements Repl {
 
 	async step(code: string): Promise<readonly Ask[]> {
 		const interp = this.currentInterp;
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			await this.hooks.evalStep.run(
 				async (ctx) => {
 					await runAsync(ctx.interp, ctx.code);
 				},
-				{ interp, code },
+				{ interp, code, author: "user" },
 			);
 		} catch (ex) {
 			if (!(ex instanceof StepHold)) throw ex;
 		} finally {
 			detach();
-			for (const { content } of interp.takeAppended()) write(content);
+			for (const { content } of buffer.collect(note)) write(content);
 		}
-		return openAsks(buffer.collect(journal));
+		return openAsks(buffer.entries);
 	}
 
 	private async answer(choice: AskChoice): Promise<void> {
 		const { action, values } = choice.answer;
 		const interp = this.currentInterp;
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			await this.hooks.invoke.run(
 				() => {
@@ -129,7 +136,8 @@ class InteractiveRepl implements Repl {
 				{ interp, action, values },
 			);
 		} finally {
-			for (const { content } of interp.takeAppended()) write(content);
+			detach();
+			for (const { content } of buffer.collect(note)) write(content);
 		}
 	}
 }

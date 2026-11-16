@@ -1,6 +1,5 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import { EvalException, messageOf } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import {
 	type Interp,
 	runSync,
@@ -62,7 +61,7 @@ type Announce = (
 
 function announcer(interp: Interp): Announce {
 	return (id, builtin, state, timing, error) =>
-		record(interp.channels, activityKind, {
+		interp.journal.write(activityKind, {
 			kind: "llm",
 			icon: "model",
 			label: builtin,

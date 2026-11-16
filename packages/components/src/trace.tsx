@@ -14,13 +14,13 @@ import {
 	useState,
 } from "react";
 import {
-	CHANNELS,
-	type ChannelId,
-	channelOf,
-	EVERY_CHANNEL,
+	LANES,
+	type LaneId,
+	laneOf,
+	EVERY_LANE,
 	type Shown,
-} from "./trace-channels.ts";
-import { ChannelsShown, Revealed, useChannels } from "./trace-context.tsx";
+} from "./trace-lanes.ts";
+import { LanesShown, Revealed, useLanes } from "./trace-context.tsx";
 import { isEntryMessage } from "./trace-entries.ts";
 import { messageMatches } from "./trace-find.ts";
 import {
@@ -115,7 +115,7 @@ function FindBar({
 	);
 }
 
-function ChannelToggles({
+function LaneToggles({
 	shown,
 	toggle,
 }: {
@@ -124,7 +124,7 @@ function ChannelToggles({
 }) {
 	return (
 		<div className="flex flex-wrap gap-x-3 gap-y-1 border-dim/20 border-b px-4 py-1.5 text-[11px]">
-			{CHANNELS.map((c) => (
+			{LANES.map((c) => (
 				<button
 					key={c.id}
 					type="button"
@@ -273,12 +273,12 @@ function useClipped(line: RefObject<HTMLElement | null>, text: string) {
 
 type MessageKind = "agent" | "memory" | "system" | "you";
 
-const MARK_CHANNEL = {
+const MARK_LANE = {
 	agent: "agents",
 	memory: "memory",
 	system: "system",
 	you: "user",
-} as const satisfies Record<MessageKind, ChannelId>;
+} as const satisfies Record<MessageKind, LaneId>;
 
 function messageKind(message: ChatMessage): MessageKind {
 	if (isParentMessage(message)) return "agent";
@@ -287,7 +287,7 @@ function messageKind(message: ChatMessage): MessageKind {
 }
 
 function MessageMark({ kind }: { kind: MessageKind }) {
-	const marked = channelOf(MARK_CHANNEL[kind]);
+	const marked = laneOf(MARK_LANE[kind]);
 	return (
 		<HugeiconsIcon
 			icon={marked.icon}
@@ -325,7 +325,7 @@ function MessageEntry({
 	message: ChatMessage;
 	flashing: string | undefined;
 }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const slots = useContext(Slots);
 	const matched = useMatched(message);
 	const [unfolded, setOpen] = useState(false);
@@ -334,7 +334,7 @@ function MessageEntry({
 	const text = messageText(message);
 	const clipped = useClipped(line, text);
 	const kind = messageKind(message);
-	if (!shown[MARK_CHANNEL[kind]]) return null;
+	if (!shown[MARK_LANE[kind]]) return null;
 	const system = kind === "system" || kind === "memory";
 	const attached = shown.attachments ? slots.attachments?.(message) : null;
 	const foldable =
@@ -370,7 +370,7 @@ function PromptEntry({
 	tokens: number | undefined;
 	flashing: string | undefined;
 }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const matched = useMatched(message);
 	const [unfolded, setOpen] = useState(false);
 	if (!shown.system) return null;
@@ -426,7 +426,7 @@ function TraceEntries({
 	entries: readonly TraceEntry[];
 	flashing?: string;
 }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const slots = useContext(Slots);
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-3">
@@ -543,7 +543,7 @@ export function Trace({
 	turn?: string;
 	slots: TraceSlots;
 }) {
-	const [shown, setShown] = useState<Shown>(EVERY_CHANNEL);
+	const [shown, setShown] = useState<Shown>(EVERY_LANE);
 	const scroller = useRef<HTMLDivElement>(null);
 	const entries = useMemo(() => traceEntries(messages), [messages]);
 	const flashing = useFlash(turn);
@@ -560,7 +560,7 @@ export function Trace({
 	};
 	return (
 		<Slots.Provider value={slots}>
-			<ChannelsShown shown={shown}>
+			<LanesShown shown={shown}>
 				<FindQuery.Provider value={find.query}>
 					<section
 						aria-label="trace"
@@ -568,7 +568,7 @@ export function Trace({
 						onKeyDown={onKeyDown}
 					>
 						<FindBar {...find} />
-						<ChannelToggles shown={shown} toggle={toggle} />
+						<LaneToggles shown={shown} toggle={toggle} />
 						<div
 							ref={scroller}
 							className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]"
@@ -579,7 +579,7 @@ export function Trace({
 						</div>
 					</section>
 				</FindQuery.Provider>
-			</ChannelsShown>
+			</LanesShown>
 		</Slots.Provider>
 	);
 }

@@ -1,15 +1,11 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { effect } from "@repo/interpreter/effects";
 import { UnresolvedHead } from "@repo/interpreter/errors";
+import { hitch, printed } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
-import type {
-	InterpExtension,
-	SessionHooks,
-	StepContext,
-} from "@repo/interpreter/session";
-import { note, output } from "@repo/interpreter/topics";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import {
 	endOfForm,
 	type FormJudge,
@@ -26,9 +22,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 			next(
 				interp,
 				stripProse(interp, text, (what) =>
-					note.emit(interp.channels, {
-						model: { kind: "skipped", text: what },
-					}),
+					interp.journal.write(hitch, { kind: "skipped", text: what }),
 				),
 			),
 		);
@@ -59,21 +53,17 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				...proseSkipped(interp, code),
 			]);
 			hooks.evalStep.use(async (ctx, next) => {
-				if (!replied(ctx)) return next(ctx);
+				if (ctx.author !== "assistant") return next(ctx);
 				const skipped: string[] = [];
-				let printed = false;
+				let printedForModel = false;
 				let held = false;
-				const unskip = note.on(ctx.interp.channels, (n, e) => {
+				const unskip = ctx.interp.journal.on(hitch, (n) => {
 					if (n.kind === "held") held = true;
-					if (
-						n.kind === "skipped" &&
-						e.to.includes("model") &&
-						!skipped.includes(n.text)
-					)
+					if (n.kind === "skipped" && !skipped.includes(n.text))
 						skipped.push(n.text);
 				});
-				const unprint = output.on(ctx.interp.channels, (_text, e) => {
-					if (e.to.includes("model")) printed = true;
+				const unprint = ctx.interp.journal.on(printed, (p) => {
+					if (p.to.includes("model")) printedForModel = true;
 				});
 				try {
 					await next(ctx);
@@ -83,22 +73,17 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				}
 				const answered =
 					formsOnly(ctx.code).trim() === "" ||
-					(!printed && !held && skipped.length > 0 && !isTruncated(ctx.code));
+					(!printedForModel &&
+						!held &&
+						skipped.length > 0 &&
+						!isTruncated(ctx.code));
 				if (!answered) return;
-				effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+				ctx.interp.journal.write(effect, { type: "end" });
 				if (skipped.length > 0)
 					ctx.interp.conversation.append("prose", ranNothing(skipped));
 			});
 		},
 	});
-}
-
-function replied({ interp, code }: StepContext): boolean {
-	const last = interp.conversation
-		.said()
-		.filter((said) => said.role !== "system")
-		.at(-1);
-	return last?.role === "assistant" && last.content === code;
 }
 
 function ranNothing(skipped: readonly string[]): string {

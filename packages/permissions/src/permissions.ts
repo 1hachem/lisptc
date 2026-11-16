@@ -11,7 +11,6 @@ import { str } from "@repo/interpreter/print";
 import { zAny, zList, zString, zSym } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { z } from "zod";
-import { requested } from "./channel.ts";
 import type {
 	ApprovalRequest,
 	PermissionsHost,
@@ -216,7 +215,7 @@ export function permissionsExtension(
 		const open = stillOpen();
 		for (const request of pendingOf.get(interp)?.get() ?? []) {
 			if (open.has(request.id)) continue;
-			const form = request.change ? readOne(request.name) : undefined;
+			const form = request.change ? interp.read(request.name) : undefined;
 			if (form instanceof Cell) awaiting.set(request.id, form);
 			host.approvals.open({ ...request, restored: true });
 		}
@@ -324,9 +323,8 @@ export function permissionsExtension(
 		host.approvals.open(request);
 		keep(interp, request);
 		if (change !== undefined) awaiting.set(request.id, change);
-		requested.emit(interp.channels, { user: request });
 		for (const approver of host.approvers)
-			approver.ask?.(request, interp.channels);
+			approver.ask?.(request, interp.journal);
 		return request;
 	}
 

@@ -1,4 +1,4 @@
-import type { Said } from "@repo/interpreter/conversation";
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import { quiets } from "@repo/interpreter/effects";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Entry } from "@repo/shared/journal";
@@ -10,7 +10,7 @@ import { type ToolMessage, toolMessage } from "./tool-message.ts";
 export interface Evaluated {
 	message: ToolMessage;
 	entries: readonly Entry[];
-	notes: readonly Said[];
+	notes: readonly ConversationRecord[];
 	quiet: boolean;
 }
 

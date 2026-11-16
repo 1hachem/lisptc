@@ -1,5 +1,6 @@
-import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -35,10 +36,18 @@ function session(online: { value: boolean }) {
 	runSync(interp, prelude);
 	const hooks = openSession([extension]);
 	const step = async (): Promise<string> => {
-		await driveAsync(hooks.beginStep.run(() => settled(undefined), { interp }));
-		return interp
-			.takeAppended()
-			.map((note) => note.content)
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
+		try {
+			await driveAsync(
+				hooks.beginStep.run(() => settled(undefined), { interp }),
+			);
+		} finally {
+			detach();
+		}
+		return buffer
+			.collect(note)
+			.map((record) => record.content)
 			.join("");
 	};
 	const listed = () => str(runSync(interp, "(list-toolkit)"));

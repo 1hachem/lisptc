@@ -1,9 +1,8 @@
 import { quotient } from "@repo/interpreter/arith";
-import type { Channels } from "@repo/interpreter/channels";
 import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
+import type { Journal } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
@@ -436,7 +435,7 @@ interface Cascade {
 const TOP: Cascade = { depth: 0, record: true };
 
 export class MemoryBank {
-	private channels?: Channels;
+	private journal?: Journal;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
 	private declaredIn: Interp | undefined;
@@ -637,8 +636,8 @@ export class MemoryBank {
 		return this.clock.now();
 	}
 
-	attach(channels: Channels): void {
-		this.channels = channels;
+	attach(journal: Journal): void {
+		this.journal = journal;
 	}
 
 	reset(): void {
@@ -742,7 +741,7 @@ export class MemoryBank {
 				{ depth: 0, record: false },
 			);
 		const fired = this.step.get().surfaced.slice(before);
-		record(this.channels, recognizedKind, {
+		this.journal?.write(recognizedKind, {
 			...seen,
 			scores: Object.fromEntries(scores),
 			...(fired.length === 0 ? {} : { fired }),
@@ -920,7 +919,7 @@ export class MemoryBank {
 			builtinSpent: step.builtinSpent + (builtin ? wordCount(line) : 0),
 			surfaced: [...step.surfaced, surfaced],
 		});
-		if (at.record) record(this.channels, memoryKind, surfaced);
+		if (at.record) this.journal?.write(memoryKind, surfaced);
 	}
 }
 
@@ -1076,7 +1075,7 @@ function situationOf(memory: Memory): unknown {
 
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
-	bank.attach(interp.channels);
+	bank.attach(interp.journal);
 	interp.defineGlobal(newSym(DECLARED), Unspecified);
 	interp.defineGlobal(newSym(BUILT_BODY), null, {
 		signature: BUILT_BODY,

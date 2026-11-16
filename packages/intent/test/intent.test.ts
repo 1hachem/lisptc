@@ -1,12 +1,8 @@
-import {
-	bufferTransport,
-	type ChannelBuffer,
-} from "@repo/interpreter/channels-host";
 import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveSync, settled } from "@repo/interpreter/drive";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink, type JournalBuffer } from "@repo/interpreter/journal";
 import { runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -45,15 +41,15 @@ function failStep(
 		step(interp, code);
 		hooks.stepError.run(
 			(_c, text) => ({ model: text, user: text }),
-			{ interp, code },
+			{ interp, code, author: "assistant" },
 			"boom\n",
 		);
 	});
 }
 
 function watching(interp: ConversationInterpreter, run: () => void) {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		run();
 	} finally {
@@ -62,12 +58,12 @@ function watching(interp: ConversationInterpreter, run: () => void) {
 	return { buffer };
 }
 
-function intents(buffer: ChannelBuffer) {
-	return view(buffer.collect(journal), { ...intentKind, fold: every });
+function intents(buffer: JournalBuffer) {
+	return view(buffer.entries, { ...intentKind, fold: every });
 }
 
-function questions(buffer: ChannelBuffer) {
-	return view(buffer.collect(journal), { ...questionKind, fold: every });
+function questions(buffer: JournalBuffer) {
+	return view(buffer.entries, { ...questionKind, fold: every });
 }
 
 function settle(
@@ -106,8 +102,8 @@ function logOf(interp: ConversationInterpreter): string {
 }
 
 function step(interp: ConversationInterpreter, code: string) {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		runSync(interp, code);
 		return { buffer, thrown: undefined };
@@ -125,12 +121,8 @@ describe("intent forms", () => {
 			interp,
 			'(intent/todo "a" "b") (intent/doing "reading") (intent/check "a")',
 		);
-		const sent = buffer.envelopes.filter((e) => e.topic === journal.name);
-		expect(sent.map((e) => e.to)).toEqual([
-			["harness"],
-			["harness"],
-			["harness"],
-		]);
+		expect(buffer.collectText("user")).toBe("");
+		expect(buffer.collectText("model")).toBe("");
 		expect(intents(buffer).at(-1)).toEqual({
 			doing: "reading",
 			todos: [
@@ -214,8 +206,7 @@ describe("a progress bar", () => {
 			interp,
 			'(intent/todo "a") (intent/progress 2 5 "files")',
 		);
-		const sent = buffer.envelopes.filter((e) => e.topic === journal.name);
-		expect(sent.map((e) => e.to)).toEqual([["harness"], ["harness"]]);
+		expect(buffer.collectText("user")).toBe("");
 		expect(intents(buffer).at(-1)).toEqual({
 			todos: [{ label: "a", done: false }],
 			progress: { done: 2, total: 5, label: "files" },
@@ -281,9 +272,7 @@ describe("a question", () => {
 				multi: true,
 			},
 		]);
-		expect(buffer.envelopes.find((e) => e.topic === journal.name)?.to).toEqual([
-			"harness",
-		]);
+		expect(buffer.collectText("model")).toBe("");
 		expect(buffer.collect(effect)).toEqual([{ type: "end" }]);
 	});
 
@@ -309,11 +298,10 @@ describe("the journal", () => {
 			interp,
 			'(intent/todo "a") (intent/doing "x") (intent/ask "p" \'("A" "B"))',
 		);
-		expect(buffer.collect(journal).map((e) => e.kind)).toEqual([
-			"intent",
-			"intent",
-			"question",
-		]);
+		const kinds = [intentKind.name, questionKind.name];
+		expect(
+			buffer.entries.map((e) => e.kind).filter((k) => kinds.includes(k)),
+		).toEqual(["intent", "intent", "question"]);
 		expect(intents(buffer).at(-1)).toEqual({
 			doing: "x",
 			todos: [{ label: "a", done: false }],
@@ -327,7 +315,7 @@ describe("the journal", () => {
 	test("records nothing for a step that said nothing", () => {
 		const { interp } = fresh();
 		const { buffer } = step(interp, "(+ 1 2)");
-		expect(buffer.collect(journal)).toEqual([]);
+		expect(buffer.entries).toEqual([]);
 	});
 });
 
@@ -394,7 +382,7 @@ describe("the doing log", () => {
 			},
 		]);
 		const quiet = step(interp, "(+ 1 2)");
-		expect(quiet.buffer.collect(journal)).toEqual([]);
+		expect(quiet.buffer.entries).toEqual([]);
 	});
 
 	test("closes the running line as done when the turn settles", () => {

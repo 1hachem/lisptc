@@ -20,13 +20,13 @@ const unread = { nested: ["anything", 7], at: "never interpreted" };
 
 const journaling = extension((hooks) => {
 	hooks.beginStep.use(function* (ctx, next) {
-		recording(ctx.interp.channels, "before-model", unread);
+		recording(ctx.interp.journal, "before-model", unread);
 		yield* next(ctx);
 	});
 	hooks.evalStep.use(async (ctx, next) => {
-		recording(ctx.interp.channels, "during-step", ctx.code);
+		recording(ctx.interp.journal, "during-step", ctx.code);
 		await next(ctx);
-		recording(ctx.interp.channels, "after-step", ctx.code);
+		recording(ctx.interp.journal, "after-step", ctx.code);
 	});
 });
 
@@ -35,7 +35,7 @@ describe("the loop and the journal", () => {
 		turn = 0;
 		const events: TurnEvent[] = [];
 		for await (const event of runAgentTurn(
-			[{ role: "user", content: "what is 1 + 2?" }],
+			[{ kind: "user", text: "what is 1 + 2?" }],
 			{ repl: testRepl([journaling]) },
 		))
 			events.push(event);
@@ -54,7 +54,7 @@ describe("the loop and the journal", () => {
 		turn = 0;
 		const events: TurnEvent[] = [];
 		for await (const event of runAgentTurn(
-			[{ role: "user", content: "what is 1 + 2?" }],
+			[{ kind: "user", text: "what is 1 + 2?" }],
 			{ repl: testRepl([journaling]) },
 		))
 			events.push(event);

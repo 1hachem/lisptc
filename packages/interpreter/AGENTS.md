@@ -49,11 +49,13 @@ never from prose. `InterpExtension` is declared here rather than in
 `src/lisp.ts` because it names `SessionHooks`, and the seam may know the
 language while the language may not know the seam.
 
-`src/hooks.ts` holds the chain machinery the seam is built on. `src/channels.ts`
-and `src/channels-host.ts` carry addressed output. `src/journal.ts` is the
-journal an extension records into, and it names no kind. The entry primitive
-lives in `@repo/shared/journal`, and the kinds a view reads live in
-`@repo/journal-catalog`. `src/arith.ts`,
+`src/hooks.ts` holds the chain machinery the seam is built on. `src/journal.ts`
+is the journal, and it is the only bus: whatever crosses the seam as data is an
+entry of a declared kind, written to it. The kinds the REPL consumes within a
+step live in this package, beside the code that writes them. The REPL reads
+those and forwards every other entry, so a kind meant for a view is never one
+of them and lives in `@repo/journal-catalog`. The entry primitive lives in
+`@repo/shared/journal`. `src/arith.ts`,
 `src/plist.ts`, `src/async.ts`, `src/timeout.ts` and `src/types.ts` are the
 small supporting modules. `src/source.ts` holds the language reference the model
 reads.
@@ -132,11 +134,6 @@ Three kinds of thing cross, and each has one mechanism.
 - Data goes through the journal. Record each fact as its own entry at the
   moment it happens, never as a summary folded onto a step. The extension picks
   the kind and owns its shape, and a reader reduces entries itself.
-
-One verb each way, and they are `emit` and `collect`. An extension emits at a
-lifecycle point or on a topic it declares, and collects only from a topic it
-declares itself. A driver collects. Nothing reads a payload it did not emit, and
-no other spelling for either direction survives review.
 
 What the user sends beside a message is input from the user. An extension
 trusts only a key it owns, and only once that key's schema accepts it. Nothing

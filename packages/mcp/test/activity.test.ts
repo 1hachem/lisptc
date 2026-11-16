@@ -1,5 +1,4 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import type { LispPromise } from "@repo/interpreter/promise";
@@ -94,21 +93,16 @@ async function activityOf(
 	reported: unknown[];
 }> {
 	const { interp } = await session(icons);
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		await runAsync(interp, code).catch(() => undefined);
 	} finally {
 		detach();
 	}
 	return {
-		activity: view(buffer.collect(journal), activityKind),
-		reported: buffer.envelopes
-			.filter((e) => e.topic === journal.name)
-			.map((e) => [
-				e.to,
-				(e.payload as { value: { state: string } }).value.state,
-			]),
+		activity: view(buffer.entries, activityKind),
+		reported: buffer.collect(activityKind).map((value) => value.state),
 	};
 }
 
@@ -117,10 +111,7 @@ describe("a tool call from lisp", () => {
 		const { activity, reported } = await activityOf(
 			'(acme/web_search :query "hyko")',
 		);
-		expect(reported).toEqual([
-			[["harness"], "started"],
-			[["harness"], "done"],
-		]);
+		expect(reported).toEqual(["started", "done"]);
 		expect(activity).toEqual([
 			{
 				kind: "mcp",
@@ -175,8 +166,8 @@ describe("loading a server", () => {
 		});
 		const interp = new Interp({ extensions: [extension] });
 		runSync(interp, prelude);
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			await (runSync(
 				interp,
@@ -185,7 +176,7 @@ describe("loading a server", () => {
 		} finally {
 			detach();
 		}
-		const entries = buffer.collect(journal);
+		const entries = buffer.entries;
 		expect(
 			view(entries, { ...activityKind, fold: every }).map((a) => a.state),
 		).toEqual(["started", "done"]);

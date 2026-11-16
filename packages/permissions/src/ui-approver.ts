@@ -1,9 +1,7 @@
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
 import { resolveApproval } from "./approvals.ts";
-import { lapsed, settled } from "./channel.ts";
 import type { ApprovalRequest, Approvals, Approver, Scope } from "./ports.ts";
 
 export const DECIDE_ACTION = "permissions/decide";
@@ -66,8 +64,8 @@ function approvalAsk(request: ApprovalRequest): Ask {
 
 export const uiApprover: Approver = {
 	kind: "ui",
-	ask(request, channels) {
-		record(channels, asksKind, { open: [approvalAsk(request)] });
+	ask(request, journal) {
+		journal.write(asksKind, { open: [approvalAsk(request)] });
 	},
 	session(hooks: SessionHooks, approvals: Approvals): void {
 		hooks.invoke.use(async (ctx, next) => {
@@ -82,9 +80,7 @@ export const uiApprover: Approver = {
 				by: "ui",
 			});
 			if (resolution === undefined) {
-				lapsed.emit(ctx.interp.channels, { user: id });
-				record(
-					ctx.interp.channels,
+				ctx.interp.journal.write(
 					asksKind,
 					answering(id, { accepted: false, label: EXPIRED }),
 				);
@@ -94,16 +90,8 @@ export const uiApprover: Approver = {
 					false,
 				);
 			}
-			settled.emit(ctx.interp.channels, {
-				user: {
-					id,
-					approved: resolution.decision.approved,
-					scope: resolution.decision.scope,
-				},
-			});
 			const { approved: accepted, scope: decidedScope } = resolution.decision;
-			record(
-				ctx.interp.channels,
+			ctx.interp.journal.write(
 				asksKind,
 				answering(id, {
 					accepted,

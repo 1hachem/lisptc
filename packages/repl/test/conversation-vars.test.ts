@@ -1,15 +1,15 @@
-import type { Said } from "@repo/interpreter/conversation";
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import { describe, expect, it } from "vitest";
-import { agentRepl, memoryRepl } from "./helpers.ts";
+import { agentRepl, extension, memoryRepl } from "./helpers.ts";
 
-const sample: Said[] = [
+const sample: ConversationRecord[] = [
 	{ role: "user", content: "hi" },
 	{ role: "assistant", content: "(+ 1 2)" },
 ];
 
-const echoed = async (code: string, said = sample): Promise<string> => {
+const echoed = async (code: string, records = sample): Promise<string> => {
 	const r = agentRepl();
-	r.seed(said, 0);
+	r.seed(records, 0);
 	return (await r.evalOutput(code)).user;
 };
 
@@ -66,11 +66,42 @@ describe("AgentRepl conversation variables", () => {
 		expect(await echoed("(echo (length user-messages))", [])).toBe("0\n");
 	});
 
-	it("shows a note an extension appended, with its source, and hands it over once", async () => {
-		const r = agentRepl();
-		r.seed(sample, 0);
-		r.interp.conversation.append("memory", "k: v");
+	it("keeps what an extension requested for the user out of user-messages, and in the conversation as the user's", async () => {
+		const requested: ConversationRecord[] = [
+			...sample,
+			{ role: "user", content: "ping pressed", source: "ping" },
+		];
+		expect(await echoed("(echo (length user-messages))", requested)).toBe(
+			"1\n",
+		);
+		expect(
+			await echoed(
+				'(echo (cdr (assoc "role" (car (last conversation)))))',
+				requested,
+			),
+		).toBe("user\n");
+	});
 
+	it("hands back a note an extension appended, and shows it in the conversation once it is seeded back", async () => {
+		const r = agentRepl([
+			extension((hooks) => {
+				hooks.beginStep.use((ctx, next) => {
+					ctx.interp.conversation.append("memory", "k: v");
+					return next(ctx);
+				});
+			}),
+		]);
+		r.seed(sample, 0);
+
+		const { notes } = await r.beginStep();
+		expect(notes).toEqual([
+			{ role: "system", content: "k: v", source: "memory" },
+		]);
+		expect((await r.evalOutput("(echo (length conversation))")).user).toBe(
+			"2\n",
+		);
+
+		r.seed([...sample, ...notes], 0);
 		expect(
 			(
 				await r.evalOutput(
@@ -81,7 +112,6 @@ describe("AgentRepl conversation variables", () => {
 		expect((await r.evalOutput("(echo (length user-messages))")).user).toBe(
 			"1\n",
 		);
-		expect((await r.beginStep()).notes).toEqual([]);
 	});
 });
 

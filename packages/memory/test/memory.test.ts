@@ -1,10 +1,10 @@
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { note } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink } from "@repo/interpreter/journal";
 import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -78,13 +78,18 @@ function fixture(
 
 async function opening(f: Fixture): Promise<string> {
 	const hooks = openSession([memoryExtension(bareHost, { bank: f.bank })]);
-	await drive(
-		hooks.beginStep.run(() => settled(undefined), { interp: f.interp }),
-	);
-	return f.interp
-		.takeAppended()
-		.map((note) => note.content)
-		.join("");
+	const buffer = bufferSink();
+	const detach = f.interp.journal.pipe(buffer);
+	try {
+		await drive(
+			hooks.beginStep.run(() => settled(undefined), { interp: f.interp }),
+		);
+	} finally {
+		detach();
+	}
+	const notes = buffer.collect(note);
+	f.interp.seed([...f.interp.conversation.records(), ...notes], 0);
+	return notes.map((record) => record.content).join("");
 }
 
 async function ev(f: Fixture, code: string): Promise<string> {
@@ -93,7 +98,7 @@ async function ev(f: Fixture, code: string): Promise<string> {
 
 function said(f: Fixture, text: string): void {
 	f.interp.seed(
-		[...f.interp.conversation.said(), { role: "user", content: text }],
+		[...f.interp.conversation.records(), { role: "user", content: text }],
 		0,
 	);
 }
@@ -263,12 +268,12 @@ describe("triggers", () => {
 	it("records each memory it fires as a journal entry, when it fires", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
-		const buffer = bufferTransport();
-		f.interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		f.interp.journal.pipe(buffer);
 
 		await f.step("(+ 1 1)");
 
-		expect(view(buffer.collect(journal), memoryKind)).toEqual([
+		expect(view(buffer.entries, memoryKind)).toEqual([
 			{ key: "always", body: "here", on: "step" },
 		]);
 	});

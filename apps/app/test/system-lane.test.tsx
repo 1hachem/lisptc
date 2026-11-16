@@ -1,4 +1,4 @@
-import { CHANNELS } from "@repo/components";
+import { LANES } from "@repo/components";
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
@@ -129,9 +129,9 @@ async function mount(view: React.ReactNode = <ChatView />) {
 	return host;
 }
 
-describe("the system channel", () => {
-	it("is a channel the trace toggles", () => {
-		expect(CHANNELS.find((c) => c.id === "system")).toMatchObject({
+describe("the system lane", () => {
+	it("is a lane the trace toggles", () => {
+		expect(LANES.find((c) => c.id === "system")).toMatchObject({
 			label: "system",
 		});
 	});

@@ -1,8 +1,8 @@
 import { effect } from "@repo/interpreter/effects";
+import { hitch } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { llmSlot, type Observed } from "@repo/interpreter/observe";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
 export function extension(
@@ -20,7 +20,7 @@ export function answering(): InterpExtension {
 	return extension((hooks) =>
 		hooks.evalStep.use((ctx, next) => {
 			if (!ctx.code.includes("("))
-				effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+				ctx.interp.journal.write(effect, { type: "end" });
 			return next(ctx);
 		}),
 	);
@@ -29,7 +29,7 @@ export function answering(): InterpExtension {
 export function noting(text: string): InterpExtension {
 	return extension((hooks) =>
 		hooks.evalStep.use((ctx, next) => {
-			note.emit(ctx.interp.channels, { model: { kind: "skipped", text } });
+			ctx.interp.journal.write(hitch, { kind: "skipped", text });
 			return next(ctx);
 		}),
 	);

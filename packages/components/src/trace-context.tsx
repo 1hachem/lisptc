@@ -1,13 +1,13 @@
 import { createContext, type ReactNode, useContext } from "react";
-import { EVERY_CHANNEL, type Shown } from "./trace-channels.ts";
+import { EVERY_LANE, type Shown } from "./trace-lanes.ts";
 
-const ShownChannels = createContext<Shown | null>(null);
+const ShownLanes = createContext<Shown | null>(null);
 
 const Traced = createContext(false);
 
 export const Revealed = createContext(false);
 
-export function ChannelsShown({
+export function LanesShown({
 	shown,
 	children,
 }: {
@@ -15,14 +15,14 @@ export function ChannelsShown({
 	children: ReactNode;
 }) {
 	return (
-		<ShownChannels.Provider value={shown}>
+		<ShownLanes.Provider value={shown}>
 			<Traced.Provider value>{children}</Traced.Provider>
-		</ShownChannels.Provider>
+		</ShownLanes.Provider>
 	);
 }
 
-export function useChannels(): Shown {
-	return useContext(ShownChannels) ?? EVERY_CHANNEL;
+export function useLanes(): Shown {
+	return useContext(ShownLanes) ?? EVERY_LANE;
 }
 
 export function useTraced(): boolean {

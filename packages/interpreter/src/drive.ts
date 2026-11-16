@@ -1,5 +1,6 @@
 import type { Awaitable } from "@repo/shared/host";
 import { EvalException } from "./errors.ts";
+import { hitch, type Journal, released } from "./journal.ts";
 import type { List } from "./objects.ts";
 
 export type Eval<T = unknown> = Generator<Promise<unknown>, T, unknown>;
@@ -51,23 +52,27 @@ export class Hold {
 	private settle!: (decision: Decision) => void;
 	readonly until: Promise<void>;
 
-	constructor(readonly reason: string) {
+	constructor(
+		readonly id: string,
+		readonly reason: string,
+		private readonly decided: (granted: boolean) => void,
+	) {
 		this.until = new Promise<void>((resolve, reject) => {
 			this.settle = (decision) =>
 				"granted" in decision ? resolve() : reject(decision.refusal);
 		});
 	}
 
-	get released(): boolean {
-		return this.decision !== undefined;
-	}
-
 	release(): void {
-		this.decision ??= { granted: true };
+		if (this.decision !== undefined) return;
+		this.decision = { granted: true };
+		this.decided(true);
 	}
 
 	refuse(refusal: unknown): void {
-		this.decision ??= { refusal };
+		if (this.decision !== undefined) return;
+		this.decision = { refusal };
+		this.decided(false);
 	}
 
 	resume(): void {
@@ -76,21 +81,28 @@ export class Hold {
 }
 
 export class Holds {
-	private parker: ((hold: Hold) => void) | undefined;
+	parkable = false;
+	private issued = 0;
+	private readonly open = new Map<string, Hold>();
 
-	get parkable(): boolean {
-		return this.parker !== undefined;
+	park(reason: string, journal: Journal): Hold {
+		this.issued += 1;
+		const id = `hold-${this.issued}`;
+		const hold = new Hold(id, reason, (granted) =>
+			journal.write(released, { hold: id, granted }),
+		);
+		this.open.set(id, hold);
+		journal.write(hitch, { kind: "held", text: reason, hold: id });
+		return hold;
 	}
 
-	parkWith(parker: (hold: Hold) => void): () => void {
-		this.parker = parker;
-		return () => {
-			if (this.parker === parker) this.parker = undefined;
-		};
+	get(id: string): Hold | undefined {
+		return this.open.get(id);
 	}
 
-	park(hold: Hold): Hold {
-		this.parker?.(hold);
+	take(id: string): Hold | undefined {
+		const hold = this.open.get(id);
+		this.open.delete(id);
 		return hold;
 	}
 }

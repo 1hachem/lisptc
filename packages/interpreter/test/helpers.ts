@@ -1,5 +1,5 @@
-import { bufferTransport } from "../src/channels-host.ts";
 import { type Image, restore, snapshot } from "../src/image.ts";
+import { bufferSink } from "../src/journal.ts";
 import { Interp, type InterpOptions, runSync } from "../src/lisp.ts";
 import { prelude } from "../src/prelude.ts";
 import { str } from "../src/print.ts";
@@ -17,8 +17,8 @@ export function evWithOutput(
 	code: string,
 	interp: Interp = freshInterp(),
 ): { value: string; output: string } {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		return {
 			value: str(runSync(interp, code)),
