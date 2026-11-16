@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 import type schema from "../convex/schema.ts";
-import { harness, type Signed, signIn } from "./helpers.ts";
+import { type Signed, signIn, testDeployment } from "./helpers.ts";
 
 const PAST_A_BATCH = 257;
 
@@ -13,7 +13,7 @@ afterEach(() => {
 
 describe("removing a chat", () => {
 	it("takes its messages with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -34,7 +34,7 @@ describe("removing a chat", () => {
 	});
 
 	it("takes its rendered views with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -56,7 +56,7 @@ describe("removing a chat", () => {
 	});
 
 	it("takes its tours with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -86,7 +86,7 @@ describe("removing a chat", () => {
 	});
 
 	it("takes its repl checkpoints with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -111,7 +111,7 @@ describe("removing a chat", () => {
 	});
 
 	it("drops it from the list at once", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const kept = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -131,7 +131,7 @@ describe("removing a chat", () => {
 	});
 
 	it("refuses a chat owned by someone else", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		const chatId = await bob.as.mutation(api.chats.create, {
@@ -142,7 +142,7 @@ describe("removing a chat", () => {
 		).rejects.toThrow();
 	});
 	it("takes the sub-agent chats it spawned, and their messages, with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -171,7 +171,7 @@ describe("removing a chat", () => {
 
 describe("removing a workspace", () => {
 	it("takes its chats and their messages with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
 			name: "doomed",
@@ -216,7 +216,7 @@ describe("removing a workspace", () => {
 	});
 
 	it("takes its preferences with it and leaves the other workspace's", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
 			name: "doomed",
@@ -239,7 +239,7 @@ describe("removing a workspace", () => {
 	});
 
 	it("takes its secrets, oauth records, permissions, readme, knowledge, attachments, bin and panel layout with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
 			name: "doomed",
@@ -328,7 +328,7 @@ describe("removing a workspace", () => {
 	});
 
 	it("leaves the other workspaces alone", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const doomed = await alice.as.mutation(api.workspaces.create, {
 			name: "doomed",
@@ -344,7 +344,7 @@ describe("removing a workspace", () => {
 	});
 
 	it("replaces the last one rather than leaving none", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 
 		const landing = await alice.as.mutation(api.workspaces.remove, {
@@ -357,7 +357,7 @@ describe("removing a workspace", () => {
 	});
 
 	it("refuses a workspace owned by someone else", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -368,7 +368,7 @@ describe("removing a workspace", () => {
 
 describe("creating a workspace", () => {
 	it("refuses one past the cap of 25", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		for (let i = 1; i < 25; i++) {
 			await alice.as.mutation(api.workspaces.create, { name: `extra ${i}` });
@@ -465,7 +465,7 @@ const nothing = {
 
 describe("deleting an account", () => {
 	it("takes chats of a full batch of messages and more", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await addChat(t, alice, alice.workspace, 256);
 		await addChat(t, alice, alice.workspace, PAST_A_BATCH);
@@ -476,7 +476,7 @@ describe("deleting an account", () => {
 	});
 
 	it("takes more chats and workspaces than one batch holds", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		for (let i = 0; i < PAST_A_BATCH; i++) {
 			await addChat(t, alice, alice.workspace, 1);
@@ -497,7 +497,7 @@ describe("deleting an account", () => {
 	});
 
 	it("takes the repl checkpoints of its chats", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
@@ -515,7 +515,7 @@ describe("deleting an account", () => {
 	});
 
 	it("takes its memories, onboardings, sources, secrets, oauth records, permissions, readme, knowledge and preferences", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.sources.put, {
 			workspaceId: alice.workspace,
@@ -577,7 +577,7 @@ describe("deleting an account", () => {
 	});
 
 	it("leaves other accounts alone", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await addChat(t, bob, bob.workspace, 1);
@@ -599,7 +599,7 @@ describe("deleting an account", () => {
 
 describe("removing a user", () => {
 	it("takes their preferences with them", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.preferences.put, {
 			workspaceId: alice.workspace,
@@ -617,7 +617,7 @@ describe("removing a user", () => {
 	});
 
 	it("takes the tours they finished with them", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,

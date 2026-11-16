@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import { DESKTOP_STALE_MS } from "../convex/limits.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe("a user's desktop presence", () => {
 	it("is off until a desktop attaches, and on after", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		expect(await alice.as.query(api.desktops.mine, {})).toEqual({
 			connected: false,
@@ -27,7 +27,7 @@ describe("a user's desktop presence", () => {
 	});
 
 	it("is the caller's own, never another account's", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await t.mutation(internal.desktops.attach, {
@@ -43,7 +43,7 @@ describe("a user's desktop presence", () => {
 	});
 
 	it("keeps the newest connection when an older one closes late", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await t.mutation(internal.desktops.attach, {
 			userId: alice.user,
@@ -78,7 +78,7 @@ describe("a user's desktop presence", () => {
 	});
 
 	it("keeps one row per account however often its desktop reconnects", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		for (const connection of ["c1", "c2", "c3"]) {
 			await t.mutation(internal.desktops.attach, {
@@ -107,7 +107,7 @@ describe("a user's desktop presence", () => {
 	});
 
 	it("keeps two machines of one account apart, and is on while either is", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		for (const machineId of ["laptop", "tower"])
 			await t.mutation(internal.desktops.attach, {
@@ -134,7 +134,7 @@ describe("a user's desktop presence", () => {
 
 	it("marks a desktop gone when its connection stopped pinging, and keeps a pinging one", async () => {
 		vi.useFakeTimers();
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await t.mutation(internal.desktops.attach, {

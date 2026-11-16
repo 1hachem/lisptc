@@ -12,10 +12,12 @@ const HOUR = 60 * 60 * 1000;
 export interface Signed {
 	user: Id<"users">;
 	workspace: Id<"workspaces">;
+	authId: string;
+	sessionId: string;
 	as: TestConvex<typeof schema>;
 }
 
-export function harness(): TestConvex<typeof schema> {
+export function testDeployment(): TestConvex<typeof schema> {
 	const t = convexTest(schema, modules);
 	betterAuthTest.register(t);
 	return t;
@@ -78,6 +80,8 @@ export async function signIn(
 	return {
 		user,
 		workspace,
+		authId,
+		sessionId,
 		as: t.withIdentity({ subject: authId, sessionId }) as TestConvex<
 			typeof schema
 		>,

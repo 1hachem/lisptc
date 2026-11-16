@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
-import { harness, type Signed, signIn } from "./helpers.ts";
+import { type Signed, signIn, testDeployment } from "./helpers.ts";
 
 afterEach(() => {
 	vi.useRealTimers();
 });
 
 async function conversation() {
-	const t = harness();
+	const t = testDeployment();
 	const alice = await signIn(t, "alice@example.com");
 	const chatId = await alice.as.mutation(api.chats.create, {
 		workspaceId: alice.workspace,
@@ -293,7 +293,7 @@ describe("forking a chat at a message", () => {
 
 	describe("an ask in the forked conversation", () => {
 		async function asked() {
-			const t = harness();
+			const t = testDeployment();
 			const alice = await signIn(t, "alice@example.com");
 			const chatId = await alice.as.mutation(api.chats.create, {
 				workspaceId: alice.workspace,

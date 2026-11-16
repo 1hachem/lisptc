@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
 import { POINTER_TTL_MS, TOUR_TTL_MS } from "../convex/limits.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -17,7 +17,7 @@ const steps = [
 ];
 
 async function touring() {
-	const t = harness();
+	const t = testDeployment();
 	const alice = await signIn(t, "alice@example.com");
 	const chatId = await alice.as.mutation(api.chats.create, {
 		workspaceId: alice.workspace,

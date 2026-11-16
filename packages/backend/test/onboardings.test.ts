@@ -8,7 +8,7 @@ import {
 	ConvexOnboardingStore,
 	type OnboardingClient,
 } from "../src/onboarding-store.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 const WELCOME = {
 	name: "welcome",
@@ -18,7 +18,7 @@ const WELCOME = {
 
 describe("onboarding access", () => {
 	it("keeps an onboarding in the workspace it was written to", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await alice.as.mutation(api.onboardings.put, {
@@ -37,7 +37,7 @@ describe("onboarding access", () => {
 	});
 
 	it("refuses another user's workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await bob.as.mutation(api.onboardings.put, {
@@ -69,7 +69,7 @@ describe("onboarding access", () => {
 	});
 
 	it("refuses an unauthenticated caller", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			t.query(api.onboardings.list, { workspaceId: alice.workspace }),
@@ -77,7 +77,7 @@ describe("onboarding access", () => {
 	});
 
 	it("records progress for the user a thread acts as", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const thread = t.withIdentity({
 			issuer: ACTING_ISSUER,
@@ -105,7 +105,7 @@ describe("onboarding access", () => {
 
 describe("onboarding rows", () => {
 	it("replaces the script and keeps the progress", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.onboardings.put, {
@@ -128,7 +128,7 @@ describe("onboarding rows", () => {
 	});
 
 	it("refuses to mark one that does not exist", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.onboardings.mark, {
@@ -140,7 +140,7 @@ describe("onboarding rows", () => {
 	});
 
 	it("refuses a name that is not a slug", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.onboardings.put, {
@@ -151,7 +151,7 @@ describe("onboarding rows", () => {
 	});
 
 	it("refuses one larger than the cap", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.onboardings.put, {
@@ -165,7 +165,7 @@ describe("onboarding rows", () => {
 	});
 
 	it("takes its progress with it when removed", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.onboardings.put, {
@@ -206,7 +206,7 @@ describe("removing a workspace", () => {
 	});
 
 	it("takes its onboardings and their progress with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.onboardings.put, {
 			workspaceId: alice.workspace,
@@ -234,7 +234,7 @@ describe("removing a workspace", () => {
 
 describe("the convex onboarding store", () => {
 	it("prints the script it writes and reads it back as a form", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const store = new ConvexOnboardingStore(
 			alice.workspace,

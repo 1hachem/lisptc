@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import { ATTACHMENT_TTL_MS, MAX_KNOWLEDGE_BYTES } from "../convex/limits.ts";
 import type schema from "../convex/schema.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 function uploaded(t: TestConvex<typeof schema>, body: BlobPart, type: string) {
 	return t.run((ctx) => ctx.storage.store(new Blob([body], { type })));
@@ -15,7 +15,7 @@ async function blobs(t: TestConvex<typeof schema>) {
 
 describe("attachments", () => {
 	it("holds an attached file apart from knowledge, and serves it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		expect(
@@ -50,7 +50,7 @@ describe("attachments", () => {
 	});
 
 	it("numbers a name attachments already hold instead of replacing it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		const add = async () =>
@@ -66,7 +66,7 @@ describe("attachments", () => {
 	});
 
 	it("refuses a file too large or badly named, and drops its blob", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		expect(
@@ -93,7 +93,7 @@ describe("attachments", () => {
 	});
 
 	it("keeps a file by moving it into knowledge with the same blob", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.files.add, {
@@ -138,7 +138,7 @@ describe("attachments", () => {
 	});
 
 	it("unkeeps a knowledge file back into attachments with the same blob", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.files.add, {
@@ -178,7 +178,7 @@ describe("attachments", () => {
 	});
 
 	it("refuses to keep over a knowledge file of the same name", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.files.add, {
@@ -202,7 +202,7 @@ describe("attachments", () => {
 	});
 
 	it("moves a file left in attachments past its time to the bin, and only that one", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		await alice.as.mutation(api.files.add, {
@@ -237,7 +237,7 @@ describe("attachments", () => {
 	});
 
 	it("keeps expiring when the bin holds every numbered copy of a name", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
 		const filler = await uploaded(t, "filler", "text/plain");

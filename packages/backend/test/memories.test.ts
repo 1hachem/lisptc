@@ -9,7 +9,7 @@ import {
 	type MemoryClient,
 	type StoredMemory,
 } from "../src/memory-store.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 function row(key: string, body: string): StoredMemory {
 	return { key, body, links: [], score: 1, used: 0, lastUsed: 0 };
@@ -17,7 +17,7 @@ function row(key: string, body: string): StoredMemory {
 
 describe("memory access", () => {
 	it("keeps a memory in the workspace it was written to", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await alice.as.mutation(api.memories.put, {
@@ -36,7 +36,7 @@ describe("memory access", () => {
 	});
 
 	it("refuses another user's workspace", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const bob = await signIn(t, "bob@example.com");
 		await expect(
@@ -51,7 +51,7 @@ describe("memory access", () => {
 	});
 
 	it("refuses an unauthenticated caller", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			t.query(api.memories.list, { workspaceId: alice.workspace }),
@@ -59,7 +59,7 @@ describe("memory access", () => {
 	});
 
 	it("replaces a memory written under a key it already holds", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		for (const body of ['"first"', '"second"'])
 			await alice.as.mutation(api.memories.put, {
@@ -75,7 +75,7 @@ describe("memory access", () => {
 	});
 
 	it("reports whether forgetting one found anything", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.memories.put, {
 			workspaceId: alice.workspace,
@@ -97,7 +97,7 @@ describe("memory access", () => {
 	});
 
 	it("refuses a memory larger than the cap", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await expect(
 			alice.as.mutation(api.memories.put, {
@@ -118,7 +118,7 @@ describe("removing a workspace", () => {
 	});
 
 	it("takes its memories with it", async () => {
-		const t = harness();
+		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		await alice.as.mutation(api.memories.put, {
 			workspaceId: alice.workspace,
