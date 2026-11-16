@@ -328,7 +328,10 @@ async function* evaluateStep(
 		: step >= maxSteps
 			? "capped"
 			: "continue";
-	if (verdict === "halt" && !held) return verdict;
+	if (verdict === "halt" && !held) {
+		yield* noting(lines, notes);
+		return verdict;
+	}
 	yield {
 		type: "result",
 		step,
