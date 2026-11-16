@@ -64,6 +64,7 @@ const CONSUMED: ReadonlySet<string> = new Set([
 	hitch.name,
 	effect.name,
 	note.name,
+	released.name,
 ]);
 
 function forwarded(entries: readonly Entry[]): Entry[] {
