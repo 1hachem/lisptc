@@ -12,7 +12,6 @@ import { Reader } from "@repo/interpreter/reader";
 import { zAny, zList, zString, zSym } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { z } from "zod";
-import { requested } from "./channel.ts";
 import type {
 	ApprovalRequest,
 	PermissionsHost,
@@ -305,7 +304,6 @@ export function permissionsExtension(
 		host.approvals.open(request);
 		keep(interp, request);
 		if (change !== undefined) awaiting.set(request.id, change);
-		requested.emit(interp.channels, { user: request });
 		for (const approver of host.approvers)
 			approver.ask?.(request, interp.channels);
 		return request;
