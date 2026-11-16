@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { bufferTransport } from "../src/channels-host.ts";
 import { EvalException, StepHold } from "../src/errors.ts";
+import { bufferSink, hitch } from "../src/journal.ts";
 import { type Interp, runSync } from "../src/lisp.ts";
 import { str } from "../src/print.ts";
-import { hitch } from "../src/topics.ts";
 import { freshInterp } from "./helpers.ts";
 
 function holding(): Interp {
@@ -27,8 +26,8 @@ function thrownBy(interp: Interp, code: string): unknown {
 describe("a held step", () => {
 	it("stops the remaining top-level forms and emits a held hitch", () => {
 		const interp = holding();
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		let thrown: unknown;
 		try {
 			thrown = thrownBy(interp, "(setq n 1) (hold 2) (setq n 3)");

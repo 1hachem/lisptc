@@ -1,11 +1,10 @@
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink } from "@repo/interpreter/journal";
 import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -65,8 +64,8 @@ function fixture(
 
 async function opening(f: Fixture): Promise<string> {
 	const hooks = openSession([memoryExtension(memoryHost, { bank: f.bank })]);
-	const buffer = bufferTransport();
-	const detach = f.interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = f.interp.journal.pipe(buffer);
 	try {
 		await drive(
 			hooks.beginStep.run(() => settled(undefined), { interp: f.interp }),
@@ -76,7 +75,7 @@ async function opening(f: Fixture): Promise<string> {
 	}
 	return buffer
 		.collect(note)
-		.map((said) => said.content)
+		.map((record) => record.content)
 		.join("");
 }
 
@@ -203,12 +202,12 @@ describe("triggers", () => {
 	it("records each memory it fires as a journal entry, when it fires", async () => {
 		const f = fixture();
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
-		const buffer = bufferTransport();
-		f.interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		f.interp.journal.pipe(buffer);
 
 		await f.step("(+ 1 1)");
 
-		expect(view(buffer.collect(journal), memoryKind)).toEqual([
+		expect(view(buffer.entries, memoryKind)).toEqual([
 			{ key: "always", body: "here", on: "step" },
 		]);
 	});

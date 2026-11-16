@@ -24,14 +24,14 @@ function progressing(): InterpExtension {
 		interp.defineGlobal(
 			newSym("progress"),
 			interp.makeBuiltIn("progress", 1, (n: unknown) => {
-				recording(interp.channels, "progress", Number(n));
+				recording(interp.journal, "progress", Number(n));
 				return 0;
 			}),
 		);
 		interp.defineGlobal(
 			newSym("doing"),
 			interp.makeBuiltIn("doing", 1, (n: unknown) => {
-				recording(interp.channels, "doing", Number(n), true);
+				recording(interp.journal, "doing", Number(n), true);
 				return 0;
 			}),
 		);

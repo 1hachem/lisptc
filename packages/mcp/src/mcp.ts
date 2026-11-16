@@ -178,7 +178,7 @@ function authorizationAsk(server: string, url: string): Ask {
 
 function holdForAuthorization(interp: Interp, error: unknown): unknown {
 	if (!(error instanceof AuthorizationRequired)) return error;
-	record(interp.channels, asksKind, {
+	record(interp.journal, asksKind, {
 		open: [authorizationAsk(error.server, error.url)],
 	});
 	return new StepHold(
@@ -204,7 +204,7 @@ function answerAuthorization(hooks: SessionHooks): void {
 				: `The user declined to authorize "${server}". Do not load it again unless they ask.`,
 		);
 		record(
-			ctx.interp.channels,
+			ctx.interp.journal,
 			asksKind,
 			answering(id, {
 				accepted,
@@ -703,7 +703,7 @@ function callTool(
 	const icon = iconOf(tool.icons, entry.icons);
 	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
-		record(interp.channels, activityKind, {
+		record(interp.journal, activityKind, {
 			kind: "mcp",
 			icon,
 			label: toolLabel(ref.server, tool),
@@ -915,7 +915,7 @@ export function registerMcp(
 		loads.set(n);
 		const startedAt = clock.now();
 		const report = (state: ActivityEntry["state"], error?: unknown): void =>
-			record(interp.channels, activityKind, {
+			record(interp.journal, activityKind, {
 				kind: "mcp",
 				icon: iconOf(
 					state === "done" ? entryOf(servers, name)?.icons : undefined,

@@ -1,10 +1,10 @@
 import type { Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { ChatMessage } from "@repo/shared/messages";
-import type { Reader } from "./channels.ts";
 import type { ConversationInterp } from "./conversation.ts";
 import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
+import type { Reader } from "./journal.ts";
 import type { Installable, Interp } from "./lisp.ts";
 export type Bounded = Record<Reader, string>;
 

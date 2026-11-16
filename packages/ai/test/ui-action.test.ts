@@ -38,7 +38,7 @@ describe("a ui action", () => {
 	test("hands what the action recorded back apart from the reply", async () => {
 		const rendering = extension((hooks) => {
 			hooks.invoke.use(async (ctx) => {
-				record(ctx.interp.channels, viewKind, { viewId: "v1" });
+				record(ctx.interp.journal, viewKind, { viewId: "v1" });
 			});
 		});
 		const repl = testRepl([rendering]);

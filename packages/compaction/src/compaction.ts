@@ -1,4 +1,3 @@
-import type { Channels, Reader } from "@repo/interpreter/channels";
 import {
 	DOC_DOC,
 	DOC_SIGNATURE,
@@ -7,6 +6,7 @@ import {
 } from "@repo/interpreter/docs";
 import { EvalException } from "@repo/interpreter/errors";
 import { callableKind } from "@repo/interpreter/func";
+import { type Journal, print, type Reader } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
@@ -27,7 +27,6 @@ import { echoText, str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { output } from "@repo/interpreter/topics";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 
@@ -210,7 +209,7 @@ const budgetCodec: StateCodec<Budget> = {
 export class Compactor {
 	private counters: State<Record<string, number>> | undefined;
 	private budget: State<Budget> = detachedState(IDLE);
-	private channels?: Channels;
+	private journal?: Journal;
 	readonly limit: number;
 
 	constructor(limit: number = MAX_WORDS) {
@@ -257,8 +256,8 @@ export class Compactor {
 		);
 	}
 
-	attach(channels: Channels): void {
-		this.channels = channels;
+	attach(journal: Journal): void {
+		this.journal = journal;
 	}
 
 	endStep(): string {
@@ -278,13 +277,13 @@ export class Compactor {
 			spent: budget.spent + wordSpans(model).length,
 			dropped: budget.dropped + dropped,
 		});
-		output.emit(this.channels, { model, user });
+		print(this.journal, { model, user });
 		return { model, user };
 	}
 
 	doc(text: string): Bounded {
 		const bounded = { model: text, user: text };
-		output.emit(this.channels, bounded);
+		print(this.journal, bounded);
 		return bounded;
 	}
 
@@ -769,13 +768,12 @@ function registerCompaction(interp: Interp, c: Compactor): void {
 			"The last number used to name each kind of saved result, so the next one gets the next number.",
 		),
 	);
-	c.attach(interp.channels);
+	c.attach(interp.journal);
 
 	interp.hooks.evalForm.use(function* (interp, form, next) {
 		const value = yield* next(interp, form);
 		const report = c.result(interp, form, value);
-		if (report !== "")
-			output.emit(interp.channels, { model: report, user: "" });
+		if (report !== "") print(interp.journal, { model: report, user: "" });
 		return value;
 	});
 	interp.def(

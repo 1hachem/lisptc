@@ -1,6 +1,6 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
+import { bufferSink } from "@repo/interpreter/journal";
 import { openSession } from "@repo/interpreter/session";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
@@ -494,8 +494,8 @@ describe("a message the user attached files to", () => {
 			}),
 		);
 		const interp = new ConversationInterpreter({ extensions: [extension] });
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			await driveAsync(
 				openSession([extension]).received.run(
@@ -507,7 +507,7 @@ describe("a message the user attached files to", () => {
 		} finally {
 			detach();
 		}
-		return buffer.collect(note).map((said) => said.content);
+		return buffer.collect(note).map((record) => record.content);
 	}
 
 	it("tells the model which files came with it", async () => {

@@ -55,13 +55,13 @@ describe("checkpoints", () => {
 		expect((await images.latest())?.depth).toBe(3);
 	});
 
-	it("stamps a step's channel envelopes with its depth, across a resume", async () => {
+	it("stamps a step's journal entries with its depth, across a resume", async () => {
 		const steps: number[] = [];
 		const stamp: InterpExtension = (interp: Interp): void => {
 			interp.defineGlobal(
 				newSym("stamp"),
 				new BuiltInFunc("stamp", 0, () => {
-					steps.push(interp.channels.step);
+					steps.push(interp.journal.step);
 					return null;
 				}),
 			);

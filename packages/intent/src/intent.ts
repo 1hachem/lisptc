@@ -151,7 +151,7 @@ function closeShown(
 	error?: string,
 ): void {
 	const intent = close(interp, state, clock, error);
-	if (intent !== undefined) record(interp.channels, intentKind, intent);
+	if (intent !== undefined) record(interp.journal, intentKind, intent);
 }
 
 function count(x: unknown, what: string, least: number): number {
@@ -245,7 +245,7 @@ function registerIntent(interp: Interp, clock: Clock): void {
 	);
 
 	const show = (): typeof Unspecified => {
-		record(interp.channels, intentKind, shown(states));
+		record(interp.journal, intentKind, shown(states));
 		return Unspecified;
 	};
 
@@ -388,13 +388,13 @@ function registerIntent(interp: Interp, clock: Clock): void {
 			const multi = opts.has("multi") && opts.get("multi") !== null;
 			const n = seq.get() + 1;
 			seq.set(n);
-			record(interp.channels, questionKind, {
+			record(interp.journal, questionKind, {
 				id: `q${n}`,
 				prompt,
 				choices,
 				multi,
 			});
-			effect.emit(interp.channels, { harness: { type: "end" } });
+			interp.journal.write(effect, { type: "end" });
 			return Unspecified;
 		},
 	);

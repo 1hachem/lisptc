@@ -65,8 +65,8 @@ function approvalAsk(request: ApprovalRequest): Ask {
 
 export const uiApprover: Approver = {
 	kind: "ui",
-	ask(request, channels) {
-		record(channels, asksKind, { open: [approvalAsk(request)] });
+	ask(request, journal) {
+		record(journal, asksKind, { open: [approvalAsk(request)] });
 	},
 	session(hooks: SessionHooks, approvals: Approvals): void {
 		hooks.invoke.use(async (ctx, next) => {
@@ -82,7 +82,7 @@ export const uiApprover: Approver = {
 			});
 			if (resolution === undefined) {
 				record(
-					ctx.interp.channels,
+					ctx.interp.journal,
 					asksKind,
 					answering(id, { accepted: false, label: EXPIRED }),
 				);
@@ -94,7 +94,7 @@ export const uiApprover: Approver = {
 			}
 			const { approved: accepted, scope: decidedScope } = resolution.decision;
 			record(
-				ctx.interp.channels,
+				ctx.interp.journal,
 				asksKind,
 				answering(id, {
 					accepted,

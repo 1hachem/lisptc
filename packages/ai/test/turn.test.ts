@@ -77,7 +77,7 @@ function holding(name: string, reason: string): InterpExtension {
 		interp.defineGlobal(
 			newSym(name),
 			interp.makeBuiltIn(name, 0, () => {
-				recording(interp.channels, "waiting", reason);
+				recording(interp.journal, "waiting", reason);
 				throw new StepHold(reason);
 			}),
 		);

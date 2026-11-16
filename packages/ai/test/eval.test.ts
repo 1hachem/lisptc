@@ -122,7 +122,7 @@ describe("a user message", () => {
 			extension((hooks) =>
 				hooks.evalStep.use((ctx, next) => {
 					if (ctx.code.includes("hush"))
-						effect.emit(ctx.interp.channels, { harness: { type: "quiet" } });
+						ctx.interp.journal.write(effect, { type: "quiet" });
 					return next(ctx);
 				}),
 			),

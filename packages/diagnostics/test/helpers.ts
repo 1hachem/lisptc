@@ -1,7 +1,6 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { bufferSink, hitch } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
-import { hitch } from "@repo/interpreter/topics";
 import { diagnosticsExtension } from "../src/diagnostics.ts";
 import { diagnosticsHost } from "../src/diagnostics-host.ts";
 
@@ -14,8 +13,8 @@ export function freshInterp(): Interp {
 }
 
 export function reportOf(code: string, interp: Interp = freshInterp()): string {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		runSync(interp, code);
 	} catch {

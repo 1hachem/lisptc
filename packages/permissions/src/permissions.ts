@@ -305,7 +305,7 @@ export function permissionsExtension(
 		keep(interp, request);
 		if (change !== undefined) awaiting.set(request.id, change);
 		for (const approver of host.approvers)
-			approver.ask?.(request, interp.channels);
+			approver.ask?.(request, interp.journal);
 		return request;
 	}
 

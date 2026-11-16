@@ -33,7 +33,7 @@ function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 						`no file named ${checked} in ${folder}`,
 						name,
 					);
-				record(interp.channels, attachmentsKind, [{ folder, name: checked }]);
+				record(interp.journal, attachmentsKind, [{ folder, name: checked }]);
 				return checked;
 			},
 		);

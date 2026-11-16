@@ -1,13 +1,12 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink, hitch } from "@repo/interpreter/journal";
 import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks, type SessionHooks } from "@repo/interpreter/session";
-import { hitch } from "@repo/interpreter/topics";
+import { asksKind } from "@repo/journal-catalog/asks";
 import type { Entry } from "@repo/shared/journal";
 import { MemoryApprovals } from "../src/approvals.ts";
 import {
@@ -76,8 +75,8 @@ export function session(
 	extension.session?.(hooks);
 
 	async function within(body: () => Promise<unknown>): Promise<StepRun> {
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		const opened = approvals.opened.length;
 		let value: string | undefined;
 		let failed = false;
@@ -91,8 +90,8 @@ export function session(
 		} finally {
 			detach();
 		}
-		const told = buffer.collect(note).map((said) => said.content);
-		const message = told.length === 0 ? undefined : told.join("\n\n");
+		const notes = buffer.collect(note).map((record) => record.content);
+		const message = notes.length === 0 ? undefined : notes.join("\n\n");
 		return {
 			...(value === undefined ? {} : { value }),
 			failed,
@@ -103,7 +102,7 @@ export function session(
 				.map((n) => n.text)
 				.join(""),
 			requests: approvals.opened.slice(opened),
-			entries: buffer.collect(journal),
+			entries: buffer.entries.filter((e) => e.kind === asksKind.name),
 			...(message === undefined ? {} : { message }),
 		};
 	}

@@ -39,7 +39,7 @@ export function* reporting<T>(
 	calls.set(n);
 	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
-		record(interp.channels, activityKind, {
+		record(interp.journal, activityKind, {
 			kind: "file",
 			icon: verb,
 			label: `knowledge · ${verb}`,

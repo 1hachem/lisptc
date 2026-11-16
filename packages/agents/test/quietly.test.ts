@@ -1,6 +1,6 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import { effect } from "@repo/interpreter/effects";
 import { StepHold } from "@repo/interpreter/errors";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -15,8 +15,8 @@ function run(code: string) {
 	interp.def("hold", 0, "(hold)", "", z.tuple([]), () => {
 		throw new StepHold("waiting on the user");
 	});
-	const buffer = bufferTransport();
-	interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	interp.journal.pipe(buffer);
 	try {
 		return {
 			value: str(runSync(interp, code)),

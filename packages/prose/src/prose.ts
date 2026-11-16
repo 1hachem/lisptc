@@ -1,12 +1,12 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { effect } from "@repo/interpreter/effects";
 import { UnresolvedHead } from "@repo/interpreter/errors";
+import { hitch, printed } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { Reader, readFailure } from "@repo/interpreter/reader";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { hitch, output } from "@repo/interpreter/topics";
 import {
 	endOfForm,
 	type FormJudge,
@@ -23,9 +23,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 			next(
 				interp,
 				stripProse(text, (what) =>
-					hitch.emit(interp.channels, {
-						model: { kind: "skipped", text: what },
-					}),
+					interp.journal.write(hitch, { kind: "skipped", text: what }),
 				),
 			),
 		);
@@ -57,19 +55,15 @@ export function proseExtension(host: ProseHost): InterpExtension {
 			hooks.evalStep.use(async (ctx, next) => {
 				if (ctx.author !== "assistant") return next(ctx);
 				const skipped: string[] = [];
-				let printed = false;
+				let printedForModel = false;
 				let held = false;
-				const unskip = hitch.on(ctx.interp.channels, (n, e) => {
+				const unskip = ctx.interp.journal.on(hitch, (n) => {
 					if (n.kind === "held") held = true;
-					if (
-						n.kind === "skipped" &&
-						e.to.includes("model") &&
-						!skipped.includes(n.text)
-					)
+					if (n.kind === "skipped" && !skipped.includes(n.text))
 						skipped.push(n.text);
 				});
-				const unprint = output.on(ctx.interp.channels, (_text, e) => {
-					if (e.to.includes("model")) printed = true;
+				const unprint = ctx.interp.journal.on(printed, (p) => {
+					if (p.to.includes("model")) printedForModel = true;
 				});
 				try {
 					await next(ctx);
@@ -79,9 +73,12 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				}
 				const answered =
 					formsOnly(ctx.code).trim() === "" ||
-					(!printed && !held && skipped.length > 0 && !isTruncated(ctx.code));
+					(!printedForModel &&
+						!held &&
+						skipped.length > 0 &&
+						!isTruncated(ctx.code));
 				if (!answered) return;
-				effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+				ctx.interp.journal.write(effect, { type: "end" });
 				if (skipped.length > 0)
 					ctx.interp.conversation.append("prose", ranNothing(skipped));
 			});

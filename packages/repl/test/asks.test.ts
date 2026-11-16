@@ -54,7 +54,7 @@ function gate(): Gate {
 			newSym("guarded"),
 			interp.makeBuiltIn("guarded", 1, (frame) => {
 				if (!granted) {
-					record(interp.channels, asksKind, { open: [ASK] });
+					record(interp.journal, asksKind, { open: [ASK] });
 					throw new StepHold("guarded waits for approval");
 				}
 				granted = false;

@@ -63,7 +63,7 @@ type Announce = (
 
 function announcer(interp: Interp): Announce {
 	return (id, builtin, state, { provider, model }, timing, error) =>
-		record(interp.channels, activityKind, {
+		record(interp.journal, activityKind, {
 			kind: "llm",
 			icon: "model",
 			label: builtin,

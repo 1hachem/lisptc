@@ -1,8 +1,8 @@
-import type { Channels } from "@repo/interpreter/channels";
 import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
+import type { Journal } from "@repo/interpreter/journal";
 import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
@@ -127,13 +127,13 @@ export class UiSurface {
 	private current: string | undefined;
 	private handling: ((text: string) => void) | undefined;
 	private interp: Interp | undefined;
-	private channels: Channels | undefined;
+	private journal: Journal | undefined;
 	private store: ViewStore | undefined;
 
 	bind(interp: Interp, store?: ViewStore): void {
 		this.interp = interp;
 		this.store = store;
-		this.channels = interp.channels;
+		this.journal = interp.journal;
 		this.handlers = interp.state(
 			"ui/handlers",
 			handlerCodec,
@@ -264,7 +264,7 @@ export class UiSurface {
 
 	render(node: UiNode): RenderedView {
 		const view = this.place(this.viewId(), node);
-		if (this.channels) record(this.channels, viewKind, { viewId: view.viewId });
+		if (this.journal) record(this.journal, viewKind, { viewId: view.viewId });
 		return view;
 	}
 

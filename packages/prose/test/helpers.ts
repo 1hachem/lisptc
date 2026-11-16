@@ -1,8 +1,7 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { bufferSink, hitch } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { hitch } from "@repo/interpreter/topics";
 import type { ProseHost } from "../src/ports.ts";
 import { proseExtension } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
@@ -58,8 +57,8 @@ export function evWithOutput(
 	code: string,
 	interp: Interp = proseInterp(),
 ): { value: string; output: string } {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		return {
 			value: str(runSync(interp, code)),
@@ -72,7 +71,7 @@ export function evWithOutput(
 
 export function collectSkips(interp: Interp): string[] {
 	const skipped: string[] = [];
-	hitch.on(interp.channels, (n) => {
+	interp.journal.on(hitch, (n) => {
 		if (n.kind === "skipped") skipped.push(n.text);
 	});
 	return skipped;
@@ -83,8 +82,8 @@ export function tolerantly(
 	interp: Interp = proseInterp(),
 ): { value: string; output: string; skipped: string[] } {
 	const skipped = collectSkips(interp);
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		return {
 			value: str(runSync(interp, text)),

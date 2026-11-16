@@ -1,4 +1,5 @@
-import { topic } from "./channels.ts";
+import { entryKind, every } from "@repo/shared/journal";
+import { z } from "zod";
 import { Interp, type InterpOptions } from "./lisp.ts";
 import {
 	arrayToList,
@@ -22,7 +23,15 @@ export interface Conversation {
 	request(source: string, content: string): void;
 }
 
-export const note = topic<ConversationRecord>("note");
+export const note = entryKind<ConversationRecord, ConversationRecord[]>({
+	name: "note",
+	schema: z.object({
+		role: z.enum(["user", "assistant", "tool", "system"]),
+		content: z.string(),
+		source: z.string().optional(),
+	}),
+	fold: every,
+});
 
 export type ConversationInterp = Interp & {
 	readonly conversation: Conversation;
@@ -74,7 +83,7 @@ export class ConversationInterpreter
 
 	private emit(role: Role, source: string, content: string): void {
 		if (content === "") return;
-		note.emit(this.channels, { model: { role, content, source } });
+		this.journal.write(note, { role, content, source });
 	}
 
 	seed(records: readonly ConversationRecord[], stepsTaken: number): void {

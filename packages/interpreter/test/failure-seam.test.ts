@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { bufferTransport } from "../src/channels-host.ts";
 import { settled } from "../src/drive.ts";
 import {
 	ArgumentException,
@@ -7,9 +6,9 @@ import {
 	UnresolvedHead,
 } from "../src/errors.ts";
 import { ArityException } from "../src/func.ts";
+import { bufferSink, type Hitch, hitch } from "../src/journal.ts";
 import { type Interp, runSync } from "../src/lisp.ts";
 import { str } from "../src/print.ts";
-import { type Hitch, hitch } from "../src/topics.ts";
 import { freshInterp } from "./helpers.ts";
 
 interface Run {
@@ -19,8 +18,8 @@ interface Run {
 }
 
 function run(interp: Interp, code: string): Run {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	let value: unknown;
 	let thrown: unknown;
 	try {

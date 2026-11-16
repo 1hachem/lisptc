@@ -1,25 +1,171 @@
-import { checked, type Entry, type EntryKind } from "@repo/shared/journal";
-import { type Channels, topic } from "./channels.ts";
+import {
+	checked,
+	type Entry,
+	type EntryKind,
+	entryKind,
+	every,
+} from "@repo/shared/journal";
+import { z } from "zod";
 
-export const journal = topic<Entry>("journal");
+export const READERS = ["user", "model"] as const;
 
-const recordedOn = new WeakMap<Channels, number>();
+export type Reader = (typeof READERS)[number];
 
-export function record<T, V>(
-	channels: Channels | undefined,
-	kind: EntryKind<T, V>,
-	value: T,
-): void {
-	checked(kind, value);
-	if (channels === undefined) return;
-	const n = (recordedOn.get(channels) ?? 0) + 1;
-	recordedOn.set(channels, n);
-	journal.emit(channels, {
-		harness: {
-			id: `${channels.step}.${n}`,
+const reader = z.enum(READERS);
+
+export interface Printed {
+	readonly to: readonly Reader[];
+	readonly text: string;
+}
+
+export const printed = entryKind<Printed, Printed[]>({
+	name: "printed",
+	schema: z.object({ to: z.array(reader).min(1), text: z.string() }),
+	fold: every,
+});
+
+export interface Hitch {
+	readonly kind: "skipped" | "failed" | "held";
+	readonly text: string;
+}
+
+export const hitch = entryKind<Hitch, Hitch[]>({
+	name: "hitch",
+	schema: z.object({
+		kind: z.enum(["skipped", "failed", "held"]),
+		text: z.string(),
+	}),
+	fold: every,
+});
+
+export interface Sink {
+	send(entry: Entry): boolean;
+	close?(): void;
+}
+
+type Listener = (entry: Entry) => void;
+
+export class Journal {
+	private readonly listeners = new Map<string, Set<Listener>>();
+	private readonly allKinds = new Set<Listener>();
+	private readonly sinks = new Set<Sink>();
+	private written = 0;
+	step = 0;
+
+	write<T, V>(kind: EntryKind<T, V>, value: T): void {
+		checked(kind, value);
+		this.written += 1;
+		this.deliver({
+			id: `${this.step}.${this.written}`,
 			kind: kind.name,
 			value,
 			...(kind.supersedes ? { supersedes: true } : {}),
+		});
+	}
+
+	on<T, V>(
+		kind: EntryKind<T, V>,
+		listener: (value: T, entry: Entry) => void,
+	): () => void {
+		let set = this.listeners.get(kind.name);
+		if (set === undefined) {
+			set = new Set();
+			this.listeners.set(kind.name, set);
+		}
+		const unwrapped: Listener = (entry) => listener(entry.value as T, entry);
+		set.add(unwrapped);
+		return () => {
+			set.delete(unwrapped);
+		};
+	}
+
+	onAny(listener: Listener): () => void {
+		this.allKinds.add(listener);
+		return () => {
+			this.allKinds.delete(listener);
+		};
+	}
+
+	pipe(sink: Sink): () => void {
+		this.sinks.add(sink);
+		return () => {
+			if (this.sinks.delete(sink)) sink.close?.();
+		};
+	}
+
+	private deliver(entry: Entry): void {
+		const broken: string[] = [];
+		for (const listener of [
+			...(this.listeners.get(entry.kind) ?? []),
+			...this.allKinds,
+		])
+			try {
+				listener(entry);
+			} catch (ex) {
+				broken.push(ex instanceof Error ? ex.message : String(ex));
+			}
+		for (const sink of [...this.sinks])
+			try {
+				if (!sink.send(entry)) this.sinks.delete(sink);
+			} catch {
+				this.sinks.delete(sink);
+			}
+		if (entry.kind === hitch.name) return;
+		for (const message of broken)
+			this.write(hitch, {
+				kind: "failed",
+				text: `a listener on ${entry.kind} threw: ${message}`,
+			});
+	}
+}
+
+export function record<T, V>(
+	journal: Journal | undefined,
+	kind: EntryKind<T, V>,
+	value: T,
+): void {
+	if (journal === undefined) checked(kind, value);
+	else journal.write(kind, value);
+}
+
+export function print(
+	journal: Journal | undefined,
+	addressed: Partial<Record<Reader, string>>,
+): void {
+	if (journal === undefined) return;
+	const groups = new Map<string, Reader[]>();
+	for (const to of READERS) {
+		const text = addressed[to];
+		if (text === undefined) continue;
+		const readers = groups.get(text);
+		if (readers === undefined) groups.set(text, [to]);
+		else readers.push(to);
+	}
+	for (const [text, to] of groups) journal.write(printed, { to, text });
+}
+
+export interface JournalBuffer extends Sink {
+	readonly entries: readonly Entry[];
+	collect<T, V>(kind: EntryKind<T, V>): T[];
+	collectText(to: Reader): string;
+}
+
+export function bufferSink(): JournalBuffer {
+	const entries: Entry[] = [];
+	const collect = <T, V>(kind: EntryKind<T, V>): T[] =>
+		entries.filter((e) => e.kind === kind.name).map((e) => e.value as T);
+	return {
+		entries,
+		send(entry) {
+			entries.push(entry);
+			return true;
 		},
-	});
+		collect,
+		collectText(to) {
+			return collect(printed)
+				.filter((p) => p.to.includes(to))
+				.map((p) => p.text)
+				.join("");
+		},
+	};
 }

@@ -1,24 +1,22 @@
-import type { Channels } from "@repo/interpreter/channels";
 import { effect, ends } from "@repo/interpreter/effects";
-import { journal } from "@repo/interpreter/journal";
+import type { Journal } from "@repo/interpreter/journal";
 import {
 	type AgentTurn,
 	slot,
 	type TurnOutcome,
 } from "@repo/interpreter/session";
+import { entryKind, every } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 import { extension } from "./helpers.ts";
 
-let recorded = 0;
-
 function recording(
-	channels: Channels | undefined,
-	kind: string,
+	journal: Journal | undefined,
+	name: string,
 	value: unknown,
 ): void {
-	recorded += 1;
-	journal.emit(channels, { harness: { id: `r${recorded}`, kind, value } });
+	journal?.write(entryKind({ name, schema: z.unknown(), fold: every }), value);
 }
 
 describe("an extension hooking the session", () => {
@@ -95,7 +93,7 @@ describe("an extension hooking the session", () => {
 				extension((hooks) =>
 					hooks.evalStep.use(async (ctx, next) => {
 						await next(ctx);
-						effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+						ctx.interp.journal.write(effect, { type: "end" });
 					}),
 				),
 			],
@@ -128,9 +126,9 @@ describe("an extension hooking the session", () => {
 			extensions: [
 				extension((hooks) => {
 					hooks.evalStep.use(async (ctx, next) => {
-						recording(ctx.interp.channels, "before", 1);
+						recording(ctx.interp.journal, "before", 1);
 						await next(ctx);
-						recording(ctx.interp.channels, "after", 2);
+						recording(ctx.interp.journal, "after", 2);
 					});
 				}),
 			],
@@ -150,7 +148,7 @@ describe("an extension hooking the session", () => {
 			extensions: [
 				extension((hooks) => {
 					hooks.invoke.use(async (ctx) => {
-						recording(ctx.interp.channels, "view", ctx.action);
+						recording(ctx.interp.journal, "view", ctx.action);
 					});
 				}),
 			],
@@ -291,7 +289,7 @@ describe("an extension hooking the turn", () => {
 			extensions: [
 				extension((hooks) => {
 					hooks.beforeSettle.use(function* (ctx, more, next) {
-						recording(ctx.interp.channels, "closed", "wrapped");
+						recording(ctx.interp.journal, "closed", "wrapped");
 						return yield* next(ctx, more);
 					});
 				}),

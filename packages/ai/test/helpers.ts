@@ -1,13 +1,13 @@
-import type { Channels } from "@repo/interpreter/channels";
 import { effect } from "@repo/interpreter/effects";
 import { StepHold } from "@repo/interpreter/errors";
-import { journal } from "@repo/interpreter/journal";
+import { type Journal, print } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { output } from "@repo/interpreter/topics";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
+import { entryKind, every, latestOnly } from "@repo/shared/journal";
+import { z } from "zod";
 import type { Repls } from "../src/repl-store.ts";
 import {
 	type ChatInput,
@@ -16,23 +16,19 @@ import {
 } from "../src/stream.ts";
 import { runAgentTurn, type TurnOptions } from "../src/turn.ts";
 
-let recorded = 0;
-
 export function recording(
-	channels: Channels | undefined,
-	kind: string,
+	journal: Journal | undefined,
+	name: string,
 	value: unknown,
 	supersedes?: true,
 ): void {
-	recorded += 1;
-	journal.emit(channels, {
-		harness: {
-			id: `t${recorded}`,
-			kind,
-			value,
-			...(supersedes ? { supersedes } : {}),
-		},
-	});
+	const schema = z.unknown();
+	journal?.write(
+		supersedes
+			? latestOnly({ name, schema })
+			: entryKind({ name, schema, fold: every }),
+		value,
+	);
 }
 
 export function extension(
@@ -44,7 +40,7 @@ export function extension(
 const answersOnForms = extension((hooks) =>
 	hooks.evalStep.use((ctx, next) => {
 		if (!ctx.code.includes("("))
-			effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+			ctx.interp.journal.write(effect, { type: "end" });
 		return next(ctx);
 	}),
 );
@@ -52,7 +48,7 @@ const answersOnForms = extension((hooks) =>
 export function reporting(text: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.evalStep.use((ctx, next) => {
-			recording(ctx.interp.channels, "reported", text);
+			recording(ctx.interp.journal, "reported", text);
 			return next(ctx);
 		});
 	});
@@ -61,7 +57,7 @@ export function reporting(text: string): InterpExtension {
 export function hearing(text: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.beginStep.use(function* (ctx, next) {
-			recording(ctx.interp.channels, "heard", text);
+			recording(ctx.interp.journal, "heard", text);
 			yield* next(ctx);
 		});
 	});
@@ -126,7 +122,7 @@ export function holding(): InterpExtension {
 			interp.defineGlobal(
 				newSym("wait-for-human"),
 				interp.makeBuiltIn("wait-for-human", 0, () => {
-					recording(interp.channels, "waiting", "approve it");
+					recording(interp.journal, "waiting", "approve it");
 					throw new StepHold("approve it");
 				}),
 			);
@@ -136,7 +132,7 @@ export function holding(): InterpExtension {
 				hooks.invoke.use(async (ctx, next) => {
 					if (ctx.action !== "approve") return next(ctx);
 					ctx.interp.conversation.request(ctx.action, "approved, carry on");
-					recording(ctx.interp.channels, "decided", "approve");
+					recording(ctx.interp.journal, "decided", "approve");
 				});
 			},
 		},
@@ -180,8 +176,8 @@ export function streamChat(
 export function asking(question: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.evalStep.use((ctx, next) => {
-			recording(ctx.interp.channels, "asked", question);
-			effect.emit(ctx.interp.channels, { harness: { type: "end" } });
+			recording(ctx.interp.journal, "asked", question);
+			ctx.interp.journal.write(effect, { type: "end" });
 			return next(ctx);
 		});
 	});
@@ -191,7 +187,7 @@ export function concluding(text: string): InterpExtension {
 	return extension((hooks) => {
 		hooks.beforeSettle.use(function* (ctx, more, next) {
 			const decided = yield* next(ctx, more);
-			if (!decided) recording(ctx.interp.channels, "closed", text);
+			if (!decided) recording(ctx.interp.journal, "closed", text);
 			return decided;
 		});
 	});
@@ -200,7 +196,7 @@ export function concluding(text: string): InterpExtension {
 export function printing(text: string): InterpExtension {
 	return extension((hooks) =>
 		hooks.evalStep.use((ctx, next) => {
-			output.emit(ctx.interp.channels, { user: text, model: text });
+			print(ctx.interp.journal, { user: text, model: text });
 			return next(ctx);
 		}),
 	);

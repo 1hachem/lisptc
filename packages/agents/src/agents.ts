@@ -1,7 +1,7 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { implant, snapshot } from "@repo/interpreter/image";
-import { record } from "@repo/interpreter/journal";
+import { print, record } from "@repo/interpreter/journal";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -17,7 +17,6 @@ import { keyName } from "@repo/interpreter/plist";
 import { readFailure } from "@repo/interpreter/reader";
 import { zList, zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { output } from "@repo/interpreter/topics";
 import { activityKind } from "@repo/journal-catalog/activity";
 import type { PromptSource, SourceFolder } from "@repo/shared/host";
 import { z } from "zod";
@@ -247,7 +246,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 	const library = new AgentLibrary(host.folder, host.workspace, host.roster);
 
 	function report(id: string, name: string, detail: string, chat: string) {
-		record(interp.channels, activityKind, {
+		record(interp.journal, activityKind, {
 			kind: "agent",
 			icon: "agent",
 			label: name,
@@ -292,7 +291,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 		"Ask the harness not to hand this message to the agent. quietly calls it before its forms run; call quietly instead.",
 		z.tuple([]),
 		() => {
-			effect.emit(interp.channels, { harness: { type: "quiet" } });
+			interp.journal.write(effect, { type: "quiet" });
 			return null;
 		},
 	);
@@ -437,7 +436,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 	);
 
 	function announce(line: string, name: string): string {
-		output.emit(interp.channels, { user: `${line}\n`, model: `${line}\n` });
+		print(interp.journal, { user: `${line}\n`, model: `${line}\n` });
 		return name;
 	}
 

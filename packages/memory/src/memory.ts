@@ -1,7 +1,7 @@
 import { quotient } from "@repo/interpreter/arith";
-import type { Channels } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
+import type { Journal } from "@repo/interpreter/journal";
 import { record } from "@repo/interpreter/journal";
 import {
 	detachedState,
@@ -205,7 +205,7 @@ const stepCodec: StateCodec<Step> = {
 };
 
 export class MemoryBank {
-	private channels?: Channels;
+	private journal?: Journal;
 	private depth = 0;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
@@ -247,8 +247,8 @@ export class MemoryBank {
 		return this.clock.now();
 	}
 
-	attach(channels: Channels): void {
-		this.channels = channels;
+	attach(journal: Journal): void {
+		this.journal = journal;
 	}
 
 	reset(): void {
@@ -431,7 +431,7 @@ export class MemoryBank {
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
-		record(this.channels, memoryKind, surfaced);
+		record(this.journal, memoryKind, surfaced);
 	}
 }
 
@@ -555,7 +555,7 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
-	bank.attach(interp.channels);
+	bank.attach(interp.journal);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
 		yield* bank.onCall(i, form);

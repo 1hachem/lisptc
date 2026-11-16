@@ -91,7 +91,7 @@ function tracker(interp: Interp, host: SemanticHost): Track {
 			ms?: number,
 			error?: unknown,
 		): void =>
-			record(interp.channels, activityKind, {
+			record(interp.journal, activityKind, {
 				kind: "semantic",
 				icon: "meaning",
 				label: form,

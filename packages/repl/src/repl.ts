@@ -1,12 +1,3 @@
-import type {
-	Channels,
-	ChannelTransport,
-	Envelope,
-} from "@repo/interpreter/channels";
-import {
-	bufferTransport,
-	type ChannelBuffer,
-} from "@repo/interpreter/channels-host";
 import {
 	ConversationInterpreter,
 	type ConversationRecord,
@@ -22,7 +13,15 @@ import { type Effect, effect, ends } from "@repo/interpreter/effects";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
 import type { Chain, Middleware } from "@repo/interpreter/hooks";
 import { type Image, restore, snapshot } from "@repo/interpreter/image";
-import { journal } from "@repo/interpreter/journal";
+import {
+	bufferSink,
+	type Hitch,
+	hitch,
+	type Journal,
+	type JournalBuffer,
+	printed,
+	type Sink,
+} from "@repo/interpreter/journal";
 import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { EndOfFile, Unspecified } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
@@ -38,7 +37,6 @@ import {
 	type StepContext,
 	type TurnContext,
 } from "@repo/interpreter/session";
-import { type Hitch, hitch } from "@repo/interpreter/topics";
 import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { Checkpoint, ImageStore } from "./image-store.ts";
@@ -59,10 +57,21 @@ export interface ReplOptions {
 
 export type LiveEntries = (entry: Entry) => void;
 
-function liveEntries(live: LiveEntries): ChannelTransport {
+const CONSUMED: ReadonlySet<string> = new Set([
+	printed.name,
+	hitch.name,
+	effect.name,
+	note.name,
+]);
+
+function forwarded(entries: readonly Entry[]): Entry[] {
+	return entries.filter((entry) => !CONSUMED.has(entry.kind));
+}
+
+function liveEntries(live: LiveEntries): Sink {
 	return {
-		send(envelope) {
-			if (envelope.topic === journal.name) live(envelope.payload as Entry);
+		send(entry) {
+			if (!CONSUMED.has(entry.kind)) live(entry);
 			return true;
 		},
 	};
@@ -79,7 +88,6 @@ export interface EvalOutput extends Bounded {
 }
 
 export interface StepResult extends EvalOutput {
-	envelopes: readonly Envelope[];
 	skipped: string[];
 }
 
@@ -115,7 +123,7 @@ interface FormRecorder {
 	end(skipsBefore: number, value: unknown): void;
 }
 
-function recordTopLevel(buffer: ChannelBuffer): {
+function recordTopLevel(buffer: JournalBuffer): {
 	recorder: FormRecorder;
 	results: string[];
 } {
@@ -200,9 +208,9 @@ export class MemoryRepl implements InMemoryRepl {
 	private recorder: FormRecorder | undefined;
 	private betweenSteps:
 		| {
-				channels: Channels;
-				buffer: ChannelBuffer;
-				handled: Set<Envelope>;
+				journal: Journal;
+				buffer: JournalBuffer;
+				handled: Set<Entry>;
 				detach: () => void;
 		  }
 		| undefined;
@@ -244,7 +252,7 @@ export class MemoryRepl implements InMemoryRepl {
 		});
 		runSync(interp, prelude);
 		this.setup(interp);
-		this.listenBetweenSteps(interp.channels);
+		this.listenBetweenSteps(interp.journal);
 		return interp;
 	}
 
@@ -288,7 +296,7 @@ export class MemoryRepl implements InMemoryRepl {
 		this.currentInterp.dispose();
 		this.currentInterp = interp;
 		this.calls = depth;
-		this.listenBetweenSteps(interp.channels);
+		this.listenBetweenSteps(interp.journal);
 	}
 
 	private checkpoint(result: StepResult, origin?: string): StepResult {
@@ -378,38 +386,38 @@ export class MemoryRepl implements InMemoryRepl {
 		return done;
 	}
 
-	private listenBetweenSteps(channels: Channels): void {
+	private listenBetweenSteps(journal: Journal): void {
 		this.betweenSteps?.detach();
-		const buffer = bufferTransport();
+		const buffer = bufferSink();
 		this.betweenSteps = {
-			channels,
+			journal,
 			buffer,
 			handled: new Set(),
-			detach: channels.pipe(buffer),
+			detach: journal.pipe(buffer),
 		};
 	}
 
-	protected handledBetweenSteps(envelopes: readonly Envelope[]): void {
-		for (const envelope of envelopes) this.betweenSteps?.handled.add(envelope);
+	protected handledBetweenSteps(entries: readonly Entry[]): void {
+		for (const entry of entries) this.betweenSteps?.handled.add(entry);
 	}
 
 	protected notedBetweenSteps(): ConversationRecord[] {
 		const between = this.betweenSteps;
 		if (between === undefined) return [];
-		const fresh = between.buffer.envelopes.filter(
-			(e) => e.topic === note.name && !between.handled.has(e),
+		const fresh = between.buffer.entries.filter(
+			(e) => e.kind === note.name && !between.handled.has(e),
 		);
 		this.handledBetweenSteps(fresh);
-		return fresh.map((e) => e.payload as ConversationRecord);
+		return fresh.map((e) => e.value as ConversationRecord);
 	}
 
-	private takeBetweenSteps(channels: Channels): readonly Envelope[] {
+	private takeBetweenSteps(journal: Journal): readonly Entry[] {
 		const between = this.betweenSteps;
 		this.betweenSteps = undefined;
 		if (between === undefined) return [];
 		between.detach();
-		return between.channels === channels
-			? between.buffer.envelopes.filter((e) => !between.handled.has(e))
+		return between.journal === journal
+			? between.buffer.entries.filter((e) => !between.handled.has(e))
 			: [];
 	}
 
@@ -420,16 +428,16 @@ export class MemoryRepl implements InMemoryRepl {
 	): Promise<StepResult> {
 		const interp = this.currentInterp;
 		const ctx: StepContext = { interp, ...step };
-		const { channels } = interp;
-		channels.step = this.calls + 1;
-		const buffer = bufferTransport();
+		const { journal } = interp;
+		journal.step = this.calls + 1;
+		const buffer = bufferSink();
 		const watching = live === undefined ? undefined : liveEntries(live);
-		for (const envelope of this.takeBetweenSteps(channels)) {
-			buffer.send(envelope);
-			watching?.send(envelope);
+		for (const entry of this.takeBetweenSteps(journal)) {
+			buffer.send(entry);
+			watching?.send(entry);
 		}
-		const detach = channels.pipe(buffer);
-		const unwatch = watching === undefined ? () => {} : channels.pipe(watching);
+		const detach = journal.pipe(buffer);
+		const unwatch = watching === undefined ? () => {} : journal.pipe(watching);
 		const { recorder, results } = recordTopLevel(buffer);
 		this.recorder = recorder;
 		let thrown: unknown;
@@ -449,7 +457,7 @@ export class MemoryRepl implements InMemoryRepl {
 			unwatch();
 			this.recorder = undefined;
 			detach();
-			this.listenBetweenSteps(channels);
+			this.listenBetweenSteps(journal);
 		}
 		const { skipped, failed, held } = partition(buffer.collect(hitch));
 		const holding = held.map((n) => `held: ${n.text}\n`).join("");
@@ -461,13 +469,12 @@ export class MemoryRepl implements InMemoryRepl {
 		const carriedError = this.errorOf(ctx, carriedThrown, failed);
 		const notes = buffer.collect(note);
 		return {
-			envelopes: buffer.envelopes,
 			model: carried ? error.model : bounded.model + error.model + holding,
 			user: bounded.user + carriedError.user + error.user,
 			notes: carried
 				? [...notes, carriedOn(bounded.model + carriedError.model + holding)]
 				: notes,
-			entries: buffer.collect(journal),
+			entries: forwarded(buffer.entries),
 			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
 			failure: carriedError.user + error.user,
@@ -623,19 +630,19 @@ export class AgentRepl extends MemoryRepl {
 	): Promise<Noted & { value: T }> {
 		const { interp } = this;
 		const earlier = this.notedBetweenSteps();
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		let value: T;
 		try {
 			({ value } = await driveAsync(run({ interp })));
 		} finally {
 			detach();
-			this.handledBetweenSteps(buffer.envelopes);
+			this.handledBetweenSteps(buffer.entries);
 		}
 		return {
 			value,
 			notes: [...earlier, ...buffer.collect(note)],
-			entries: buffer.collect(journal),
+			entries: forwarded(buffer.entries),
 		};
 	}
 

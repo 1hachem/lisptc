@@ -1,7 +1,6 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import type { Conversation } from "@repo/interpreter/conversation";
 import { restore, snapshot } from "@repo/interpreter/image";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -55,7 +54,7 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 function collector(interp: Interp, views: MemoryViewStore) {
 	let viewId: string | undefined;
 	let requests: { source: string; content: string }[] = [];
-	journal.on(interp.channels, (entry) => {
+	interp.journal.onAny((entry) => {
 		if (entry.kind === viewKind.name)
 			viewId = (entry.value as { viewId: string }).viewId;
 	});
@@ -176,8 +175,8 @@ describe("building a view", () => {
 describe("echoing a widget", () => {
 	function echoed(code: string) {
 		const { interp, ui } = fresh();
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			const result = runSync(interp, code);
 			const view = ui.takeView();
@@ -561,8 +560,8 @@ describe("actions", () => {
 		const { surface, interp } = render(
 			'(ui/render (ui/button "say" (lambda () (echo "from the click"))))',
 		);
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			await surface.invoke("a1", {});
 		} finally {

@@ -1,8 +1,7 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { bufferSink, hitch } from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { zString } from "@repo/interpreter/schema";
-import { hitch } from "@repo/interpreter/topics";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { promisesExtension } from "../src/promises.ts";
@@ -32,8 +31,8 @@ function interpWithJob(): Interp {
 
 async function failureOf(code: string): Promise<string> {
 	const interp = interpWithJob();
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		await runAsync(interp, code);
 	} catch {

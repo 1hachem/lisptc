@@ -1,5 +1,5 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import { restore, snapshot } from "@repo/interpreter/image";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { Cell, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
@@ -36,8 +36,8 @@ function stepped(
 ): { user: string; model: string } {
 	const { interp, c } = given ?? { interp: freshInterp(), c: undefined };
 	c?.beginStep();
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		runSync(interp, code);
 	} finally {
@@ -499,8 +499,8 @@ describe("the step's echo budget", () => {
 				into = stepping(4);
 				restore(into.interp, snapshot(given.interp));
 			}
-			const buffer = bufferTransport();
-			const detach = into.interp.channels.pipe(buffer);
+			const buffer = bufferSink();
+			const detach = into.interp.journal.pipe(buffer);
 			runSync(into.interp, '(echo "e f")');
 			detach();
 			return buffer.collectText("model") + into.c.endStep();
