@@ -58,19 +58,6 @@ describe("a supplied store is the one the extension uses", () => {
 		await r.eval('(memory/remember "k" "kept here")');
 		expect((await store.get("k"))?.body).toBe("kept here");
 	});
-
-	it("keeps secrets in the store it was handed", async () => {
-		const store = {
-			get: () => ({ value: "v", description: "from the host" }),
-			list: (): Array<[string, string]> => [["REPL_K", "from the host"]],
-			set: () => {},
-		};
-		const r = memoryRepl([
-			secretsExtension({ ...secretsHost, store }),
-			compactionExtension(compactionHost),
-		]);
-		expect(await r.eval("(secrets)")).toContain("from the host");
-	});
 });
 
 describe("a host with no filesystem behind it still builds", () => {

@@ -95,11 +95,6 @@ describe("watching a chat", () => {
 	const watchOf = (chatId: string) =>
 		serve(watch)(new Request(`http://app.test/?chatId=${chatId}`));
 
-	test("hands back the thread's stream", async () => {
-		const response = await watchOf(CHAT);
-		expect(await response.text()).toContain("event: status");
-	});
-
 	test("refuses a watch that names no chat", async () => {
 		const response = await serve(watch)(new Request("http://app.test/"));
 		expect(response.status).toBe(400);

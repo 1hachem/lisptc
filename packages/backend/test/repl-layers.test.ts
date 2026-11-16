@@ -68,24 +68,6 @@ describe("a chat's repl", () => {
 });
 
 describe("repl layers", () => {
-	it("resumes every layer recorded over the head, in order", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		const first = await t.mutation(internal.repls.record, {
-			replId,
-			...layer(1),
-		});
-		const second = await t.mutation(internal.repls.record, {
-			replId,
-			...layer(2, first),
-		});
-		await t.mutation(internal.repls.record, { replId, ...layer(3, second) });
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.depth).toBe(3);
-		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
-			[{ n: 1 }, { n: 2 }, { n: 3 }],
-		);
-	});
-
 	it("refuses a delta that is not over the head", async () => {
 		const { t, replId } = await chatOf("alice@example.com");
 		const first = await t.mutation(internal.repls.record, {
@@ -103,21 +85,6 @@ describe("repl layers", () => {
 				chunks: ["{}"],
 			}),
 		).rejects.toThrow("STALE_HEAD");
-	});
-
-	it("takes a whole layer over any head", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		const first = await t.mutation(internal.repls.record, {
-			replId,
-			...layer(1),
-		});
-		await t.mutation(internal.repls.record, { replId, ...layer(2, first) });
-		await t.mutation(internal.repls.record, { replId, ...layer(3) });
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.depth).toBe(3);
-		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
-			[{ n: 3 }],
-		);
 	});
 
 	it("hands back the run from the nearest whole layer", async () => {

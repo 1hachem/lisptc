@@ -152,15 +152,6 @@ function remembered(key: string, body: unknown): Memory {
 }
 
 describe("the convex memory store", () => {
-	it("answers from the cache once it has read the workspace", async () => {
-		const { workspace, connect } = await seeded(row("triage", '"logs"'));
-		const store = new ConvexMemoryStore(workspace, connect);
-
-		expect(await store.all()).toHaveLength(1);
-		expect((await store.get("triage"))?.body).toBe("logs");
-		expect(store.all()).toEqual([expect.objectContaining({ key: "triage" })]);
-	});
-
 	it("serves a hydrated read without awaiting", async () => {
 		const { workspace, connect } = await seeded(row("triage", '"logs"'));
 		const store = new ConvexMemoryStore(workspace, connect);

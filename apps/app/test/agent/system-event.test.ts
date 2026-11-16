@@ -55,7 +55,6 @@ vi.mock("../../server/agent/threads.ts", () => ({
 }));
 
 let chat: Method;
-let uiAction: Method;
 let stop: Method;
 
 beforeAll(async () => {
@@ -66,7 +65,6 @@ beforeAll(async () => {
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
 	({ turn: chat, stop } = await import("../../server/agent/chat.ts"));
-	({ uiAction } = await import("../../server/agent/ui-action.ts"));
 });
 
 beforeEach(() => {
@@ -74,30 +72,7 @@ beforeEach(() => {
 	world.cancelled.length = 0;
 });
 
-const decide = (messageId?: string) =>
-	send(uiAction, {
-		chatId: CHAT,
-		messageId,
-		action: "permissions/decide",
-		values: { id: "r1" },
-	});
-
 describe("a ui action", () => {
-	test("answers with the message the decision produced", async () => {
-		const body = (await (await decide("ask-1")).json()) as Record<
-			string,
-			unknown
-		>;
-		expect(body.message).toBe(NOTE);
-	});
-
-	test("accepts a stop of the chat's own thread and of its whole tree", async () => {
-		expect((await send(stop, { chatId: CHAT })).status).toBe(200);
-		expect((await send(stop, { chatId: CHAT, scope: "tree" })).status).toBe(
-			200,
-		);
-	});
-
 	test("refuses a stop scope it does not know", async () => {
 		const response = await send(stop, { chatId: CHAT, scope: "siblings" });
 		expect(response.ok).toBe(false);

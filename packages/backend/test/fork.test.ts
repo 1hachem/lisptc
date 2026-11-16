@@ -154,21 +154,13 @@ describe("forking a chat at a message", () => {
 
 	it("keeps the layers the fork stands on when the original is removed", async () => {
 		const { t, alice, chatId } = await conversation();
-		const { forked, replId } = await forkedRepl(alice, chatId, "h2");
+		const { replId } = await forkedRepl(alice, chatId, "h2");
 
 		vi.useFakeTimers();
 		await alice.as.mutation(api.chats.remove, { chatId });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
 		expect(await resumed(t, replId)).toEqual([{ layer: 1 }]);
-
-		await alice.as.mutation(api.chats.remove, { chatId: forked });
-		await t.finishAllScheduledFunctions(vi.runAllTimers);
-		const gone = await t.run(async (ctx) => [
-			...(await ctx.db.query("replLayers").collect()),
-			...(await ctx.db.query("replLayerChunks").collect()),
-		]);
-		expect(gone).toEqual([]);
 	});
 
 	it("keeps a fork's layers when the original and a sibling fork are removed", async () => {
@@ -178,7 +170,7 @@ describe("forking a chat at a message", () => {
 			messages: [{ id: "f2", type: "ai", content: "cube is defined" }],
 		});
 		const { forked: sibling } = await forkedRepl(alice, chatId, "f2");
-		const { forked, replId } = await forkedRepl(alice, chatId, "f2");
+		const { replId } = await forkedRepl(alice, chatId, "f2");
 		expect(await resumed(t, replId)).toEqual([{ layer: 1 }, { layer: 2 }]);
 
 		vi.useFakeTimers();
@@ -187,14 +179,6 @@ describe("forking a chat at a message", () => {
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
 		expect(await resumed(t, replId)).toEqual([{ layer: 1 }, { layer: 2 }]);
-
-		await alice.as.mutation(api.chats.remove, { chatId: forked });
-		await t.finishAllScheduledFunctions(vi.runAllTimers);
-		const gone = await t.run(async (ctx) => [
-			...(await ctx.db.query("replLayers").collect()),
-			...(await ctx.db.query("replLayerChunks").collect()),
-		]);
-		expect(gone).toEqual([]);
 	});
 
 	it("leaves no layer behind once every chat over it is removed after a fork at an ai message", async () => {

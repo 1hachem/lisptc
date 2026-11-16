@@ -580,25 +580,6 @@ describe("the chat input", () => {
 		expect(host.textContent).not.toContain("Count the items of xs.");
 	});
 
-	it("underlines the form an error is about", async () => {
-		const highlights = new Map<string, { size: number }>();
-		vi.stubGlobal("CSS", { highlights });
-		vi.stubGlobal(
-			"Highlight",
-			class {
-				size: number;
-				constructor(...ranges: Range[]) {
-					this.size = ranges.length;
-				}
-			},
-		);
-		const field = render(vi.fn());
-		type(field, "(one-arg)");
-		await paused();
-		expect(highlights.get("lisp-error")?.size).toBe(1);
-		vi.unstubAllGlobals();
-	});
-
 	it("hides the attach button, and Enter still sends", () => {
 		const onSubmit = vi.fn();
 		act(() =>

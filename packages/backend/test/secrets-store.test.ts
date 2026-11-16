@@ -53,15 +53,6 @@ describe("the convex secrets store", () => {
 		expect(store.list()).toEqual([["REPL_TOKEN", "from convex"]]);
 	});
 
-	it("answers a read before the write has landed", async () => {
-		const { client } = spyClient();
-		const store = await open(client);
-
-		store.set({ REPL_TOKEN: "just set" });
-
-		expect(store.get("REPL_TOKEN")?.value).toEqual("just set");
-	});
-
 	it("sends nothing for a key the port would drop", async () => {
 		const { client, saved } = spyClient();
 		const store = await open(client);

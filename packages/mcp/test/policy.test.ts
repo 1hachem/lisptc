@@ -55,6 +55,7 @@ describe("the mcp policy port", () => {
 			serverPolicy({ access: "denied", reason: "no fixtures" }),
 		);
 		expect(() => runSync(interp, LOAD_FX)).toThrow("no fixtures");
+		expect(() => runSync(interp, "(fx/echo)")).toThrow("undefined: fx/echo");
 	});
 
 	it("treats a hidden server as one that does not exist", () => {

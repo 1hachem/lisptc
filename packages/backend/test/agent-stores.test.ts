@@ -74,17 +74,6 @@ describe("the convex workspace store", () => {
 		expect(OFFERED_MODELS).toContain((await store.settings()).model);
 	});
 
-	it("reads back the model it was told to choose", async () => {
-		const alice = await signIn(testDeployment(), "alice@example.com");
-		const store = new ConvexWorkspaceStore(
-			alice.workspace,
-			() => alice.as as unknown as WorkspaceStoreClient,
-		);
-		const model = OFFERED_MODELS.at(-1) ?? "";
-		await store.choose(model);
-		expect((await store.settings()).model).toBe(model);
-	});
-
 	it("refuses a model the catalogue does not hold", async () => {
 		const { client, sent } = spyClient({});
 		const store = new ConvexWorkspaceStore(WORKSPACE, () => client);

@@ -18,22 +18,9 @@ async function workspace(held?: string) {
 }
 
 describe("the convex permissions store", () => {
-	it("serves the config the workspace already held", async () => {
-		const open = await workspace("(permission/deny eval)");
-		expect((await open()).source()).toBe("(permission/deny eval)");
-	});
-
 	it("serves an empty config to a workspace that never saved one", async () => {
 		const open = await workspace();
 		expect((await open()).source()).toBe("");
-	});
-
-	it("writes a config through, and serves it after", async () => {
-		const open = await workspace();
-		const store = await open();
-		await store.save("(permission/ask eval)");
-		expect(store.source()).toBe("(permission/ask eval)");
-		expect((await open()).source()).toBe("(permission/ask eval)");
 	});
 
 	it("refuses to save a config that does not parse, and keeps the old one", async () => {

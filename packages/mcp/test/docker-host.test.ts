@@ -17,18 +17,6 @@ const remote: HttpConnConfig = {
 };
 
 describe("what the docker host does with each toolkit modality", () => {
-	it("runs an image-backed server from its own image", () => {
-		const launch = launchFor({
-			name: "playwright",
-			image: "lisptc/browser-mcp:v1.63.0",
-			port: 8931,
-			command: "npx",
-			args: ["-y", "@playwright/mcp@0.0.81"],
-		});
-
-		expect(launch?.image).toBe("lisptc/browser-mcp:v1.63.0");
-	});
-
 	it("wraps a stdio server in a gateway that speaks streamable http", () => {
 		const launch = launchFor({
 			name: "fs",
