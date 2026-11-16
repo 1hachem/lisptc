@@ -135,11 +135,6 @@ Three kinds of thing cross, and each has one mechanism.
   moment it happens, never as a summary folded onto a step. The extension picks
   the kind and owns its shape, and a reader reduces entries itself.
 
-One verb each way, and they are `emit` and `collect`. An extension emits at a
-lifecycle point or on a topic it declares, and collects only from a topic it
-declares itself. A driver collects. Nothing reads a payload it did not emit, and
-no other spelling for either direction survives review.
-
 What the user sends beside a message is input from the user. An extension
 trusts only a key it owns, and only once that key's schema accepts it. Nothing
 above the seam interprets one.
