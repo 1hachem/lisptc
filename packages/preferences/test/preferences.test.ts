@@ -309,15 +309,28 @@ describe("changing preferences", () => {
 });
 
 describe("the prompt", () => {
-	it("teaches the forms it installs", () => {
+	it("names the core forms it installs", () => {
 		const prompt = preferencesHost.prompt();
-		for (const form of [
-			"(preferences)",
-			"(preferences/set",
-			"(fonts)",
-			"(motions)",
-		])
+		for (const form of ["preferences", "preferences/set", "fonts"])
 			expect(prompt).toContain(form);
+	});
+
+	it("leaves the signatures of the core forms to memories", () => {
+		const memories = preferencesHost.memories();
+		for (const form of ["(preferences)", "(preferences/set", "(fonts)"])
+			expect(memories).toContain(form);
+	});
+
+	it("leaves the motions and the desktop app to memories", () => {
+		const memories = preferencesHost.memories();
+		expect(memories).toMatch(
+			/^\(memory "internal\/preferences\/motion" :when /m,
+		);
+		expect(memories).toMatch(
+			/^\(memory "internal\/preferences\/desktop" :when /m,
+		);
+		expect(memories).toContain("(motions)");
+		expect(memories).toContain("(desktop-preferences/set");
 	});
 });
 

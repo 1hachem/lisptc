@@ -16,11 +16,16 @@ function ai(content: string): KwargMessage {
 describe("a light transcript", () => {
 	test("leaves what the person and the system said as it was", () => {
 		const said: KwargMessage[] = [
-			{ type: "human", content: "hi", additional_kwargs: { riding: "r" } },
+			{ type: "human", content: "hi" },
 			{
 				type: "system",
 				content: "an event",
 				additional_kwargs: { source: "s" },
+			},
+			{
+				type: "system",
+				content: "a note",
+				additional_kwargs: { source: "memory", noted: true },
 			},
 		];
 
@@ -51,7 +56,7 @@ describe("a light transcript", () => {
 					failed: true,
 					quiet: true,
 					results: ["3"],
-					riding: "a note for the model",
+					source: "lisp-repl",
 					ui: { tag: "text" },
 					asks: [{ id: "a" }],
 				},
@@ -97,7 +102,7 @@ describe("a light transcript", () => {
 			failure: "boom",
 			failed: true as const,
 			results: ["(1 2 3)"],
-			riding: "a note for the model",
+			source: "lisp-repl",
 		};
 		const [, result] = lighten([
 			{ type: "human", content: "(list 1 2 3)" },

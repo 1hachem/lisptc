@@ -1,34 +1,32 @@
-import { journal } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension } from "@repo/interpreter/session";
-import type { Entry } from "@repo/shared/journal";
+import { type Entry, entryKind, every } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { agentRepl } from "./helpers.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let ids = 0;
+const progress = entryKind({
+	name: "progress",
+	schema: z.number(),
+	fold: every,
+});
 
 function progressing(): InterpExtension {
 	return (interp: Interp): void => {
 		interp.defineGlobal(
 			newSym("progress"),
 			interp.makeBuiltIn("progress", 1, (n: unknown) => {
-				journal.emit(interp.channels, {
-					harness: { id: `p${++ids}`, kind: "progress", value: Number(n) },
-				});
+				interp.journal.write(progress, Number(n));
 				return 0;
 			}),
 		);
 		interp.defineGlobal(
 			newSym("later"),
 			interp.makeBuiltIn("later", 1, (n: unknown) => {
-				setTimeout(() =>
-					journal.emit(interp.channels, {
-						harness: { id: `p${++ids}`, kind: "progress", value: Number(n) },
-					}),
-				);
+				setTimeout(() => interp.journal.write(progress, Number(n)));
 				return 0;
 			}),
 		);

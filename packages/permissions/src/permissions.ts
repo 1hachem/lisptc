@@ -8,11 +8,9 @@ import {
 } from "@repo/interpreter/lisp";
 import { arrayToList, Cell, newSym, Sym } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
-import { Reader } from "@repo/interpreter/reader";
 import { zAny, zList, zString, zSym } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { z } from "zod";
-import { requested } from "./channel.ts";
 import type {
 	ApprovalRequest,
 	PermissionsHost,
@@ -21,9 +19,11 @@ import type {
 	ServerAccess,
 } from "./ports.ts";
 import {
+	type ConfigReader,
 	type PermissionRules,
-	parseRules,
 	RULE_FORMS,
+	readRules,
+	rulesOf,
 	SERVER_STRENGTH,
 	STRENGTH,
 } from "./rules.ts";
@@ -40,10 +40,12 @@ const CLEAR_FORM = "permission/clear-all";
 
 const CLEAR_SYM = newSym(CLEAR_FORM);
 
+const ALLOW_SYM = newSym("permission/allow");
+
 function cleared(form: Cell): PermissionRules {
 	if (form.cdr !== null)
 		throw new EvalException("permission/clear-all takes no forms", form, false);
-	return parseRules("");
+	return rulesOf("", []);
 }
 
 function deleted(form: Cell): unknown {
@@ -78,22 +80,42 @@ function strongest(rulings: readonly Ruling[]): Ruling | undefined {
 }
 
 export class SessionRules {
-	private readonly asks: readonly string[];
-	private read: PermissionRules;
+	private reader: ConfigReader | undefined;
+	private read: PermissionRules | undefined;
+	private bound: readonly PermissionRules[] | undefined;
 
 	constructor(
 		private readonly store: PermissionsStore,
-		asks: readonly string[] = [],
-		private readonly bounds: readonly PermissionRules[] = [],
-	) {
-		this.asks = asks;
-		this.read = parseRules(store.source());
+		private readonly asks: readonly string[] = [],
+		private readonly boundSources: readonly string[] = [],
+	) {}
+
+	readWith(reader: ConfigReader): void {
+		this.reader ??= reader;
 	}
 
 	get current(): PermissionRules {
 		const source = this.store.source();
-		if (source !== this.read.source) this.read = parseRules(source);
+		if (source !== this.read?.source)
+			this.read = readRules(this.installed(), source);
 		return this.read;
+	}
+
+	private get bounds(): readonly PermissionRules[] {
+		this.bound ??= this.boundSources.map((source) =>
+			readRules(this.installed(), source),
+		);
+		return this.bound;
+	}
+
+	private installed(): ConfigReader {
+		if (this.reader === undefined)
+			throw new EvalException(
+				"the permissions config is read once the extension is installed",
+				"permissions",
+				false,
+			);
+		return this.reader;
 	}
 
 	decide(name: string): Ruling {
@@ -152,6 +174,7 @@ const heldRequest = z.object({
 	args: z.string(),
 	reason: z.string().optional(),
 	at: z.number(),
+	change: z.literal(true).optional(),
 });
 
 function parsedRequests(source: string): ApprovalRequest[] {
@@ -174,14 +197,15 @@ export interface PermissionsExtension extends InterpExtension {
 export function permissionsExtension(
 	host: PermissionsHost,
 ): PermissionsExtension {
-	const rules = new SessionRules(
-		host.store,
-		host.asks,
-		(host.bounds ?? []).map(parseRules),
-	);
+	const rules = new SessionRules(host.store, host.asks, host.bounds);
 	let armed = 0;
 	let issued = 0;
 	const pendingOf = new WeakMap<Interp, State<ApprovalRequest[]>>();
+	const awaiting = new Map<string, Cell>();
+	const holding = new Map<
+		string,
+		{ readonly name: string; readonly hold: Hold }
+	>();
 
 	function stillOpen(): Set<string> {
 		return new Set(host.approvals.pending().map((request) => request.id));
@@ -189,9 +213,12 @@ export function permissionsExtension(
 
 	function adopt(interp: Interp): void {
 		const open = stillOpen();
-		for (const request of pendingOf.get(interp)?.get() ?? [])
-			if (!open.has(request.id))
-				host.approvals.open({ ...request, restored: true });
+		for (const request of pendingOf.get(interp)?.get() ?? []) {
+			if (open.has(request.id)) continue;
+			const form = request.change ? interp.read(request.name) : undefined;
+			if (form instanceof Cell) awaiting.set(request.id, form);
+			host.approvals.open({ ...request, restored: true });
+		}
 	}
 
 	function prune(interp: Interp): void {
@@ -205,7 +232,7 @@ export function permissionsExtension(
 
 	function keep(interp: Interp, request: ApprovalRequest): void {
 		const pending = pendingOf.get(interp);
-		if (pending === undefined || request.change) return;
+		if (pending === undefined) return;
 		pending.set([
 			...pending.get().filter((held) => held.name !== request.name),
 			request,
@@ -232,12 +259,6 @@ export function permissionsExtension(
 			armed--;
 		}
 	}
-
-	const awaiting = new Map<string, Cell>();
-	const holding = new Map<
-		string,
-		{ readonly name: string; readonly hold: Hold }
-	>();
 
 	host.approvals.onResolved((request, decision) => {
 		const saving =
@@ -302,9 +323,8 @@ export function permissionsExtension(
 		host.approvals.open(request);
 		keep(interp, request);
 		if (change !== undefined) awaiting.set(request.id, change);
-		requested.emit(interp.channels, { user: request });
 		for (const approver of host.approvers)
-			approver.ask?.(request, interp.channels);
+			approver.ask?.(request, interp.journal);
 		return request;
 	}
 
@@ -352,7 +372,7 @@ export function permissionsExtension(
 	}
 
 	function apply(interp: Interp, given: unknown): unknown {
-		const form = typeof given === "string" ? readOne(given) : given;
+		const form = typeof given === "string" ? interp.read(given) : given;
 		if (!(form instanceof Cell))
 			throw new EvalException("not a permissions form", given, false);
 		changed(form);
@@ -385,8 +405,7 @@ export function permissionsExtension(
 	}
 
 	async function remember(name: string): Promise<void> {
-		const form = readOne(`(permission/allow ${name})`);
-		if (form instanceof Cell) await commit(form);
+		await commit(new Cell(ALLOW_SYM, new Cell(newSym(name), null)));
 	}
 
 	function commit(form: Cell): unknown {
@@ -396,6 +415,7 @@ export function permissionsExtension(
 
 	return Object.assign(
 		(interp: Interp): void => {
+			rules.readWith(interp);
 			registerPermissions(interp, rules, (form) => apply(interp, form));
 			pendingOf.set(
 				interp,
@@ -421,6 +441,7 @@ export function permissionsExtension(
 		{
 			rules,
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use((ctx, next) =>
 					adopting(ctx.interp, () => next(ctx)),
@@ -467,11 +488,33 @@ const FORM_DOCS: Record<(typeof RULE_FORMS)[number], [string, string]> = {
 const APPLIES =
 	" Waits for the user's approval, then is saved with the config; a rule naming this form, such as (permission/allow permission/deny), lets it apply at once instead.";
 
+function defineMemoryGlobals(interp: Interp): void {
+	interp.defineGlobal(
+		newSym("*permissions-config-forms*"),
+		arrayToList(
+			[...RULE_FORMS, DELETE_FORM, CLEAR_FORM].map((name) => newSym(name)),
+		),
+		{
+			signature: "*permissions-config-forms*",
+			doc: "Every form a permissions config is written in.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*permissions-verdicts*"),
+		arrayToList(Object.keys(STRENGTH).map((name) => newSym(name))),
+		{
+			signature: "*permissions-verdicts*",
+			doc: "The verdicts permission/check gives.",
+		},
+	);
+}
+
 export function registerPermissions(
 	interp: Interp,
 	rules: SessionRules,
 	apply: (form: unknown) => unknown,
 ): void {
+	defineMemoryGlobals(interp);
 	interp.def(
 		"permission/apply",
 		1,
@@ -547,12 +590,6 @@ function denial(
 	change: string,
 ): string {
 	return `${operation} is denied by the permissions config${reason === undefined ? "" : `: ${reason}`}, so ${change} changes nothing. Do not run it again`;
-}
-
-function readOne(source: string): unknown {
-	const reader = new Reader();
-	reader.push(source);
-	return reader.read();
 }
 
 function summarize(args: readonly unknown[]): string {

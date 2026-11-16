@@ -1,26 +1,27 @@
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
-import type { MessageKwargs } from "@repo/shared/messages";
 import type { AgentConfig } from "./agent.ts";
 import { exhausted, type Limits, type Usage } from "./budget.ts";
 import { evalMessage } from "./eval.ts";
-import type { Envelope, Mailbox } from "./mailbox.ts";
 import {
 	type ChatMessageInput,
+	lineWire,
+	mailLine,
+	type WireMessage,
+} from "./line.ts";
+import type { Mail, Mailbox } from "./mailbox.ts";
+import {
 	entryMessage,
 	streamTurn,
-	systemEventMessage,
 	type ThreadState,
 	type TurnOutcome,
 	Watchers,
-	type WireMessage,
 } from "./stream.ts";
 import { runAgentTurn, type TurnEvent } from "./turn.ts";
 
 export interface TranscriptStore {
 	read(threadId: string): Promise<ChatMessageInput[]>;
 	append(threadId: string, messages: WireMessage[]): Promise<void>;
-	revise(threadId: string, id: string, kwargs: MessageKwargs): Promise<void>;
 }
 
 export type TurnEnding = { failure: string } | { stopped: true };
@@ -68,17 +69,11 @@ interface Tracked {
 
 const WITHDRAWN: TurnOutcome = { stopped: "withdrawn before a turn took it" };
 
-function openingMessage(envelope: Envelope): WireMessage {
-	if (envelope.kind === "event")
-		return systemEventMessage(envelope, envelope.id);
-	return {
-		id: envelope.id,
-		type: "human",
-		content: envelope.text,
-		...(envelope.received === undefined
-			? {}
-			: { additional_kwargs: envelope.received }),
-	};
+function openingMessage(mail: Mail): WireMessage {
+	const message = lineWire(mailLine(mail), mail.id);
+	return mail.kind === "user" && mail.received !== undefined
+		? { ...message, additional_kwargs: mail.received }
+		: message;
 }
 
 function stepCap(...caps: (number | undefined)[]): { maxSteps?: number } {
@@ -142,13 +137,13 @@ export class Thread {
 		private readonly ports: ThreadPorts,
 	) {}
 
-	async post(envelope: Envelope, options: PostOptions = {}): Promise<Posted> {
+	async post(mail: Mail, options: PostOptions = {}): Promise<Posted> {
 		let end: Tracked["end"] = () => {};
 		const ended = new Promise<TurnOutcome>((done) => {
 			end = done;
 		});
-		this.tracked.set(envelope.id, { options, end });
-		await this.ports.mailbox.post(this.id, envelope);
+		this.tracked.set(mail.id, { options, end });
+		await this.ports.mailbox.post(this.id, mail);
 		this.posted += 1;
 		if (!this.running) {
 			this.running = true;
@@ -174,7 +169,7 @@ export class Thread {
 	async cancel(why: TurnOutcome): Promise<boolean> {
 		const stopped = this.stop(why);
 		const dropped = await this.ports.mailbox.take(this.id);
-		for (const envelope of dropped) this.release(envelope.id, why);
+		for (const mail of dropped) this.release(mail.id, why);
 		return stopped || dropped.length > 0;
 	}
 
@@ -199,9 +194,9 @@ export class Thread {
 		this.tracked.delete(id);
 	}
 
-	private taken(envelope: Envelope): void {
-		if (envelope.kind === "event" && envelope.replyTo !== undefined)
-			this.relay(systemEventMessage(envelope, envelope.id));
+	private taken(mail: Mail): void {
+		if (mail.kind === "event" && mail.replyTo !== undefined)
+			this.relay(lineWire(mailLine(mail), mail.id));
 	}
 
 	private async drive(): Promise<void> {
@@ -223,7 +218,7 @@ export class Thread {
 		}
 	}
 
-	private async turn(opening: Envelope): Promise<void> {
+	private async turn(opening: Mail): Promise<void> {
 		const { id, ports } = this;
 		const budget = this.tracked.get(opening.id)?.options ?? {};
 		const consumed = [opening.id];
@@ -295,9 +290,9 @@ export class Thread {
 						...stepCap(budget.maxSteps, setup.maxSteps, left.steps),
 						inbox: async () => {
 							const taken = await ports.mailbox.take(id);
-							for (const envelope of taken) {
-								consumed.push(envelope.id);
-								this.taken(envelope);
+							for (const mail of taken) {
+								consumed.push(mail.id);
+								this.taken(mail);
 							}
 							return taken;
 						},
@@ -309,7 +304,7 @@ export class Thread {
 				signal,
 				quiet,
 				onStep: (produced) => ports.transcript.append(id, produced),
-				onTurn: (produced, revised, failure) => {
+				onTurn: (produced, failure) => {
 					failed =
 						failure ??
 						(deadline?.aborted === true
@@ -318,9 +313,7 @@ export class Thread {
 								? "the turn ran out of tokens"
 								: undefined);
 					return this.record(
-						history,
 						produced,
-						revised,
 						failed !== undefined
 							? { failure: failed }
 							: halting.signal.aborted
@@ -357,7 +350,7 @@ export class Thread {
 		}
 	}
 
-	private async prepare(opening: Envelope) {
+	private async prepare(opening: Mail) {
 		const { id, ports } = this;
 		const setup = await ports.setup(id);
 		const repl = await ports.repl(id);
@@ -369,6 +362,9 @@ export class Thread {
 				await ports.transcript.append(id, [
 					evaluated.message,
 					...evaluated.entries.map((entry) => entryMessage(entry)),
+					...evaluated.notes.map((note) =>
+						lineWire({ kind: "record", record: note }, crypto.randomUUID()),
+					),
 				]);
 				quiet = evaluated.quiet;
 			}
@@ -378,19 +374,11 @@ export class Thread {
 	}
 
 	private async record(
-		history: ChatMessageInput[],
 		produced: WireMessage[],
-		revised: ReadonlyMap<number, WireMessage>,
 		ending: TurnEnding | undefined,
 	): Promise<void> {
 		const { id, ports } = this;
 		try {
-			for (const [at, message] of revised) {
-				const stored = at < history.length ? history[at].id : message.id;
-				if (stored === undefined || message.additional_kwargs === undefined)
-					continue;
-				await ports.transcript.revise(id, stored, message.additional_kwargs);
-			}
 			if (produced.length > 0) await ports.transcript.append(id, produced);
 		} finally {
 			await ports.status.settle(id, ending);

@@ -7,6 +7,7 @@ import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { PromptDialog } from "@repo/components";
 import type { Question } from "@repo/journal-catalog/intent";
 import type { SymbolTable } from "@repo/language-service";
+import type { InputHelper } from "@repo/shared/chat-toggles";
 import { cn } from "@repo/ui";
 import { anchorOf } from "@repo/ui-catalog";
 import { useCallback, useEffect, useRef } from "react";
@@ -19,7 +20,6 @@ import { useDraft, useKeys, useRecall } from "../lib/chat-draft.ts";
 import { useMenus, usePick, usePromptSearch } from "../lib/chat-menus.ts";
 import { useComposerRequests } from "../lib/composer-requests.ts";
 import { useDropZone } from "../lib/drop-zone.ts";
-import type { InputHelper } from "../lib/input-helpers.ts";
 import { useNotice } from "../lib/notice.ts";
 import {
 	AttachAction,

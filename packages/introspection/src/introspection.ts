@@ -1,6 +1,7 @@
 import { quotient } from "@repo/interpreter/arith";
 import { lookupDoc } from "@repo/interpreter/docs";
 import { callableArity, callableKind } from "@repo/interpreter/func";
+import { print } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -12,12 +13,12 @@ import {
 import { str } from "@repo/interpreter/print";
 import { zAny, zString, zSym } from "@repo/interpreter/schema";
 import type { InterpExtension } from "@repo/interpreter/session";
-import { output } from "@repo/interpreter/topics";
 import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 
 export interface IntrospectionHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export function introspectionExtension(
@@ -25,7 +26,7 @@ export function introspectionExtension(
 ): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerIntrospection(interp),
-		{ prompt: host.prompt() },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }
 
@@ -37,7 +38,7 @@ function arityList(f: unknown): List {
 }
 
 function say(interp: Interp, text: string): void {
-	output.emit(interp.channels, { user: text, model: text });
+	print(interp.journal, { user: text, model: text });
 }
 
 export function registerIntrospection(interp: Interp): void {

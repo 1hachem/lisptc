@@ -4,8 +4,8 @@ import {
 	isToolMessage,
 	isUserMessage,
 	messageText,
-	toolResult,
-} from "./chat.tsx";
+} from "@repo/components";
+import { toolResult } from "./chat.tsx";
 import { isGreetingMessage } from "./greeting.ts";
 
 function section(label: string, body: string): string | null {

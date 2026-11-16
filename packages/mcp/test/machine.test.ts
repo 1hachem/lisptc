@@ -1,4 +1,6 @@
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -20,10 +22,7 @@ const LOCAL: StdioConnConfig = {
 };
 
 function session(online: { value: boolean }) {
-	const machine = cachedMachine(
-		async () => online.value,
-		() => ["local-git"],
-	);
+	const machine = cachedMachine(async () => online.value);
 	const extension = mcpExtension({
 		...mcpHost,
 		toolkit: desktopToolkit(
@@ -33,20 +32,23 @@ function session(online: { value: boolean }) {
 		),
 		machine,
 	});
-	const interp = new Interp({ extensions: [extension] });
+	const interp = new ConversationInterpreter({ extensions: [extension] });
 	runSync(interp, prelude);
 	const hooks = openSession([extension]);
 	const step = async (): Promise<string> => {
-		let emitted = "";
-		await driveAsync(
-			hooks.beginStep.run(() => settled(undefined), {
-				interp,
-				emit: (text) => {
-					emitted += text;
-				},
-			}),
-		);
-		return emitted;
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
+		try {
+			await driveAsync(
+				hooks.beginStep.run(() => settled(undefined), { interp }),
+			);
+		} finally {
+			detach();
+		}
+		return buffer
+			.collect(note)
+			.map((record) => record.content)
+			.join("");
 	};
 	const listed = () => str(runSync(interp, "(list-toolkit)"));
 	const asked = () => str(runSync(interp, "(desktop-connected-p)"));
@@ -69,9 +71,8 @@ describe("the user's machine", () => {
 	});
 
 	it("counts a presence it cannot read as disconnected", async () => {
-		const machine = cachedMachine(
-			() => Promise.reject(new Error("convex down")),
-			() => [],
+		const machine = cachedMachine(() =>
+			Promise.reject(new Error("convex down")),
 		);
 		expect(await machine.refresh()).toBe(false);
 		expect(machine.connected()).toBe(false);
@@ -96,21 +97,11 @@ describe("the user's machine", () => {
 		expect(listed()).toMatch(/"remote" "" nil :unloaded\)/);
 	});
 
-	it("tells the session when the desktop connects and disconnects", async () => {
+	it("tells the session nothing when the desktop connects or disconnects", async () => {
 		const online = { value: true };
 		const { step } = session(online);
-		expect(await step()).toBe(
-			"desktop app connected: local servers now loadable: local-git",
-		);
 		expect(await step()).toBe("");
 		online.value = false;
-		expect(await step()).toBe(
-			"desktop app disconnected: local servers gone: local-git",
-		);
 		expect(await step()).toBe("");
-	});
-
-	it("says nothing at the start when no desktop is connected", async () => {
-		expect(await session({ value: false }).step()).toBe("");
 	});
 });

@@ -21,9 +21,12 @@ Preferences belong to a workspace, and each one keeps its own. The store a
 root hands in is already bound to the workspace of the chat, and this package
 never learns which one that is.
 
-What can be chosen comes in through the host: the fonts as data,
-the metadata and input ids as whatever the store already holds. This
-package names none of them.
+What can be chosen comes in through the host: the fonts, the metadata
+fields and the input helpers as data, and what the store already holds is
+what a change is checked against. This package names none of them.
+
+The memories name no value code holds. Each one is a global the extension
+sets from the host or from its own constants, read by the body in lisptc.
 
 Every preference the app lets the user set is one this package exposes. Read
 the Preferences section in `apps/app/AGENTS.md` before adding one.

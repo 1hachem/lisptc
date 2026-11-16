@@ -12,7 +12,6 @@ import {
 	subtract,
 	ZERO,
 } from "./arith.ts";
-import type { Channels } from "./channels.ts";
 import { LispHashTable, LispVector } from "./collections.ts";
 import {
 	DOC_DOC,
@@ -24,7 +23,9 @@ import {
 } from "./docs.ts";
 import type { Eval } from "./drive.ts";
 import { EvalException, LoopSignal, ThrowSignal } from "./errors.ts";
+import { formatText } from "./format.ts";
 import { BuiltInFunc } from "./func.ts";
+import { type Journal, print } from "./journal.ts";
 import {
 	Cell,
 	EndOfFile,
@@ -40,10 +41,9 @@ import {
 import { echoText, str } from "./print.ts";
 import { Reader } from "./reader.ts";
 import { zAny, zCell, zList, zNumeric, zString, zSym } from "./schema.ts";
-import { output } from "./topics.ts";
 
 export interface Definer extends DocSource {
-	readonly channels: Channels;
+	readonly journal: Journal;
 	def<T extends z.ZodType>(
 		name: string,
 		carity: number,
@@ -950,13 +950,13 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		"Print the arguments, separated by spaces and followed by a newline: strings as they are, everything else in re-readable form. `(echo)` alone prints a blank line. Returns an unspecified value, so the REPL reports nothing for a step that ends in an echo — what was printed IS the report.",
 		z.tuple([zList]),
 		([rest]) => {
-			output.emit(interp.channels, { user: `${echoText(rest)}\n` });
+			print(interp.journal, { user: `${echoText(rest)}\n` });
 			return Unspecified;
 		},
 	);
 	interp.def("doc", -1, DOC_SIGNATURE, DOC_DOC, z.tuple([zList]), ([rest]) => {
 		const answer = lookupDoc(interp, rest);
-		output.emit(interp.channels, { user: answer.text, model: answer.text });
+		print(interp.journal, { user: answer.text, model: answer.text });
 		return answer.value;
 	});
 	interp.def(
@@ -1061,6 +1061,27 @@ export function installCore(interp: Definer, core: CoreOps): void {
 				out += s;
 			}
 			return out;
+		},
+	);
+	interp.def(
+		"format",
+		-1,
+		"(format destination control args...)",
+		'Format `args` by the Common Lisp `control` string. `destination` nil returns the string; t prints it and returns nil; a control string in its place is read as nil. Directives: ~a as `string` prints, ~s readable, ~d an integer, ~% a newline, ~& a newline unless at line start, ~~ a tilde, ~{...~} once per element of a list argument, ~^ stops the loop when no element is left. `(format nil "~a has ~d" "x" 3)` is "x has 3"; `(format nil "~{~s~^ ~}" \'("a" "b"))` is "\\"a\\" \\"b\\"".',
+		z.tuple([zList]),
+		([rest]) => {
+			const [destination, ...given] = listItems(rest);
+			const legacy = typeof destination === "string";
+			const [control, ...items] = legacy ? [destination, ...given] : given;
+			if (typeof control !== "string")
+				throw new EvalException("format needs a control string", control);
+			const text = formatText(control, items);
+			if (legacy) return text;
+			if (destination === null) return text;
+			if (destination !== true)
+				throw new EvalException("format writes to nil or t", destination);
+			print(interp.journal, { user: text });
+			return null;
 		},
 	);
 	interp.def(

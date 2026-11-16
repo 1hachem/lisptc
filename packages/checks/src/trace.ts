@@ -1,7 +1,7 @@
+import { hitch } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import type { InterpExtension } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
 // @boundaries-ignore contract type only, never a value
 import type {
 	ConnectResult,
@@ -35,7 +35,7 @@ export type TraceEvent =
 			ok: boolean;
 	  }
 	| { kind: "connect"; step: number; server: string; ok: boolean }
-	| { kind: "note"; step: number; severity: Severity; text: string }
+	| { kind: "hitch"; step: number; severity: Severity; text: string }
 	| { kind: "halt"; step: number; answer: string };
 
 function clip(text: string): string {
@@ -112,9 +112,9 @@ export class Trace {
 					throw err;
 				}
 			});
-			note.on(interp.channels, (n) => {
+			interp.journal.on(hitch, (n) => {
 				trace.add({
-					kind: "note",
+					kind: "hitch",
 					step: trace.step,
 					severity: n.kind === "failed" ? "critical" : "warning",
 					text: n.text,

@@ -1,5 +1,4 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import {
@@ -11,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { MemoryKnowledgeStore } from "../src/memory-store.ts";
+import { EXPIRY } from "./helpers.ts";
 
 class FullStore extends MemoryKnowledgeStore {
 	override write(): string {
@@ -41,19 +41,20 @@ async function activityOf(
 				},
 			},
 			maxDownloadBytes: 1024,
+			...EXPIRY,
 			clock: ticking(1000, 25),
 		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
 	await runAsync(interp, prelude);
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		await runAsync(interp, code).catch(() => undefined);
 	} finally {
 		detach();
 	}
-	return view(buffer.collect(journal), activityKind);
+	return view(buffer.entries, activityKind);
 }
 
 describe("a knowledge file read or write", () => {

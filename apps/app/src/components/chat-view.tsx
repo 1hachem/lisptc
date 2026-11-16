@@ -1,4 +1,19 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+	type ChatMessage,
+	isParentMessage,
+	isSystemMessage,
+	isToolMessage,
+	isUserMessage,
+	type LaneId,
+	laneOf,
+	messageText,
+	Revealed,
+	type StepMeta,
+	toolModelOutput,
+	useLanes,
+	useTraced,
+} from "@repo/components";
 import type { Progress } from "@repo/journal-catalog/intent";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
@@ -6,7 +21,6 @@ import { anchorOf, contentRegion } from "@repo/ui-catalog";
 import {
 	createContext,
 	memo,
-	type ReactNode,
 	useCallback,
 	useContext,
 	useEffect,
@@ -23,28 +37,14 @@ import {
 import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import {
-	type ChannelId,
-	channelOf,
-	EVERY_CHANNEL,
-	type Shown,
-} from "../lib/channels.ts";
-import {
-	type ChatMessage,
-	isParentMessage,
-	isSystemMessage,
-	isToolMessage,
-	isUserMessage,
 	messageClassified,
 	messageProse,
 	messageReasoning,
-	messageText,
 	parentSourceOf,
-	type StepMeta,
 	toolAnswers,
 	toolAsks,
 	toolFailed,
 	toolFailure,
-	toolModelOutput,
 	toolQuestion,
 	toolResult,
 	toolResults,
@@ -86,22 +86,18 @@ const CHAT_FOLD = { lines: 25, chars: Number.POSITIVE_INFINITY };
 const TRACE_FOLD = { lines: 6, chars: 480 };
 const PAGE_LINES = 200;
 
-const Traced = createContext(false);
-
-export const Revealed = createContext(false);
-
 function Marked({
 	id,
 	tone,
 	children,
 }: {
-	id: ChannelId;
+	id: LaneId;
 	tone?: string;
 	children: React.ReactNode;
 }) {
-	const { icon, label, text } = channelOf(id);
+	const { icon, label, text } = laneOf(id);
 	return (
-		<div data-channel={id} className="flex min-w-0 gap-2">
+		<div data-lane={id} className="flex min-w-0 gap-2">
 			<HugeiconsIcon
 				icon={icon}
 				aria-label={label}
@@ -119,7 +115,7 @@ function foldOf(text: string, fold: { lines: number; chars: number }) {
 	return head.length > fold.chars ? head.slice(0, fold.chars) : head;
 }
 
-function ChannelBody({ text, code }: { text: string; code: boolean }) {
+function LaneBody({ text, code }: { text: string; code: boolean }) {
 	if (!code) return <Markdown>{text}</Markdown>;
 	return (
 		<pre className="whitespace-pre-wrap break-words font-mono">
@@ -128,7 +124,7 @@ function ChannelBody({ text, code }: { text: string; code: boolean }) {
 	);
 }
 
-function ChannelText({
+function LaneText({
 	text,
 	tone,
 	code = false,
@@ -137,7 +133,7 @@ function ChannelText({
 	tone: string;
 	code?: boolean;
 }) {
-	const traced = useContext(Traced);
+	const traced = useTraced();
 	const revealed = useContext(Revealed);
 	const [expanded, setExpanded] = useState(false);
 	const [page, setPage] = useState(0);
@@ -160,7 +156,7 @@ function ChannelText({
 				{...contentRegion}
 				className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined}
 			>
-				<ChannelBody text={shown} code={code} />
+				<LaneBody text={shown} code={code} />
 			</div>
 			{long && (
 				<div
@@ -207,26 +203,6 @@ function ChannelText({
 	);
 }
 
-const ShownChannels = createContext<Shown | null>(null);
-
-export function ChannelsShown({
-	shown,
-	children,
-}: {
-	shown: Shown;
-	children: ReactNode;
-}) {
-	return (
-		<ShownChannels.Provider value={shown}>
-			<Traced.Provider value>{children}</Traced.Provider>
-		</ShownChannels.Provider>
-	);
-}
-
-export function useChannels(): Shown {
-	return useContext(ShownChannels) ?? EVERY_CHANNEL;
-}
-
 function toolOutput(message: ChatMessage): string {
 	return [toolResult(message).output, ...toolResults(message)]
 		.filter((part) => part !== "")
@@ -234,13 +210,13 @@ function toolOutput(message: ChatMessage): string {
 }
 
 function ToolResult({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const output = shown.output ? toolModelOutput(message).output : "";
 	const ui = shown.ui ? toolUi(message) : undefined;
 	const attachments = shown.attachments ? attachedTo(message) : [];
 	if (ui === undefined && attachments.length === 0 && !output) return null;
 	const failed = toolFailed(message);
-	const outputTone = failed ? "text-red" : channelOf("output").text;
+	const outputTone = failed ? "text-red" : laneOf("output").text;
 	return (
 		<div
 			data-step-failed={failed || undefined}
@@ -248,10 +224,10 @@ function ToolResult({ message }: { message: ChatMessage }) {
 		>
 			{ui !== undefined && (
 				<Marked id="ui">
-					<ChannelText
+					<LaneText
 						code
 						text={JSON.stringify(ui, null, 2)}
-						tone={channelOf("ui").text}
+						tone={laneOf("ui").text}
 					/>
 				</Marked>
 			)}
@@ -262,7 +238,7 @@ function ToolResult({ message }: { message: ChatMessage }) {
 			)}
 			{output && (
 				<Marked id="output" tone={outputTone}>
-					<ChannelText code={failed} text={output} tone={outputTone} />
+					<LaneText code={failed} text={output} tone={outputTone} />
 				</Marked>
 			)}
 		</div>
@@ -279,14 +255,14 @@ function askedText(message: ChatMessage): string {
 }
 
 export function ToolMessage({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const asked = shown.asks ? askedText(message) : "";
 	return (
 		<>
 			<ToolResult message={message} />
 			{asked !== "" && (
 				<Marked id="asks">
-					<ChannelText text={asked} tone="text-dim" />
+					<LaneText text={asked} tone="text-dim" />
 				</Marked>
 			)}
 		</>
@@ -303,7 +279,7 @@ function AgentMessage({
 	const chatId = useChatSession((state) => state.chatId);
 	const sender = useAgentSender(message, chatId, useContext(ParentSource));
 	if (sender.cleared) return null;
-	const { icon, text } = channelOf("agents");
+	const { icon, text } = laneOf("agents");
 	if (!sender.parent)
 		return (
 			<button
@@ -342,7 +318,7 @@ function AgentMessage({
 }
 
 function UserMessage({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const text = messageText(message);
 	const files = shown.attachments ? attachedTo(message) : [];
 	if (files.length === 0) return <UserLine text={text} />;
@@ -355,8 +331,8 @@ function UserMessage({ message }: { message: ChatMessage }) {
 }
 
 export function ChatLine({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
-	const traced = useContext(Traced);
+	const shown = useLanes();
+	const traced = useTraced();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
 	return (
@@ -364,7 +340,7 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 			{reasoning && (
 				<div className="mb-2">
 					<Marked id="thinking">
-						<ChannelText text={reasoning} tone="text-dim italic" />
+						<LaneText text={reasoning} tone="text-dim italic" />
 					</Marked>
 				</div>
 			)}
@@ -372,13 +348,13 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 				<UserMessage message={message} />
 			) : !traced ? (
 				<div {...contentRegion}>
-					<ChannelBody text={messageText(message)} code />
+					<LaneBody text={messageText(message)} code />
 				</div>
 			) : (
 				shown.assistant && (
 					<Marked id="assistant">
 						<div {...contentRegion}>
-							<ChannelBody text={messageText(message)} code />
+							<LaneBody text={messageText(message)} code />
 						</div>
 					</Marked>
 				)
@@ -417,8 +393,8 @@ function RanOutput({ message }: { message: ChatMessage }) {
 	if (output === "" && failure === "") return null;
 	return (
 		<div data-step-ran className="flex min-w-0 flex-col gap-2 break-words">
-			{output !== "" && <ChannelText code text={output} tone="text-dim" />}
-			{failure !== "" && <ChannelText code text={failure} tone="text-red" />}
+			{output !== "" && <LaneText code text={output} tone="text-dim" />}
+			{failure !== "" && <LaneText code text={failure} tone="text-red" />}
 		</div>
 	);
 }
@@ -611,7 +587,7 @@ function failedAt(turn: Turn): ChatMessage | undefined {
 function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 	const shape = useMemo(() => shapeTurn(turn), [turn]);
 	const placed = useMemo(() => placeTimeline(shape, live), [shape, live]);
-	const shown = useChannels();
+	const shown = useLanes();
 	const traceAt = (message: ChatMessage | undefined) => {
 		const id = message?.id;
 		return onTrace && id !== undefined ? () => onTrace(id) : undefined;

@@ -41,4 +41,5 @@ export class MapSecretsStore implements SecretsStore {
 export interface SecretsHost {
 	store: SecretsStore;
 	prompt: PromptSource;
+	memories: PromptSource;
 }

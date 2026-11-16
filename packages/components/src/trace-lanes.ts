@@ -12,7 +12,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
-export type ChannelId =
+export type LaneId =
 	| "user"
 	| "assistant"
 	| "output"
@@ -24,15 +24,15 @@ export type ChannelId =
 	| "system"
 	| "agents";
 
-export interface Channel {
-	id: ChannelId;
+export interface Lane {
+	id: LaneId;
 	icon: IconSvgElement;
 	label: string;
 	hint: string;
 	text: string;
 }
 
-export const CHANNELS: Channel[] = [
+export const LANES: Lane[] = [
 	{
 		id: "user",
 		icon: UserIcon,
@@ -72,7 +72,7 @@ export const CHANNELS: Channel[] = [
 		id: "memory",
 		icon: Brain02Icon,
 		label: "memories",
-		hint: "what a step recalled",
+		hint: "memories that fired, as the agent read them",
 		text: "text-orange",
 	},
 	{
@@ -105,17 +105,17 @@ export const CHANNELS: Channel[] = [
 	},
 ];
 
-const BY_ID = Object.fromEntries(CHANNELS.map((c) => [c.id, c])) as Record<
-	ChannelId,
-	Channel
+const BY_ID = Object.fromEntries(LANES.map((c) => [c.id, c])) as Record<
+	LaneId,
+	Lane
 >;
 
-export function channelOf(id: ChannelId): Channel {
+export function laneOf(id: LaneId): Lane {
 	return BY_ID[id];
 }
 
-export type Shown = Record<ChannelId, boolean>;
+export type Shown = Record<LaneId, boolean>;
 
-export const EVERY_CHANNEL = Object.fromEntries(
-	CHANNELS.map((c) => [c.id, true]),
+export const EVERY_LANE = Object.fromEntries(
+	LANES.map((c) => [c.id, true]),
 ) as Shown;

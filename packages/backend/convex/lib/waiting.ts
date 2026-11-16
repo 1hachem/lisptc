@@ -1,6 +1,7 @@
 import { asksKind, unansweredAsks } from "@repo/journal-catalog/asks";
 import { questionKind } from "@repo/journal-catalog/intent";
 import { entriesIn, view } from "@repo/shared/journal";
+import { envelopeOf } from "@repo/shared/messages";
 import type { Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 
@@ -10,7 +11,8 @@ async function latestTurn(ctx: QueryCtx, chatId: Id<"chats">) {
 		.query("messages")
 		.withIndex("by_chat_seq", (q) => q.eq("chatId", chatId))
 		.order("desc")) {
-		if (message.type === "human" || message.type === "system") break;
+		if (message.type === "human") break;
+		if (message.type === "system" && !envelopeOf(message.kwargs).noted) break;
 		turn.push({ type: message.type, additional_kwargs: message.kwargs });
 	}
 	return turn.reverse();

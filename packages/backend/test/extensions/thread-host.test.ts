@@ -1,7 +1,6 @@
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
-import { MAX_SPAWN_DEPTH } from "../../convex/limits.ts";
 import type { Connect } from "../../src/agent-repl.ts";
 import type { Owner, ServerClient } from "../../src/server-client.ts";
 import { profileOf, ThreadHost } from "../../src/thread-host.ts";
@@ -14,7 +13,6 @@ type Agent = {
 	name: string;
 	prompt: string;
 	bounds: string[];
-	roster?: string[];
 	budget?: number;
 };
 
@@ -70,7 +68,6 @@ const middle: { agent: Agent } = {
 		name: "lead",
 		prompt: "lead the dig",
 		bounds: ["(permission/deny memory/*)"],
-		roster: ["scout", "digger"],
 		budget: 12,
 	},
 };
@@ -79,17 +76,15 @@ const child: { agent: Agent } = {
 		name: "digger",
 		prompt: "dig only",
 		bounds: ["(permission/deny knowledge/*)"],
-		roster: ["digger", "writer"],
 		budget: 30,
 	},
 };
 
 describe("the thread factory", () => {
-	it("narrows bounds and budget down the lineage and leaves a sub-agent no roster", () => {
+	it("narrows bounds and budget down the lineage and marks the thread a sub-agent", () => {
 		expect(profileOf([child, middle])).toEqual({
 			instructions: "dig only",
 			bounds: ["(permission/deny knowledge/*)", "(permission/deny memory/*)"],
-			roster: [],
 			budget: 12,
 			subAgent: true,
 		});
@@ -97,14 +92,6 @@ describe("the thread factory", () => {
 
 	it("leaves a root chat the whole workspace", () => {
 		expect(profileOf([root])).toEqual({ bounds: [] });
-	});
-
-	it("gives a thread at the depth cap no agents to spawn", () => {
-		const lineage = [
-			...Array.from({ length: MAX_SPAWN_DEPTH }, () => middle),
-			root,
-		];
-		expect(profileOf(lineage).roster).toEqual([]);
 	});
 
 	it("sets up the turn with the record's instructions", async () => {

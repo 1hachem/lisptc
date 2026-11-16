@@ -1,6 +1,5 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -25,6 +24,7 @@ import { z } from "zod";
 
 export interface IntentHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 	clock: Clock;
 }
 
@@ -151,7 +151,7 @@ function closeShown(
 	error?: string,
 ): void {
 	const intent = close(interp, state, clock, error);
-	if (intent !== undefined) record(interp.channels, intentKind, intent);
+	if (intent !== undefined) interp.journal.write(intentKind, intent);
 }
 
 function count(x: unknown, what: string, least: number): number {
@@ -186,6 +186,7 @@ export function intentExtension(host: IntentHost): InterpExtension {
 		(interp: Interp): void => registerIntent(interp, clock),
 		{
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.turnStart.use((ctx, next) => {
 					statesOf.get(ctx.interp)?.log.set([]);
@@ -245,7 +246,7 @@ function registerIntent(interp: Interp, clock: Clock): void {
 	);
 
 	const show = (): typeof Unspecified => {
-		record(interp.channels, intentKind, shown(states));
+		interp.journal.write(intentKind, shown(states));
 		return Unspecified;
 	};
 
@@ -388,13 +389,13 @@ function registerIntent(interp: Interp, clock: Clock): void {
 			const multi = opts.has("multi") && opts.get("multi") !== null;
 			const n = seq.get() + 1;
 			seq.set(n);
-			record(interp.channels, questionKind, {
+			interp.journal.write(questionKind, {
 				id: `q${n}`,
 				prompt,
 				choices,
 				multi,
 			});
-			effect.emit(interp.channels, { harness: { type: "end" } });
+			interp.journal.write(effect, { type: "end" });
 			return Unspecified;
 		},
 	);

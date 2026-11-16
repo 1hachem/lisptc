@@ -1,0 +1,358 @@
+(area "lang" :when "the agent is about to write or fix lisptc code, or a form just failed or returned something unexpected")
+
+(memory "internal/lang/syntax" :when "the agent is about to write lisptc that needs exact syntax: quoting, quasiquote, dotted pairs, strings, keywords, numbers or symbol names; or a form just failed to read, or read as something else than meant"
+  "Syntax detail.
+- Quote: 'x same as (quote x) — x unevaluated.
+- Quasiquote: leading backtick same as (quasiquote x) . Inside, ,x unquotes, inserts evaluated x; ,@x unquote-splicing, splices a list.
+  Example: (a ,(+ 1 2) ,@(list 3 4)) evaluates to the list a 3 3 4.
+- Lists: (a b c) . Dotted pair: (a . b) is one cons cell.
+- Strings: \"...\" with escapes \\\\ \\\" \\n \\r \\f \\b \\t \\v. No character type: \"character\" is one-character string; char-code and friends take them.
+- Keywords: :foo self-evaluating, interned, so (eq :a :a) is t.
+- Numbers: see internal/lang/numbers. nil and () same value: empty list and false. t is canonical true.
+- Comments: there is no comment syntax — prose around forms is the comment. ; is ordinary symbol character, so \"; note\" inside a form is code.
+- Symbols: any token not number, string, keyword, nil or t. / and - legal in names, e.g. string-split, acme/get_widget.")
+
+(memory "internal/lang/prose-asides" :when "the agent is about to write a remark, an aside or parentheses next to its code, or its last reply ran nothing, or prose was just run as code and failed with undefined"
+  "Asides and parens in prose.
+Aside whose head names nothing — (see below) , (one, two,
+  three) — reads as prose, comes back as skipped note. Mistake the reader
+forgave, not a way to write. Forgiveness narrow, unpredictable: anything shaped
+like a call runs. Keyword argument, string literal, nested call, or slashed or
+underscored name with no words around it — (server/tool :key \"value\") , dummy
+names — is code whatever is missing. (see below) skips; (see
+  \"below\") raises undefined: see. Tool of unloaded server: undefined: error to
+fix, not a skip. Reply of only asides ran nothing, ends the loop.
+Stray paren in prose still reads as code, so never write one; paren smiley unsayable.")
+
+(memory "internal/lang/data-types" :when "the agent is about to test for an empty or false value or branch on a value's type, or a type check just returned something unexpected, such as zero or an empty string read as true"
+  "Data types.
+- Cons cell — pair (car . cdr) ; list is chain of cells ending in nil.
+- Symbol — interned name; gensym and make-symbol make uninterned ones, printed #:name.
+- Keyword — :foo, self-evaluating.
+- String — text.
+- Hash table — mutable map, keys compare by equal. Prints #<hash-table n>.
+- Vector — mutable indexed sequence. Prints #<vector 1 2 3>.
+- Function / closure / macro — from lambda, defun, defmacro.
+- Secret — tainted string wrapper, only when secrets extension loaded.
+
+Test emptiness with null or not. Never rely on 0 or \"\" being false — they are TRUE.")
+
+(memory "internal/lang/special-forms" :when "the agent is about to use a special form, a loop or deep recursion, or a step just failed with a stack overflow or a form that did not evaluate as expected"
+  "Evaluated specially, not as function calls. Complete list:
+
+| Form | Shape | Meaning |
+|------|-------|---------|
+| quote | (quote x) | Return x unevaluated, written 'x. |
+| progn | (progn e...) | Evaluate in order, return the last. |
+| cond | (cond (test body...) ...) | First clause with non-nil test: eval its body, return last, or the test value if no body. Else nil. |
+| setq | (setq name val ...) | Assign val to variable name, one or more pairs. Returns last value. Defines or updates a global if name isn't a local. |
+| lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
+| macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
+| quasiquote | (quasiquote x) | Template with unquote and unquote-splicing, see internal/lang/syntax. |
+| try | (try
+  body
+  (catch (e)
+    handler...)) | Eval body; on error, bind e to the error value and run the handler. |
+
+Tail calls optimized: tail recursion and loop macros never overflow the stack.
+Iterate with tail-recursive helpers or loop macros.")
+
+(memory "internal/lang/numbers" :when "the agent is about to do arithmetic or division, or a result just came back as a float, a ratio or an integer where another was expected"
+  "NUMBERS
+- Integer literal is exact bigint: 42.
+- Decimal or exponent makes inexact float: 42.0, 4.2e1.
+- + - * keep exactness: bigint with bigint gives bigint. ANY float makes the
+  result float, \"float contagion\": (+ 1 2) is 3,
+(+ 1 2.0) is 3.0, (* 2 3) is 6, (* 2 3.0) is 6.0.
+- / is ALWAYS float, even evenly divisible: (/ 6 2)
+is 3.0. Exact integer division: truncate, gives bigint:
+(truncate 6 2) is 3.
+- Integer-valued float prints 3.0; bigint prints 3.
+- = and eql compare numerically across types: (= 3 3.0) is t.
+- Divide by zero: / follows JS, (/ 1 0) is Infinity, (/ 0 0) is NaN, no error.
+  Integer truncate, % and mod on bigints throw. Guard divisors.")
+
+(memory "internal/lang/arithmetic" :when "the agent is about to call a math function: add, subtract, multiply, divide, remainder, rounding, power, root, gcd, min, max, or a number test such as even or zero; or one just failed with a wrong argument"
+  "Arithmetic built-ins:
+- (+ n...) sum, 0 if none · (* n...) product, 1 if none ·
+(- n m...) subtract, or negate one arg · (/ n m...) float divide.
+- (% x y) remainder, sign of x, alias rem · (mod x y) modulo, sign of y ·
+(truncate x [y]) toward zero, gives bigint.
+- (< x y) primitive less-than. Prelude adds (> x y) , (>= x y) , (<= x y) ,
+(/= x y) and (= x y) .
+- Predicates: (numberp x) · (zerop n) · (plusp n) · (minusp n) ·
+(evenp n) · (oddp n) , last two integers only.
+- (abs n) · (min n m...) · (max n m...) · (1+ n) · (1- n) , keep exactness.
+- (floor x [y]) · (ceiling x [y]) · (round x [y]) give bigint, like
+  truncate. round takes tie to even: (round 2.5) is 2.
+- (expt b p) exact for integer b and p >= 0, else float · (sqrt n) float ·
+(gcd n...) · (lcm n...) .
+- (parse-integer s) decimal string to bigint, error otherwise.")
+
+(memory "internal/lang/lists" :when "the agent is about to build, read or change lists, pairs or symbols, or test a value with atom, eq, eql, stringp or numberp; or a list call just failed or returned nil unexpectedly"
+  "Lists and pairs:
+- (car x) first · (cdr x) rest · (cons a b) new cell · (list x...) .
+- (length x) length of list or string, bigint.
+- (rplaca cell x) and (rplacd cell x) destructively set car and cdr, aliases
+  setcar and setcdr.
+
+Predicates:
+- (atom x) true if not cons · (eq x y) identity · (eql x y) identity or
+  numeric and string equality, alias = · (stringp x) · (numberp x) .
+
+Symbols:
+- (gensym) fresh uninterned symbol · (make-symbol name) · (intern name) ·
+(symbol-name sym) .")
+
+(memory "internal/lang/hash-vectors" :when "the agent is about to keep keyed data in a hash table or index into a mutable vector, or a hash or vector call just failed"
+  "Hash tables:
+- (make-hash-table) · (gethash key table [default]) · (puthash key value table)
+· (remhash key table) · (clrhash table) · (hash-has-key key table) ·
+(hash-table-count table) · (hash-table-keys table) ·
+(hash-table-values table) · (hash-table-alist table) · (hash-table-p x) .
+  Keys by equal: \"a\", 2 and 2.0, (list 1 2) all work. Order is insertion.
+
+Vectors:
+- (vector x...) · (make-vector n [init]) · (aref v i) · (aset v i x) ·
+(vector-push x v) appends, returns index · (vector-to-list v) ·
+(list-to-vector list) · (vectorp x) . Index past end errors.
+- (length x) , (elt seq i) and (subseq seq start [end]) take list, string or
+  vector.")
+
+(memory "internal/lang/strings" :when "the agent is about to read, build, compare, upcase, pad or convert text or turn a value into a string, or a string call just failed or returned the wrong text"
+  "Strings:
+- (char s i) one-char string at i, or nil · (concat s...) concatenate
+  · (string-upcase s) · (string-downcase s) .
+- (string< a b) · (string> a b) order by code point · (string-equal a b)
+ignores case · (string-pad-left s width [pad]) ·
+(string-pad-right s width [pad]) · (number-to-string n digits) fixed digits:
+(number-to-string 3.14159 2) is \"3.14\".
+- Character = one-char string: (char-code c) · (code-char n) ·
+(digit-char-p c) digit value or nil · (alpha-char-p c) ·
+(whitespace-char-p c) .
+- (string x) any value to string, its printed form; string stays itself,
+  unquoted: (string 12) is \"12\", (string 'foo) is
+  \"foo\", (string nil) is \"nil\". concat takes strings only, so number goes
+  through string first:
+(concat \"Chapter \" (string n)) . Float keeps .0: (string 3.0)
+is \"3.0\"; (string (truncate x)) gives bare integer.")
+
+(memory "internal/lang/json-read" :when "the agent holds JSON text or Lisp text in a string and is about to parse it, or a parse just failed"
+  "Parsing text into data:
+- (read s) parse FIRST Lisp expression in s, return as data, unevaluated:
+(read \"(+ 1 2)\") gives the list (+ 1 2) , not 3. Trailing text ignored;
+  no expression errors.
+- (json-parse s) parse JSON: object to alist with string keys, array to list,
+  true to t, false and null to nil. Numbers arrive as floats: 7 reads 7.0; =
+  still compares numerically.
+(cdr (assoc \"title\" (json-parse s))) reads a field.
+- Different parsers, not aliases. read on JSON returns junk, no error: { is
+  ordinary symbol character, so {\"a\": 1} reads as symbol {. json-parse for
+  JSON, read for Lisp.")
+
+(memory "internal/lang/eval-control" :when "the agent is about to apply a function to a list of arguments, raise an error value, or leave a loop early with break or return; or such a call just failed"
+  "Eval and control:
+- (apply f args) call f with elements of list args.
+- (error value) raise catchable error carrying value, caught by try.
+- (break) exit nearest loop; (return value) exit it with value.")
+
+(memory "internal/lang/output" :when "the agent wants to look at a value, print a result, narrate its reasoning or print a keyword, or a value it meant to see did not show"
+  "Output — echo is the ONLY thing that prints; no print, princ, terpri or view. Nothing computed is seen until echoed.
+- (echo x...) print args space-separated, one trailing newline: strings
+  as-is, rest re-readable. (echo) is blank line.
+  Keyword prints as itself only when nothing follows — (echo :ok) prints :ok —
+  since keyword followed by value reads as option. Put keyword to print LAST,
+  or wrap in list.
+
+Narration:
+- (think part...) echo reasoning as narration: parts print literally, ,x part
+  evaluated first, e.g. (think \"sum is\" ,(+ 1 2)) . Returns nil; real answer
+  goes in separate expression.")
+
+(memory "internal/lang/introspection" :when "the agent needs to know what a name does, list the globals, load another Lisp file or remove a global binding, or a name it used just came back undefined"
+  "Introspection:
+- (doc name) print binding's signature and doc; (doc) lists all documented
+  names. Read it before guessing an argument, and again after a rejected call.
+- (dump) list every global symbol · (import \"path\") load and eval Lisp file.
+- (makunbound 'name) drops global from setq, defun or defmacro, doc and source
+  too. t if bound. Builtins and read-only globals stay.
+
+Globals: *gensym-counter*, *version*.")
+
+(memory "internal/lang/prelude-access" :when "the agent is about to take the second, third or nth element of a list, its tail, its last cell or all but the last, or compose car and cdr; or such a call returned nil unexpectedly"
+  "List access by position:
+- Composed car and cdr: caar cadr cdar cddr caaar caadr cadar caddr cdaar
+  cdadr cddar cdddr. cadr is 2nd element, caddr 3rd, and so on.
+- (nth n list) element at index n from 0; nil past end · (nthcdr n list) ·
+(last list) last cons cell, not element · (butlast list [n]) .")
+
+(memory "internal/lang/prelude-map" :when "the agent is about to transform every element of a list, keep the ones that pass a test, or fold a list into one value; or mapcar, filter or reduce just failed or returned the wrong value"
+  "Map, filter, fold:
+- (mapcar f list) new list of f over each element:
+(mapcar (lambda (n) (* n n)) '(1 2 3)) gives (1 4 9) .
+- (mapc f list) for effect, returns list.
+- (filter f list) elements f says yes to:
+(filter (lambda (n) (< 10 n)) '(3 12 7 40)) gives (12 40) .
+- (reduce f list [initial]) fold left: f takes accumulator and element.
+  No initial: first element starts; empty list gives nil.
+(reduce + '(1 2 3)) is 6. List SECOND, initial last.
+- (identity x) return x.")
+
+(memory "internal/lang/prelude-sort" :when "the agent is about to sort, order, rank or reverse a list, or a sorted list came back unchanged"
+  "Sort and reverse:
+- (sort list pred) new sorted list, stable, list unchanged:
+(sort '(3 1 2) <) gives (1 2 3) ; strings use string< . Keep result:
+(setq xs (sort xs <)) .
+- (reverse list) new reversed list · (nreverse list) destructive reverse.")
+
+(memory "internal/lang/prelude-build" :when "the agent is about to concatenate or copy lists, or append to a list"
+  "List building:
+- (append list...) concatenate lists, non-destructive ·
+(nconc lists...) destructive concat · (copy-list list) .")
+
+(memory "internal/lang/prelude-search" :when "the agent is about to search a list for an item or match, count or remove matching items, deduplicate a list, or test whether any or all elements pass"
+  "Search, item matched by equal:
+- (find item list) · (find-if f list) · (position item list) ·
+(position-if f list) · (count item list) · (count-if f list) ·
+(remove item list) · (remove-if f list) · (remove-duplicates list) .
+- (some f list) first non-nil (f x) · (every f list) t if all pass.")
+
+(memory "internal/lang/prelude-predicates" :when "the agent is about to test whether a value is nil, a cons, a list or a keyword, or compare two structures deeply"
+  "Predicates:
+- (not x) and (null x) true if nil · (consp x) true if cons ·
+(listp x) true if nil or cons · (keywordp x) true if keyword ·
+(equal x y) deep structural equality.")
+
+(memory "internal/lang/prelude-alists" :when "the agent is about to look up a key in an alist, test list membership, or read a field out of an alist or a tool result made of alists"
+  "Membership / alists:
+- (memq key list) tail from first eq match · (member key list) first equal
+  match · (assq key alist) first pair with eq car · (assoc key alist) first
+  pair with equal car. Alist field:
+(cdr (assoc \"content\" msg)) .")
+
+(memory "internal/lang/prelude-get-in" :when "the agent is about to read a value out of a nested record, config, plist, alist or tool result by a path of keys or indexes"
+  "- (get-in record key...) read through nested alists, keyword plists and lists,
+  every step guarded: (get-in config \"server\" \"port\") is nil when no
+  \"server\", not an error. No or guard, no assoc chain.
+  Number key indexes a list — (get-in reply \"results\" 0 \"url\") — keyword key
+  matches string of its name, :port finds \"port\". Plist key matches by name:
+(get-in '(:theme (:accent \"red\")) :theme :accent) gives \"red\" .")
+
+(memory "internal/lang/prelude-set-in" :when "the agent is about to change, add or remove a value inside a nested record, config, plist or alist, or edit a data file"
+  "Nested data, write side of get-in. Pure: return new copy, record unchanged.
+Paths same as get-in.
+- (set-in record value key...) value at path. Missing key added: plist gets
+  keyword, alist gets pair; nil record becomes plist for keyword key, else alist.
+  Index replaces element, index = length appends:
+(set-in '(:theme (:accent \"red\")) \"blue\" :theme :accent) gives (:theme (:accent \"blue\")) .
+- (update-in record f key...) value at path becomes (f value) ; f gets nil when
+  path missing:
+(update-in '(:n 1) (lambda (n) (+ n 1)) :n) gives (:n 2) .
+- (remove-in record key...) drop plist key, alist pair or list index; missing
+  path gives record back:
+(remove-in '(:a 1 :b 2) :a) gives (:b 2) .
+- Edit data file: read it, set-in / update-in / remove-in, write whole value back.")
+
+(memory "internal/lang/prelude-branch" :when "the agent is about to branch on a condition or dispatch on a value with if, when, unless, and, or or case; or a branch took the wrong arm"
+  "Branching macros:
+- (if test then else...) · (when test body...) · (unless test body...) ·
+(and x...) , nil on first nil, else last · (or x...) , first non-nil ·
+(case key (keys forms...) ... (t default...)) — matches key by equal
+  against each clause's key list; t clause is default.")
+
+(memory "internal/lang/prelude-let" :when "the agent is about to bind local names, bind one name from another, or define local recursive functions; or a let binding came back nil or undefined"
+  "Binding macros:
+- (let ((name val) ...) body...) parallel bindings; bare name binds nil.
+- (let* ((name val) ...) body...) sequential; each val may use earlier names:
+(let* ((issue (car issues)) (state (cdr (assoc \"state\" issue)))) …) .
+- (letrec ((name val) ...) body...) bindings reference each other — local
+  recursive functions.")
+
+(memory "internal/lang/prelude-loops" :when "the agent is about to loop over a list, repeat something n times or loop while a condition holds, or leave a loop early"
+  "Loops, all support (break) and (return value) :
+- (while test body...) .
+- (dolist (name list [result]) body...) iterate elements.
+- (dotimes (name count [result]) body...) iterate 0..count-1.")
+
+(memory "internal/lang/prelude-defun" :when "the agent is about to define a function, especially with optional, keyword or rest arguments, or a defun just failed on its argument list"
+  "Defining:
+- (defun name (args...) [doc] body...) define function; &rest x variadic.
+- &key after required args makes the rest optional and nameable:
+(defun kpi (&key label value unit) ...) is called as
+(kpi \"Revenue\" 42000) or (kpi :label \"Revenue\" :value 42000 :unit \"USD\") .
+  Filled left to right until first keyword; missing one is nil.
+  &key and &rest cannot both appear.
+- (defmacro name (args...) [doc] body...) define macro, see internal/lang/macros.")
+
+(memory "internal/lang/prelude-string-search" :when "the agent is about to compare strings, take a substring, or test whether a string starts with, ends with, contains or counts a piece of text"
+  "String search:
+- (string= s1 s2) string content equality, same test as equal ·
+(substring s start [end]) · (string-prefix? p s) · (string-suffix? p s) ·
+(string-index s sub [start]) index or nil · (string-contains? s sub) ·
+(string-count s sub) .")
+
+(memory "internal/lang/prelude-string-edit" :when "the agent is about to split a string into parts, join parts into a string, trim whitespace or replace text"
+  "String editing:
+- (string-replace s old new) · (string-split s sep) , empty sep gives
+  characters · (string-join list sep) · (string-trim s) .")
+
+(memory "internal/lang/prelude-format" :when "the agent is about to build a sentence or message around values, or fill a text template"
+  "- (format nil \"The sum was ~a\" n) fills template, returns string.
+- (format t control arg...) prints string, returns nil.
+- ~a next arg as string would; ~s readable, string keeps quotes; ~d integer;
+  ~% newline; ~& newline unless at line start; ~~ tilde.
+- ~{...~} loops over list arg, ~^ stops before last separator:
+(format nil \"~{~a~^, ~}\" '(1 2 3)) gives \"1, 2, 3\" .")
+
+(memory "internal/lang/places" :when "the agent is about to store into a variable, a car or cdr, a list index, a vector slot, a hash entry or a nested record, or increment a counter; or a setf just failed"
+  "Places:
+- (setf place value ...) store, return value. Place: variable, (car x) ,
+(cdr x) , (nth n xs) , (aref v i) , (gethash key table) , or
+(get-in record key...) , which rebinds record to updated copy.
+- (push x place) · (pop place) · (incf place [n]) · (decf place [n]) .")
+
+(memory "internal/lang/macros" :when "the agent is about to define a macro, generate code from a template, or needs a name that will not clash with user variables; or a macro expanded wrong"
+  (format nil "MACROS
+
+defmacro defines compile-time transformer. Build expansion with quasiquote:
+
+(defmacro swap (a b)
+  (let ((tmp (gensym)))
+    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))
+
+(gensym) for temporaries you introduce, so user variables are not captured.
+Expansion depth max ~d nesting levels at compile time."
+    *max-macro-depth*))
+
+(memory "internal/lang/errors" :when "the agent is about to handle a failure, catch an error, unwind on exit, or leave early with block, return-from, catch or throw; or an error escaped a handler it wrote"
+  "ERRORS & CONTROL FLOW
+- (error value) raises; value any Lisp value, often string.
+- (try
+  expr
+  (catch (e)
+    handler...)) evaluates expr; on raise, e bound to raised value, handler
+  runs. ONLY error mechanism — no condition system.
+
+(try
+  (error \"boom\")
+  (catch (e)
+    (concat \"failed: \" e)))
+
+- (break) and (return value) escape nearest while, dolist or dotimes. Outside
+  a loop: error.
+- (block name body...) with (return-from name [value]) leaves named block
+  from any depth.
+- (catch tag body...) with (throw tag [value]) unwinds to catch with eq tag,
+  across calls. Not try's catch clause, which handles errors. throw or
+  return-from with nothing to reach: error, try catches it.
+- (unwind-protect form cleanup...) returns form's value, runs cleanup
+  however form exits: normal, error, throw, return-from, break.")
+
+(memory "internal/lang/gotchas" :when "the agent is about to write a helper the prelude may already have, keep many values looked up by key, or type back a value from its hash-and-angle-brackets printout"
+  "GOTCHAS
+- Check prelude before writing helper: sort, find, position, count, some,
+  every, remove, reverse, min, max, abs, floor, round exist.
+- Many lookups by key: hash table, not alist.
+- Hash-and-angle-brackets printout — closure, live value reader cannot read
+  back — is printout, not syntax; typing one always errors. Use the name the
+  value was reported under.")

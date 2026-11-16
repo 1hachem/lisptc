@@ -310,6 +310,7 @@ export function workspaceExtension(host: WorkspaceHost): WorkspaceExtension {
 		{
 			asks: [SETTINGS_SET, CHAT_ARCHIVE, CHAT_READ],
 			prompt: host.prompt(),
+			memories: host.memories(),
 		},
 	);
 }

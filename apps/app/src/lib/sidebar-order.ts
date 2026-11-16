@@ -40,7 +40,7 @@ export const RIGHT_BY_DEFAULT: readonly SidebarEntry[] = [
 	"tests",
 ];
 
-function entriesIn(stored: readonly string[] | undefined): SidebarEntry[] {
+function sidebarItems(stored: readonly string[] | undefined): SidebarEntry[] {
 	return [...new Set(currentNames(stored))].filter(isEntry);
 }
 
@@ -49,8 +49,8 @@ export function sidebarSides(
 	right: readonly string[] | undefined,
 ): SidebarSides {
 	const onRight =
-		right === undefined ? [...RIGHT_BY_DEFAULT] : entriesIn(right);
-	const onLeft = entriesIn(left).filter((name) => !onRight.includes(name));
+		right === undefined ? [...RIGHT_BY_DEFAULT] : sidebarItems(right);
+	const onLeft = sidebarItems(left).filter((name) => !onRight.includes(name));
 	const unplaced = SIDEBAR_ENTRIES.filter(
 		(name) => !onLeft.includes(name) && !onRight.includes(name),
 	);

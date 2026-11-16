@@ -28,10 +28,16 @@ export interface Arity {
 	max?: number;
 }
 
+export interface WordCap {
+	position: number;
+	words: number;
+}
+
 export interface Doc {
 	signature: string;
 	doc: string;
 	args?: DocArg[];
+	wordCaps?: readonly WordCap[];
 }
 
 export const specialFormDocs: Record<string, Doc> = {

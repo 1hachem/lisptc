@@ -6,6 +6,7 @@ import {
 	type List,
 	listToArray,
 	newLispKeyword,
+	newSym,
 } from "@repo/interpreter/objects";
 import { LispPromise } from "@repo/interpreter/promise";
 import { zList } from "@repo/interpreter/schema";
@@ -15,6 +16,10 @@ import type { PromptSource } from "@repo/shared/host";
 import { z } from "zod";
 
 export const AWAIT_TIMEOUT_MS = 50_000;
+
+const EVERY_REJECTED = "every promise rejected";
+
+const REJECTIONS_JOINED = "; ";
 
 const zPromise = z.custom<LispPromise>(
 	(x) => x instanceof LispPromise,
@@ -43,6 +48,7 @@ function parseTimeout(x: unknown): number {
 
 export interface PromisesHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 function unawaited(error: EvalException): string | undefined {
@@ -64,11 +70,31 @@ export function promisesExtension(host: PromisesHost): InterpExtension {
 				return { reported };
 			});
 		},
-		{ prompt: host.prompt() },
+		{ prompt: host.prompt(), memories: host.memories() },
 	);
 }
 
 export function registerPromises(interp: Interp): void {
+	interp.defineGlobal(
+		newSym("*promises-await-seconds*"),
+		BigInt(AWAIT_TIMEOUT_MS / 1000),
+		{
+			signature: "*promises-await-seconds*",
+			doc: "How many seconds await waits on a promise before it fails.",
+		},
+	);
+	interp.defineGlobal(newSym("*promises-every-rejected*"), EVERY_REJECTED, {
+		signature: "*promises-every-rejected*",
+		doc: "The error promise-any raises when every promise rejected.",
+	});
+	interp.defineGlobal(
+		newSym("*promises-rejections-joined*"),
+		REJECTIONS_JOINED,
+		{
+			signature: "*promises-rejections-joined*",
+			doc: "The separator promise-any puts between the rejection reasons it reports.",
+		},
+	);
 	interp.def(
 		"await",
 		-1,
@@ -119,8 +145,10 @@ export function registerPromises(interp: Interp): void {
 			Promise.any(toPromises(interp, list)).catch((ex) => {
 				const errors = (ex as { errors?: unknown[] }).errors;
 				throw new EvalException(
-					"every promise rejected",
-					Array.isArray(errors) ? errors.map(message).join("; ") : message(ex),
+					EVERY_REJECTED,
+					Array.isArray(errors)
+						? errors.map(message).join(REJECTIONS_JOINED)
+						: message(ex),
 					false,
 				);
 			}),

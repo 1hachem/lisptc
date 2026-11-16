@@ -24,6 +24,7 @@
     "@repo/models": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/shared": "workspace:*",
+    "gpt-tokenizer": "^4.1.0",
     "posthog-node": "^5.51.6"
   },
   "devDependencies": {
@@ -32,6 +33,7 @@
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.7",
     "typescript": "^5.9.3",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "zod": "^4.4.3"
   }
 }

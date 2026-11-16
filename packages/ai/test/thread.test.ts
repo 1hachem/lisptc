@@ -1,15 +1,15 @@
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
-import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
-import type { ChatMessageInput, WireMessage } from "../src/stream.ts";
+import type { ChatMessageInput, WireMessage } from "../src/line.ts";
+import { type Mail, MemoryMailbox } from "../src/mailbox.ts";
 import {
 	Thread,
 	type TranscriptStore,
 	type TurnEnding,
 	type TurnSetup,
 } from "../src/thread.ts";
-import { testRepl } from "./helpers.ts";
+import { testRepl, unprompted } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as string[],
@@ -64,8 +64,6 @@ class World implements TranscriptStore {
 		this.onAppend(messages);
 	}
 
-	async revise(): Promise<void> {}
-
 	thread(): Thread {
 		return new Thread("t1", {
 			mailbox: new MemoryMailbox(),
@@ -92,7 +90,7 @@ class World implements TranscriptStore {
 	}
 }
 
-function user(id: string, text: string): Envelope {
+function user(id: string, text: string): Mail {
 	return { kind: "user", id, text, forms: true };
 }
 
@@ -209,8 +207,9 @@ describe("a thread", () => {
 		});
 		await posted.ended;
 
-		expect(world.stored[0]).toMatchObject({ type: "system", id: "e1" });
-		expect(world.stored[1]).toMatchObject({ type: "ai" });
+		const stored = unprompted(world.stored);
+		expect(stored[0]).toMatchObject({ type: "system", id: "e1" });
+		expect(stored[1]).toMatchObject({ type: "ai" });
 		expect(model.calls[0].at(-1)?.content).toContain(
 			'<system-event source="agent:r">(+ 40 2)</system-event>',
 		);

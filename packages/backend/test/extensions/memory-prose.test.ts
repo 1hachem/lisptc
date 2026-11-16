@@ -27,7 +27,10 @@ async function step(
 ): Promise<string> {
 	const before = await driveAsync(bank.beginStep(code, interp));
 	await runAsync(interp, code);
-	return before.value + (await driveAsync(bank.endStep())).value;
+	const after = (await driveAsync(bank.endStep())).value;
+	return [...before.value.memories, ...after.memories]
+		.map((m) => `${m.key}: ${m.body}\n`)
+		.join("");
 }
 
 describe("memory and prose", () => {

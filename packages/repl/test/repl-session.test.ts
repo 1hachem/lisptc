@@ -57,41 +57,6 @@ describe("AgentRepl (in-process REPL binding)", () => {
 			expect(ends((await r.evalOutput("   ")).effects)).toBe(false);
 		});
 	});
-
-	describe("withheld prose feedback", () => {
-		it("keeps the notes an answer did not return", async () => {
-			const r = agentRepl([answering(), noting("an aside")]);
-			expect(await r.eval("   ")).toBe("");
-			expect(r.takeProseFeedback()).toBe("skipped an aside\n");
-		});
-
-		it("clears them once read", async () => {
-			const r = agentRepl([answering(), noting("an aside")]);
-			await r.eval("   ");
-			r.takeProseFeedback();
-			expect(r.takeProseFeedback()).toBe("");
-		});
-
-		it("accumulates the notes of several answers", async () => {
-			const r = agentRepl([answering(), noting("an aside")]);
-			await r.eval("   ");
-			await r.eval("   ");
-			expect(r.takeProseFeedback().split("\n").filter(Boolean).length).toBe(2);
-		});
-
-		it("holds nothing back from a step that ran code", async () => {
-			const r = agentRepl([answering(), noting("an aside")]);
-			expect(await r.eval("(+ 1 2)")).toContain("skipped an aside");
-			expect(r.takeProseFeedback()).toBe("");
-		});
-
-		it("reset() drops what was held", async () => {
-			const r = agentRepl([answering(), noting("an aside")]);
-			await r.eval("   ");
-			r.reset();
-			expect(r.takeProseFeedback()).toBe("");
-		});
-	});
 });
 
 describe("the llm observer", () => {

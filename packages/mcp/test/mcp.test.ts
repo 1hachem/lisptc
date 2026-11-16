@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -15,8 +15,8 @@ async function evalStr(interp: Interp, code: string): Promise<string> {
 }
 
 async function evalOutput(interp: Interp, code: string): Promise<string> {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		await runAsync(interp, code);
 		return buffer.collectText("user");

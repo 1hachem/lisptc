@@ -1,3 +1,4 @@
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import { ends } from "@repo/interpreter/effects";
 import type {
 	AgentFailure,
@@ -13,22 +14,21 @@ import type { AgentRepl, LiveEntries } from "@repo/repl/repl";
 import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
+import { countTokens } from "gpt-tokenizer";
 import { type AgentConfig, streamAgent } from "./agent.ts";
 import { evalMessage } from "./eval.ts";
-import type { Envelope } from "./mailbox.ts";
-import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import {
-	evalCode,
-	isUserPrompt,
-	joinRiding,
-	proseFeedbackContent,
-	replResultContent,
-	snapshotConversation,
-	stripFences,
-	type TranscriptEntry,
-	toLlmMessages,
-	withItsResult,
-} from "./repl.ts";
+	isPrompt,
+	type Line,
+	lineChat,
+	lineRecord,
+	mailLine,
+	type PostedLine,
+	ranByUser,
+} from "./line.ts";
+import type { Mail } from "./mailbox.ts";
+import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
+import { evalCode, replResultContent, stripFences } from "./repl.ts";
 import type { TraceContext } from "./telemetry.ts";
 import type { ToolMessage } from "./tool-message.ts";
 import { type TurnTelemetry, turnTelemetry } from "./turn-telemetry.ts";
@@ -40,7 +40,7 @@ export interface TurnOptions {
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
-	inbox?: () => Promise<Envelope[]>;
+	inbox?: () => Promise<Mail[]>;
 	runsForms?: boolean;
 	received?: Received;
 }
@@ -61,20 +61,14 @@ export type TurnEvent =
 			output: string;
 			display: string;
 			error: boolean;
-			riding?: string;
 			failed: boolean;
 			held?: true;
 			results: readonly string[];
 	  }
 	| { type: "entry"; entry: Entry }
-	| { type: "rode"; text: string }
-	| {
-			type: "steered";
-			id: string;
-			content: string;
-			source?: string;
-			failed?: true;
-	  }
+	| { type: "system"; prompt: string; tokens: number }
+	| { type: "noted"; line: PostedLine }
+	| { type: "steered"; id: string; line: PostedLine }
 	| { type: "evaluated"; message: ToolMessage }
 	| { type: "halt"; answer: string; steps: number }
 	| { type: "capped"; steps: number }
@@ -87,8 +81,8 @@ function withInstructions(prompt: string, config?: AgentConfig): string {
 		: `${prompt}\n\n${config.instructions}`;
 }
 
-function lastUserPrompt(transcript: TranscriptEntry[]): string {
-	return transcript.filter(isUserPrompt).at(-1)?.content ?? "";
+function lastUserPrompt(lines: readonly Line[]): string {
+	return lines.filter(isPrompt).at(-1)?.text ?? "";
 }
 
 function stepMeta(
@@ -113,75 +107,67 @@ function stepMeta(
 	};
 }
 
-function resultEntry(message: ToolMessage): TranscriptEntry {
-	const riding = message.additional_kwargs?.riding;
-	return {
-		role: "tool",
-		content: message.content,
-		...(typeof riding === "string" ? { riding } : {}),
-	};
+interface Noted {
+	readonly notes: readonly ConversationRecord[];
+	readonly entries: readonly Entry[];
+}
+
+function* noting(
+	lines: Line[],
+	notes: readonly ConversationRecord[],
+): Generator<TurnEvent> {
+	for (const record of notes) {
+		const line = { kind: "record", record } as const;
+		lines.push(line);
+		yield { type: "noted", line };
+	}
+}
+
+function seed({ repl, lines, steps }: Turn): void {
+	repl.seed(lines.map(lineRecord), steps);
+}
+
+async function* through<T extends Noted>(
+	turn: Turn,
+	run: (repl: AgentRepl) => Promise<T>,
+	about?: string,
+): AsyncGenerator<TurnEvent, T> {
+	seed(turn);
+	const ran = await run(turn.repl);
+	yield* recorded(ran.entries, about);
+	yield* noting(turn.lines, ran.notes);
+	return ran;
 }
 
 async function* takeSteers({
 	repl,
 	inbox,
-	transcript,
+	lines,
 	runsForms,
 }: Turn): AsyncGenerator<TurnEvent, number> {
 	let taken = 0;
-	for (const envelope of (await inbox?.()) ?? []) {
-		if (envelope.kind === "event") {
-			const { id, source, text, failed } = envelope;
-			yield { type: "steered", id, content: text, source, failed };
-			transcript.push({ role: "user", content: text, event: { source } });
-			taken += 1;
-			continue;
-		}
-		const prompt: TranscriptEntry = { role: "user", content: envelope.text };
-		yield { type: "steered", id: envelope.id, content: envelope.text };
+	for (const mail of (await inbox?.()) ?? []) {
+		const line = mailLine(mail);
+		yield { type: "steered", id: mail.id, line };
 		const evaluated =
-			runsForms && envelope.forms
-				? await evalMessage(repl, envelope.text)
+			runsForms && mail.kind === "user" && mail.forms
+				? await evalMessage(repl, mail.text)
 				: undefined;
 		if (evaluated === undefined) {
-			transcript.push(prompt);
+			lines.push(line);
 			taken += 1;
 			continue;
 		}
-		const { message, quiet, entries } = evaluated;
+		const { message, quiet, entries, notes } = evaluated;
 		if (!quiet) {
-			transcript.push(...withItsResult(prompt, resultEntry(message)));
+			lines.push(line, ranByUser(message.content));
 			taken += 1;
 		}
 		yield { type: "evaluated", message };
 		yield* recorded(entries);
+		yield* noting(lines, notes);
 	}
 	return taken;
-}
-
-function noteEntry(text: string): TranscriptEntry {
-	return { role: "tool", content: replResultContent(text, false) };
-}
-
-function ride(transcript: TranscriptEntry[], text: string): boolean {
-	let at = transcript.length - 1;
-	while (at >= 0 && !isUserPrompt(transcript[at])) at--;
-	if (at === -1) return false;
-	const carrier = transcript[at];
-	transcript[at] = { ...carrier, riding: joinRiding(carrier.riding, text) };
-	return true;
-}
-
-async function* prepareStep(
-	repl: AgentRepl,
-	transcript: TranscriptEntry[],
-	stepId: string,
-): AsyncGenerator<TurnEvent> {
-	repl.setConversationVars(snapshotConversation(transcript));
-	const { emitted, entries } = await repl.beginStep();
-	yield* recorded(entries, stepId);
-	if (emitted !== "" && ride(transcript, emitted))
-		yield { type: "rode", text: emitted };
 }
 
 interface Reply {
@@ -191,13 +177,12 @@ interface Reply {
 }
 
 async function* callModel(
-	repl: AgentRepl,
 	request: ModelRequest,
 	stepId: string,
-	call: (request: ModelRequest) => AsyncIterable<ModelDelta>,
+	call: ModelCall,
 ): AsyncGenerator<TurnEvent, Reply> {
 	const reply: Reply = { full: "", reasoning: "" };
-	for await (const delta of repl.modelCall(request, call)) {
+	for await (const delta of call(request)) {
 		if (delta.usage) {
 			reply.usage = delta.usage;
 			continue;
@@ -215,12 +200,12 @@ async function* callModel(
 
 interface Turn {
 	readonly repl: AgentRepl;
-	readonly transcript: TranscriptEntry[];
+	readonly lines: Line[];
 	readonly trace: TraceContext;
 	readonly ran: { provider: string; model: string };
 	readonly maxSteps: number;
 	readonly signal?: AbortSignal;
-	readonly inbox?: () => Promise<Envelope[]>;
+	readonly inbox?: () => Promise<Mail[]>;
 	readonly runsForms: boolean;
 	readonly received?: Received;
 	readonly agent: AgentTurn;
@@ -245,26 +230,15 @@ async function* openTurn(
 	turn: Turn,
 	config: AgentConfig | undefined,
 ): AsyncGenerator<TurnEvent, { system: string; call: ModelCall }> {
-	const { repl, transcript, trace, signal } = turn;
-	const withheld = repl.takeProseFeedback();
-	if (withheld)
-		transcript.push({ role: "tool", content: proseFeedbackContent(withheld) });
+	const { trace, signal, received, telemetry } = turn;
+	yield* through(turn, (repl) => repl.turnStart(telemetry.turnStart));
+	if (received !== undefined)
+		yield* through(turn, (repl) => repl.received(received, telemetry.received));
 
-	const started = await repl.turnStart(turn.telemetry.turnStart);
-	if (started.emitted !== "") transcript.push(noteEntry(started.emitted));
-	yield* recorded(started.entries);
-
-	if (turn.received !== undefined) {
-		const heard = await repl.received(turn.received, turn.telemetry.received);
-		yield* recorded(heard.entries);
-		if (heard.emitted !== "" && ride(transcript, heard.emitted))
-			yield { type: "rode", text: heard.emitted };
-	}
-
-	const { prompt: system, entries } = await repl.system(
-		config?.system ?? withInstructions(systemPromptFor(repl.interp), config),
-	);
-	yield* recorded(entries);
+	const system =
+		config?.system ??
+		withInstructions(systemPromptFor(turn.repl.interp), config);
+	yield { type: "system", prompt: system, tokens: countTokens(system) };
 	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,
@@ -325,7 +299,7 @@ async function* evaluateStep(
 	turn: Turn,
 	answered: Answered,
 ): AsyncGenerator<TurnEvent, StepVerdict> {
-	const { repl, transcript, ran, maxSteps } = turn;
+	const { repl, lines, ran, maxSteps } = turn;
 	const { stepId, startedAt, code, reply } = answered;
 	yield {
 		type: "assistant",
@@ -335,31 +309,29 @@ async function* evaluateStep(
 		...(reply.reasoning ? { reasoning: reply.reasoning } : {}),
 		meta: stepMeta(startedAt, reply.usage, ran),
 	};
-	transcript.push({ role: "assistant", content: code });
+	lines.push({ kind: "assistant", text: code });
+	seed(turn);
 
 	const evalStartedAt = Date.now();
-	const { output, display, error, effects, emitted, failed, held, results } =
+	const { output, display, error, effects, notes, failed, held, results } =
 		yield* whileRunning(stepId, (live) => evalCode(repl, code, stepId, live));
 	turn.steps += 1;
 	const step = turn.steps;
 
-	const capped = step >= maxSteps;
-	const verdict = repl.stepEnd(
-		turn.agent,
-		{
-			step,
-			code,
-			output,
-			error,
-			failed,
-			latencyMs: Date.now() - evalStartedAt,
-		},
-		ends(effects) ? "halt" : capped ? "capped" : "continue",
-		turn.telemetry.stepEnd,
-	);
-	const halting = verdict === "halt" && !held;
-	if (halting) return verdict;
-	const riding = emitted === "" || halting ? {} : { riding: emitted };
+	turn.telemetry.stepEnd({
+		step,
+		code,
+		output,
+		error,
+		failed,
+		latencyMs: Date.now() - evalStartedAt,
+	});
+	const verdict: StepVerdict = ends(effects)
+		? "halt"
+		: step >= maxSteps
+			? "capped"
+			: "continue";
+	if (verdict === "halt" && !held) return verdict;
 	yield {
 		type: "result",
 		step,
@@ -368,16 +340,11 @@ async function* evaluateStep(
 		error,
 		failed,
 		results,
-		...riding,
 		...(held ? { held: true as const } : {}),
 	};
-	transcript.push({
-		role: "tool",
-		content: replResultContent(output, error),
-		...riding,
-	});
-	if (verdict === "halt") return verdict;
-	return capped ? "capped" : verdict;
+	lines.push({ kind: "result", text: replResultContent(output, error) });
+	yield* noting(lines, notes);
+	return verdict;
 }
 
 async function* settleIfDone(
@@ -389,12 +356,10 @@ async function* settleIfDone(
 }
 
 async function* settle(turn: Turn): AsyncGenerator<TurnEvent, boolean> {
-	const { repl, transcript, signal, steps, maxSteps } = turn;
+	const { signal, steps, maxSteps } = turn;
 	if (signal?.aborted) return false;
 	const taken = steps > 0 ? yield* takeSteers(turn) : 0;
-	const settled = await repl.beforeSettle(taken > 0);
-	if (settled.emitted !== "") transcript.push(noteEntry(settled.emitted));
-	yield* recorded(settled.entries);
+	const settled = yield* through(turn, (repl) => repl.beforeSettle(taken > 0));
 	return settled.more && steps < maxSteps;
 }
 
@@ -409,18 +374,16 @@ async function* runStep(
 	turn: Turn,
 	opened: { system: string; call: ModelCall },
 ): AsyncGenerator<TurnEvent, Stepped> {
-	const { repl, transcript } = turn;
 	const stepId = crypto.randomUUID();
-	yield* prepareStep(repl, transcript, stepId);
+	yield* through(turn, (repl) => repl.beginStep(), stepId);
 	const startedAt = Date.now();
-	const messages = repl.context(toLlmMessages(transcript));
+	const messages = turn.lines.map(lineChat);
 	const reply = yield* callModel(
-		repl,
 		{ system: opened.system, messages },
 		stepId,
 		opened.call,
 	);
-	const code = repl.response(reply.full, stripFences);
+	const code = stripFences(reply.full);
 	if (code === "") return { verdict: "silent", code };
 	const verdict = yield* evaluateStep(turn, {
 		stepId,
@@ -436,7 +399,7 @@ function ending(verdict: Ending, code: string, steps: number): TurnEvent {
 	return { type: verdict, steps };
 }
 
-function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
+function newTurn(options: TurnOptions, messages: readonly Line[]): Turn {
 	const { repl, threadId, config, signal, identity, inbox } = options;
 	const ran = resolveModel(config?.provider, config?.model);
 	const trace: TraceContext = {
@@ -449,7 +412,7 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 	};
 	return {
 		repl,
-		transcript: [...messages],
+		lines: [...messages],
 		trace,
 		agent: {
 			get interp() {
@@ -473,7 +436,7 @@ function newTurn(options: TurnOptions, messages: TranscriptEntry[]): Turn {
 }
 
 export async function* runAgentTurn(
-	messages: TranscriptEntry[],
+	messages: readonly Line[],
 	options: TurnOptions,
 ): AsyncGenerator<TurnEvent> {
 	const turn = newTurn(options, messages);

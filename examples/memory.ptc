@@ -19,8 +19,9 @@ Built-ins, installed by the memory extension — src/memory.ts:
 (echo "=== 1. a declarative memory: something to know ===")
 
 The body is prose. This is the half of memory that loads text into
-your context.
-(memory/remember "widget-ids" "Widget ids are short strings, never numbers.")
+your context. :when describes the situation that brings it back.
+(memory/remember "widget-ids" "Widget ids are short strings, never numbers."
+  :when "the agent is about to read or build a widget id")
 => "widget-ids"
 
 (echo (memory/recall "widget"))
@@ -29,8 +30,10 @@ your context.
 (echo "=== 2. a procedural memory: something to do ===")
 
 The body is a QUOTED form. Without the quote you would store the
-result of evaluating it, not the recipe.
-(memory/remember "double" '(defun double (x) (* x 2)))
+result of evaluating it, not the recipe. Every memory carries a hook,
+so it comes back by itself.
+(memory/remember "double" '(defun double (x) (* x 2))
+  :when "the agent needs to double a number")
 => "double"
 
 double is not defined yet — the memory holds the form, nothing ran.

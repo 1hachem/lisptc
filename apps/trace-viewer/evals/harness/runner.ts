@@ -1,5 +1,6 @@
 import {
 	evalCode,
+	type Line,
 	replResultContent,
 	runAgentTurn,
 	systemPromptFor,
@@ -15,6 +16,7 @@ import type {
 	TranscriptEntry,
 } from "@repo/evals/runner";
 import { createEvalSuite, runCase as runEvalCase } from "@repo/evals/runner";
+import { systemPromptKind } from "@repo/journal-catalog/system";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { CataloguedChoice } from "@repo/shared/providers";
 import type { ExtensionsFor } from "./harness.ts";
@@ -73,19 +75,38 @@ function open(spec: TraceViewerEvalSpec): EvalRunContext<AgentRepl> {
 			refusedSince: (mark) =>
 				trace.events
 					.slice(mark)
-					.some((e) => e.kind === "note" || (e.kind === "form" && e.error)),
+					.some((e) => e.kind === "hitch" || (e.kind === "form" && e.error)),
 			errors: () =>
 				trace.events.filter(
 					(e) =>
 						(e.kind === "form" && e.error !== undefined) ||
-						(e.kind === "note" && e.severity === "critical"),
+						(e.kind === "hitch" && e.severity === "critical"),
 				).length,
 			skips: () =>
 				trace.events.filter(
-					(e) => e.kind === "note" && e.severity === "warning",
+					(e) => e.kind === "hitch" && e.severity === "warning",
 				).length,
 		},
 	};
+}
+
+function lineOf(entry: TranscriptEntry): Line {
+	switch (entry.role) {
+		case "user":
+		case "assistant":
+			return { kind: entry.role, text: entry.content };
+		case "tool":
+			return { kind: "result", text: entry.content };
+		case "system":
+			return {
+				kind: "record",
+				record: {
+					role: "system",
+					content: entry.content,
+					source: entry.source ?? "system",
+				},
+			};
+	}
 }
 
 const runtime = {
@@ -102,7 +123,7 @@ const runtime = {
 				system: string;
 			},
 		) {
-			for await (const event of runAgentTurn(transcript, {
+			for await (const event of runAgentTurn(transcript.map(lineOf), {
 				repl: options.repl,
 				maxSteps: options.maxSteps,
 				config: {
@@ -111,7 +132,23 @@ const runtime = {
 					system: options.system,
 				},
 			})) {
-				if (
+				if (event.type === "system")
+					yield {
+						type: "entry" as const,
+						entry: {
+							kind: systemPromptKind.name,
+							value: { text: event.prompt, tokens: event.tokens },
+						},
+					};
+				else if (event.type === "noted" && event.line.kind === "record")
+					yield {
+						type: "noted" as const,
+						content: event.line.record.content,
+						...(event.line.record.source === undefined
+							? {}
+							: { source: event.line.record.source }),
+					};
+				else if (
 					event.type === "assistant" ||
 					event.type === "entry" ||
 					event.type === "result" ||

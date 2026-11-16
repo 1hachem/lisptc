@@ -95,15 +95,24 @@ describe("reading lisptc", () => {
 		expect(openForms("(a (b))")).toBe(0);
 	});
 
-	test("an unterminated string colours to the end of its line", () => {
+	test("an unterminated string colours to the end of the text", () => {
 		expect(tokens('(echo "hi\n(+ 1 2)')).toEqual([
 			["(", "operator"],
 			["echo", "function"],
-			['"hi', "string"],
+			['"hi\n(+ 1 2)', "string"],
+		]);
+	});
+
+	test("a string spans lines, and the parens inside it are not code", () => {
+		expect(tokens('(echo "one\n(+ 1 2)\ntwo")\n(+ 3 4)')).toEqual([
+			["(", "operator"],
+			["echo", "function"],
+			['"one\n(+ 1 2)\ntwo"', "string"],
+			[")", "operator"],
 			["(", "operator"],
 			["+", "function"],
-			["1", "number"],
-			["2", "number"],
+			["3", "number"],
+			["4", "number"],
 			[")", "operator"],
 		]);
 	});

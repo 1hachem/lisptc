@@ -10,17 +10,16 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { memoryEnv } from "@repo/env/memory";
 import { EvalException } from "@repo/interpreter/errors";
-import { str } from "@repo/interpreter/print";
-import { Reader } from "@repo/interpreter/reader";
 import { type Awaitable, systemClock } from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
-	formToMemory,
-	type Memory,
 	type MemoryHost,
+	type MemorySource,
 	type MemoryStore,
-	memoryToForm,
+	type MemoryWrite,
+	recognizeNothing,
+	type StoredMemory,
 } from "./ports.ts";
 
 export function memoryDirFor(scope?: string): string {
@@ -38,8 +37,10 @@ function sanitize(name: string): string {
 	return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+const SOURCE = ".ptc";
+
 function keyToFileName(key: string): string {
-	return `${sanitize(key)}.ptc`;
+	return `${encodeURIComponent(key)}${SOURCE}`;
 }
 
 export class FileMemoryStore implements MemoryStore {
@@ -53,30 +54,30 @@ export class FileMemoryStore implements MemoryStore {
 		return join(this.base(), keyToFileName(key));
 	}
 
-	all(): Memory[] {
-		const out: Memory[] = [];
+	all(): MemorySource[] {
+		const out: MemorySource[] = [];
 		try {
 			const base = this.base();
 			if (!existsSync(base)) return out;
 			for (const entry of readdirSync(base, { withFileTypes: true })) {
-				if (!entry.isFile() || !entry.name.endsWith(".ptc")) continue;
-				const memory = this.readOne(join(base, entry.name));
-				if (memory !== undefined) out.push(memory);
+				if (!entry.isFile() || !entry.name.endsWith(SOURCE)) continue;
+				const found = this.readOne(
+					decodeURIComponent(entry.name.slice(0, -SOURCE.length)),
+				);
+				if (found !== undefined) out.push(found);
 			}
 		} catch {}
 		return out;
 	}
 
-	get(key: string): Memory | undefined {
-		return this.readOne(this.file(key));
+	get(key: string): MemorySource | undefined {
+		return this.readOne(key);
 	}
 
-	put(memory: Memory): void {
+	put({ record, source }: MemoryWrite): void {
 		try {
 			mkdirSync(this.base(), { recursive: true, mode: 0o700 });
-			writeFileSync(this.file(memory.key), `${str(memoryToForm(memory))}\n`, {
-				mode: 0o600,
-			});
+			writeFileSync(this.file(record.key), `${source}\n`, { mode: 0o600 });
 		} catch (ex) {
 			throw new EvalException(
 				"could not write this memory to disk",
@@ -97,11 +98,13 @@ export class FileMemoryStore implements MemoryStore {
 		}
 	}
 
-	private readOne(path: string): Memory | undefined {
+	clear(): number {
+		return this.all().filter((memory) => this.delete(memory.key)).length;
+	}
+
+	private readOne(key: string): MemorySource | undefined {
 		try {
-			const reader = new Reader();
-			reader.push(readFileSync(path, "utf8"));
-			return formToMemory(reader.read());
+			return { key, source: readFileSync(this.file(key), "utf8") };
 		} catch {
 			return undefined;
 		}
@@ -131,20 +134,20 @@ export class LayeredStore implements MemoryStore {
 		private readonly shared: MemoryStore,
 	) {}
 
-	all(): Awaitable<Memory[]> {
+	all(): Awaitable<StoredMemory[]> {
 		return both(this.shared.all(), this.own.all(), (shared, own) => {
-			const byKey = new Map<string, Memory>();
+			const byKey = new Map<string, StoredMemory>();
 			for (const memory of shared) byKey.set(memory.key, memory);
 			for (const memory of own) byKey.set(memory.key, memory);
 			return [...byKey.values()];
 		});
 	}
 
-	get(key: string): Awaitable<Memory | undefined> {
+	get(key: string): Awaitable<StoredMemory | undefined> {
 		return then(this.own.get(key), (mine) => mine ?? this.shared.get(key));
 	}
 
-	put(memory: Memory): Awaitable<void> {
+	put(memory: MemoryWrite): Awaitable<void> {
 		return this.own.put(memory);
 	}
 
@@ -153,6 +156,12 @@ export class LayeredStore implements MemoryStore {
 			this.own.delete(key),
 			this.shared.delete(key),
 			(mine, theirs) => theirs || mine,
+		);
+	}
+
+	clear(): Awaitable<number> {
+		return then(this.all(), (all) =>
+			both(this.own.clear(), this.shared.clear(), () => all.length),
 		);
 	}
 }
@@ -164,13 +173,18 @@ export function scopedMemoryStore(scope?: string): MemoryStore {
 }
 
 const memoryPrompt = filePrompt(new URL("./memory.ptc", import.meta.url));
+const memoryMemories = filePrompt(
+	new URL("./memory.memories.ptc", import.meta.url),
+);
 
 export function memoryHostFor(scope?: string): MemoryHost {
 	return {
 		store: scopedMemoryStore(scope),
 		clock: systemClock,
 		prompt: memoryPrompt,
+		memories: memoryMemories,
 		search: memorySearchEngine,
+		recognize: recognizeNothing,
 	};
 }
 
@@ -180,5 +194,7 @@ export const memoryHost: MemoryHost = {
 	},
 	clock: systemClock,
 	prompt: memoryPrompt,
+	memories: memoryMemories,
 	search: memorySearchEngine,
+	recognize: recognizeNothing,
 };

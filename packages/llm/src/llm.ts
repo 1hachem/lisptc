@@ -1,6 +1,5 @@
 import { isNumeric } from "@repo/interpreter/arith";
 import { EvalException, messageOf } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import {
 	type Interp,
 	runSync,
@@ -56,14 +55,13 @@ type Announce = (
 	id: string,
 	builtin: string,
 	state: ActivityEntry["state"],
-	target: { provider?: string; model?: string },
 	timing: Timing,
 	error?: unknown,
 ) => void;
 
 function announcer(interp: Interp): Announce {
-	return (id, builtin, state, { provider, model }, timing, error) =>
-		record(interp.channels, activityKind, {
+	return (id, builtin, state, timing, error) =>
+		interp.journal.write(activityKind, {
 			kind: "llm",
 			icon: "model",
 			label: builtin,
@@ -107,6 +105,7 @@ export interface LlmHost {
 	generate: Generate;
 	clock: Clock;
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export interface LlmOptions {
@@ -155,6 +154,7 @@ export function llmExtension(
 		},
 		{
 			prompt: host.prompt(),
+			memories: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {
@@ -461,7 +461,7 @@ function caller(
 		calls.set(n);
 		const id = `llm-${n}`;
 		const startedAt = clock.now();
-		announce(id, builtin, "started", req, { startedAt });
+		announce(id, builtin, "started", { startedAt });
 		const controller = new AbortController();
 		return withTimeout(
 			generate(req, controller.signal),
@@ -470,22 +470,13 @@ function caller(
 		).then(
 			(res) => {
 				const ms = clock.now() - startedAt;
-				announce(
-					id,
-					builtin,
-					"done",
-					{
-						provider: res.provider ?? req.provider,
-						model: res.model ?? req.model,
-					},
-					{ startedAt, ms },
-				);
+				announce(id, builtin, "done", { startedAt, ms });
 				report(traceOf(builtin, req, ms, res, undefined));
 				return res;
 			},
 			(ex) => {
 				const ms = clock.now() - startedAt;
-				announce(id, builtin, "failed", req, { startedAt, ms }, ex);
+				announce(id, builtin, "failed", { startedAt, ms }, ex);
 				controller.abort();
 				report(traceOf(builtin, req, ms, undefined, ex));
 				throw ex;
@@ -519,6 +510,18 @@ export function registerLlm(
 		announcer(interp),
 	);
 
+	interp.defineGlobal(newSym("*llm-timeout-ms*"), BigInt(LLM_TIMEOUT_MS), {
+		signature: "*llm-timeout-ms*",
+		doc: "How long a writing call waits, in milliseconds, when it is given no :timeout.",
+	});
+	interp.defineGlobal(
+		newSym("*llm-scalars*"),
+		arrayToList(Object.keys(SCALARS).map((name) => newLispKeyword(name))),
+		{
+			signature: "*llm-scalars*",
+			doc: "The scalar field kinds an extract shape takes, as keywords.",
+		},
+	);
 	interp.defineGlobal(newSym(DEFAULTS_VAR), null, {
 		signature: DEFAULTS_VAR,
 		doc: "The options every write, converse and extract call starts from, as a keyword list, e.g. `(setq *writing-defaults* (list :max-tokens 300 :temperature 0.2))`. An option given at the call site wins over it. `with-writing` binds it for one block and restores it after.",

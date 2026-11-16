@@ -1,3 +1,4 @@
+import { LANES } from "@repo/components";
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
@@ -5,7 +6,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
 import { TraceLines } from "../src/components/trace-view.tsx";
-import { CHANNELS } from "../src/lib/channels.ts";
 import { UIProvider } from "../src/lib/ui.tsx";
 
 const NOTE = "I approved (fs/write a). Carry on.";
@@ -129,9 +129,9 @@ async function mount(view: React.ReactNode = <ChatView />) {
 	return host;
 }
 
-describe("the system channel", () => {
-	it("is a channel the trace toggles", () => {
-		expect(CHANNELS.find((c) => c.id === "system")).toMatchObject({
+describe("the system lane", () => {
+	it("is a lane the trace toggles", () => {
+		expect(LANES.find((c) => c.id === "system")).toMatchObject({
 			label: "system",
 		});
 	});

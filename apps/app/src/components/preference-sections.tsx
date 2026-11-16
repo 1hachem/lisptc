@@ -5,6 +5,12 @@ import {
 	SortableTree,
 	ThemeSwatches,
 } from "@repo/components";
+import {
+	INPUT_HELPERS,
+	type InputHelper,
+	META_FIELDS,
+	type MetaField,
+} from "@repo/shared/chat-toggles";
 import type { StatusBarItem } from "@repo/shared/status-bar";
 import { fonts } from "@repo/ui";
 import { motions } from "@repo/ui/motions.ts";
@@ -12,8 +18,6 @@ import { anchorOf } from "@repo/ui-catalog";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { inDesktopShell, useDesktopSettings } from "../lib/desktop-shell.ts";
-import { INPUT_HELPERS, type InputHelper } from "../lib/input-helpers.ts";
-import { META_FIELDS, type MetaField } from "../lib/meta-fields.ts";
 import {
 	usePanelMotion,
 	useTraceBesideChat,

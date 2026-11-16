@@ -1,8 +1,8 @@
-import { type Channels, topic } from "@repo/interpreter/channels";
+import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
-import { record } from "@repo/interpreter/journal";
+import type { Journal } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -22,6 +22,7 @@ import { zAny, zList } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { viewKind } from "@repo/journal-catalog/view";
 import type { PromptSource } from "@repo/shared/host";
+import { MAX_SPLITS } from "@repo/shared/split-layout";
 import {
 	ACTION_PROPS,
 	FOLDERS,
@@ -39,6 +40,7 @@ import {
 	UiElement,
 } from "./element.ts";
 import {
+	DEFAULT_SPLIT,
 	type Folder,
 	fileTab,
 	type PanelOp,
@@ -49,16 +51,16 @@ import {
 	type Split,
 	viewTab,
 } from "./panel.ts";
-import {
-	anchorPromptSection,
-	pageOf,
-	pagePromptSection,
-	registerTours,
-} from "./tour.ts";
+import { anchorMemories, pageOf, registerTours } from "./tour.ts";
 import type { TourStore } from "./tour-store.ts";
 import type { UiNode } from "./view.ts";
 import type { ViewStore } from "./view-store.ts";
-import { WIDGET_FORMS, widgetPromptSection, zString } from "./widgets.ts";
+import {
+	WIDGET_FORMS,
+	WIDGET_NAMES,
+	widgetMemories,
+	zString,
+} from "./widgets.ts";
 
 export { nodeToJson } from "./element.ts";
 export {
@@ -86,9 +88,7 @@ const MAX_HANDLERS = 500;
 
 const MAX_MESSAGE_CHARS = 4000;
 
-export function joinMessages(parts: readonly string[]): string | undefined {
-	if (parts.length === 0) return undefined;
-	const text = parts.join("\n\n");
+function bounded(text: string): string {
 	if (text.length <= MAX_MESSAGE_CHARS) return text;
 	return `${text.slice(0, MAX_MESSAGE_CHARS)}\n… (message truncated)`;
 }
@@ -97,10 +97,6 @@ export interface RenderedView {
 	viewId: string;
 	node: UiNode;
 }
-
-export const rendered = topic<RenderedView>("ui");
-
-export const sent = topic<string>("ui-send");
 
 const handlerCodec: StateCodec<[string, unknown][]> = {
 	toLisp: (handlers) =>
@@ -151,14 +147,15 @@ export class UiSurface {
 	private views: State<number> | undefined;
 	private owners: State<[string, string][]> | undefined;
 	private current: string | undefined;
+	private handling: ((text: string) => void) | undefined;
 	private interp: Interp | undefined;
-	private channels: Channels | undefined;
+	private journal: Journal | undefined;
 	private store: ViewStore | undefined;
 
 	bind(interp: Interp, store?: ViewStore): void {
 		this.interp = interp;
 		this.store = store;
-		this.channels = interp.channels;
+		this.journal = interp.journal;
 		this.handlers = interp.state(
 			"ui/handlers",
 			handlerCodec,
@@ -193,10 +190,12 @@ export class UiSurface {
 
 	beginStep(): void {
 		this.current = undefined;
+		this.handling = undefined;
 	}
 
-	enter(action: string): void {
+	enter(action: string, conversation: Conversation): void {
 		this.current = this.ownerOf(action);
+		this.handling = (text) => conversation.request(action, text);
 	}
 
 	private viewId(): string {
@@ -287,17 +286,12 @@ export class UiSurface {
 
 	render(node: UiNode): RenderedView {
 		const view = this.place(this.viewId(), node);
-		const channels = this.channels;
-		if (channels) {
-			rendered.emit(channels, { user: view });
-			record(channels, viewKind, { viewId: view.viewId });
-		}
+		this.journal?.write(viewKind, { viewId: view.viewId });
 		return view;
 	}
 
 	send(text: string): void {
-		const channels = this.channels;
-		if (channels) sent.emit(channels, { model: text });
+		this.handling?.(bounded(text));
 	}
 
 	hasAction(id: string): boolean {
@@ -401,7 +395,7 @@ function folderOf(folder: string): Folder {
 }
 
 function splitOf(opts: Map<string, unknown>): Split {
-	const split = stringOption(opts, "split") ?? "here";
+	const split = stringOption(opts, "split") ?? DEFAULT_SPLIT;
 	if (!(SPLITS as readonly string[]).includes(split))
 		throw new EvalException(
 			`unknown split; expected one of ${SPLITS.join(" ")}`,
@@ -463,6 +457,32 @@ function registerUi(
 ): void {
 	surface.bind(interp, views);
 	surface.reset();
+	interp.defineGlobal(newSym("*ui-max-handlers*"), BigInt(MAX_HANDLERS), {
+		signature: "*ui-max-handlers*",
+		doc: "How many view actions are kept before the oldest are dropped.",
+	});
+	interp.defineGlobal(newSym("*ui-max-splits*"), BigInt(MAX_SPLITS), {
+		signature: "*ui-max-splits*",
+		doc: "How many panel splits can stack down.",
+	});
+	interp.defineGlobal(newSym("*ui-folders*"), arrayToList([...FOLDERS]), {
+		signature: "*ui-folders*",
+		doc: "The folders ui/open-file opens from.",
+	});
+	interp.defineGlobal(newSym("*ui-splits*"), arrayToList([...SPLITS]), {
+		signature: "*ui-splits*",
+		doc: "Where a panel can open: the focused split, or a new one right or down.",
+	});
+	interp.defineGlobal(newSym("*ui-default-split*"), DEFAULT_SPLIT, {
+		signature: "*ui-default-split*",
+		doc: "Where a panel opens when given no :split.",
+	});
+	const widgets = newSym("ui-widgets");
+	interp.defineGlobal(widgets, arrayToList([...WIDGET_NAMES]), {
+		signature: "ui-widgets",
+		doc: "The widget constructors, by name. Each has a built-in memory ui/widget-NAME with its signature and an example; (doc 'ui/table) prints one in full.",
+	});
+	interp.seal(widgets, "ui");
 	interp.recovery.kind({
 		name: UI_TAG,
 		claims: (x) => x instanceof UiElement,
@@ -582,7 +602,7 @@ function registerUi(
 		"ui/send",
 		-1,
 		"(ui/send text...)",
-		'Send a message to the agent from inside a handler, as if the user had typed it: it joins the conversation as a user turn and the agent answers it. This is how a click hands work BACK to the model — a form whose contents are a request rather than a filter, a button that means "now go do it". Arguments are joined like `echo`\'s, so build the message from the field values: (ui/send "search the issues for " (cdr (assoc "q" values))). A handler may render AND send; only handlers deliver, so calling this outside one does nothing.',
+		'Send a message to the agent from inside a handler, as if the user had typed it: it joins the conversation as a user turn and the agent answers it. This is how a click hands work BACK to the model — a form whose contents are a request rather than a filter, a button that means "now go do it". Arguments are joined like `echo`\'s, so build the message from the field values: (ui/send "search the issues for " (cdr (assoc "q" values))). A handler may render AND send, and each send is its own message; only handlers deliver, so calling this outside one does nothing.',
 		z.tuple([zList]),
 		([rest]) => {
 			const parts = (listElements(rest) ?? []).map((x) =>
@@ -660,6 +680,7 @@ function registerUi(
 
 export interface UiHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 	panel: PanelStore;
 	views: ViewStore;
 	tours: TourStore;
@@ -681,23 +702,19 @@ export function uiExtension(
 			registerUi(interp, surface, host.panel, host.views, host.tours),
 		{
 			surface,
-			prompt: host
-				.prompt()
-				.replace("{{widgets}}", widgetPromptSection())
-				.replace("{{anchors}}", anchorPromptSection())
-				.replace("{{pages}}", pagePromptSection()),
+			prompt: host.prompt(),
+			memories: [host.memories().trimEnd(), widgetMemories(), anchorMemories()]
+				.join("\n\n")
+				.concat("\n"),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();
 					await next(ctx);
 				});
 				hooks.invoke.use(async (ctx) => {
-					surface.enter(ctx.action);
+					surface.enter(ctx.action, ctx.interp.conversation);
 					await surface.invoke(ctx.action, ctx.values);
 				});
-				hooks.message.use(
-					(buffer, next) => joinMessages(buffer.collect(sent)) ?? next(buffer),
-				);
 			},
 		},
 	);

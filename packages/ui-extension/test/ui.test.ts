@@ -1,8 +1,11 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import type { Conversation } from "@repo/interpreter/conversation";
 import { restore, snapshot } from "@repo/interpreter/image";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { bufferSink } from "@repo/interpreter/journal";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { type List, listToArray, newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { viewKind } from "@repo/journal-catalog/view";
 import {
 	ANCHOR_IDS,
 	PAGE_IDS,
@@ -15,13 +18,10 @@ import { describe, expect, it } from "vitest";
 import { MemoryTourStore } from "../src/tour-store.ts";
 import {
 	fileTab,
-	joinMessages,
 	nodeToJson,
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
-	rendered,
-	sent,
 	type UiNode,
 	UiSurface,
 	type UiValue,
@@ -60,25 +60,31 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 	return { panel, ops };
 }
 
-function collector(interp: Interp) {
-	let view: UiNode | undefined;
-	let messages: string[] = [];
-	rendered.on(interp.channels, ({ node }) => {
-		view = node;
+function collector(interp: Interp, views: MemoryViewStore) {
+	let viewId: string | undefined;
+	let requests: { source: string; content: string }[] = [];
+	interp.journal.onAny((entry) => {
+		if (entry.kind === viewKind.name)
+			viewId = (entry.value as { viewId: string }).viewId;
 	});
-	sent.on(interp.channels, (text) => {
-		messages.push(text);
-	});
+	const conversation: Conversation = {
+		records: () => [],
+		append: () => {},
+		request: (source, content) => {
+			requests.push({ source, content });
+		},
+	};
 	return {
+		conversation,
 		takeView(): UiNode | undefined {
-			const v = view;
-			view = undefined;
+			const v = viewId === undefined ? undefined : views.views.get(viewId);
+			viewId = undefined;
 			return v;
 		},
-		takeMessage(): string | undefined {
-			const m = joinMessages(messages);
-			messages = [];
-			return m;
+		takeRequests(): { source: string; content: string }[] {
+			const taken = requests;
+			requests = [];
+			return taken;
 		},
 	};
 }
@@ -91,10 +97,21 @@ function fresh(): {
 } {
 	const surface = new UiSurface();
 	const { panel, ops } = panelOf([]);
-	const host = uiHostFor({ panel });
+	const views = new MemoryViewStore();
+	const host = uiHostFor({ panel, views });
 	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 	runSync(interp, prelude);
-	return { interp, surface, ui: collector(interp), ops };
+	return { interp, surface, ui: collector(interp, views), ops };
+}
+
+async function click(
+	surface: UiSurface,
+	ui: ReturnType<typeof collector>,
+	action: string,
+	values: Record<string, unknown> = {},
+): Promise<void> {
+	surface.enter(action, ui.conversation);
+	await surface.invoke(action, values);
 }
 
 function render(code: string): {
@@ -167,8 +184,8 @@ describe("building a view", () => {
 describe("echoing a widget", () => {
 	function echoed(code: string) {
 		const { interp, ui } = fresh();
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			const result = runSync(interp, code);
 			const view = ui.takeView();
@@ -552,8 +569,8 @@ describe("actions", () => {
 		const { surface, interp } = render(
 			'(ui/render (ui/button "say" (lambda () (echo "from the click"))))',
 		);
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			await surface.invoke("a1", {});
 		} finally {
@@ -564,41 +581,50 @@ describe("actions", () => {
 });
 
 describe("handing a turn back to the agent", () => {
-	it("carries a handler's message out, joining the arguments like echo", async () => {
+	it("carries a handler's message out as a request from its action, joining the arguments like echo", async () => {
 		const { surface, ui } = render(`
 			(ui/render (ui/form (lambda (values) (ui/send "search for" (cdr (assoc "q" values))))
 				(ui/input :name "q")))
 		`);
-		await surface.invoke("a1", { q: "auth" });
-		expect(ui.takeMessage()).toBe("search for auth");
+		await click(surface, ui, "a1", { q: "auth" });
+		expect(ui.takeRequests()).toEqual([
+			{ source: "a1", content: "search for auth" },
+		]);
 	});
 
-	it("reads and clears, so a message is delivered once", async () => {
-		const { surface, ui } = render(
+	it("delivers nothing from a send outside a handler", async () => {
+		const { surface, interp, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "go"))))',
 		);
-		await surface.invoke("a1", {});
-		expect(ui.takeMessage()).toBe("go");
-		expect(ui.takeMessage()).toBeUndefined();
+		runSync(interp, '(ui/send "stray")');
+		expect(ui.takeRequests()).toEqual([]);
+		await click(surface, ui, "a1");
+		expect(ui.takeRequests()).toEqual([{ source: "a1", content: "go" }]);
+		surface.beginStep();
+		runSync(interp, '(ui/send "late")');
+		expect(ui.takeRequests()).toEqual([]);
 	});
 
-	it("joins several sends in a handler into a single message", async () => {
+	it("delivers each send in a handler as its own request", async () => {
 		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "first") (ui/send "second"))))',
 		);
-		await surface.invoke("a1", {});
-		expect(ui.takeMessage()).toBe("first\n\nsecond");
+		await click(surface, ui, "a1");
+		expect(ui.takeRequests()).toEqual([
+			{ source: "a1", content: "first" },
+			{ source: "a1", content: "second" },
+		]);
 	});
 
 	it("lets a handler render and send in the same click", async () => {
 		const { surface, ui } = render(`
 			(ui/render (ui/button "go" (lambda () (ui/render (ui/text "working…")) (ui/send "do it"))))
 		`);
-		await surface.invoke("a1", {});
+		await click(surface, ui, "a1");
 		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
 			props: { text: "working…" },
 		});
-		expect(ui.takeMessage()).toBe("do it");
+		expect(ui.takeRequests()).toEqual([{ source: "a1", content: "do it" }]);
 	});
 
 	it("caps a message rather than letting a handler post an essay", async () => {
@@ -606,18 +632,18 @@ describe("handing a turn back to the agent", () => {
 			(defun wide (n) (let ((s "")) (dotimes (i n) (setq s (concat s "abcdefghij"))) s))
 			(ui/render (ui/button "go" (lambda () (ui/send (wide 600)))))
 		`);
-		await surface.invoke("a1", {});
-		const message = ui.takeMessage() ?? "";
-		expect(message.length).toBeLessThan(4100);
-		expect(message).toMatch(/message truncated/);
+		await click(surface, ui, "a1");
+		const [request] = ui.takeRequests();
+		expect(request.content.length).toBeLessThan(4100);
+		expect(request.content).toMatch(/message truncated/);
 	});
 
 	it("reports no message for a click that sent nothing", async () => {
 		const { surface, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/render (ui/text "x")))))',
 		);
-		await surface.invoke("a1", {});
-		expect(ui.takeMessage()).toBeUndefined();
+		await click(surface, ui, "a1");
+		expect(ui.takeRequests()).toEqual([]);
 	});
 });
 
@@ -796,11 +822,37 @@ describe("the widget form table", () => {
 		}
 	});
 
-	it("lists every constructor in the prompt", () => {
-		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
-		expect(prompt).not.toContain("{{widgets}}");
+	it("names every widget constructor in ui-widgets", async () => {
+		const { interp } = fresh();
+		const names = TAGS.map((tag) => `"ui/${tag}"`).join(" ");
+		const { value } = await runAsync(interp, `(equal ui-widgets '(${names}))`);
+		expect(value).toBe(true);
+	});
+
+	it("keeps ui-widgets read-only", () => {
+		const { interp } = fresh();
+		expect(() => runSync(interp, "(setq ui-widgets nil)")).toThrow();
+	});
+
+	it("ships one memory per widget, carrying its signature", () => {
+		const { memories } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		const { interp } = fresh();
+		runSync(
+			interp,
+			`(setq shipped nil)
+(defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
+(defmacro area (name &rest declared) nil)`,
+		);
+		runSync(interp, memories ?? "");
+		const bodies = new Map(
+			listToArray(interp.getGlobal(newSym("shipped")) as List).map(
+				(entry) => listToArray(entry as List) as [string, string],
+			),
+		);
 		for (const tag of TAGS)
-			expect(prompt).toContain(WIDGET_FORMS[tag].signature);
+			expect(bodies.get(`internal/ui/widget-${tag}`)).toContain(
+				WIDGET_FORMS[tag].signature,
+			);
 	});
 });
 
@@ -811,7 +863,7 @@ describe("the view store", () => {
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 		runSync(interp, prelude);
-		return { surface, views, interp };
+		return { surface, views, interp, ui: collector(interp, views) };
 	}
 
 	it("writes every render of a step into one view", () => {
@@ -826,7 +878,7 @@ describe("the view store", () => {
 	});
 
 	it("renders a click back into the view the control was in", async () => {
-		const { surface, views, interp } = stored();
+		const { surface, views, interp, ui } = stored();
 		surface.beginStep();
 		runSync(
 			interp,
@@ -837,8 +889,7 @@ describe("the view store", () => {
 		);
 		surface.beginStep();
 		runSync(interp, '(ui/render (ui/text "other"))');
-		surface.enter("a1");
-		await surface.invoke("a1", {});
+		await click(surface, ui, "a1");
 		expect(views.views.get("v1")).toMatchObject({
 			children: [{ props: { text: "1" } }, { tag: "button" }],
 		});
@@ -846,7 +897,7 @@ describe("the view store", () => {
 	});
 
 	it("stores a panel view under its tab, and a click renders back into it", async () => {
-		const { surface, views, interp } = stored();
+		const { surface, views, interp, ui } = stored();
 		surface.beginStep();
 		runSync(
 			interp,
@@ -856,8 +907,7 @@ describe("the view store", () => {
 			(ui/open-view "counts" (panel))`,
 		);
 		expect(views.views.get("view:counts")).toMatchObject({ tag: "stack" });
-		surface.enter("a1");
-		await surface.invoke("a1", {});
+		await click(surface, ui, "a1");
 		expect(views.views.get("view:counts")).toMatchObject({
 			children: [{ props: { text: "1" } }, { tag: "button" }],
 		});
@@ -961,14 +1011,15 @@ describe("tours", () => {
 	function touring() {
 		const surface = new UiSurface();
 		const tours = new MemoryTourStore();
-		const host = uiHostFor({ panel: panelOf([]).panel, tours });
+		const views = new MemoryViewStore();
+		const host = uiHostFor({ panel: panelOf([]).panel, views, tours });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 		runSync(interp, prelude);
 		return {
 			surface,
 			tours,
 			interp,
-			ui: collector(interp),
+			ui: collector(interp, views),
 			ev: (code: string) => str(runSync(interp, code)),
 		};
 	}
@@ -1067,10 +1118,14 @@ describe("tours", () => {
 		const tour = tours.tours.get("upload-files");
 		if (tour?.done === undefined || tour.skip === undefined)
 			throw new Error("tour carries no end actions");
-		await surface.invoke(tour.done, {});
-		expect(ui.takeMessage()).toBe("I finished the upload-files tour.");
-		await surface.invoke(tour.skip, {});
-		expect(ui.takeMessage()).toBe("I skipped the upload-files tour.");
+		await click(surface, ui, tour.done);
+		expect(ui.takeRequests()).toEqual([
+			{ source: tour.done, content: "I finished the upload-files tour." },
+		]);
+		await click(surface, ui, tour.skip);
+		expect(ui.takeRequests()).toEqual([
+			{ source: tour.skip, content: "I skipped the upload-files tour." },
+		]);
 	});
 
 	it("reads whether a tour was finished before", () => {
@@ -1113,33 +1168,49 @@ describe("tours", () => {
 		);
 	});
 
-	it("names every anchor and page in the prompt", () => {
-		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
-		expect(prompt).not.toContain("{{anchors}}");
-		expect(prompt).not.toContain("{{pages}}");
-		for (const id of [...ANCHOR_IDS, ...PAGE_IDS])
-			expect(prompt).toContain(`- ${id}:`);
+	function shipped(): Map<string, string> {
+		const { memories } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		const { interp } = touring();
+		runSync(
+			interp,
+			`(setq shipped nil)
+(defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
+(defmacro area (name &rest declared) nil)`,
+		);
+		runSync(interp, memories ?? "");
+		return new Map(
+			listToArray(interp.getGlobal(newSym("shipped")) as List).map(
+				(entry) => listToArray(entry as List) as [string, string],
+			),
+		);
+	}
+
+	function exampleIn(key: string, opening: string, closing: string): string {
+		const body = shipped().get(key) ?? "";
+		const start = body.indexOf(opening);
+		return body.slice(start, body.indexOf(closing, start));
+	}
+
+	it("ships every anchor in a memory, and every page", () => {
+		const bodies = shipped();
+		const anchored = [...bodies]
+			.filter(([key]) => key.startsWith("internal/ui/anchors-"))
+			.map(([, body]) => body)
+			.join("\n");
+		for (const id of ANCHOR_IDS) expect(anchored).toContain(`- ${id}:`);
+		for (const id of PAGE_IDS)
+			expect(bodies.get("internal/ui/pages")).toContain(`- ${id}:`);
 	});
 
-	it("runs the tour the prompt shows", () => {
-		const prompt =
-			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
-		const example = prompt.slice(
-			prompt.indexOf('(ui/tour "upload-files"'),
-			prompt.indexOf("New tour replaces"),
-		);
+	it("runs the tour its memory shows", () => {
 		const { tours, ev } = touring();
-		ev(example);
+		ev(exampleIn("internal/ui/tour", '(ui/tour "upload-files"', "\n\n"));
 		expect(tours.tours.get("upload-files")?.steps).toHaveLength(2);
 	});
 
-	it("runs the pointer the prompt shows", () => {
-		const prompt =
-			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
-		const start = prompt.indexOf('(ui/point "account"');
-		const example = prompt.slice(start, prompt.indexOf("\n", start));
+	it("runs the pointer its memory shows", () => {
 		const { tours, ev } = touring();
-		ev(example);
+		ev(exampleIn("internal/ui/point", '(ui/point "account"', "\n"));
 		expect(tours.pointers).toEqual([
 			{
 				anchor: "account",
@@ -1178,13 +1249,9 @@ describe("tours", () => {
 		});
 	});
 
-	it("fills the message box with the command the prompt shows", () => {
-		const prompt =
-			uiExtension(uiHostFor({ panel: panelOf([]).panel })).prompt ?? "";
-		const start = prompt.indexOf('(ui/point "composer" :fill');
-		const example = prompt.slice(start, prompt.indexOf("\n", start));
+	it("fills the message box with the command its memory shows", () => {
 		const { tours, ev } = touring();
-		ev(example);
+		ev(exampleIn("internal/ui/point", '(ui/point "composer" :fill', "\n"));
 		expect(tours.pointers).toEqual([
 			{
 				anchor: "composer",

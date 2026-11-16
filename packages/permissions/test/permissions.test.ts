@@ -1,5 +1,7 @@
 import type { Hold } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
+import { hitch } from "@repo/interpreter/journal";
+import { Interp } from "@repo/interpreter/lisp";
 import { asksKind } from "@repo/journal-catalog/asks";
 import { view } from "@repo/shared/journal";
 import { describe, expect, it, vi } from "vitest";
@@ -10,6 +12,16 @@ import { DECIDE_ACTION } from "../src/ui-approver.ts";
 import { recordingApprover, session } from "./helpers.ts";
 
 const UPCASE = '(string-upcase "a")';
+
+function parkedHold(interp: Interp): () => Hold | undefined {
+	let parked: Hold | undefined;
+	interp.holds.parkable = true;
+	interp.journal.on(hitch, (h) => {
+		if (h.kind === "held" && h.hold !== undefined)
+			parked = interp.holds.get(h.hold);
+	});
+	return () => parked;
+}
 
 describe("the permissions guard", () => {
 	it("refuses a denied form with its reason, and tells the model it is final", async () => {
@@ -89,35 +101,29 @@ describe("the permissions guard", () => {
 
 	it("parks an asked call where a step can wait, and carries it on once approved", async () => {
 		const s = session("(permission/ask string-upcase)");
-		let parked: Hold | undefined;
-		s.interp.holds.parkWith((hold) => {
-			parked = hold;
-		});
+		const parked = parkedHold(s.interp);
 		const run = s.step(UPCASE);
-		await vi.waitFor(() => expect(parked).toBeDefined());
-		expect(parked?.reason).toContain("do not run it again");
+		await vi.waitFor(() => expect(parked()).toBeDefined());
+		expect(parked()?.reason).toContain("do not run it again");
 		const [request] = s.host.approvals.pending();
 		await s.invoke(DECIDE_ACTION, {
 			id: request.id,
 			approved: true,
 			scope: "once",
 		});
-		parked?.resume();
+		parked()?.resume();
 		expect((await run).value).toBe('"A"');
 		expect(s.host.approvals.granted("string-upcase")).toBe(false);
 	});
 
 	it("refuses a parked call the user denies", async () => {
 		const s = session("(permission/ask string-upcase)");
-		let parked: Hold | undefined;
-		s.interp.holds.parkWith((hold) => {
-			parked = hold;
-		});
+		const parked = parkedHold(s.interp);
 		const run = s.step(UPCASE);
-		await vi.waitFor(() => expect(parked).toBeDefined());
+		await vi.waitFor(() => expect(parked()).toBeDefined());
 		const [request] = s.host.approvals.pending();
 		await s.invoke(DECIDE_ACTION, { id: request.id, approved: false });
-		parked?.resume();
+		parked()?.resume();
 		const refused = await run;
 		expect(refused.failed).toBe(true);
 		expect(refused.report).toContain("the user denied string-upcase");
@@ -747,6 +753,7 @@ describe("following the saved config", () => {
 	it("decides by what the store holds now, not what it held at the start", () => {
 		const store = new MemoryPermissionsStore("(permission/deny eval)");
 		const rules = new SessionRules(store);
+		rules.readWith(new Interp());
 		expect(rules.decide("eval").verdict).toBe("deny");
 		store.save("(permission/server fx (hide echo))");
 		expect(rules.decide("eval").verdict).toBe("allow");
@@ -790,6 +797,24 @@ describe("an approval asked in a session that was restored from its image", () =
 		expect(decided.failed).toBe(false);
 		expect(decided.message).toContain("denied string-upcase");
 		expect((await later.step(UPCASE)).held).toBe(true);
+	});
+
+	it("applies a change to the config once it is approved", async () => {
+		const tighten = "(permission/deny string-upcase)";
+		const asked = session("");
+		const [request] = (await asked.step(tighten)).requests;
+		const later = session("");
+		restore(later.interp, snapshot(asked.interp));
+
+		const decided = await later.invoke(DECIDE_ACTION, {
+			id: request.id,
+			approved: true,
+			scope: "once",
+		});
+
+		expect(decided.message).toContain("it is applied");
+		expect(later.host.store.source()).toContain(tighten);
+		expect((await later.step(UPCASE)).failed).toBe(true);
 	});
 
 	it("is not kept once decided, so a later restore cannot answer it twice", async () => {

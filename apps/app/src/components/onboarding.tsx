@@ -11,7 +11,6 @@ import {
 	useAnchorElement,
 	useUnpointableWarning,
 } from "../lib/anchors.ts";
-import { postMessage } from "../lib/chat.tsx";
 import { requestComposerText } from "../lib/composer-requests.ts";
 import { NEW_CHAT, type PanelContent, panelTab } from "../lib/panel-ops.ts";
 import { requestPanelOps } from "../lib/panel-requests.ts";
@@ -33,8 +32,7 @@ const ANCHOR_WAIT_MS = 3000;
 async function tellAgent(chatId: Id<"chats">, action: string | undefined) {
 	if (action === undefined) return;
 	try {
-		const { message } = await postUiAction(chatId, action, {});
-		if (message) await postMessage(chatId, message);
+		await postUiAction(chatId, action, {});
 	} catch (ex) {
 		reportIssue(ex, { $exception_source: "tour end" });
 	}

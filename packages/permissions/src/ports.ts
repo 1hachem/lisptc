@@ -1,4 +1,4 @@
-import type { Channels } from "@repo/interpreter/channels";
+import type { Journal } from "@repo/interpreter/journal";
 import type { SessionHooks } from "@repo/interpreter/session";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 
@@ -71,7 +71,7 @@ export interface Approvals {
 
 export interface Approver {
 	readonly kind: string;
-	ask?(request: ApprovalRequest, channels: Channels): void;
+	ask?(request: ApprovalRequest, journal: Journal): void;
 	session?(hooks: SessionHooks, approvals: Approvals): void;
 }
 
@@ -81,6 +81,7 @@ export interface PermissionsHost {
 	approvers: readonly Approver[];
 	clock: Clock;
 	prompt: PromptSource;
+	memories: PromptSource;
 	asks?: readonly string[];
 	bounds?: readonly string[];
 }

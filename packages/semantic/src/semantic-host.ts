@@ -8,4 +8,5 @@ export const semanticHost: SemanticHost = {
 	embedder: openRouterEmbedder,
 	clock: systemClock,
 	prompt: filePrompt(new URL("./semantic.ptc", import.meta.url)),
+	memories: filePrompt(new URL("./semantic.memories.ptc", import.meta.url)),
 };

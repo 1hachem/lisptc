@@ -48,14 +48,14 @@ export function finishAuthorization(
 
 export const mcpPrompt = filePrompt(new URL("./mcp.ptc", import.meta.url));
 
+const mcpMemories = filePrompt(new URL("./mcp.memories.ptc", import.meta.url));
+
 function desktopParts(
 	presence: () => Promise<boolean>,
 ): Pick<McpExtensionHost, "toolkit" | "machine"> {
 	const bundled = bundledToolkit();
 	const bridged = bridgedEntries(bundled, localToolkit());
-	const machine = cachedMachine(presence, () =>
-		[...bridged.own, ...bridged.variants].map((conf) => conf.name),
-	);
+	const machine = cachedMachine(presence);
 	return {
 		toolkit: desktopToolkit(bundled, bridged, () => machine.connected()),
 		machine,
@@ -70,6 +70,7 @@ export function mcpHostFor(options: McpHostOptions): McpExtensionHost {
 			: desktopParts(options.desktop)),
 		search: miniSearchEngine,
 		prompt: mcpPrompt,
+		memories: mcpMemories,
 		clock: systemClock,
 	};
 }

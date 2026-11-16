@@ -31,7 +31,8 @@ async function printed(repl: MemoryRepl, code: string): Promise<string> {
 	return (await repl.evalOutput(`(echo ${code})`)).user;
 }
 
-const REMEMBER = '(memory/remember "k" "a note")';
+const REMEMBER =
+	'(memory/remember "k" "a zebra note" :when "the test asks for it")';
 
 describe("permissions over the memory extension", () => {
 	it("holds forget-all for the user under a config that never names it", async () => {
@@ -41,7 +42,9 @@ describe("permissions over the memory extension", () => {
 		expect(asked.held).toBe(true);
 		const requests = view(asked.entries, asksKind).open ?? [];
 		expect(requests.map((r) => r.title)).toEqual(["memory/forget-all"]);
-		expect(await printed(repl, '(memory/recall "note")')).toContain("a note");
+		expect(await printed(repl, '(memory/recall "zebra")')).toContain(
+			"a zebra note",
+		);
 	});
 
 	it("runs forget-all at once when a rule allows it by name", async () => {
@@ -72,7 +75,9 @@ describe("permissions over the memory extension", () => {
 			scope: "once",
 		});
 		expect(decided.failed).toBe(false);
-		expect(decided.message).toContain("run it again exactly as before");
+		expect(decided.notes.map((said) => said.content).join("\n")).toContain(
+			"run it again exactly as before",
+		);
 		expect(await printed(resumed, "(memory/forget-all)")).toContain("1");
 	});
 });

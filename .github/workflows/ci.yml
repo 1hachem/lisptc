@@ -43,6 +43,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Setup Nix for ptcfmt
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
       - name: Lint & format check
         run: pnpm lint
 

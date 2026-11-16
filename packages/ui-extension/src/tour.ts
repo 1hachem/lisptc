@@ -11,10 +11,12 @@ import {
 	Sym,
 } from "@repo/interpreter/objects";
 import { plistOptions, splitKeywordArgs } from "@repo/interpreter/plist";
+import { str } from "@repo/interpreter/print";
 import { zAny, zList } from "@repo/interpreter/schema";
 import {
 	ANCHOR_IDS,
 	type AnchorId,
+	type AnchorLocation,
 	anchors,
 	FILLABLE_ANCHOR,
 	isAnchor,
@@ -38,6 +40,10 @@ import { listElements } from "./element.ts";
 import type { StartedTour, TourStore } from "./tour-store.ts";
 
 const MAX_STEPS = 20;
+
+const DEFAULT_MARK: Mark = "arrow";
+
+const DEFAULT_SIZE: MarkSize = "medium";
 
 const MAX_SAY_CHARS = 500;
 
@@ -73,10 +79,6 @@ export function pageOf(x: unknown): PageId {
 			id,
 		);
 	return id;
-}
-
-export function pagePromptSection(): string {
-	return PAGE_IDS.map((id) => `- ${id}: ${pages[id].doc}`).join("\n");
 }
 
 function sayOf(x: unknown): string {
@@ -174,11 +176,53 @@ function stepOf(x: unknown): TourStep {
 	};
 }
 
-export function anchorPromptSection(): string {
-	return ANCHOR_IDS.map((id) => {
-		const { doc, opens } = anchors[id] as { doc: string; opens?: PageId };
-		return `- ${id}: ${doc}${opens === undefined ? "" : `, opens page ${opens}`}`;
-	}).join("\n");
+const REGIONS = {
+	sidebar:
+		"the user asks where something is in the app's sidebar: the workspace, home, a new chat, a folder, the readme, settings, preferences, the account or signing out",
+	folders:
+		"the user asks where to find, search, upload, select, rename, archive or delete a chat or a file",
+	chat: "the user asks where something is in a chat: the message box, sending, stopping, attaching, a message, its trace, its details, feedback, the todo or sub-agent threads",
+	pages:
+		"the user asks where one preference is changed: theme, font, animation, the bottom bar, the sidebars, input helpers, developer or desktop switches",
+	panel:
+		"the user asks about tabs, panes, splitting, resizing, the bottom bar or zoom",
+} as const;
+
+type Region = keyof typeof REGIONS;
+
+const REGION_IDS = Object.keys(REGIONS) as Region[];
+
+const FRAME_ANCHOR = /^(panel|status)\b/;
+
+function regionOf(id: AnchorId): Region {
+	const { location } = anchors[id] as { location: AnchorLocation };
+	switch (location.kind) {
+		case "chat":
+			return "chat";
+		case "page":
+			return "pages";
+		case "folder":
+			return "folders";
+		case "sidebar":
+			return location.folder === undefined ? "sidebar" : "folders";
+		case "shell":
+			return FRAME_ANCHOR.test(id) ? "panel" : "sidebar";
+	}
+}
+
+function anchorLine(id: AnchorId): string {
+	const { doc, opens } = anchors[id] as { doc: string; opens?: PageId };
+	return `- ${id}: ${doc}${opens === undefined ? "" : `, opens page ${opens}`}`;
+}
+
+export function anchorMemories(): string {
+	return REGION_IDS.map((region) => {
+		const body = [
+			`Anchors, ${region}. For ui/point and ui/tour :anchor.`,
+			...ANCHOR_IDS.filter((id) => regionOf(id) === region).map(anchorLine),
+		].join("\n");
+		return `(memory "internal/ui/anchors-${region}" :when ${str(REGIONS[region])}\n  "${body.replace(/[\\"]/g, "\\$&")}")`;
+	}).join("\n\n");
 }
 
 function endForm(tourId: string, outcome: (typeof OUTCOMES)[number]): Cell {
@@ -190,6 +234,48 @@ export function registerTours(
 	tours: TourStore,
 	actions: TourActions,
 ): void {
+	const shared: [string, unknown, string][] = [
+		[
+			"*ui-pages*",
+			arrayToList(PAGE_IDS.map((id) => arrayToList([id, pages[id].doc]))),
+			"The app pages ui/open and :open take, each as (id what-it-holds).",
+		],
+		[
+			"*ui-anchor-regions*",
+			arrayToList([...REGION_IDS]),
+			"The parts of the app the anchors are filed under; memory internal/ui/anchors-REGION lists one part's anchors.",
+		],
+		["*ui-marks*", arrayToList([...MARKS]), "The marks ui/point draws."],
+		["*ui-default-mark*", DEFAULT_MARK, "The mark ui/point draws given none."],
+		[
+			"*ui-mark-sizes*",
+			arrayToList([...MARK_SIZES]),
+			"The sizes a ui/point mark comes in.",
+		],
+		[
+			"*ui-default-mark-size*",
+			DEFAULT_SIZE,
+			"The size of a ui/point mark given none.",
+		],
+		[
+			"*ui-fill-anchor*",
+			FILLABLE_ANCHOR,
+			"The one anchor ui/point :fill works on.",
+		],
+		[
+			"*ui-tour-untils*",
+			arrayToList([...UNTILS]),
+			"What a tour step waits for; the first is the default.",
+		],
+		[
+			"*ui-tour-max-steps*",
+			BigInt(MAX_STEPS),
+			"How many steps one ui/tour takes.",
+		],
+	];
+	for (const [name, value, doc] of shared)
+		interp.defineGlobal(newSym(name), value, { signature: name, doc });
+
 	function* start(tour: StartedTour): Eval<string> {
 		yield* settled(tours.start(tour));
 		return tour.tourId;
@@ -214,8 +300,8 @@ export function registerTours(
 			const fill = opts.has("fill")
 				? fillOf(anchor, opts.get("fill"))
 				: undefined;
-			const mark = opts.has("mark") ? markOf(opts.get("mark")) : "arrow";
-			const size = opts.has("size") ? sizeOf(opts.get("size")) : "medium";
+			const mark = opts.has("mark") ? markOf(opts.get("mark")) : DEFAULT_MARK;
+			const size = opts.has("size") ? sizeOf(opts.get("size")) : DEFAULT_SIZE;
 			const click =
 				open !== undefined || (opts.has("click") && opts.get("click") !== null);
 			yield* settled(
