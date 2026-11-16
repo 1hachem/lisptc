@@ -28,6 +28,13 @@ function parking(): InterpExtension {
 				newSym("guarded"),
 				interp.makeBuiltIn("guarded", 0, () => "ran"),
 			);
+			interp.defineGlobal(
+				newSym("release-held"),
+				interp.makeBuiltIn("release-held", 0, () => {
+					waiting?.release();
+					return null;
+				}),
+			);
 			interp.hooks.call.use((i, name, args, next) => {
 				if (name !== "guarded") return next(i, name, args);
 				const hold = i.hold(REASON);
@@ -95,6 +102,25 @@ describe("a parked step", () => {
 		expect(between.held).toBe(false);
 		expect(between.user).toContain("between");
 		expect((await r.invokeUi("release")).user).toContain("after");
+	});
+
+	it("keeps what the releasing step printed out of the held step's note", async () => {
+		const r = memoryRepl([parking()]);
+		await r.evalOutput("(guarded) (doc 'car)");
+		const resumed = await r.evalOutput("(doc 'cdr) (release-held)");
+		const [held] = resumed.notes;
+		expect(held?.content).toContain("(car list)");
+		expect(held?.content).not.toContain("(cdr list)");
+		expect(resumed.user).toContain("(cdr list)");
+	});
+
+	it("reports the releasing step's failure and the held step's failure each as its own", async () => {
+		const r = memoryRepl([parking()]);
+		await r.evalOutput("(guarded) (car 1 2 3)");
+		const resumed = await r.evalOutput("(release-held) (no-such-fn)");
+		expect(resumed.failed).toBe(true);
+		expect(resumed.failure).toContain("no-such-fn");
+		expect(resumed.failure).toContain("car");
 	});
 
 	it("parks again when the carried step reaches another hold", async () => {

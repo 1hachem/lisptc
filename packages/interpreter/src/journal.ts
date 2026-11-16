@@ -27,6 +27,7 @@ export const printed = entryKind<Printed, Printed[]>({
 export interface Hitch {
 	readonly kind: "skipped" | "failed" | "held";
 	readonly text: string;
+	readonly hold?: string;
 }
 
 export const hitch = entryKind<Hitch, Hitch[]>({
@@ -34,7 +35,19 @@ export const hitch = entryKind<Hitch, Hitch[]>({
 	schema: z.object({
 		kind: z.enum(["skipped", "failed", "held"]),
 		text: z.string(),
+		hold: z.string().optional(),
 	}),
+	fold: every,
+});
+
+export interface Released {
+	readonly hold: string;
+	readonly granted: boolean;
+}
+
+export const released = entryKind<Released, Released[]>({
+	name: "released",
+	schema: z.object({ hold: z.string(), granted: z.boolean() }),
 	fold: every,
 });
 

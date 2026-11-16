@@ -16,7 +16,7 @@ import {
 	driveAsync,
 	driveSync,
 	type Eval,
-	Hold,
+	type Hold,
 	Holds,
 	type Outcome,
 	settled,
@@ -433,9 +433,9 @@ export class Interp {
 	}
 
 	hold(reason: string): Hold | undefined {
-		if (!this.holds.parkable) return undefined;
-		this.journal.write(hitch, { kind: "held", text: reason });
-		return this.holds.park(new Hold(reason));
+		return this.holds.parkable
+			? this.holds.park(reason, this.journal)
+			: undefined;
 	}
 
 	makeBuiltIn(

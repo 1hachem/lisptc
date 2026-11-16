@@ -20,6 +20,8 @@ import {
 	type Journal,
 	type JournalBuffer,
 	printed,
+	type Recipient,
+	released,
 	type Sink,
 } from "@repo/interpreter/journal";
 import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
@@ -37,7 +39,7 @@ import {
 	type StepContext,
 	type TurnContext,
 } from "@repo/interpreter/session";
-import type { Entry, Received } from "@repo/shared/journal";
+import { type Entry, type Received, view } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { Checkpoint, ImageStore } from "./image-store.ts";
 
@@ -150,6 +152,31 @@ function recordTopLevel(buffer: JournalBuffer): {
 interface Parked {
 	readonly hold: Hold;
 	readonly run: Promise<unknown>;
+	readonly evaluation: number;
+}
+
+interface Part {
+	readonly model: string;
+	readonly user: string;
+	readonly hitches: ReturnType<typeof partition>;
+}
+
+function partOf(entries: readonly Entry[]): Part {
+	const said = view(entries, printed);
+	const textFor = (to: Recipient) =>
+		said
+			.filter((p) => p.to.includes(to))
+			.map((p) => p.text)
+			.join("");
+	return {
+		model: textFor("model"),
+		user: textFor("user"),
+		hitches: partition(view(entries, hitch)),
+	};
+}
+
+function heldText(part: Part): string {
+	return part.hitches.held.map((n) => `held: ${n.text}\n`).join("");
 }
 
 type Settled = { readonly held: Hold } | { readonly thrown: unknown };
@@ -205,6 +232,7 @@ export class MemoryRepl implements InMemoryRepl {
 	private currentInterp: ConversationInterpreter;
 	private inFlight: Promise<void> = Promise.resolve();
 	private parked: Parked[] = [];
+	private readonly decided = new Set<string>();
 	private recorder: FormRecorder | undefined;
 	private betweenSteps:
 		| {
@@ -252,7 +280,7 @@ export class MemoryRepl implements InMemoryRepl {
 		});
 		runSync(interp, prelude);
 		this.setup(interp);
-		this.listenBetweenSteps(interp.journal);
+		this.watch(interp);
 		return interp;
 	}
 
@@ -293,10 +321,11 @@ export class MemoryRepl implements InMemoryRepl {
 			throw ex;
 		}
 		this.parked = [];
+		this.decided.clear();
 		this.currentInterp.dispose();
 		this.currentInterp = interp;
 		this.calls = depth;
-		this.listenBetweenSteps(interp.journal);
+		this.watch(interp);
 	}
 
 	private checkpoint(result: StepResult, origin?: string): StepResult {
@@ -441,16 +470,26 @@ export class MemoryRepl implements InMemoryRepl {
 		const { recorder, results } = recordTopLevel(buffer);
 		this.recorder = recorder;
 		let thrown: unknown;
-		let carried = false;
-		let carriedThrown: unknown;
+		let resumedThrown: unknown;
+		let resumedFrom: number | undefined;
 		try {
-			const ran = await this.untilHeld(() => caught(body(ctx)));
+			const ran = await this.raceHold(() => caught(body(ctx)));
 			if ("thrown" in ran) {
 				thrown = ran.thrown;
-				if (this.parked.some((p) => p.hold.released)) {
-					carried = true;
-					const resumed = await this.untilHeld(() => this.carryOn());
-					if ("thrown" in resumed) carriedThrown = resumed.thrown;
+				if (this.parked.some((p) => this.decided.has(p.hold.id))) {
+					resumedFrom = buffer.entries.length;
+					const resumed = await this.raceHold(() => this.resumeDecided());
+					if ("thrown" in resumed) resumedThrown = resumed.thrown;
+					const later = partOf(buffer.entries.slice(resumedFrom));
+					const laterError = this.errorOf(
+						ctx,
+						resumedThrown,
+						later.hitches.failed,
+					);
+					interp.conversation.append(
+						"held-step",
+						resumedNote(later.model + laterError.model + heldText(later)),
+					);
 				}
 			}
 		} finally {
@@ -459,28 +498,23 @@ export class MemoryRepl implements InMemoryRepl {
 			detach();
 			this.listenBetweenSteps(journal);
 		}
-		const { skipped, failed, held } = partition(buffer.collect(hitch));
-		const holding = held.map((n) => `held: ${n.text}\n`).join("");
-		const bounded: Bounded = {
-			model: buffer.collectText("model"),
-			user: buffer.collectText("user"),
-		};
-		const error = this.errorOf(ctx, thrown, failed);
-		const carriedError = this.errorOf(ctx, carriedThrown, failed);
-		const notes = buffer.collect(note);
+		const cut = resumedFrom ?? buffer.entries.length;
+		const own = partOf(buffer.entries.slice(0, cut));
+		const later = partOf(buffer.entries.slice(cut));
+		const all = partition(buffer.collect(hitch));
+		const error = this.errorOf(ctx, thrown, own.hitches.failed);
+		const laterError = this.errorOf(ctx, resumedThrown, later.hitches.failed);
 		return {
-			model: carried ? error.model : bounded.model + error.model + holding,
-			user: bounded.user + carriedError.user + error.user,
-			notes: carried
-				? [...notes, carriedOn(bounded.model + carriedError.model + holding)]
-				: notes,
+			model: own.model + error.model + heldText(own),
+			user: own.user + later.user + laterError.user + error.user,
+			notes: buffer.collect(note),
 			entries: forwarded(buffer.entries),
 			effects: buffer.collect(effect),
 			failed: thrown !== undefined,
-			failure: carriedError.user + error.user,
-			held: held.length > 0,
+			failure: laterError.user + error.user,
+			held: all.held.length > 0,
 			results,
-			skipped,
+			skipped: all.skipped,
 		};
 	}
 
@@ -503,35 +537,59 @@ export class MemoryRepl implements InMemoryRepl {
 		);
 	}
 
-	private async untilHeld(run: () => Promise<unknown>): Promise<Settled> {
-		let parked!: (hold: Hold) => void;
-		const holding = new Promise<Hold>((resolve) => {
-			parked = resolve;
+	private watch(interp: ConversationInterpreter): void {
+		interp.journal.on(released, ({ hold }) => this.decided.add(hold));
+		this.listenBetweenSteps(interp.journal);
+	}
+
+	private async raceHold(run: () => Promise<unknown>): Promise<Settled> {
+		const { holds, journal } = this.currentInterp;
+		let onParked!: (hold: Hold) => void;
+		const parkedHold = new Promise<Hold>((resolve) => {
+			onParked = resolve;
 		});
-		const unpark = this.currentInterp.holds.parkWith(parked);
+		const unlisten = journal.on(hitch, (h) => {
+			const hold = h.hold === undefined ? undefined : holds.get(h.hold);
+			if (h.kind === "held" && hold !== undefined) onParked(hold);
+		});
+		holds.parkable = true;
 		try {
 			const running = run();
 			const first = await Promise.race([
 				running.then((thrown) => ({ thrown })),
-				holding.then((held) => ({ held })),
+				parkedHold.then((held) => ({ held })),
 			]);
 			if ("held" in first) {
 				running.catch(() => undefined);
-				this.parked.push({ hold: first.held, run: running });
+				this.parked.push({
+					hold: first.held,
+					run: running,
+					evaluation: journal.evaluation,
+				});
 			}
 			return first;
 		} finally {
-			unpark();
+			unlisten();
+			holds.parkable = false;
 		}
 	}
 
-	private async carryOn(): Promise<unknown> {
-		const ready = this.parked.filter((p) => p.hold.released);
-		this.parked = this.parked.filter((p) => !p.hold.released);
+	private async resumeDecided(): Promise<unknown> {
+		const { holds, journal } = this.currentInterp;
+		const ready = this.parked.filter((p) => this.decided.has(p.hold.id));
+		this.parked = this.parked.filter((p) => !this.decided.has(p.hold.id));
+		const evaluation = journal.evaluation;
 		let thrown: unknown;
-		for (const { hold, run } of ready) {
-			hold.resume();
-			thrown = (await run) ?? thrown;
+		try {
+			for (const { hold, run, evaluation: parkedAt } of ready) {
+				this.decided.delete(hold.id);
+				holds.take(hold.id);
+				journal.evaluation = parkedAt;
+				hold.resume();
+				thrown = (await run) ?? thrown;
+			}
+		} finally {
+			journal.evaluation = evaluation;
 		}
 		return thrown;
 	}
@@ -542,6 +600,7 @@ export class MemoryRepl implements InMemoryRepl {
 
 	reset(): void {
 		this.parked = [];
+		this.decided.clear();
 		this.currentInterp.dispose();
 		this.currentInterp = this.freshInterp();
 	}
@@ -662,13 +721,8 @@ function outermost<A extends unknown[], R>(
 	return around === undefined ? chain : chain.wrappedBy(around);
 }
 
-function carriedOn(printed: string): ConversationRecord {
-	return {
-		role: "system",
-		source: "held-step",
-		content:
-			printed.trim() === ""
-				? "The held step carried on and finished."
-				: `The held step carried on:\n${printed}`,
-	};
+function resumedNote(printed: string): string {
+	return printed.trim() === ""
+		? "The held step carried on and finished."
+		: `The held step carried on:\n${printed}`;
 }
