@@ -4,9 +4,9 @@ import type { ChatMessage } from "@repo/shared/messages";
 import type { ConversationInterp } from "./conversation.ts";
 import type { Eval } from "./drive.ts";
 import { Chain } from "./hooks.ts";
-import type { Reader } from "./journal.ts";
+import type { Recipient } from "./journal.ts";
 import type { Installable, Interp } from "./lisp.ts";
-export type Bounded = Record<Reader, string>;
+export type Bounded = Record<Recipient, string>;
 
 export interface TurnContext {
 	readonly interp: ConversationInterp;

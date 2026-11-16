@@ -7,20 +7,20 @@ import {
 } from "@repo/shared/journal";
 import { z } from "zod";
 
-export const READERS = ["user", "model"] as const;
+export const RECIPIENTS = ["user", "model"] as const;
 
-export type Reader = (typeof READERS)[number];
+export type Recipient = (typeof RECIPIENTS)[number];
 
-const reader = z.enum(READERS);
+const recipient = z.enum(RECIPIENTS);
 
 export interface Printed {
-	readonly to: readonly Reader[];
+	readonly to: readonly Recipient[];
 	readonly text: string;
 }
 
 export const printed = entryKind<Printed, Printed[]>({
 	name: "printed",
-	schema: z.object({ to: z.array(reader).min(1), text: z.string() }),
+	schema: z.object({ to: z.array(recipient).min(1), text: z.string() }),
 	fold: every,
 });
 
@@ -121,16 +121,16 @@ export class Journal {
 
 export function print(
 	journal: Journal | undefined,
-	addressed: Partial<Record<Reader, string>>,
+	addressed: Partial<Record<Recipient, string>>,
 ): void {
 	if (journal === undefined) return;
-	const groups = new Map<string, Reader[]>();
-	for (const to of READERS) {
+	const groups = new Map<string, Recipient[]>();
+	for (const to of RECIPIENTS) {
 		const text = addressed[to];
 		if (text === undefined) continue;
-		const readers = groups.get(text);
-		if (readers === undefined) groups.set(text, [to]);
-		else readers.push(to);
+		const recipients = groups.get(text);
+		if (recipients === undefined) groups.set(text, [to]);
+		else recipients.push(to);
 	}
 	for (const [text, to] of groups) journal.write(printed, { to, text });
 }
@@ -138,7 +138,7 @@ export function print(
 export interface JournalBuffer extends Sink {
 	readonly entries: readonly Entry[];
 	collect<T, V>(kind: EntryKind<T, V>): T[];
-	collectText(to: Reader): string;
+	collectText(to: Recipient): string;
 }
 
 export function bufferSink(): JournalBuffer {

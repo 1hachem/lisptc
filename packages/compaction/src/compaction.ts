@@ -6,7 +6,7 @@ import {
 } from "@repo/interpreter/docs";
 import { EvalException } from "@repo/interpreter/errors";
 import { callableKind } from "@repo/interpreter/func";
-import { type Journal, print, type Reader } from "@repo/interpreter/journal";
+import { type Journal, print, type Recipient } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
@@ -60,7 +60,7 @@ function wordSpans(text: string): [number, number][] {
 	return spans;
 }
 
-export type Bounded = Record<Reader, string>;
+export type Bounded = Record<Recipient, string>;
 
 interface Slice {
 	text: string;
