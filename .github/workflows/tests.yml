@@ -25,6 +25,9 @@ jobs:
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Fetch the OpenRouter key from Infisical
         uses: Infisical/secrets-action@v1.0.9
         with:
