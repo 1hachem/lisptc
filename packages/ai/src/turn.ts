@@ -157,10 +157,8 @@ async function* takeSteers({
 			continue;
 		}
 		const { message, quiet, entries, notes } = evaluated;
-		if (!quiet) {
-			lines.push(line, ranByUser(message.content));
-			taken += 1;
-		}
+		lines.push(line, ranByUser(message.content));
+		if (!quiet) taken += 1;
 		yield { type: "evaluated", message };
 		yield* recorded(entries);
 		yield* noting(lines, notes);
