@@ -339,6 +339,25 @@ instead; their own `AGENTS.md` says so.
 A package with shared test helpers has them in `test/helpers.ts`, and a test
 should use them rather than assembling the world by hand.
 
+**A test is translated from a spec, never written on an agent's own
+initiative.** The human writes the spec under `specs/`. Each acceptance
+scenario in it becomes exactly one test, and each test realises exactly one
+scenario. The `describe` names the spec's directory and user story, and the
+test's title is the scenario's number and its Given/When/Then. An agent adds
+nothing around that: no test for a helper it wrote, no test to cover a branch,
+no test a scenario does not ask for. A behaviour worth pinning that no spec
+states is a gap in the spec. Tell the user, and do not write the test.
+
+Only two kinds of test stay. Lisp source run through the REPL, with the value
+or the error it gives asserted. An interface driven from outside, the UI, the
+chat loop, an HTTP route, a Convex function through `api`, the LSP or MCP
+protocol, with what its caller sees asserted. A test that calls a TypeScript
+function directly is neither.
+
+`task check:tests` puts each test case a PR adds or changes before Jev, and
+fails one that is heavily mocked, set up so it cannot fail, or pins the
+implementation. CI runs it on every pull request that touches a test.
+
 **A test pins behaviour, never the implementation.** It drives what a caller
 drives: Lisp through the REPL, a module through its exports, a component
 through what a user does to it, a Convex function through `api`. It asserts what
@@ -396,6 +415,8 @@ pnpm repl                    # turbo run repl (run the interpreter REPL directly
 
 task check:agents            # judge the AGENTS.md prose a PR adds (needs the /actions/agents-md secrets)
 task check:agents -- --all   # sweep every AGENTS.md, not just the ones a PR changed
+task check:tests             # judge the test cases a PR adds or changes (needs the /actions/agents-md secrets)
+task check:tests -- --all    # judge every test case; --json <path> writes each verdict
 task up                      # run the whole stack on the local k3s under tilt, in lisptc-dev, with live reload
 task test                    # the vitest suites and the nix flake checks together
 task test:nix                # the nix flake checks, the ptcfmt formatter test included
