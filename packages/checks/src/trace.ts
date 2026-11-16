@@ -35,7 +35,7 @@ export type TraceEvent =
 			ok: boolean;
 	  }
 	| { kind: "connect"; step: number; server: string; ok: boolean }
-	| { kind: "note"; step: number; severity: Severity; text: string }
+	| { kind: "hitch"; step: number; severity: Severity; text: string }
 	| { kind: "halt"; step: number; answer: string };
 
 function clip(text: string): string {
@@ -114,7 +114,7 @@ export class Trace {
 			});
 			hitch.on(interp.channels, (n) => {
 				trace.add({
-					kind: "note",
+					kind: "hitch",
 					step: trace.step,
 					severity: n.kind === "failed" ? "critical" : "warning",
 					text: n.text,

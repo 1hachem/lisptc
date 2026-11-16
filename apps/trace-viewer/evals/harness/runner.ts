@@ -74,16 +74,16 @@ function open(spec: TraceViewerEvalSpec): EvalRunContext<AgentRepl> {
 			refusedSince: (mark) =>
 				trace.events
 					.slice(mark)
-					.some((e) => e.kind === "note" || (e.kind === "form" && e.error)),
+					.some((e) => e.kind === "hitch" || (e.kind === "form" && e.error)),
 			errors: () =>
 				trace.events.filter(
 					(e) =>
 						(e.kind === "form" && e.error !== undefined) ||
-						(e.kind === "note" && e.severity === "critical"),
+						(e.kind === "hitch" && e.severity === "critical"),
 				).length,
 			skips: () =>
 				trace.events.filter(
-					(e) => e.kind === "note" && e.severity === "warning",
+					(e) => e.kind === "hitch" && e.severity === "warning",
 				).length,
 		},
 	};

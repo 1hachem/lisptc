@@ -25,12 +25,12 @@ function verdict(trace: Trace, source: string): string {
 	return checks.results()[0]?.verdict ?? "missing";
 }
 
-describe("what the interpreter's notes become in a trace", () => {
+describe("what the interpreter's hitches become in a trace", () => {
 	test("a skipped aside is a warning the (skipped) positions can see", () => {
 		const trace = ran("an aside (see below)\n(+ 1 2)");
-		expect(trace.events.filter((e) => e.kind === "note")).toEqual([
+		expect(trace.events.filter((e) => e.kind === "hitch")).toEqual([
 			{
-				kind: "note",
+				kind: "hitch",
 				step: 1,
 				severity: "warning",
 				text: expect.stringContaining("(see below)"),
@@ -43,15 +43,15 @@ describe("what the interpreter's notes become in a trace", () => {
 		const trace = ran("(car 1 2 3)");
 		expect(
 			trace.events.filter(
-				(e) => e.kind === "note" && e.severity === "critical",
+				(e) => e.kind === "hitch" && e.severity === "critical",
 			),
 		).toHaveLength(1);
 		expect(verdict(trace, "(defcheck it (eventually (errored)))")).toBe("true");
 	});
 
-	test("a clean step leaves no note behind", () => {
+	test("a clean step leaves no hitch behind", () => {
 		const trace = ran("(+ 1 2)");
-		expect(trace.events.filter((e) => e.kind === "note")).toEqual([]);
+		expect(trace.events.filter((e) => e.kind === "hitch")).toEqual([]);
 		expect(verdict(trace, "(defcheck it (eventually (skipped)))")).toBe(
 			"false",
 		);
