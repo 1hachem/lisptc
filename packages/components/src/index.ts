@@ -43,14 +43,6 @@ export {
 } from "./theme-selector.tsx";
 export { Trace, type TraceSlots, TraceSteps } from "./trace.tsx";
 export {
-	LANES,
-	type Lane,
-	type LaneId,
-	laneOf,
-	EVERY_LANE,
-	type Shown,
-} from "./trace-lanes.ts";
-export {
 	LanesShown,
 	Revealed,
 	useLanes,
@@ -65,6 +57,14 @@ export {
 	toolActivity,
 	tracePlacement,
 } from "./trace-entries.ts";
+export {
+	EVERY_LANE,
+	LANES,
+	type Lane,
+	type LaneId,
+	laneOf,
+	type Shown,
+} from "./trace-lanes.ts";
 export {
 	type ChatMessage,
 	isParentMessage,

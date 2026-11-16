@@ -1,12 +1,12 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-	type LaneId,
 	type ChatMessage,
-	laneOf,
 	isParentMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
+	type LaneId,
+	laneOf,
 	messageText,
 	Revealed,
 	type StepMeta,

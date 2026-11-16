@@ -1,4 +1,4 @@
-import { LANES, type LaneId, type ChatMessage } from "@repo/components";
+import { type ChatMessage, LANES, type LaneId } from "@repo/components";
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";

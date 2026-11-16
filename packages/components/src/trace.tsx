@@ -13,16 +13,16 @@ import {
 	useRef,
 	useState,
 } from "react";
-import {
-	LANES,
-	type LaneId,
-	laneOf,
-	EVERY_LANE,
-	type Shown,
-} from "./trace-lanes.ts";
 import { LanesShown, Revealed, useLanes } from "./trace-context.tsx";
 import { isEntryMessage } from "./trace-entries.ts";
 import { messageMatches } from "./trace-find.ts";
+import {
+	EVERY_LANE,
+	LANES,
+	type LaneId,
+	laneOf,
+	type Shown,
+} from "./trace-lanes.ts";
 import {
 	type ChatMessage,
 	isMemoryMessage,
