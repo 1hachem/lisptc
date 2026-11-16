@@ -22,12 +22,6 @@ import {
 import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import {
-	type ChannelId,
-	channelOf,
-	EVERY_CHANNEL,
-	type Shown,
-} from "../lib/channels.ts";
-import {
 	type ChatMessage,
 	isParentMessage,
 	isSystemMessage,
@@ -53,6 +47,7 @@ import {
 	useChatSession,
 } from "../lib/chat.tsx";
 import { isGreetingMessage } from "../lib/greeting.ts";
+import { EVERY_LANE, type LaneId, laneOf, type Shown } from "../lib/lanes.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { traceOpen } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
@@ -94,13 +89,13 @@ function Marked({
 	tone,
 	children,
 }: {
-	id: ChannelId;
+	id: LaneId;
 	tone?: string;
 	children: React.ReactNode;
 }) {
-	const { icon, label, text } = channelOf(id);
+	const { icon, label, text } = laneOf(id);
 	return (
-		<div data-channel={id} className="flex min-w-0 gap-2">
+		<div data-lane={id} className="flex min-w-0 gap-2">
 			<HugeiconsIcon
 				icon={icon}
 				aria-label={label}
@@ -118,7 +113,7 @@ function foldOf(text: string, fold: { lines: number; chars: number }) {
 	return head.length > fold.chars ? head.slice(0, fold.chars) : head;
 }
 
-function ChannelBody({ text, code }: { text: string; code: boolean }) {
+function LaneBody({ text, code }: { text: string; code: boolean }) {
 	if (!code) return <Markdown>{text}</Markdown>;
 	return (
 		<pre className="whitespace-pre-wrap break-words font-mono">
@@ -127,7 +122,7 @@ function ChannelBody({ text, code }: { text: string; code: boolean }) {
 	);
 }
 
-function ChannelText({
+function LaneText({
 	text,
 	tone,
 	code = false,
@@ -156,7 +151,7 @@ function ChannelText({
 	return (
 		<div className={`min-w-0 break-words ${tone}`}>
 			<div className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined}>
-				<ChannelBody text={shown} code={code} />
+				<LaneBody text={shown} code={code} />
 			</div>
 			{long && (
 				<div className="mt-1 flex items-center gap-3 text-dim">
@@ -200,9 +195,9 @@ function ChannelText({
 	);
 }
 
-const ShownChannels = createContext<Shown | null>(null);
+const ShownLanes = createContext<Shown | null>(null);
 
-export function ChannelsShown({
+export function LanesShown({
 	shown,
 	children,
 }: {
@@ -210,14 +205,14 @@ export function ChannelsShown({
 	children: ReactNode;
 }) {
 	return (
-		<ShownChannels.Provider value={shown}>
+		<ShownLanes.Provider value={shown}>
 			<Traced.Provider value>{children}</Traced.Provider>
-		</ShownChannels.Provider>
+		</ShownLanes.Provider>
 	);
 }
 
-export function useChannels(): Shown {
-	return useContext(ShownChannels) ?? EVERY_CHANNEL;
+export function useLanes(): Shown {
+	return useContext(ShownLanes) ?? EVERY_LANE;
 }
 
 function toolOutput(message: ChatMessage): string {
@@ -227,13 +222,13 @@ function toolOutput(message: ChatMessage): string {
 }
 
 function ToolResult({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const output = shown.output ? toolModelOutput(message).output : "";
 	const ui = shown.ui ? toolUi(message) : undefined;
 	const attachments = shown.attachments ? attachedTo(message) : [];
 	if (ui === undefined && attachments.length === 0 && !output) return null;
 	const failed = toolFailed(message);
-	const outputTone = failed ? "text-red" : channelOf("output").text;
+	const outputTone = failed ? "text-red" : laneOf("output").text;
 	return (
 		<div
 			data-step-failed={failed || undefined}
@@ -241,10 +236,10 @@ function ToolResult({ message }: { message: ChatMessage }) {
 		>
 			{ui !== undefined && (
 				<Marked id="ui">
-					<ChannelText
+					<LaneText
 						code
 						text={JSON.stringify(ui, null, 2)}
-						tone={channelOf("ui").text}
+						tone={laneOf("ui").text}
 					/>
 				</Marked>
 			)}
@@ -255,7 +250,7 @@ function ToolResult({ message }: { message: ChatMessage }) {
 			)}
 			{output && (
 				<Marked id="output" tone={outputTone}>
-					<ChannelText code={failed} text={output} tone={outputTone} />
+					<LaneText code={failed} text={output} tone={outputTone} />
 				</Marked>
 			)}
 		</div>
@@ -272,14 +267,14 @@ function askedText(message: ChatMessage): string {
 }
 
 export function ToolMessage({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const asked = shown.asks ? askedText(message) : "";
 	return (
 		<>
 			<ToolResult message={message} />
 			{asked !== "" && (
 				<Marked id="asks">
-					<ChannelText text={asked} tone="text-dim" />
+					<LaneText text={asked} tone="text-dim" />
 				</Marked>
 			)}
 		</>
@@ -296,7 +291,7 @@ function AgentMessage({
 	const chatId = useChatSession((state) => state.chatId);
 	const sender = useAgentSender(message, chatId, useContext(ParentSource));
 	if (sender.cleared) return null;
-	const { icon, text } = channelOf("agents");
+	const { icon, text } = laneOf("agents");
 	if (!sender.parent)
 		return (
 			<button
@@ -334,7 +329,7 @@ function AgentMessage({
 }
 
 function UserMessage({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const text = messageText(message);
 	const files = shown.attachments ? attachedTo(message) : [];
 	if (files.length === 0) return <UserLine text={text} />;
@@ -347,7 +342,7 @@ function UserMessage({ message }: { message: ChatMessage }) {
 }
 
 export function ChatLine({ message }: { message: ChatMessage }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const traced = useContext(Traced);
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
@@ -356,18 +351,18 @@ export function ChatLine({ message }: { message: ChatMessage }) {
 			{reasoning && (
 				<div className="mb-2">
 					<Marked id="thinking">
-						<ChannelText text={reasoning} tone="text-dim italic" />
+						<LaneText text={reasoning} tone="text-dim italic" />
 					</Marked>
 				</div>
 			)}
 			{isUserMessage(message) ? (
 				<UserMessage message={message} />
 			) : !traced ? (
-				<ChannelBody text={messageText(message)} code />
+				<LaneBody text={messageText(message)} code />
 			) : (
 				shown.assistant && (
 					<Marked id="assistant">
-						<ChannelBody text={messageText(message)} code />
+						<LaneBody text={messageText(message)} code />
 					</Marked>
 				)
 			)}
@@ -404,8 +399,8 @@ function RanOutput({ message }: { message: ChatMessage }) {
 	if (output === "" && failure === "") return null;
 	return (
 		<div data-step-ran className="flex min-w-0 flex-col gap-2 break-words">
-			{output !== "" && <ChannelText code text={output} tone="text-dim" />}
-			{failure !== "" && <ChannelText code text={failure} tone="text-red" />}
+			{output !== "" && <LaneText code text={output} tone="text-dim" />}
+			{failure !== "" && <LaneText code text={failure} tone="text-red" />}
 		</div>
 	);
 }
@@ -594,7 +589,7 @@ function failedAt(turn: Turn): ChatMessage | undefined {
 function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
 	const shape = useMemo(() => shapeTurn(turn), [turn]);
 	const placed = useMemo(() => placeTimeline(shape, live), [shape, live]);
-	const shown = useChannels();
+	const shown = useLanes();
 	const traceAt = (message: ChatMessage | undefined) => {
 		const id = message?.id;
 		return onTrace && id !== undefined ? () => onTrace(id) : undefined;
