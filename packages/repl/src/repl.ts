@@ -630,7 +630,10 @@ export class AgentRepl extends MemoryRepl {
 	): Promise<EvalOutput> {
 		const result = await this.evaluate(code, origin, live, "assistant");
 		if (result.held) return ending(render(result));
-		return ends(result.effects) ? render(result, "") : render(result);
+		const ranNothing = result.results.length === 0 && result.model === "";
+		return ends(result.effects) && ranNothing
+			? render(result, "")
+			: render(result);
 	}
 
 	unrun(code: string): Skipped[] {
