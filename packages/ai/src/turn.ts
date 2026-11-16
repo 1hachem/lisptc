@@ -121,8 +121,18 @@ function* noting(
 	}
 }
 
-function seed({ repl, lines, steps }: Turn): void {
+function seed(turn: Turn): void {
+	const { repl, lines, steps } = turn;
+	const { interp } = repl;
+	const was = turn.seeded;
+	if (
+		was?.interp === interp &&
+		was.lines === lines.length &&
+		was.steps === steps
+	)
+		return;
 	repl.seed(lines.map(lineRecord), steps);
+	turn.seeded = { interp, lines: lines.length, steps };
 }
 
 async function* through<T extends Noted>(
@@ -207,6 +217,7 @@ interface Turn {
 	readonly agent: AgentTurn;
 	readonly telemetry: TurnTelemetry;
 	steps: number;
+	seeded?: { interp: AgentRepl["interp"]; lines: number; steps: number };
 }
 
 type ModelCall = (request: ModelRequest) => AsyncIterable<ModelDelta>;
