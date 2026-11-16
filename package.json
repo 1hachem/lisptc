@@ -34,6 +34,7 @@
     "fix:comments": "no-comments --fix",
     "check:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts",
     "fix:docs": "node --no-warnings --experimental-transform-types ./scripts/check-docs.ts --fix",
+    "check:tests": "node --no-warnings --experimental-transform-types ./scripts/check-tests.ts",
     "check:refs": "check-agents-md --checks refs",
     "prepare": "husky"
   },
