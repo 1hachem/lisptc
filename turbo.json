@@ -44,6 +44,20 @@
           "deny": ["language", "extension", "runtime", "product"]
         }
       },
+      "platform": {
+        "dependencies": {
+          "deny": [
+            "platform",
+            "ui",
+            "language",
+            "extension",
+            "runtime",
+            "backend",
+            "frontend",
+            "product"
+          ]
+        }
+      },
       "foundation": {
         "dependencies": {
           "deny": [

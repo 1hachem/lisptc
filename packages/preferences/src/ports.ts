@@ -8,6 +8,7 @@ export interface Preferences {
 	metadata?: Toggles;
 	input?: Toggles;
 	sidebar?: string[];
+	sidebarRight?: string[];
 	hidden?: string[];
 	statusBar?: string[];
 	statusBarHidden?: string[];

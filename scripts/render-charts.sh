@@ -62,3 +62,6 @@ for ((f = 0; f < ${#files[@]}; f++)); do
     retry helm template "$name" "${args[@]}" -n "$namespace" >"$out/$name-$i.yaml"
   done
 done
+
+echo "render charts/lisptc as tilt runs it"
+helm template lisptc "$root/charts/lisptc" -f "$root/charts/lisptc/values-dev.yaml" --set dev.node=dev -n lisptc-dev >"$out/lisptc-dev.yaml"

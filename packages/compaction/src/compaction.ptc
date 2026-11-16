@@ -2,7 +2,7 @@ THE SILENT REPL: NAMING, EXTRACTING, ECHOING
 
 REPL prints nothing on its own. Each top-level result is bound to a variable
 and reports one line, name: shape. echo is the one command that shows a value,
-to you and to the user alike.
+to you alone: user never sees echo.
 
 Windowing what echo prints
 
@@ -62,7 +62,7 @@ Bare slice already answers "what is in there":
 ((("id" . "a1f") ("identifier" . "ENG-12") ("title" . "Auth token refresh fails"))
   (("id" . "c3d") ("identifier" . "ENG-31") ("title" . "OAuth callback drops the state param")))
 
-To render for the user, keep whole list and echo rendering:
+To read rows, keep whole list and echo rendering:
 
 (defun row (i) (concat "| " (cdr (assoc "identifier" i)) " | " (cdr (assoc "title" i)) " |"))
 row: function
@@ -79,7 +79,7 @@ Both wrong. Never do either:
 Prefer computing over reading: (length x) , mapcar, assoc and grep work on
 complete value. One extracting form beats paging through text.
 
-Echo output is capped for you, not for the user
+Echo output is capped for you; user never sees echo
 
 Each step may echo a fixed number of words. Past that, text stops and a ...
 line says how much is left and how to continue:
@@ -88,16 +88,16 @@ line says how much is left and how to continue:
 Q3 revenue grew 12 percent, driven by the two enterprise
 ... 10 of 40 words shown, 30 below — read on with (echo report-1 :offset 10)
 
-User sees whole output; cap is on your copy only. On that line: do not re-run
-the call, do not answer from the fragment. Page on with the given offset, or
-(echo report-1 :match "pattern") when you know what you look for. One unbroken
-word, minified JSON say, is cut by character, and ... line points at
-substring. Several echoes in one step share the budget. When it runs out you
+Value stays whole in its name; cap is on what you read. On that line: do not
+re-run the call, do not answer from the fragment. Page on with the given
+offset, or (echo report-1 :match "pattern") when you know what you look for.
+One unbroken word, minified JSON say, is cut by character, and ... line points
+at substring. Several echoes in one step share the budget. When it runs out you
 are told how many words you were not shown.
 
 GOTCHAS
 
-- echo built-in is the only way to see a value or show one to the user.
+- echo built-in is the only way to see a value. Shows user nothing.
 - The head, tail and grep built-ins RETURN a value; only echo prints. Except
   bare head, tail or discovery call: those print.
 - Output ending in a ... line is not everything.

@@ -1,6 +1,6 @@
 import type { Effect } from "@repo/interpreter/effects";
-import { noAnnotations, type StepAnnotations } from "@repo/interpreter/session";
-import type { AgentRepl, EvalOutput, LiveAnnotations } from "@repo/repl/repl";
+import type { AgentRepl, EvalOutput, LiveEntries } from "@repo/repl/repl";
+import type { Entry } from "@repo/shared/journal";
 import type { ChatMessage } from "@repo/shared/messages";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
@@ -89,7 +89,7 @@ async function outcomeOf(
 	output: string;
 	display: string;
 	error: boolean;
-	annotations: StepAnnotations;
+	entries: readonly Entry[];
 	effects: readonly Effect[];
 	emitted: string;
 	failed: boolean;
@@ -101,7 +101,7 @@ async function outcomeOf(
 		const {
 			model,
 			user,
-			annotations,
+			entries,
 			effects,
 			emitted,
 			failed,
@@ -114,7 +114,7 @@ async function outcomeOf(
 			display: without(user, failure),
 			failure,
 			error: false,
-			annotations,
+			entries,
 			effects,
 			emitted,
 			failed,
@@ -133,7 +133,7 @@ async function outcomeOf(
 			display: "",
 			failure: text,
 			error: true,
-			annotations: noAnnotations(),
+			entries: [],
 			effects: [],
 			emitted: "",
 			failed: true,
@@ -152,7 +152,7 @@ export function evalCode(
 	repl: AgentRepl,
 	code: string,
 	origin?: string,
-	live?: LiveAnnotations,
+	live?: LiveEntries,
 ) {
 	return outcomeOf(repl, () => repl.evalOutput(code, origin, live));
 }

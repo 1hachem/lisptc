@@ -5,9 +5,9 @@ import {
 	SystemMessage,
 } from "@langchain/core/messages";
 import type { ModelDelta, ModelUsage } from "@repo/interpreter/session";
+import { getChatProvider } from "@repo/models/providers";
 import type { ChatMessage } from "@repo/shared/messages";
 import type { ProviderName } from "@repo/shared/providers";
-import { getProvider } from "./provider/registry.ts";
 import { type TraceContext, traceCallbacks } from "./telemetry.ts";
 
 export const DEFAULT_SYSTEM_PROMPT =
@@ -65,7 +65,7 @@ export class Agent {
 		messages: ChatMessage[],
 		options?: { signal?: AbortSignal },
 	): AsyncGenerator<ModelDelta> {
-		const model = getProvider(this.config.provider)({
+		const model = getChatProvider(this.config.provider)({
 			model: this.config.model,
 			streaming: true,
 		});

@@ -1,9 +1,14 @@
-import { type Activity, activityKey } from "@repo/interpreter/annotations";
 import { bufferTransport } from "@repo/interpreter/channels-host";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import type { LispPromise } from "@repo/interpreter/promise";
-import { noAnnotations, openSession } from "@repo/interpreter/session";
+import { openSession } from "@repo/interpreter/session";
+import {
+	type ActivityEntry,
+	activityKind,
+} from "@repo/journal-catalog/activity";
+import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -84,8 +89,8 @@ async function session(icons?: Icon[]) {
 async function activityOf(
 	code: string,
 	icons?: Icon[],
-): Promise<Activity | undefined> {
-	const { interp, hooks } = await session(icons);
+): Promise<ActivityEntry[]> {
+	const { interp } = await session(icons);
 	const buffer = bufferTransport();
 	const detach = interp.channels.pipe(buffer);
 	try {
@@ -93,8 +98,7 @@ async function activityOf(
 	} finally {
 		detach();
 	}
-	const into = hooks.annotate.run((_b, into) => into, buffer, noAnnotations());
-	return activityKey.schema.safeParse(into.output[activityKey.name]).data;
+	return view(buffer.collect(journal), activityKind);
 }
 
 describe("a tool call from lisp", () => {
@@ -149,7 +153,6 @@ describe("loading a server", () => {
 		});
 		const interp = new Interp({ extensions: [extension] });
 		runSync(interp, prelude);
-		const hooks = openSession([extension]);
 		const buffer = bufferTransport();
 		const detach = interp.channels.pipe(buffer);
 		try {
@@ -160,14 +163,8 @@ describe("loading a server", () => {
 		} finally {
 			detach();
 		}
-		const into = hooks.annotate.run(
-			(_b, into) => into,
-			buffer,
-			noAnnotations(),
-		);
-		expect(
-			activityKey.schema.parse(into.output[activityKey.name]),
-		).toMatchObject([
+		const entries = buffer.collect(journal);
+		expect(view(entries, activityKind)).toMatchObject([
 			{
 				kind: "mcp",
 				icon: [{ src: "https://acme.example/logo.svg" }],

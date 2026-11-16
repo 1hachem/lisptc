@@ -26,6 +26,8 @@ import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost, secretsHostFor } from "@repo/secrets-extension/host";
+import { semanticExtension } from "@repo/semantic-extension";
+import { semanticHost } from "@repo/semantic-extension/host";
 
 export function cliExtensions(): InterpExtension[] {
 	const memory = memoryExtension(memoryHost);
@@ -44,6 +46,7 @@ export function cliExtensions(): InterpExtension[] {
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),
+		semanticExtension(semanticHost),
 		compactionExtension(compactionHost, { compactor: new Compactor() }),
 		memory,
 		proseExtension(proseHost),
@@ -71,6 +74,7 @@ export function sessionExtensions(): InterpExtension[] {
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),
+		semanticExtension(semanticHost),
 		compactionExtension(compactionHost),
 		memory,
 		proseExtension(proseHost),

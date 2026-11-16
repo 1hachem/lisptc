@@ -1,0 +1,472 @@
+<title>The Journal Refactor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,650&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column with wide breakouts for before/after code pairs; critique as a severity ledger. */
+:root {
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --fg: #1d2421;
+  --muted: #5b6661;
+  --rule: #d9dfdb;
+  --accent: #1f6f5c;
+  --accent-soft: #e2efe9;
+  --code-bg: #eef1ee;
+  --del: #a4402f;
+  --del-soft: #f6e6e2;
+  --add: #1f6f5c;
+  --add-soft: #e2efe9;
+  --high: #b3372a;
+  --med: #a86a12;
+  --low: #4f6b8a;
+  --good: #2f7a4a;
+  --display: "Newsreader", Georgia, "Times New Roman", serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131816; --surface: #1a201d; --fg: #e3e8e5; --muted: #98a39e; --rule: #2c3531;
+    --accent: #6cc3a8; --accent-soft: #1f3a31; --code-bg: #1e2522;
+    --del: #f08b78; --del-soft: #3a2420; --add: #6cc3a8; --add-soft: #1f3a31;
+    --high: #f2826f; --med: #e2b25a; --low: #8fb0d6; --good: #7dcb98;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131816; --surface: #1a201d; --fg: #e3e8e5; --muted: #98a39e; --rule: #2c3531;
+  --accent: #6cc3a8; --accent-soft: #1f3a31; --code-bg: #1e2522;
+  --del: #f08b78; --del-soft: #3a2420; --add: #6cc3a8; --add-soft: #1f3a31;
+  --high: #f2826f; --med: #e2b25a; --low: #8fb0d6; --good: #7dcb98;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 96px; display: grid; gap: 56px; }
+.col { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--display); font-weight: 650; text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); letter-spacing: -0.01em; }
+h2 { font-size: 1.9rem; }
+h3 { font-size: 1.25rem; font-weight: 500; }
+p { margin: 0; }
+.eyebrow { font: 600 0.75rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
+.stack { display: grid; gap: 16px; }
+.lede { font-size: 1.15rem; color: var(--muted); }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+a { color: var(--accent); }
+header.hero { display: grid; gap: 20px; border-bottom: 1px solid var(--rule); padding-bottom: 36px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 28px; font: 0.85rem/1.4 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta b { color: var(--fg); font-weight: 600; }
+.meta .plus { color: var(--add); } .meta .minus { color: var(--del); }
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 820px) { .pair { grid-template-columns: 1fr; } }
+.pane { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.pane-label { font: 600 0.75rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.1em; display: flex; gap: 8px; align-items: center; }
+.pane-label.before { color: var(--del); } .pane-label.after { color: var(--add); }
+.pane-label span.file { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+pre.code { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; overflow-x: auto; font: 0.8rem/1.55 var(--mono); tab-size: 2; }
+pre.code .d { background: var(--del-soft); color: var(--del); display: inline-block; min-width: 100%; }
+pre.code .a { background: var(--add-soft); color: var(--add); display: inline-block; min-width: 100%; }
+pre.code .c { color: var(--muted); }
+pre.code .k { color: var(--accent); font-weight: 600; }
+
+figure { margin: 0; display: grid; gap: 8px; }
+figcaption { font-size: 0.85rem; color: var(--muted); }
+.diagram { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; overflow-x: auto; }
+
+table.kinds { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table.kinds th, table.kinds td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.kinds th { font: 600 0.72rem/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+table.kinds tr:last-child td { border-bottom: 0; }
+table.kinds td:first-child { font-family: var(--mono); white-space: nowrap; }
+
+.ledger { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.finding { display: grid; grid-template-columns: 92px 1fr; gap: 6px 20px; padding: 22px 0; border-bottom: 1px solid var(--rule); }
+@media (max-width: 600px) { .finding { grid-template-columns: 1fr; } }
+.sev { font: 600 0.72rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.1em; padding: 6px 8px; border-radius: 4px; align-self: start; justify-self: start; border: 1px solid currentColor; }
+.sev.high { color: var(--high); } .sev.med { color: var(--med); } .sev.low { color: var(--low); } .sev.good { color: var(--good); }
+.finding-body { display: grid; gap: 10px; min-width: 0; max-width: 76ch; }
+.finding-body h3 { font-size: 1.15rem; font-weight: 650; }
+.where { font: 0.8rem/1.4 var(--mono); color: var(--muted); }
+.fix { font-size: 0.92rem; border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); }
+.fix b { color: var(--fg); }
+
+.verdict { background: var(--accent-soft); border-radius: 8px; padding: 28px; display: grid; gap: 14px; }
+ol.plain, ul.plain { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">refactor/journal · review</span>
+  <h1>Annotations out, journal in</h1>
+  <p class="lede col">The branch removes the per-step annotation bag and replaces it with an append-only journal. An extension now records one typed entry when something happens. Every layer above carries entries without knowing who made them, and each view reduces the kinds it shows.</p>
+  <div class="meta">
+    <span><b>7</b> commits</span>
+    <span><b>160</b> files</span>
+    <span class="plus">+2830</span>
+    <span class="minus">−2177</span>
+    <span>new package <b>@repo/journal-catalog</b></span>
+    <span>deleted <b>annotations.ts</b>, <b>asks.ts</b> from the interpreter</span>
+  </div>
+</header>
+
+<section class="stack">
+  <span class="eyebrow">1 · Before</span>
+  <h2>How annotations worked</h2>
+  <div class="col stack">
+    <p>Each extension emitted onto a private topic, then hooked the <code>annotate</code> chain. At the end of a step the REPL ran that chain over the step's buffer. Every extension folded its own topic into a <code>StepAnnotations</code> value with two lanes, <code>step</code> and <code>output</code>.</p>
+    <p>The agent loop then merged those lanes into message metadata: the <code>step</code> lane onto the AI message's <code>meta</code>, the <code>output</code> lane onto the tool result's kwargs. The <code>"collected"</code>, <code>"concluded"</code> and <code>"live"</code> events in <code>packages/ai/src/turn.ts</code> carried them. A throttled <code>liveWatch</code> re-ran the whole chain every 150 ms during a step to show progress.</p>
+  </div>
+  <figure>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  E1["memory: fired.emit()"] --> T1(["topic 'memory'"])
+  E2["llm: modelActivity.emit()"] --> T2(["topic 'llm-activity'"])
+  T1 --> B[step buffer]
+  T2 --> B
+  B --> C{{"hooks.annotate chain · every extension folds"}}
+  C --> SA["StepAnnotations · { step, output }"]
+  SA -->|step lane| M1["ai message meta"]
+  SA -->|output lane| M2["tool message kwargs"]
+</pre>
+    </div>
+    <figcaption>Each extension owned a topic and a fold. The result was merged onto whichever message the step produced.</figcaption>
+  </figure>
+</section>
+
+<section class="stack">
+  <span class="eyebrow">2 · After</span>
+  <h2>How the journal works</h2>
+  <div class="col stack">
+    <p>There is now one topic, <code>journal</code>, and one call, <code>record(channels, kind, value)</code>. The REPL collects the topic from the buffer as a flat <code>Entry[]</code>. The agent loop yields one <code>"entry"</code> event per entry. The wire and Convex store each entry as its own message row with <code>type: "entry"</code>. Readers reduce the run with a fold that the catalog ships beside each kind.</p>
+  </div>
+  <figure>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  X1["memory: record(memoryKind, …)"] --> J(["topic 'journal'"])
+  X2["llm: record(activityKind, …)"] --> J
+  J --> B[step buffer]
+  J -. live .-> L[liveEntries transport]
+  B -->|"collect(journal)"| ES["Entry[]"]
+  L --> EV
+  ES --> EV["TurnEvent { type: 'entry' }"]
+  EV --> W["wire row type: 'entry'"]
+  W --> V1["asksOf / activityOf / latest"]
+</pre>
+    </div>
+    <figcaption>No chain runs at step end. Entries are appended as they happen and read back by kind.</figcaption>
+  </figure>
+
+  <h3>The primitive</h3>
+  <div class="pair">
+    <div class="pane">
+      <div class="pane-label after">new <span class="file">packages/shared/src/journal.ts</span></div>
+<pre class="code"><span class="k">export interface</span> Entry {
+  <span class="k">readonly</span> kind: string;
+  <span class="k">readonly</span> value: unknown;
+}
+
+<span class="k">export interface</span> EntryKind&lt;T&gt; {
+  <span class="k">readonly</span> name: string;
+  <span class="k">readonly</span> schema: z.ZodType&lt;T&gt;;
+}
+
+<span class="k">export function</span> readEntry&lt;T&gt;(entry: Entry, kind: EntryKind&lt;T&gt;) {
+  <span class="k">return</span> entry.kind === kind.name
+    ? kind.schema.safeParse(entry.value).data
+    : undefined;
+}
+
+<span class="k">export function</span> latest&lt;T&gt;(entries, kind) {
+  <span class="k">return</span> entriesOf(entries, kind).at(-1);
+}</pre>
+    </div>
+    <div class="pane">
+      <div class="pane-label after">new <span class="file">packages/interpreter/src/journal.ts</span></div>
+<pre class="code"><span class="k">export const</span> journal = topic&lt;Entry&gt;(<span class="k">"journal"</span>);
+
+<span class="k">export function</span> record&lt;T&gt;(
+  channels: Channels | undefined,
+  kind: EntryKind&lt;T&gt;,
+  value: T,
+): void {
+  journal.emit(channels, {
+    harness: { kind: kind.name, value },
+  });
+}</pre>
+      <p class="where">The interpreter keeps 12 lines: the topic and the writer. Schemas left for the catalog.</p>
+    </div>
+  </div>
+
+  <h3>An extension, before and after</h3>
+  <div class="pair">
+    <div class="pane">
+      <div class="pane-label before">before <span class="file">packages/memory/src/memory.ts</span></div>
+<pre class="code"><span class="d">import { annotate, memoriesKey } from "@repo/interpreter/annotations";</span>
+<span class="d">export const fired = topic&lt;FiredMemory&gt;("memory");</span>
+
+<span class="c">// when a memory surfaces</span>
+<span class="d">fired.emit(this.channels, { user: surfaced });</span>
+
+<span class="c">// in session(hooks)</span>
+<span class="d">hooks.annotate.use((buffer, into, next) =&gt; {</span>
+<span class="d">  const memories = buffer.collect(fired);</span>
+<span class="d">  return next(buffer, memories.length === 0</span>
+<span class="d">    ? into</span>
+<span class="d">    : annotate(into, memoriesKey, memories));</span>
+<span class="d">});</span></pre>
+    </div>
+    <div class="pane">
+      <div class="pane-label after">after</div>
+<pre class="code"><span class="a">import { record } from "@repo/interpreter/journal";</span>
+<span class="a">import { memoryKind } from "@repo/journal-catalog/memory";</span>
+
+<span class="c">// when a memory surfaces</span>
+<span class="a">record(this.channels, memoryKind, surfaced);</span>
+
+<span class="c">// no annotate hook</span></pre>
+      <p class="where">The same shape repeats in <code>llm</code>, <code>mcp</code>, <code>knowledge</code>, <code>agents</code>, <code>intent</code>, <code>permissions</code> and <code>ui-extension</code>.</p>
+    </div>
+  </div>
+
+  <h3>Asks become events, not a merged bag</h3>
+  <div class="col"><p>Permissions used to fold open asks and answers into one <code>asks</code> annotation per step. Now it records an <code>open</code> entry when it asks and an <code>answered</code> entry when the human decides or the request lapses. <code>asksOf</code> folds the run.</p></div>
+  <div class="pair">
+    <div class="pane">
+      <div class="pane-label after">recording <span class="file">packages/permissions/src/ui-approver.ts</span></div>
+<pre class="code">ask(request, channels) {
+  record(channels, asksKind, { open: [approvalAsk(request)] });
+},
+<span class="c">// on decide</span>
+record(ctx.interp.channels, asksKind,
+  answering(id, {
+    accepted,
+    label: accepted ? DONE[decidedScope] : DONE.denied,
+  }));</pre>
+    </div>
+    <div class="pane">
+      <div class="pane-label after">reading <span class="file">packages/backend/convex/lib/waiting.ts</span></div>
+<pre class="code"><span class="k">export async function</span> waitsOnUser(ctx, chatId) {
+  <span class="k">const</span> newestFirst = <span class="k">await</span> ctx.db
+    .query(<span class="k">"messages"</span>)
+    .withIndex(<span class="k">"by_chat_seq"</span>, …)
+    .order(<span class="k">"desc"</span>)
+    .take(TURN_SCAN);  <span class="c">// 64</span>
+  <span class="k">const</span> entries = entriesIn(latestTurn(newestFirst));
+  <span class="k">return</span> unansweredAsks(asksOf(entries)).length &gt; 0
+    || latest(entries, questionKind) !== undefined;
+}</pre>
+    </div>
+  </div>
+
+  <h3>Live progress</h3>
+  <div class="pair">
+    <div class="pane">
+      <div class="pane-label before">before <span class="file">packages/repl/src/repl.ts</span></div>
+<pre class="code"><span class="d">const LIVE_THROTTLE_MS = 150;</span>
+<span class="d">function liveWatch(buffer, annotate, live) {</span>
+<span class="d">  // on any user envelope, schedule push()</span>
+<span class="d">  // push(): copy buffer, rerun the whole</span>
+<span class="d">  //   annotate chain, JSON-diff the output</span>
+<span class="d">  //   lane, call live(output) if it changed</span>
+<span class="d">}</span></pre>
+    </div>
+    <div class="pane">
+      <div class="pane-label after">after</div>
+<pre class="code"><span class="a">function liveEntries(live: LiveEntries): ChannelTransport {</span>
+<span class="a">  return {</span>
+<span class="a">    send(envelope) {</span>
+<span class="a">      if (envelope.topic === journal.name)</span>
+<span class="a">        live(envelope.payload as Entry);</span>
+<span class="a">      return true;</span>
+<span class="a">    },</span>
+<span class="a">  };</span>
+<span class="a">}</span></pre>
+      <p class="where"><code>whileRunning</code> in <code>packages/ai/src/turn.ts</code> yields each live entry, then yields the step's collected entries it has not seen, deduped by object identity.</p>
+    </div>
+  </div>
+
+  <h3>Storage</h3>
+  <div class="col"><p>Convex gains a fifth message type, <code>"entry"</code>. The <code>annotate</code> mutation, which patched kwargs onto an existing row, becomes <code>record</code>, which appends rows. An optional <code>about</code> ties an entry to the message it concerns.</p></div>
+<pre class="code">export const record = mutation({
+  args: { chatId: v.id("chats"), about: v.optional(v.string()), entries: v.array(entry) },
+  handler: async (ctx, { chatId, about, entries }) =&gt; {
+    const ids = await appendTo(ctx, chat, entries.map(({ kind, value }) =&gt; ({
+      type: ENTRY_TYPE, content: "",
+      kwargs: about === undefined ? { kind, value } : { kind, value, about },
+    })));
+    await settleWaiting(ctx, chat);
+    return ids;
+  },
+});</pre>
+</section>
+
+<section class="stack">
+  <span class="eyebrow">3 · The catalog</span>
+  <h2>@repo/journal-catalog</h2>
+  <div class="col"><p>A <code>static</code> package: zod and <code>@repo/shared</code>, nothing else. Extensions record against it, and views above the seam read against it, so neither names the other. A kind enters the catalog only when a reader above the seam must understand it.</p></div>
+  <div class="table-wrap">
+    <table class="kinds">
+      <thead><tr><th>Kind name</th><th>Export</th><th>Recorded by</th><th>How readers fold it</th></tr></thead>
+      <tbody>
+        <tr><td>activity</td><td><code>activityKind</code></td><td>llm, mcp, knowledge, agents</td><td><code>activityOf</code>: merge by <code>id</code>, later fields win</td></tr>
+        <tr><td>asks</td><td><code>asksKind</code></td><td>permissions, mcp</td><td><code>asksOf</code>: concat <code>open</code>, merge <code>answered</code></td></tr>
+        <tr><td>intent</td><td><code>intentKind</code></td><td>intent</td><td><code>latest</code>: full snapshot each time</td></tr>
+        <tr><td>question</td><td><code>questionKind</code></td><td>intent</td><td><code>latest</code></td></tr>
+        <tr><td>memory</td><td><code>memoryKind</code></td><td>memory</td><td><code>entriesOf</code>: one entry per fired memory</td></tr>
+        <tr><td>ui</td><td><code>viewKind</code></td><td>ui-extension</td><td><code>latest</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="stack">
+  <span class="eyebrow">4 · Critique</span>
+  <h2>What holds, and what I would change</h2>
+  <div class="col"><p>The direction is right. The rule the repo states, "a fact is recorded as its own entry when it happens, never folded onto a step," is now how the code works. The findings below are ordered by risk.</p></div>
+
+  <div class="ledger">
+
+    <article class="finding">
+      <span class="sev good">Good</span>
+      <div class="finding-body">
+        <h3>The seam got simpler</h3>
+        <p>The <code>annotate</code> chain is gone, with <code>StepAnnotations</code>, its two lanes, <code>mergeInto</code>, <code>conclude</code>, the provisional live message and the 150 ms re-fold. Seven extensions lost a hook each. The interpreter no longer ships schemas for intent, asks, memory and activity, which were extension surfaces it had no business owning. <code>packages/ai</code> now handles one event type, <code>"entry"</code>, instead of three.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev high">High</span>
+      <div class="finding-body">
+        <h3>Entries carry no step or turn identity, so the view guesses</h3>
+        <p class="where">packages/shared/src/journal.ts · apps/app/src/lib/entries.ts <code>Folding.settle</code></p>
+        <p>An <code>Entry</code> is <code>{ kind, value }</code> and nothing else. Annotations were attached to a step by construction. Entries are not, so the frontend rebuilds that link from row order. <code>foldEntries</code> carries an entry to the next tool message, else the previous tool message, else the next AI message, else a synthesized quiet tool row. Only <code>about</code> and <code>holding</code> are explicit. A steer, a sub-agent or a reordering in <code>appendTo</code> changes where an entry lands, and no test pins every branch of that ladder.</p>
+        <p class="fix"><b>Direction:</b> stamp <code>step</code> (already on <code>channels.step</code>) and a turn id on the envelope at <code>record</code> time, and have <code>foldEntries</code> place by id. Keep position as the fallback for rows written before the change.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev high">High</span>
+      <div class="finding-body">
+        <h3><code>waitsOnUser</code> shares a 64-row window with entry rows</h3>
+        <p class="where">packages/backend/convex/lib/waiting.ts:8 <code>TURN_SCAN = 64</code></p>
+        <p>Before, one tool row carried a step's whole bag. Now every activity <code>started</code> and <code>done</code>, every intent snapshot and every fired memory is its own row. A turn that asks for approval early and then runs a few MCP calls and intent updates can push the ask out of the 64 newest rows. <code>latestTurn</code> stops at a human or system row, but if it never reaches one within 64 rows it sees a truncated turn. The chat then leaves <code>"waiting"</code> while an approval is still open.</p>
+        <p class="fix"><b>Direction:</b> query back to the turn's human row by index instead of a fixed count, or keep a denormalized "open asks" field on the chat that <code>record</code> updates.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev med">Medium</span>
+      <div class="finding-body">
+        <h3>Old chats lose their intent, activity and asks</h3>
+        <p class="where">packages/backend/convex/migrations.ts is untouched on this branch</p>
+        <p>Rows written before the change hold their annotations in <code>kwargs</code> and <code>meta</code>. Every reader now looks only for <code>type: "entry"</code> rows. A chat opened after deploy shows no todo, no activity strip and no answered-ask labels for earlier turns. A chat that was <code>"waiting"</code> on an old-style ask is cleared by the next <code>settleWaiting</code>.</p>
+        <p class="fix"><b>Direction:</b> a one-shot migration that splits the old <code>meta</code> and <code>output</code> keys into entry rows with <code>about</code> set to the source row. If losing history is acceptable, say so in the PR's blast radius.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev med">Medium</span>
+      <div class="finding-body">
+        <h3>One full SSE snapshot per entry, with no throttle</h3>
+        <p class="where">packages/ai/src/stream.ts <code>case "entry"</code></p>
+<pre class="code">case "entry":
+  this.stepEntries.push(event.entry);
+  this.wire.push(entryMessage(event.entry));
+  return this.snapshot();   // writes lighten(this.wire) in full</pre>
+        <p>The old live path was throttled to 150 ms and diffed. Now each entry rewrites the whole lightened wire. Intent records its complete state on every <code>show</code>, so a loop that ticks progress 200 times sends 200 snapshots and stores 200 rows, of which <code>latest</code> keeps one. The cost grows with turn length times entry count.</p>
+        <p class="fix"><b>Direction:</b> coalesce entries inside one event-loop tick before <code>snapshot()</code>, and let a latest-wins kind replace its previous unflushed row instead of appending.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev med">Medium</span>
+      <div class="finding-body">
+        <h3>The fold is a convention beside the kind, not part of it</h3>
+        <p class="where">packages/journal-catalog/src/*.ts</p>
+        <p>Each kind has a different reduction: merge by id, concat-and-merge, latest, or plain list. That knowledge lives in free functions a reader has to know to call. A view that calls <code>entriesOf(entries, activityKind)</code> instead of <code>activityOf</code> shows every activity twice, started and done. Nothing in the types stops it. <code>activityOf</code> is also quadratic through <code>findIndex</code>, and views re-run it on every render.</p>
+        <p class="fix"><b>Direction:</b> put the reducer on the kind, <code>entryKind({ name, schema, fold })</code>, and expose one <code>view(entries, kind)</code>. Use a <code>Map</code> for the merge-by-id fold.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev low">Low</span>
+      <div class="finding-body">
+        <h3>Validation happens only on read</h3>
+        <p><code>record&lt;T&gt;</code> trusts the compile-time <code>T</code>. A value that fails the schema (a <code>progress</code> with <code>done &gt; total</code>, a <code>min(1)</code> key) is stored and streamed, then <code>readEntry</code>'s <code>safeParse</code> drops it with no trace. Parsing in <code>record</code> would fail at the extension that wrote it, which is the boundary rule <code>@repo/env</code> already follows.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev low">Low</span>
+      <div class="finding-body">
+        <h3>Two names for one shape, and an unchecked cast</h3>
+        <p class="where">shared/src/journal.ts <code>Entry</code> · shared/src/messages.ts <code>JournalEntry</code> · repl/src/repl.ts <code>payload as Entry</code></p>
+        <p><code>JournalEntry</code> is the zod twin of <code>Entry</code>. One schema in <code>journal.ts</code> with its inferred type would serve both. <code>liveEntries</code> casts the payload without the check that <code>entryOf</code> performs on the wire side.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev low">Low</span>
+      <div class="finding-body">
+        <h3>Naming collides with the new vocabulary</h3>
+        <p><code>ActivityEntry</code> has a field named <code>kind</code> (<code>"llm"</code>, <code>"mcp"</code>) and sits inside an <code>Entry</code> whose <code>kind</code> is <code>"activity"</code>. The <code>ui</code> kind is exported as <code>viewKind</code>. <code>memories</code> became <code>memory</code>. Renaming the inner field to <code>source</code> and matching export names to kind names would make grep reliable.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev low">Low</span>
+      <div class="finding-body">
+        <h3>Inbound is still a bag</h3>
+        <p><code>Received</code> is <code>Record&lt;string, unknown&gt;</code> read with <code>readReceived(received, kind)</code>. What comes in with the human message is keyed by kind name but is not a list of entries. That asymmetry is fine today. It will bite the first time two values of one kind arrive together.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <span class="sev low">Low</span>
+      <div class="finding-body">
+        <h3>Live dedupe depends on reference identity</h3>
+        <p class="where">packages/ai/src/turn.ts <code>whileRunning</code></p>
+        <p><code>seen</code> is a <code>Set&lt;Entry&gt;</code>. It works because <code>bufferTransport.collect</code> returns the same payload objects the live transport saw. A transport that clones, or a buffer that round-trips through JSON, would double every live entry. An id on the entry would remove that coupling and help the first finding too.</p>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<section class="verdict">
+  <span class="eyebrow">Verdict</span>
+  <h2>Merge after two fixes</h2>
+  <p class="col">The refactor removes more mechanism than it adds, and the boundary between interpreter, extensions and views is cleaner for it. Before merging I would fix the <code>waitsOnUser</code> window and decide on old rows: migrate them or state the loss. The missing step identity is the deeper problem and could follow in its own change, since adding an id to <code>Entry</code> also fixes the live dedupe and makes <code>foldEntries</code> deterministic.</p>
+  <ol class="plain">
+    <li>Scan <code>waitsOnUser</code> to the turn's human row, not 64 rows.</li>
+    <li>Migrate or explicitly drop annotation-shaped rows.</li>
+    <li>Add <code>step</code>, turn and entry ids to <code>Entry</code>; place by id.</li>
+    <li>Coalesce snapshots; collapse latest-wins kinds.</li>
+    <li>Move each fold onto its kind and validate in <code>record</code>.</li>
+  </ol>
+</section>
+
+</div>
+<script>
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    const pending = [...document.querySelectorAll("pre.mermaid")].filter((el) => !el.querySelector("svg"));
+    if (pending.length === 0) return;
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
+    s.onload = () => {
+      const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+      window.mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral" });
+      window.mermaid.run({ nodes: pending });
+    };
+    document.head.appendChild(s);
+  }, 800);
+});
+</script>

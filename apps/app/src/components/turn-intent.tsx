@@ -5,6 +5,7 @@ import {
 	FileEditIcon,
 	FileViewIcon,
 	FirstBracketIcon,
+	JusticeScale01Icon,
 	LockKeyIcon,
 	PlugSocketIcon,
 	SquareIcon,
@@ -15,8 +16,8 @@ import { GlyphCycle } from "@repo/components";
 import type {
 	ActivityIcon,
 	ActivityImage,
-	Progress,
-} from "@repo/interpreter/annotations";
+} from "@repo/journal-catalog/activity";
+import type { Progress } from "@repo/journal-catalog/intent";
 import { useState } from "react";
 import { formatElapsed, type TimelineEntry } from "../lib/turn-timeline.ts";
 
@@ -61,6 +62,7 @@ const ACTIVITY_ICON: Record<ActivityIcon, IconSvgElement> = {
 	agent: UserMultipleIcon,
 	read: FileViewIcon,
 	write: FileEditIcon,
+	meaning: JusticeScale01Icon,
 };
 
 function markOf(entry: TimelineEntry, live: boolean) {

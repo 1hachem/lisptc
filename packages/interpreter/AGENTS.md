@@ -43,14 +43,17 @@ Every module a caller outside this package needs is its own entry in
 There is no barrel, so `src/lisp.ts` re-exports nothing.
 
 `src/session.ts` is the seam. It declares `SessionHooks`, the chains an
-extension hooks, the annotation lanes, `slot`, which mints a capability key, and
+extension hooks, `slot`, which mints a capability key, and
 `InterpExtension`, the shape an extension satisfies. Read the hook names there,
 never from prose. `InterpExtension` is declared here rather than in
 `src/lisp.ts` because it names `SessionHooks`, and the seam may know the
 language while the language may not know the seam.
 
 `src/hooks.ts` holds the chain machinery the seam is built on. `src/channels.ts`
-and `src/channels-host.ts` carry addressed output. `src/arith.ts`,
+and `src/channels-host.ts` carry addressed output. `src/journal.ts` is the
+journal an extension records into, and it names no kind. The entry primitive
+lives in `@repo/shared/journal`, and the kinds a view reads live in
+`@repo/journal-catalog`. `src/arith.ts`,
 `src/plist.ts`, `src/async.ts`, `src/timeout.ts` and `src/types.ts` are the
 small supporting modules. `src/source.ts` holds the language reference the model
 reads.
@@ -126,8 +129,9 @@ Three kinds of thing cross, and each has one mechanism.
   over, which may be a module separate from the extension, so that consuming a
   capability does not pull in what provides it. `memorySlot` and `secretsSlot`,
   each in its own extension package, are the examples.
-- Data goes through an annotation. Split a report by audience and by nothing
-  else. The extension picks the key and owns the shape.
+- Data goes through the journal. Record each fact as its own entry at the
+  moment it happens, never as a summary folded onto a step. The extension picks
+  the kind and owns its shape, and a reader reduces entries itself.
 
 One verb each way, and they are `emit` and `collect`. An extension emits at a
 lifecycle point or on a topic it declares, and collects only from a topic it
@@ -140,7 +144,7 @@ above the seam interprets one.
 
 Needing something new is never a reason to import across the seam. A new point
 in the lifecycle is a new chain. A new capability is a new slot. A new thing to
-report is a new key. A payload a layer above would have to interpret belongs
+report is a new entry kind. A payload a layer above would have to interpret belongs
 below the seam instead: move the interpretation into the extension.
 
 ## State lives in the image

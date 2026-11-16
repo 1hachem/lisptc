@@ -59,7 +59,7 @@ class World {
 								...messages,
 							]);
 						},
-						annotate: async (id, message, kwargs) => {
+						revise: async (id, message, kwargs) => {
 							this.stored.set(
 								id,
 								(this.stored.get(id) ?? []).map((m) =>
@@ -427,13 +427,31 @@ describe("a thread's budget", () => {
 		expect(await finished).toEqual({ answer: "done." });
 		expect(world.heard("grand", "approve")).toBe(true);
 		expect(world.heard("root", "approve")).toBe(false);
-		const held = (world.stored.get("grand") ?? []).find(
+		const root = world.stored.get("root") ?? [];
+		const surfaced = root.findIndex((m) => m.id === asked()?.id);
+		expect(root[surfaced + 1]).toMatchObject({
+			type: "entry",
+			additional_kwargs: {
+				kind: "waiting",
+				value: "approve it",
+				thread: "grand",
+				holding: asked()?.additional_kwargs?.holding,
+			},
+		});
+		const grand = world.stored.get("grand") ?? [];
+		const held = grand.findIndex(
 			(m) => m.id === asked()?.additional_kwargs?.holding,
 		);
-		expect(held?.additional_kwargs).toMatchObject({
-			waiting: ["approve it"],
-			decided: ["approve"],
-		});
+		expect(
+			grand
+				.filter((m) => m.type === "entry")
+				.map((m) => m.additional_kwargs?.value),
+		).toEqual(["approve it", "approve"]);
+		expect(
+			grand.findIndex(
+				(m) => m.type === "entry" && m.additional_kwargs?.value === "approve",
+			),
+		).toBeGreaterThan(held);
 	});
 
 	test("refuse an answer stamped with a thread outside the caller's tree", async () => {

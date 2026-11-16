@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Ask, asking } from "@repo/interpreter/asks";
 import { StepHold } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { type Ask, asksKind } from "@repo/journal-catalog/asks";
 import { describe, expect, it } from "vitest";
 import { openAsks, runAsking, yesOrNo } from "../src/asks.ts";
 import { SessionClient, serve } from "../src/session-server.ts";
@@ -46,7 +47,6 @@ interface Gate {
 }
 
 function gate(): Gate {
-	let open = false;
 	let granted = false;
 	let ran = 0;
 	const install = (interp: Interp): void => {
@@ -54,7 +54,7 @@ function gate(): Gate {
 			newSym("guarded"),
 			interp.makeBuiltIn("guarded", 1, (frame) => {
 				if (!granted) {
-					open = true;
+					record(interp.channels, asksKind, { open: [ASK] });
 					throw new StepHold("guarded waits for approval");
 				}
 				granted = false;
@@ -66,12 +66,8 @@ function gate(): Gate {
 	const session = (hooks: SessionHooks): void => {
 		hooks.invoke.use(async (ctx, next) => {
 			if (ctx.action !== DECIDE) return next(ctx);
-			open = false;
 			granted = ctx.values.approved === true;
 		});
-		hooks.annotate.use((buffer, into, next) =>
-			next(buffer, open ? asking(into, { open: [ASK] }) : into),
-		);
 	};
 	return { extension: Object.assign(install, { session }), ran: () => ran };
 }
@@ -98,7 +94,7 @@ describe("asking around a step", () => {
 			run: async () => {
 				const out = await r.evalOutput('(echo (guarded "42"))');
 				outputs.push(out.user);
-				return openAsks(out.annotations);
+				return openAsks(out.entries);
 			},
 			reply: async () => "y",
 			answer: async (c) => {
@@ -114,8 +110,7 @@ describe("asking around a step", () => {
 		const g = gate();
 		const r = memoryRepl([g.extension]);
 		const refused = await runAsking({
-			run: async () =>
-				openAsks((await r.evalOutput("(guarded 1)")).annotations),
+			run: async () => openAsks((await r.evalOutput("(guarded 1)")).entries),
 			reply: async () => null,
 			answer: async (c) => {
 				await r.invokeUi(c.answer.action, c.answer.values);

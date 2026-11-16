@@ -7,6 +7,7 @@ const HELD = {
 	metadata: { tokens: true, time: false },
 	input: { lisp: true },
 	sidebar: ["home", "chat", "memories", "README.md"],
+	sidebarRight: ["tests", "ui"],
 	hidden: ["memories"],
 	statusBar: [
 		"panes",
@@ -47,7 +48,7 @@ describe("reading preferences", () => {
 	it("gives them as the plist the sidebar file shows", async () => {
 		const { ev } = await world(HELD);
 		expect(await ev("(preferences)")).toBe(
-			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
+			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :sidebar-right ("tests" "ui") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
 		);
 	});
 
@@ -129,9 +130,51 @@ describe("changing preferences", () => {
 	it("refuses a sidebar entry the app has never listed", async () => {
 		const { ev, store } = await world(HELD);
 		await expect(ev('(preferences/set :sidebar \'("bogus"))')).rejects.toThrow(
-			/"home" "chat" "memories" "README.md"/,
+			/"home" "chat" "memories" "README.md" "tests" "ui"/,
 		);
 		expect(store.read()).toEqual(HELD);
+	});
+
+	it("moves an entry named for the other sidebar across, keeping the rest where they were", async () => {
+		const { ev, store } = await world(HELD);
+		await ev('(preferences/set :sidebar-right \'("chat"))');
+		expect(store.read()).toMatchObject({
+			sidebar: ["home", "memories", "README.md"],
+			sidebarRight: ["chat", "tests", "ui"],
+		});
+		await ev('(preferences/set :sidebar \'("ui"))');
+		expect(store.read()).toMatchObject({
+			sidebar: ["ui", "home", "memories", "README.md"],
+			sidebarRight: ["chat", "tests"],
+		});
+	});
+
+	it("sets both sidebars in one call", async () => {
+		const { ev, store } = await world(HELD);
+		const shown = await ev(
+			'(preferences/set :sidebar \'("tests") :sidebar-right \'("home" "chat"))',
+		);
+		expect(shown).toContain(
+			':sidebar ("tests" "memories" "README.md") :sidebar-right ("home" "chat" "ui")',
+		);
+		expect(store.read()).toMatchObject({
+			sidebar: ["tests", "memories", "README.md"],
+			sidebarRight: ["home", "chat", "ui"],
+		});
+	});
+
+	it("refuses an entry named for both sidebars", async () => {
+		const { ev, store } = await world(HELD);
+		await expect(
+			ev('(preferences/set :sidebar \'("chat") :sidebar-right \'("chat"))'),
+		).rejects.toThrow(/not both/);
+		expect(store.read()).toEqual(HELD);
+	});
+
+	it("hides an entry of the right sidebar", async () => {
+		const { ev, store } = await world(HELD);
+		await ev('(preferences/set :hidden \'("tests"))');
+		expect(store.read().hidden).toEqual(["tests"]);
 	});
 
 	it("refuses a sidebar entry named twice", async () => {

@@ -1,20 +1,15 @@
-import {
-	annotate,
-	readAnnotation,
-	recordActivity,
-} from "@repo/interpreter/annotations";
-import { topic } from "@repo/interpreter/channels";
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { type AttachedFile, STORE_FOLDERS } from "@repo/shared/files";
+import { STORE_FOLDERS } from "@repo/shared/files";
+import { readReceived } from "@repo/shared/journal";
 import { z } from "zod";
-import { attachmentsKey } from "./attached.ts";
+import { attachmentsKind } from "./attached.ts";
 import { ATTACHMENT_ASKS, registerAttachments } from "./attachment-forms.ts";
 import { BIN_ASKS, registerBin } from "./bin-forms.ts";
-import { fileActivity } from "./file-activity.ts";
 import { KNOWLEDGE_ASKS, registerKnowledge } from "./knowledge-forms.ts";
 import { fileName } from "./names.ts";
 import type { KnowledgeHost } from "./ports.ts";
@@ -22,8 +17,6 @@ import type { KnowledgeHost } from "./ports.ts";
 export interface KnowledgeExtension extends InterpExtension {
 	readonly asks: readonly string[];
 }
-
-export const attached = topic<AttachedFile>("attachments");
 
 function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 	for (const folder of STORE_FOLDERS)
@@ -40,7 +33,7 @@ function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 						`no file named ${checked} in ${folder}`,
 						name,
 					);
-				attached.emit(interp.channels, { user: { folder, name: checked } });
+				record(interp.channels, attachmentsKind, [{ folder, name: checked }]);
 				return checked;
 			},
 		);
@@ -48,24 +41,12 @@ function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 
 function attachSession(hooks: SessionHooks): void {
 	hooks.received.use(function* (ctx, received, next) {
-		const files = readAnnotation(received, attachmentsKey) ?? [];
+		const files = readReceived(received, attachmentsKind) ?? [];
 		if (files.length > 0)
 			ctx.emit(
 				`user attached: ${files.map(({ folder, name }) => `${folder}/${name}`).join(", ")}`,
 			);
 		yield* next(ctx, received);
-	});
-	hooks.annotate.use((buffer, into, next) => {
-		const attachments = buffer.collect(attached);
-		return next(
-			buffer,
-			recordActivity(
-				attachments.length === 0
-					? into
-					: annotate(into, attachmentsKey, attachments),
-				buffer.collect(fileActivity),
-			),
-		);
 	});
 }
 

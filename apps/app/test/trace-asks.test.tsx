@@ -79,20 +79,20 @@ const approval = {
 	],
 };
 
-function tool(kwargs: Record<string, unknown>): ChatMessage {
+function tool(kind: string, value: unknown): ChatMessage {
 	return {
 		id: "t1",
 		type: "tool",
 		content: "",
-		additional_kwargs: kwargs,
-	} as ChatMessage;
+		entries: [{ id: kind, kind, value }],
+	};
 }
 
 describe("an ask in the trace", () => {
 	it("reads as text with nothing to press", async () => {
 		const host = await mount([
 			{ id: "h1", type: "human", content: "write a" } as ChatMessage,
-			tool({ asks: { open: [approval] } }),
+			tool("asks", { open: [approval] }),
 		]);
 
 		expect(host.textContent).toContain("write to a?");
@@ -107,11 +107,9 @@ describe("an ask in the trace", () => {
 
 	it("says what was answered", async () => {
 		const host = await mount([
-			tool({
-				asks: {
-					open: [approval],
-					answered: { a1: { accepted: true, label: "Allowed" } },
-				},
+			tool("asks", {
+				open: [approval],
+				answered: { a1: { accepted: true, label: "Allowed" } },
 			}),
 		]);
 
@@ -120,13 +118,11 @@ describe("an ask in the trace", () => {
 
 	it("shows the question the agent asked, with its choices as text", async () => {
 		const host = await mount([
-			tool({
-				question: {
-					id: "q1",
-					prompt: "which one?",
-					choices: ["A", "B"],
-					multi: false,
-				},
+			tool("question", {
+				id: "q1",
+				prompt: "which one?",
+				choices: ["A", "B"],
+				multi: false,
 			}),
 		]);
 

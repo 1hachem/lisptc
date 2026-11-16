@@ -1,42 +1,21 @@
 import { evalsEnv } from "@repo/env/evals";
-import { defaultProvider, providerSpecs } from "@repo/env/providers";
+import { providerSpecs } from "@repo/env/providers";
 import {
-	isProviderName,
+	type CataloguedChoice,
+	choiceFrom,
+	DEFAULT_CHOICE,
 	type ProviderName,
 	providerSpecFor,
 } from "@repo/shared/providers";
 
-export interface Target {
-	provider: ProviderName;
-	model: string;
-}
-
-export function evalMatrix(): Target[] {
+export function evalMatrix(): CataloguedChoice[] {
 	const raw = evalsEnv.EVAL_MATRIX;
-	if (!raw) {
-		const provider = defaultProvider;
-		return [
-			{
-				provider,
-				model: providerSpecFor(provider, providerSpecs).defaultModel,
-			},
-		];
-	}
+	if (!raw) return [DEFAULT_CHOICE];
 	return raw
 		.split(",")
 		.map((entry) => entry.trim())
 		.filter(Boolean)
-		.map((entry) => {
-			const at = entry.indexOf(":");
-			const name = at === -1 ? entry : entry.slice(0, at);
-			if (!isProviderName(name))
-				throw new Error(`EVAL_MATRIX names an unknown provider: ${name}`);
-			const model = at === -1 ? "" : entry.slice(at + 1);
-			return {
-				provider: name,
-				model: model || providerSpecFor(name, providerSpecs).defaultModel,
-			};
-		});
+		.map((entry) => choiceFrom(entry, providerSpecs));
 }
 
 export function reachable(provider: ProviderName): boolean {

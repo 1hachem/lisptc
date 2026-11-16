@@ -189,12 +189,18 @@ describe("activity a quiet step started", () => {
 					id: "q",
 					type: "tool",
 					content: "",
-					additional_kwargs: {
-						quiet: true,
-						activity: [
-							{ id: "apify", kind: "mcp", label: "apify", state: "done" },
-						],
-					},
+					additional_kwargs: { quiet: true },
+					entries: [
+						{
+							kind: "activity",
+							value: {
+								id: "apify",
+								kind: "mcp",
+								label: "apify",
+								state: "done",
+							},
+						},
+					],
 				},
 				{ id: "b", type: "ai", content: "b" },
 				{ id: "t2", type: "tool", content: "", additional_kwargs: {} },
@@ -219,10 +225,13 @@ describe("activity a quiet step started", () => {
 			id: "q",
 			type: "tool",
 			content: "",
-			additional_kwargs: {
-				quiet: true,
-				activity: [{ id: "apify", kind: "mcp", label: "apify", state: "done" }],
-			},
+			additional_kwargs: { quiet: true },
+			entries: [
+				{
+					kind: "activity",
+					value: { id: "apify", kind: "mcp", label: "apify", state: "done" },
+				},
+			],
 		};
 		const turn = {
 			id: "turn",

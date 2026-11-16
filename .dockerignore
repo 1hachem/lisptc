@@ -20,3 +20,4 @@ editors/nvim/.vendor
 charts
 argocd
 deploy
+worktrees

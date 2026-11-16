@@ -20,8 +20,8 @@ type KeyedPage = keyof typeof KEYED;
 
 const NAMED = {
 	readme: "README.md",
-	settings: "settings.ptc",
-	preferences: "preferences.ptc",
+	settings: "settings",
+	preferences: "preferences",
 	account: "account",
 } as const satisfies Record<Exclude<Page, KeyedPage>, string>;
 

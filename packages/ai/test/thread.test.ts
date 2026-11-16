@@ -64,7 +64,7 @@ class World implements TranscriptStore {
 		this.onAppend(messages);
 	}
 
-	async annotate(): Promise<void> {}
+	async revise(): Promise<void> {}
 
 	thread(): Thread {
 		return new Thread("t1", {

@@ -11,10 +11,10 @@ import {
 import type schema from "../convex/schema.ts";
 import { ConvexImageStore } from "../src/image-store.ts";
 import type { ServerClient } from "../src/server-client.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 async function chatOf(email: string) {
-	const t = harness();
+	const t = testDeployment();
 	const user = await signIn(t, email);
 	const chatId = await user.as.mutation(api.chats.create, {
 		workspaceId: user.workspace,

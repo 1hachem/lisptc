@@ -83,5 +83,7 @@ function followUp({ request, refused }: Settled, decision: Decision): string {
 		session: "for the rest of this session",
 		always: `for good, saved as (permission/allow ${request.name})`,
 	}[decision.scope];
+	if (request.restored)
+		return `I approved ${request.name} ${lasting}. The call that asked was held in an earlier session and did not carry on, so run it again exactly as before.`;
 	return `I approved ${request.name} ${lasting}. Carry on with what you were doing.`;
 }

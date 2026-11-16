@@ -33,4 +33,18 @@ describe("the messages a chat can be forked at", () => {
 		]);
 		expect(choices.map((c) => c.id)).toEqual(["h1"]);
 	});
+
+	it("leaves out the journal's entries, so a fork cuts at a message", () => {
+		const choices = forkChoices([
+			{ id: "a1", type: "ai", content: "(work)" },
+			{
+				id: "e1",
+				type: "entry",
+				content: "",
+				additional_kwargs: { kind: "intent", value: {} },
+			},
+			{ id: "t1", type: "tool", content: "done" },
+		]);
+		expect(choices.map((c) => c.id)).toEqual(["a1", "t1"]);
+	});
 });

@@ -1,4 +1,3 @@
-import { noAnnotations } from "@repo/interpreter/session";
 import { describe, expect, test } from "vitest";
 import { type ToolOutcome, toolMessage } from "../src/tool-message.ts";
 
@@ -9,7 +8,6 @@ function outcome(output: string, display: string): ToolOutcome {
 		error: false,
 		failed: false,
 		results: [],
-		annotations: noAnnotations(),
 	};
 }
 

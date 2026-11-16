@@ -1,8 +1,8 @@
-import { annotationKey } from "@repo/interpreter/annotations";
-import { ATTACHMENTS_ANNOTATION, attachedFiles } from "@repo/shared/files";
+import { ATTACHMENTS_KIND, attachedFiles } from "@repo/shared/files";
+import { entryKind, every } from "@repo/shared/journal";
 
-export const attachmentsKey = annotationKey({
-	name: ATTACHMENTS_ANNOTATION,
-	lane: "output",
+export const attachmentsKind = entryKind({
+	name: ATTACHMENTS_KIND,
 	schema: attachedFiles,
+	fold: every,
 });

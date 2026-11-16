@@ -3,7 +3,8 @@ import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { useQuery } from "@tanstack/react-query";
 import { permissionRules } from "../lib/files.ts";
-import { FileView } from "./file-view.tsx";
+import { PageView } from "./file-view.tsx";
+import { Field, RuleCard } from "./read-only.tsx";
 
 export function PermissionPage({
 	workspaceId,
@@ -20,11 +21,16 @@ export function PermissionPage({
 		source === undefined ? undefined : permissionRules(source ?? "")[rule];
 
 	return (
-		<FileView
-			file={
-				found && { path: `permissions/${found.name}`, source: found.source }
-			}
-			missing={source === undefined ? undefined : "no such rule"}
-		/>
+		<PageView title={found ? `permissions/${found.name}` : "permissions"}>
+			{found === undefined ? (
+				<div className="text-dim">
+					{source === undefined ? "loading…" : "no such rule"}
+				</div>
+			) : (
+				<Field label="rule">
+					<RuleCard source={found.source} />
+				</Field>
+			)}
+		</PageView>
 	);
 }

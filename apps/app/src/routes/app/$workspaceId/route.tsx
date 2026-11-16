@@ -6,6 +6,7 @@ import { AppLoading } from "../../../components/app-loading.tsx";
 import { PanelSplit } from "../../../components/panel-split.tsx";
 import { prefetchPanels } from "../../../lib/panel-prefetch.ts";
 import { PanelsProvider } from "../../../lib/panels.tsx";
+import { preferencesQuery } from "../../../lib/preferences.ts";
 import { prefetchSidebar } from "../../../lib/sidebar-prefetch.ts";
 
 export const Route = createFileRoute("/app/$workspaceId")({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/app/$workspaceId")({
 		const prefetched = Promise.allSettled([
 			prefetchPanels(context.queryClient, params.workspaceId),
 			prefetchSidebar(context.queryClient, params.workspaceId),
+			context.queryClient.ensureQueryData(preferencesQuery(params.workspaceId)),
 		]);
 		const workspaces = await context.queryClient.ensureQueryData(
 			convexQuery(api.workspaces.list, {}),

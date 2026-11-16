@@ -1,4 +1,3 @@
-import type { StepAnnotations } from "@repo/interpreter/session";
 import type { MessageKwargs } from "@repo/shared/messages";
 import { replResultContent } from "./repl.ts";
 
@@ -17,12 +16,11 @@ export interface ToolOutcome {
 	failure?: string;
 	riding?: string;
 	results: readonly string[];
-	annotations: StepAnnotations;
 	quiet?: boolean;
 }
 
 export function toolMessage(outcome: ToolOutcome, id: string): ToolMessage {
-	const extras: MessageKwargs = { ...outcome.annotations.output };
+	const extras: MessageKwargs = {};
 	if (outcome.display !== "") extras.display = outcome.display;
 	if (outcome.failed) extras.failed = true;
 	if (outcome.failure) extras.failure = outcome.failure;

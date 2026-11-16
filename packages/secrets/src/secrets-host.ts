@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { replEnv } from "@repo/env/repl";
 import { filePrompt } from "@repo/shared/host-node";
-import * as dotenv from "dotenv";
+import { parse } from "dotenv";
 import {
 	MapSecretsStore,
 	SECRET_ENV_PREFIX,
@@ -34,7 +34,7 @@ export function loadSecretsFromFile(
 	store: SecretsStore,
 	path: string,
 ): Record<string, string> {
-	const record = dotenv.parse(readFileSync(path));
+	const record = parse(readFileSync(path));
 	store.set(record);
 	return record;
 }

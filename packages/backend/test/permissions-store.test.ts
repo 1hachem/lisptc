@@ -4,10 +4,10 @@ import {
 	ConvexPermissionsStore,
 	type PermissionsClient,
 } from "../src/permissions-store.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 async function workspace(held?: string) {
-	const alice = await signIn(harness(), "alice@example.com");
+	const alice = await signIn(testDeployment(), "alice@example.com");
 	if (held !== undefined)
 		await alice.as.mutation(api.permissions.put, {
 			workspaceId: alice.workspace,

@@ -29,9 +29,9 @@ describe("the command list", () => {
 		expect(commands.map((c) => c.name)).not.toContain("/clear");
 	});
 
-	it("offers /preferences for /panel and /right, and /sidebar for /left", () => {
-		expect(typing("panel")).toEqual(["/preferences"]);
-		expect(typing("right")).toEqual(["/preferences"]);
+	it("offers /right for /panel, and /sidebar for /left", () => {
+		expect(typing("panel")).toEqual(["/right"]);
+		expect(typing("right")).toEqual(["/right"]);
 		expect(typing("left")).toEqual(["/sidebar"]);
 		expect(commands.map((c) => c.name)).not.toContain("/panel");
 	});
@@ -39,8 +39,8 @@ describe("the command list", () => {
 
 describe("canonicalCommand", () => {
 	it("runs an alias as the command it stands for", () => {
-		expect(canonicalCommand("/panel")).toBe("/preferences");
-		expect(canonicalCommand("/RIGHT")).toBe("/preferences");
+		expect(canonicalCommand("/panel")).toBe("/right");
+		expect(canonicalCommand("/RIGHT")).toBe("/right");
 		expect(canonicalCommand("/left")).toBe("/sidebar");
 		expect(canonicalCommand("/clear")).toBe("/new");
 	});

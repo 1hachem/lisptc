@@ -9,13 +9,19 @@ FROM base AS pruner
 COPY . .
 RUN turbo prune @repo/backend --docker
 
-FROM base AS prod
+FROM base AS deps
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm fetch --frozen-lockfile
 RUN --mount=type=cache,id=pnpm,target=${PNPM_HOME}/store \
     pnpm install --frozen-lockfile --offline
 COPY --from=pruner /app/out/full/ .
+
+FROM deps AS dev
+WORKDIR /app/packages/backend
+CMD ["pnpm", "exec", "convex", "dev", "--typecheck", "disable", "--codegen", "disable"]
+
+FROM deps AS prod
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 --ingroup nodejs --home /home/lisptc lisptc \
  && chown -R lisptc:nodejs /app/packages/backend

@@ -3,7 +3,7 @@ import type { Awaitable } from "@repo/shared/host";
 import { envelopeOf } from "@repo/shared/messages";
 import { Budget, type Limits } from "./budget.ts";
 import type { Envelope } from "./mailbox.ts";
-import type { TurnOutcome, WireMessage } from "./stream.ts";
+import { entryMessage, type TurnOutcome, type WireMessage } from "./stream.ts";
 import { type PostOptions, Thread, type ThreadPorts } from "./thread.ts";
 import { type UiActionResult, uiActionOn } from "./ui-action.ts";
 
@@ -65,6 +65,7 @@ const STOPPED: TurnOutcome = { stopped: "stopped by the user" };
 const OUTSIDE: UiActionResult = {
 	output: "that ask belongs to no thread under this one",
 	error: true,
+	entries: [],
 };
 
 const MAX_LIVE = 50;
@@ -232,16 +233,9 @@ export class Threads {
 		if (asker === undefined) return OUTSIDE;
 		const target = asker.thread;
 		const result = await uiActionOn(await this.repl(target), action, values);
-		if (
-			asker.asked !== undefined &&
-			result.annotations !== undefined &&
-			Object.keys(result.annotations).length > 0
-		)
-			await this.host.ports.transcript.annotate(
-				target,
-				asker.asked,
-				result.annotations,
-			);
+		if (asker.asked !== undefined)
+			for (const entry of result.entries)
+				await this.get(target).place(entryMessage(entry));
 		if (result.message !== undefined && !result.error)
 			await this.followUp(target, {
 				kind: "event",
@@ -302,9 +296,14 @@ export class Threads {
 			id: crypto.randomUUID(),
 			type: "tool",
 			content: `agent ${nameOf(lineage)} is waiting on you`,
-			additional_kwargs: { ...held.output, thread, holding },
+			additional_kwargs: { thread, holding },
 		};
-		await this.get(root).place(message);
+		const surfacing = this.get(root);
+		await surfacing.place(message);
+		for (const entry of held)
+			await surfacing.place(
+				entryMessage(entry, crypto.randomUUID(), { thread, holding }),
+			);
 	}
 
 	wait(job: string, signal?: AbortSignal): Promise<TurnOutcome> {

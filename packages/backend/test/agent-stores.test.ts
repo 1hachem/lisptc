@@ -22,7 +22,7 @@ import {
 	OFFERED_MODELS,
 	type WorkspaceStoreClient,
 } from "../src/workspace-store.ts";
-import { harness, signIn } from "./helpers.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 function named(reference: unknown): string {
 	return getFunctionName(reference as FunctionReference<"query" | "mutation">);
@@ -75,7 +75,7 @@ describe("the convex workspace store", () => {
 	});
 
 	it("reads back the model it was told to choose", async () => {
-		const alice = await signIn(harness(), "alice@example.com");
+		const alice = await signIn(testDeployment(), "alice@example.com");
 		const store = new ConvexWorkspaceStore(
 			alice.workspace,
 			() => alice.as as unknown as WorkspaceStoreClient,
@@ -253,7 +253,7 @@ describe("the convex panel reader", () => {
 
 describe("the convex view store", () => {
 	async function chatViews() {
-		const alice = await signIn(harness(), "alice@example.com");
+		const alice = await signIn(testDeployment(), "alice@example.com");
 		const chatId = await alice.as.mutation(api.chats.create, {
 			workspaceId: alice.workspace,
 		});
@@ -348,7 +348,7 @@ describe("the convex preferences store", () => {
 				hidden: ["tests"],
 			},
 		});
-		const store = new ConvexPreferencesStore(() => client);
+		const store = new ConvexPreferencesStore(WORKSPACE, () => client);
 		expect(await store.read()).toEqual({
 			font: "mono",
 			metadata: undefined,

@@ -26,6 +26,7 @@
     "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",
     "@repo/memory-extension": "workspace:*",
@@ -34,6 +35,7 @@
     "@repo/prose-extension": "workspace:*",
     "@repo/repl": "workspace:*",
     "@repo/secrets-extension": "workspace:*",
+    "@repo/semantic-extension": "workspace:*",
     "@repo/shared": "workspace:*"
   },
   "devDependencies": {

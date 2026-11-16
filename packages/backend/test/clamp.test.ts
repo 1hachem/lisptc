@@ -30,7 +30,7 @@ describe("clamp", () => {
 		expect(MAX_MESSAGE_BYTES).toBeLessThan(CONVEX_DOCUMENT_BYTES);
 	});
 
-	it("drops the oversized annotation and keeps the small one", () => {
+	it("drops the oversized field and keeps the small one", () => {
 		const clamped = clamp("x".repeat(MAX_MESSAGE_BYTES * 4), {
 			ui: "y".repeat(MAX_MESSAGE_BYTES * 4),
 			meta: { durationMs: 12 },
@@ -38,13 +38,13 @@ describe("clamp", () => {
 		expect(clamped.kwargs).toEqual({ meta: { durationMs: 12 } });
 	});
 
-	it("keeps an open ask over a view that would spend the budget first", () => {
-		const asks = { open: [{ id: "a1", title: "t", prompt: "p", choices: [] }] };
+	it("keeps an entry's kind and the ask it is held on over a payload that would spend the budget first", () => {
 		const clamped = clamp("x".repeat(MAX_MESSAGE_BYTES * 4), {
-			ui: "y".repeat(Math.floor(MAX_MESSAGE_BYTES / 2) - 64),
-			asks,
+			value: "y".repeat(Math.floor(MAX_MESSAGE_BYTES / 2) - 64),
+			kind: "asks",
+			holding: "h1",
 		});
-		expect(clamped.kwargs?.asks).toEqual(asks);
+		expect(clamped.kwargs).toMatchObject({ kind: "asks", holding: "h1" });
 	});
 
 	it("never splits a multi-byte character", () => {

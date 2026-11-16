@@ -71,8 +71,8 @@ Do not reach for a key an extension owns and do not reimplement its meaning
 here.
 
 The agent carries bytes, it does not interpret them. The turn events and the
-annotation lanes come out of `@repo/ai` already shaped, and a route writes them
-to the wire without unpacking a key. If a payload has to be interpreted here,
+journal entries come out of `@repo/ai` already shaped, and a route writes them
+to the wire without unpacking one. A view picks the entry kinds it shows. If a payload has to be interpreted here,
 the interpretation belongs below the seam, in the extension that produced it.
 
 A route never names an extension. **`server/agent/` posts, watches and

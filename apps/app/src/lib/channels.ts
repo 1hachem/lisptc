@@ -8,17 +8,19 @@ import {
 	HelpCircleIcon,
 	InformationCircleIcon,
 	UserGroupIcon,
+	UserIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
 export type ChannelId =
+	| "user"
+	| "assistant"
 	| "output"
 	| "ui"
 	| "attachments"
 	| "thinking"
 	| "memory"
 	| "asks"
-	| "model"
 	| "system"
 	| "agents";
 
@@ -32,11 +34,18 @@ export interface Channel {
 
 export const CHANNELS: Channel[] = [
 	{
-		id: "output",
-		icon: CommandLineIcon,
-		label: "output",
-		hint: "what a step printed for you, and the value each form returned",
-		text: "text-dim",
+		id: "user",
+		icon: UserIcon,
+		label: "user",
+		hint: "what you sent the agent",
+		text: "text-fg",
+	},
+	{
+		id: "assistant",
+		icon: AiChat02Icon,
+		label: "assistant",
+		hint: "what the agent wrote: its prose and the code it ran",
+		text: "text-blue",
 	},
 	{
 		id: "ui",
@@ -74,9 +83,9 @@ export const CHANNELS: Channel[] = [
 		text: "text-yellow",
 	},
 	{
-		id: "model",
-		icon: AiChat02Icon,
-		label: "model",
+		id: "output",
+		icon: CommandLineIcon,
+		label: "output",
 		hint: "what the step sent back to the model",
 		text: "text-purple",
 	},

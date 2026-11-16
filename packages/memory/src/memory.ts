@@ -1,8 +1,8 @@
-import { annotate, memoriesKey } from "@repo/interpreter/annotations";
 import { quotient } from "@repo/interpreter/arith";
-import { type Channels, topic } from "@repo/interpreter/channels";
+import type { Channels } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
+import { record } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
@@ -25,6 +25,7 @@ import {
 	type SessionHooks,
 	slot,
 } from "@repo/interpreter/session";
+import { type FiredMemory, memoryKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
@@ -140,14 +141,6 @@ function fires(trigger: Trigger, event: MemoryEvent): boolean {
 		typeof p === "string" ? matches(p, event.text ?? "") : false,
 	);
 }
-
-export interface FiredMemory {
-	key: string;
-	body: string;
-	on?: TriggerKind;
-}
-
-export const fired = topic<FiredMemory>("memory");
 
 const countCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
@@ -438,7 +431,7 @@ export class MemoryBank {
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
-		fired.emit(this.channels, { user: surfaced });
+		record(this.channels, memoryKind, surfaced);
 	}
 }
 
@@ -498,13 +491,6 @@ function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 			} finally {
 				ctx.emit((await driveAsync(bank.endStep())).value);
 			}
-		});
-		hooks.annotate.use((buffer, into, next) => {
-			const memories = buffer.collect(fired);
-			return next(
-				buffer,
-				memories.length === 0 ? into : annotate(into, memoriesKey, memories),
-			);
 		});
 	};
 }

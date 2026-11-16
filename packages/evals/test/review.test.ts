@@ -13,7 +13,10 @@ const IDENTITY = {
 	sha: "deadbee",
 };
 
-function line(role: TranscriptLine["role"], content: string): TranscriptLine {
+function line(
+	role: Exclude<TranscriptLine["role"], "entry">,
+	content: string,
+): TranscriptLine {
 	return { role, content };
 }
 

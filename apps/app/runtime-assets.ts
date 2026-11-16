@@ -25,6 +25,7 @@ export const PROMPT_ROOTS = [
 	rootOf(require.resolve("@repo/promises-extension")),
 	rootOf(require.resolve("@repo/prose-extension")),
 	rootOf(require.resolve("@repo/secrets-extension")),
+	rootOf(require.resolve("@repo/semantic-extension")),
 	rootOf(require.resolve("@repo/ui-extension")),
 	rootOf(require.resolve("@repo/workspace-extension")),
 ];

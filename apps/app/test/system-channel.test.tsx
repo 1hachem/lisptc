@@ -137,10 +137,9 @@ describe("the system channel", () => {
 
 	it("draws what the system told the agent in the trace, and never as the user's words", async () => {
 		const host = await mount(<TraceLines messages={session.messages} />);
-		const system = host
-			.querySelector('[aria-label="system"]')
-			?.closest("button");
-		expect(system?.textContent).toContain(NOTE);
-		expect(system?.textContent).not.toContain("›");
+		const row = (label: string) =>
+			host.querySelector(`[aria-label="${label}"]`)?.closest("button");
+		expect(row("system")?.textContent).toContain(NOTE);
+		expect(row("you")?.textContent).not.toContain(NOTE);
 	});
 });

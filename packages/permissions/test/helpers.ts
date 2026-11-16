@@ -1,16 +1,13 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import {
-	newSessionHooks,
-	noAnnotations,
-	type SessionHooks,
-	type StepAnnotations,
-} from "@repo/interpreter/session";
+import { newSessionHooks, type SessionHooks } from "@repo/interpreter/session";
 import { note } from "@repo/interpreter/topics";
+import type { Entry } from "@repo/shared/journal";
 import { requested } from "../src/channel.ts";
 import {
 	type PermissionsExtension,
@@ -30,7 +27,7 @@ export interface StepRun {
 	held: boolean;
 	report: string;
 	requests: ApprovalRequest[];
-	annotations: StepAnnotations;
+	entries: Entry[];
 	message?: string;
 }
 
@@ -92,11 +89,7 @@ export function session(
 				.map((n) => n.text)
 				.join(""),
 			requests: buffer.collect(requested),
-			annotations: hooks.annotate.run(
-				(_b, into) => into,
-				buffer,
-				noAnnotations(),
-			),
+			entries: buffer.collect(journal),
 			...(message === undefined ? {} : { message }),
 		};
 	}

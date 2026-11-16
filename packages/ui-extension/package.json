@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/ui-catalog": "workspace:*",
     "zod": "^4.4.3"

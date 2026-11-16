@@ -21,11 +21,6 @@ export const purge = internalMutation({
 	args: { userId: v.id("users") },
 	returns: v.null(),
 	handler: async (ctx, { userId }) => {
-		const preferences = await ctx.db
-			.query("preferences")
-			.withIndex("by_user", (q) => q.eq("userId", userId))
-			.unique();
-		if (preferences !== null) await ctx.db.delete(preferences._id);
 		const desktops = await ctx.db
 			.query("desktops")
 			.withIndex("by_user", (q) => q.eq("userId", userId))

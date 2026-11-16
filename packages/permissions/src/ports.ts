@@ -1,3 +1,4 @@
+import type { Channels } from "@repo/interpreter/channels";
 import type { SessionHooks } from "@repo/interpreter/session";
 import type { Awaitable, Clock, PromptSource } from "@repo/shared/host";
 
@@ -37,6 +38,7 @@ export interface ApprovalRequest {
 	readonly reason?: string;
 	readonly at: number;
 	readonly change?: true;
+	readonly restored?: true;
 }
 
 export type Scope = "once" | "session" | "always";
@@ -69,7 +71,7 @@ export interface Approvals {
 
 export interface Approver {
 	readonly kind: string;
-	ask?(request: ApprovalRequest): void;
+	ask?(request: ApprovalRequest, channels: Channels): void;
 	session?(hooks: SessionHooks, approvals: Approvals): void;
 }
 

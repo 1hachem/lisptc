@@ -10,6 +10,7 @@ import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
+import type { CataloguedChoice } from "@repo/shared/providers";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { playwright } from "./fixtures/server.ts";
 import { mockedMcpExtension, tracedSecretsExtension } from "./mocks.ts";
@@ -24,6 +25,27 @@ const extensions = () => [
 	proseExtension(proseHost),
 ];
 
+function entriesAt(result: RunResult, kind: string): number[] {
+	return result.transcript.flatMap((line, at) =>
+		line.role === "entry" && line.kind === kind ? [at] : [],
+	);
+}
+
+function firstAssistant(result: RunResult): number {
+	return result.transcript.findIndex((line) => line.role === "assistant");
+}
+
+function around(result: RunResult, at: number): [string?, string?] {
+	const before = result.transcript
+		.slice(0, at)
+		.reverse()
+		.find((line) => line.role !== "entry");
+	const after = result.transcript
+		.slice(at + 1)
+		.find((line) => line.role !== "entry");
+	return [before?.role, after?.role];
+}
+
 const TURNS: string[] = [
 	'(await (search-mcps "browser"))',
 	'(setq p (load-mcp "playwright"))',
@@ -36,6 +58,11 @@ let turn = 0;
 const sent: string[] = [];
 let server: Server;
 let runCase: typeof import("./runner.ts").runCase;
+
+const TARGET: CataloguedChoice = {
+	provider: "digitalocean",
+	model: "glm-5.3-flash",
+};
 
 function chunk(content: string): string {
 	return `data: ${JSON.stringify({
@@ -116,7 +143,7 @@ describe("a case runs against a scripted model", () => {
 				checks: CHECKS,
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(result.halted).toBe(true);
@@ -133,7 +160,7 @@ describe("a case runs against a scripted model", () => {
 		expect(result.grade).toBe("degraded");
 		expect(result.outputTokens).toBe(100);
 		expect(result.inputTokens).toBe(100);
-		expect(result.model).toBe("stub");
+		expect(result.model).toBe(TARGET.model);
 		expect(result.provider).toBe("digitalocean");
 	});
 
@@ -151,7 +178,7 @@ describe("a case runs against a scripted model", () => {
 					'(defcheck prelude-ran (eventually (called "memory/remember")))',
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(result.checks[0]).toMatchObject({
@@ -178,7 +205,7 @@ describe("a case runs against a scripted model", () => {
 					checks: "(defcheck stops (within 6 (halted)))",
 					system: "answer in lisptc.",
 				},
-				{ provider: "digitalocean", model: "stub" },
+				TARGET,
 			),
 		).rejects.toThrow(/prelude/);
 	});
@@ -200,13 +227,13 @@ describe("a case runs against a scripted model", () => {
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(sent[0]).toContain("browser_navigate, not navigate");
 	});
 
-	test("a memory a step fires lands on the line it fired in", async () => {
+	test("a memory a step fires lands between that step and its result", async () => {
 		turn = 0;
 		const result = await runCase(
 			{
@@ -222,22 +249,56 @@ describe("a case runs against a scripted model", () => {
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
-		const navigate = [
-			{ key: "navigate", body: "browser_navigate, not navigate", on: "call" },
-		];
-		const fired = result.transcript.filter((line) => line.annotations);
-		expect(fired.map((line) => line.role)).toEqual(["tool", "tool"]);
-		expect(fired.map((line) => line.annotations?.memories)).toEqual([
-			navigate,
-			navigate,
-		]);
-		expect(result.transcript[2]?.annotations?.memories).toEqual(navigate);
+		const fired = entriesAt(result, "memory");
+		expect(fired).toHaveLength(2);
+		for (const at of fired) {
+			expect(result.transcript[at]).toMatchObject({
+				value: {
+					key: "navigate",
+					body: "browser_navigate, not navigate",
+					on: "call",
+				},
+			});
+			expect(around(result, at)).toEqual(["assistant", "tool"]);
+		}
 	});
 
-	test("a memory the user's words fire lands on the reply that heard them", async () => {
+	test("a memory the halting step fires lands after the halting step", async () => {
+		turn = 0;
+		const result = await runCase(
+			{
+				min: 4,
+				max: 8,
+				extensions,
+				mocks: { servers: { playwright } },
+				prelude: `(memory/remember "headline-step" "answer with the headline" :on '(step "headline"))`,
+				seed: [{ user: "open hyko.ai" }],
+				checks: "(defcheck stops (within 6 (halted)))",
+				system: "answer in lisptc.",
+			},
+			TARGET,
+		);
+
+		expect(result.halted).toBe(true);
+		expect(result.transcript.at(-1)).toMatchObject({
+			role: "entry",
+			kind: "memory",
+			value: {
+				key: "headline-step",
+				body: "answer with the headline",
+				on: "step",
+			},
+		});
+		expect(result.transcript.at(-2)).toMatchObject({
+			role: "assistant",
+			content: "the headline is: Build AI workflows visually.",
+		});
+	});
+
+	test("a memory the user's words fire lands before the reply that heard them", async () => {
 		turn = 0;
 		const result = await runCase(
 			{
@@ -250,17 +311,14 @@ describe("a case runs against a scripted model", () => {
 				checks: "(defcheck stops (within 6 (halted)))",
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
-		expect(result.transcript[1]).toMatchObject({
-			role: "assistant",
-			annotations: {
-				memories: [
-					{ key: "site", body: "hyko.ai is the product site", on: "user" },
-				],
-			},
+		const [fired] = entriesAt(result, "memory");
+		expect(result.transcript[fired]).toMatchObject({
+			value: { key: "site", body: "hyko.ai is the product site", on: "user" },
 		});
+		expect(fired).toBeLessThan(firstAssistant(result));
 	});
 
 	test("a check that fails grades the run a failure", async () => {
@@ -275,7 +333,7 @@ describe("a case runs against a scripted model", () => {
 				checks: '(defcheck never-searches (never (called "search-mcps")))',
 				system: "answer in lisptc.",
 			},
-			{ provider: "digitalocean", model: "stub" },
+			TARGET,
 		);
 
 		expect(result.checks[0]).toMatchObject({

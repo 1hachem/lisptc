@@ -16,6 +16,16 @@ import { UIProvider } from "../src/lib/ui.tsx";
 
 const PROSE = "Here is your chart.";
 
+let entryIds = 0;
+const entry = (kind: string, value: unknown) => ({
+	id: `e${++entryIds}`,
+	kind,
+	value,
+});
+
+const activities = (...values: unknown[]) =>
+	values.map((value) => entry("activity", value));
+
 const MESSAGES: ChatMessage[] = [
 	{ id: "h1", type: "human", content: "make a chart" },
 	{ id: "a1", type: "ai", content: "(draw-chart)" },
@@ -26,15 +36,17 @@ const MESSAGES: ChatMessage[] = [
 		additional_kwargs: {
 			display: "drawn for you",
 			results: ["RESULT-VALUE"],
-			ui: { viewId: "v1" },
-			intent: {
+		},
+		entries: [
+			entry("ui", { viewId: "v1" }),
+			entry("intent", {
 				doing: "drawing the chart",
 				todos: [
 					{ label: "fetch rows", done: true },
 					{ label: "draw", done: false },
 				],
-			},
-		},
+			}),
+		],
 	},
 	{
 		id: "a2",
@@ -342,12 +354,12 @@ describe("a call's progress", () => {
 			id: "t1",
 			type: "tool",
 			content: "",
-			additional_kwargs: {
-				intent: { progress: { done: 3, total: 10, label: "rows" } },
-			},
+			entries: [
+				entry("intent", { progress: { done: 3, total: 10, label: "rows" } }),
+			],
 		},
 		{ id: "a2", type: "ai", content: "(next)" },
-		{ id: "t2", type: "tool", content: "", additional_kwargs: { intent: {} } },
+		{ id: "t2", type: "tool", content: "", entries: [entry("intent", {})] },
 	];
 
 	it("stays on the call that first showed it, live and once settled", async () => {
@@ -372,34 +384,25 @@ describe("a call's progress", () => {
 });
 
 describe("the trace", () => {
-	it("shows the code each step ran, what it printed and what it returned, every channel on", async () => {
+	it("shows the code each step ran and only what it sent back to the model, every channel on", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const text = host.textContent ?? "";
 
 		expect(text).toContain("(draw-chart)");
-		expect(text).toContain("drawn for you");
-		expect(text).toContain("RESULT-VALUE");
 		expect(text).toContain("MODEL-SAW");
+		expect(text).not.toContain("drawn for you");
+		expect(text).not.toContain("RESULT-VALUE");
 	});
 
 	it("marks every block a trace draws with its channel's icon, and the chat with none", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const labels = (root: HTMLElement) =>
 			[...root.querySelectorAll("svg[aria-label]")].map((icon) =>
 				icon.getAttribute("aria-label"),
 			);
 
-		expect(labels(host)).toEqual(
-			expect.arrayContaining(["ui", "output", "model"]),
-		);
+		expect(labels(host)).toEqual(expect.arrayContaining(["ui", "output"]));
+		expect(labels(host)).not.toContain("model");
 
 		session.messages = MESSAGES;
 		const chat = await mount(<ChatView />);
@@ -468,10 +471,6 @@ describe("the trace", () => {
 				]}
 			/>,
 		);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const toggles = [...host.querySelectorAll("button[aria-pressed]")].map(
 			(button) => button.textContent,
 		);
@@ -497,10 +496,6 @@ describe("the trace", () => {
 				]}
 			/>,
 		);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const text = host.textContent ?? "";
 
 		expect(text).toContain(
@@ -511,25 +506,71 @@ describe("the trace", () => {
 		);
 	});
 
-	it("titles a step by its intent, else by the agent's prose, never by a form's name", async () => {
+	const METERED: ChatMessage[] = [
+		{ id: "h1", type: "human", content: "go" },
+		{
+			id: "a1",
+			type: "ai",
+			content: "(draw-chart)",
+			additional_kwargs: {
+				meta: {
+					durationMs: 1500,
+					inputTokens: 1200,
+					outputTokens: 30,
+					model: "acme/fast-1",
+				},
+			},
+		},
+		{ id: "t1", type: "tool", content: '{"source":"lisp-repl"}' },
+		{
+			id: "a2",
+			type: "ai",
+			content: "(draw-chart)",
+			additional_kwargs: {
+				meta: { durationMs: 500, inputTokens: 4000, outputTokens: 20 },
+			},
+		},
+		{ id: "t2", type: "tool", content: '{"source":"lisp-repl"}' },
+	];
+
+	it("heads a step with its number and what it took, no model, and leaves none of it under the message", async () => {
+		const host = await mount(<TraceLines messages={METERED} />);
+		const [first] = host.querySelectorAll("[data-step-header]");
+
+		expect(first?.textContent).toContain("step 1");
+		expect(first?.textContent).toContain("took 1.5s");
+		expect(first?.textContent).toContain("1.2k in");
+		expect(first?.textContent).toContain("30 out");
+		expect(first?.textContent).not.toContain("fast-1");
+		expect(host.querySelector("[data-step-bar]")).toBeNull();
+		expect(
+			host.querySelector('[data-message-id="a1"]')?.textContent,
+		).not.toContain("took");
+	});
+
+	it("draws no row for an entry that shows nothing, whether memories are on or off", async () => {
 		const host = await mount(
 			<TraceLines
 				messages={[
-					...MESSAGES,
-					{ id: "a3", type: "ai", content: "(draw-chart)" },
-					{ id: "t3", type: "tool", content: '{"source":"lisp-repl"}' },
+					{ id: "h1", type: "human", content: "go" },
+					{ id: "a1", type: "ai", content: "(plan)" },
+					{
+						id: "i1",
+						type: "entry",
+						content: "",
+						additional_kwargs: entry("intent", { doing: "planning" }),
+					},
+					{ id: "t1", type: "tool", content: '{"source":"lisp-repl"}' },
 				]}
 			/>,
 		);
-		const titles = [...host.querySelectorAll("[data-step-header]")].map(
-			(header) => header.textContent ?? "",
-		);
+		const memories = [
+			...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]"),
+		].find((b) => b.textContent === "memories");
 
-		expect(titles).toHaveLength(3);
-		expect(titles[0]).toContain("drawing the chart");
-		expect(titles[1]).toContain(PROSE);
-		expect(titles[2]).toContain("step");
-		expect(titles[2]).not.toContain("draw-chart");
+		expect(host.querySelector('[data-message-id="i1"]')).toBeNull();
+		await act(async () => memories?.click());
+		expect(host.querySelector('[data-message-id="i1"]')).toBeNull();
 	});
 
 	const CHANNEL_TRACE: ChatMessage[] = [
@@ -542,37 +583,41 @@ describe("the trace", () => {
 			},
 		},
 		{
+			id: "m1",
+			type: "entry",
+			content: "",
+			additional_kwargs: entry("memory", { key: "remembered", body: "b" }),
+		},
+		{
 			id: "a1",
 			type: "ai",
 			content: "(draw-chart)",
 			additional_kwargs: {
 				reasoning_content: "THINKING-MARK",
-				meta: { durationMs: 5, memories: [{ key: "remembered", body: "b" }] },
+				meta: { durationMs: 5 },
 			},
 		},
 		{
 			id: "t1",
 			type: "tool",
 			content: '{"source":"lisp-repl","output":"MODEL-MARK"}',
-			additional_kwargs: {
-				display: "OUTPUT-MARK",
-				ui: { viewId: "UI-MARK" },
-				question: {
+			additional_kwargs: { display: "OUTPUT-MARK" },
+			entries: [
+				entry("ui", { viewId: "UI-MARK" }),
+				entry("question", {
 					id: "q1",
 					prompt: "ASKS-MARK",
 					choices: ["yes"],
 					multi: false,
-				},
-				activity: [
-					{
-						kind: "agent",
-						label: "AGENTS-MARK",
-						state: "done",
-						id: "scout",
-						chat: "child-chat",
-					},
-				],
-			},
+				}),
+				...activities({
+					kind: "agent",
+					label: "AGENTS-MARK",
+					state: "done",
+					id: "scout",
+					chat: "child-chat",
+				}),
+			],
 		},
 		{
 			id: "s1",
@@ -588,23 +633,20 @@ describe("the trace", () => {
 	];
 
 	const MARKS: Record<ChannelId, string> = {
-		output: "OUTPUT-MARK",
+		user: "make a chart",
+		assistant: "(draw-chart)",
+		output: "MODEL-MARK",
 		ui: "UI-MARK",
 		attachments: "USER-FILE.pdf",
 		thinking: "THINKING-MARK",
 		memory: "1 memory recalled",
 		asks: "ASKS-MARK",
-		model: "MODEL-MARK",
 		system: "SYSTEM-MARK",
 		agents: "AGENTS-MARK",
 	};
 
 	async function traced() {
 		const host = await mount(<TraceLines messages={CHANNEL_TRACE} />);
-		for (const header of host.querySelectorAll<HTMLButtonElement>(
-			"[data-step-header]",
-		))
-			await act(async () => header.click());
 		const you = host.querySelector<HTMLButtonElement>(
 			'[data-trace-message="you"] > button',
 		);
@@ -655,18 +697,16 @@ const ACTING: ChatMessage[] = [
 		id: "t1",
 		type: "tool",
 		content: "",
-		additional_kwargs: {
-			activity: [
-				call("a", "started"),
-				call("b", "started", "linear · Get issue"),
-			],
-		},
+		entries: activities(
+			call("a", "started"),
+			call("b", "started", "linear · Get issue"),
+		),
 	},
 	{
 		id: "t2",
 		type: "tool",
 		content: "",
-		additional_kwargs: { activity: [call("a", "done")] },
+		entries: activities(call("a", "done")),
 	},
 ];
 
@@ -688,10 +728,10 @@ describe("what a turn is doing", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: { doing: "triaging" },
-					activity: [call("a", "failed")],
-				},
+				entries: [
+					entry("intent", { doing: "triaging" }),
+					...activities(call("a", "failed")),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -709,12 +749,12 @@ describe("what a turn is doing", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: {
+				entries: [
+					entry("intent", {
 						doing: "triaging",
 						log: [{ text: "triaging", startedAt: 1, state: "done", ms: 5 }],
-					},
-				},
+					}),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -787,17 +827,17 @@ describe("the turn timeline", () => {
 		]);
 	});
 
-	it("draws the timeline from the intent and activity a step annotated", async () => {
+	it("draws the timeline from the intent and activity a step recorded", async () => {
 		session.messages = [
 			{ id: "h1", type: "human", content: "go" },
 			{
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: { log: logged.log.slice(0, 2) },
-					activity: [timed("a", 1200, "done", 90)],
-				},
+				entries: [
+					entry("intent", { log: logged.log.slice(0, 2) }),
+					...activities(timed("a", 1200, "done", 90)),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -824,13 +864,13 @@ describe("the turn timeline", () => {
 				id: "t1",
 				type: "tool",
 				content: "",
-				additional_kwargs: {
-					intent: {
+				entries: [
+					entry("intent", {
 						todos: [{ label: "fix it", done: true }],
 						log: logged.log.slice(0, 2),
-					},
-					activity: [timed("a", 100, "done", 300)],
-				},
+					}),
+					...activities(timed("a", 100, "done", 300)),
+				],
 			},
 		];
 		const host = await mount(<ChatView />);
@@ -915,60 +955,110 @@ const STEPS: ChatMessage[] = [
 	]).flat(),
 ];
 
-describe("a trace's steps", () => {
-	it("start folded, however few there are", async () => {
-		const host = await mount(<TraceLines messages={MESSAGES} />);
-		const headers = [...host.querySelectorAll("[data-step-header]")];
-
-		expect(headers.length).toBeGreaterThan(0);
-		expect(
-			headers.every((h) => h.getAttribute("aria-expanded") === "false"),
-		).toBe(true);
+async function find(host: HTMLElement, query: string) {
+	const field = host.querySelector<HTMLInputElement>(
+		'input[aria-label="find in trace"]',
+	);
+	if (field === null) throw new Error("no find field");
+	const setValue = Object.getOwnPropertyDescriptor(
+		HTMLInputElement.prototype,
+		"value",
+	)?.set;
+	await act(async () => {
+		setValue?.call(field, query);
+		field.dispatchEvent(new Event("input", { bubbles: true }));
 	});
+	return field;
+}
 
-	it("folds every step to a header and opens the one it was sent to", async () => {
-		const host = await mount(<TraceLines messages={STEPS} turn="t4" />);
-		const headers = [...host.querySelectorAll("[data-step-header]")];
-		const open = headers.filter(
-			(h) => h.getAttribute("aria-expanded") === "true",
+describe("finding in a trace", () => {
+	it("counts every match across steps and steps through them", async () => {
+		const host = await mount(<TraceLines messages={STEPS} />);
+		const field = await find(host, "out-");
+		const count = () => host.querySelector("[data-find-count]")?.textContent;
+
+		expect(count()).toBe("1/9");
+		expect(host.querySelector("[data-find-current]")).toBeNull();
+
+		await act(async () =>
+			field.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+			),
+		);
+		await act(async () =>
+			host
+				.querySelector<HTMLButtonElement>('[aria-label="next match"]')
+				?.click(),
 		);
 
+		expect(count()).toBe("2/9");
+		expect(
+			host
+				.querySelector("[data-find-current]")
+				?.getAttribute("data-message-id"),
+		).toBe("t1");
+	});
+
+	it("unfolds a folded message and a long output it matches", async () => {
+		const tail = "NEEDLE-AT-THE-END";
+		const host = await mount(
+			<TraceLines
+				messages={[
+					{
+						id: "h1",
+						type: "human",
+						content: `first line\nsecond line ${tail}`,
+					},
+					{ id: "a1", type: "ai", content: "(read-log)" },
+					{
+						id: "t1",
+						type: "tool",
+						content: JSON.stringify({
+							source: "lisp-repl",
+							output: `${"line\n".repeat(40)}${tail}`,
+						}),
+					},
+				]}
+			/>,
+		);
+
+		expect(host.textContent).not.toContain(`line\n${tail}`);
+
+		await find(host, "needle");
+
+		expect(host.querySelectorAll("[data-match]")).toHaveLength(2);
+		expect(host.querySelector('[data-message-id="t1"]')?.textContent).toContain(
+			tail,
+		);
+		expect(
+			host
+				.querySelector('[data-trace-message="you"] > button')
+				?.getAttribute("aria-expanded"),
+		).toBe("true");
+	});
+
+	it("says so when nothing matches", async () => {
+		const host = await mount(<TraceLines messages={STEPS} />);
+		await find(host, "nowhere-to-be-found");
+
+		expect(host.querySelector("[data-find-count]")?.textContent).toBe(
+			"no match",
+		);
+	});
+});
+
+describe("a trace's steps", () => {
+	it("lays every step out open, one level deep, under its header", async () => {
+		const host = await mount(<TraceLines messages={STEPS} />);
+		const headers = [...host.querySelectorAll("[data-step-header]")];
+
 		expect(headers).toHaveLength(9);
-		expect(open).toHaveLength(1);
-		expect(open[0]?.textContent).toContain("step 5");
-		expect(open[0]?.textContent).toContain("failed");
-		expect(host.textContent).toContain("OUT-4");
-		expect(host.textContent).not.toContain("OUT-3");
+		expect(host.querySelector("[aria-expanded][data-step-header]")).toBeNull();
+		for (let at = 0; at < 9; at++)
+			expect(host.textContent).toContain(`OUT-${at}`);
 	});
 
-	it("opens the step it is sent to next, and lets a header open its step", async () => {
-		const host = document.createElement("div");
-		document.body.append(host);
-		const root = createRoot(host);
-		roots.push(root);
-		const draw = (turn: string) =>
-			act(async () =>
-				root.render(
-					<QueryClientProvider client={offline}>
-						<UIProvider>
-							<TraceLines messages={STEPS} turn={turn} />
-						</UIProvider>
-					</QueryClientProvider>,
-				),
-			);
-		await draw("t4");
-		await draw("a7");
-
-		expect(host.textContent).toContain("OUT-7");
-
-		const first = host.querySelector<HTMLButtonElement>("[data-step-header]");
-		await act(async () => first?.click());
-
-		expect(first?.getAttribute("aria-expanded")).toBe("true");
-		expect(host.textContent).toContain("OUT-0");
-	});
-
-	it("opens a sub-agent's own trace under the step that started it", async () => {
+	it("indents a sub-agent's trace right after the message that started it", async () => {
 		const spawned: ChatMessage[] = [
 			{ id: "h1", type: "human", content: "ask the scout" },
 			{ id: "a1", type: "ai", content: "(agents/spawn scout)" },
@@ -976,17 +1066,13 @@ describe("a trace's steps", () => {
 				id: "t1",
 				type: "tool",
 				content: '{"source":"lisp-repl","output":"spawned"}',
-				additional_kwargs: {
-					activity: [
-						{
-							kind: "agent",
-							label: "scout",
-							state: "started",
-							id: "scout",
-							chat: "child-chat",
-						},
-					],
-				},
+				entries: activities({
+					kind: "agent",
+					label: "scout",
+					state: "started",
+					id: "scout",
+					chat: "child-chat",
+				}),
 			},
 		];
 		const child: ChatMessage[] = [
@@ -995,7 +1081,7 @@ describe("a trace's steps", () => {
 				id: "c2",
 				type: "tool",
 				content: '{"source":"lisp-repl","output":"CHILD-SAW"}',
-				additional_kwargs: { intent: { doing: "looking around" } },
+				entries: [entry("intent", { doing: "looking around" })],
 			},
 		];
 		const source = (chatId: string) => (chatId === "child-chat" ? child : []);
@@ -1004,16 +1090,13 @@ describe("a trace's steps", () => {
 				<TraceLines messages={spawned} turn="t1" />
 			</TraceSourceProvider>,
 		);
-		const opener = host.querySelector<HTMLButtonElement>(
-			'[data-child-trace="child-chat"] > button',
-		);
+		const indented = host.querySelector('[data-child-trace="child-chat"]');
 
-		expect(opener?.textContent).toContain("scout");
-		expect(host.textContent).not.toContain("looking around");
-
-		await act(async () => opener?.click());
-
-		expect(host.textContent).toContain("looking around");
+		expect(indented?.textContent).toContain("scout");
+		expect(indented?.textContent).toContain("CHILD-SAW");
+		expect(
+			indented?.previousElementSibling?.getAttribute("data-message-id"),
+		).toBe("t1");
 	});
 });
 
@@ -1023,7 +1106,7 @@ const todoTurn = (id: string, todos: { label: string; done: boolean }[]) => [
 		id: `t-${id}`,
 		type: "tool",
 		content: "",
-		additional_kwargs: { intent: { todos } },
+		entries: [entry("intent", { todos })],
 	},
 ];
 

@@ -8,8 +8,8 @@ tasks:
   run:
     desc: run the agent eval suite against real models
     vars:
-      MATRIX: '{{.EVAL_MATRIX | default "digitalocean:gemma-4-31B-it"}}'
-      JUDGE: '{{.EVAL_JUDGE | default "digitalocean:gemma-4-31B-it"}}'
+      MATRIX: '{{.EVAL_MATRIX}}'
+      JUDGE: '{{.EVAL_JUDGE}}'
       CONCURRENCY: '{{.EVAL_CONCURRENCY | default "4"}}'
     cmds:
       - task: _infisical-run
@@ -17,6 +17,15 @@ tasks:
           ENV: dev
           PATHS: "/ai /assets"
           CMD: 'EVAL_MATRIX="{{.MATRIX}}" EVAL_JUDGE="{{.JUDGE}}" EVAL_CONCURRENCY="{{.CONCURRENCY}}" pnpm test:evals'
+
+  semantic:
+    desc: measure the semantic forms against labelled cases on the real models, and print each score
+    cmds:
+      - task: _infisical-run
+        vars:
+          ENV: dev
+          PATHS: "/ai"
+          CMD: "pnpm --filter @repo/semantic-extension test:calibration"
 
   open:
     desc: build the eval trace viewer, serve it, and open a browser on it

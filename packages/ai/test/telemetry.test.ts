@@ -121,7 +121,7 @@ describe("llm built-in calls", () => {
 		const { captureLlmCall } = await import("../src/telemetry.ts");
 
 		captureLlmCall(CTX, {
-			builtin: "llm/extract",
+			builtin: "extract",
 			provider: "digitalocean",
 			model: "a-small-one",
 			messages: [{ role: "user", content: "one and two" }],
@@ -138,7 +138,7 @@ describe("llm built-in calls", () => {
 		expect(generation?.properties).toMatchObject({
 			$ai_trace_id: "thread-abc",
 			$ai_parent_id: "turn-1",
-			$ai_span_name: "llm/extract",
+			$ai_span_name: "extract",
 			$ai_provider: "digitalocean",
 			$ai_model: "a-small-one",
 			$ai_input_tokens: 11,
@@ -157,7 +157,7 @@ describe("llm built-in calls", () => {
 		const { captureLlmCall } = await import("../src/telemetry.ts");
 
 		captureLlmCall(CTX, {
-			builtin: "llm/complete",
+			builtin: "write",
 			messages: [{ role: "user", content: "hi" }],
 			structured: false,
 			latencyMs: 100,
@@ -169,7 +169,7 @@ describe("llm built-in calls", () => {
 
 		expect(errored).toHaveLength(1);
 		expect(errored[0].properties).toMatchObject({
-			$ai_span_name: "llm/complete",
+			$ai_span_name: "write",
 			$ai_error: "llm timed out",
 		});
 		expect(errored[0].properties.$ai_provider).toBeUndefined();

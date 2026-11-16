@@ -5,11 +5,11 @@ import type {
 	AgentEnd,
 	AgentStep,
 	AgentTurn,
-	Annotations,
 	SessionHooks,
 	StepVerdict,
 	TurnContext,
 } from "@repo/interpreter/session";
+import type { Received } from "@repo/shared/journal";
 import {
 	captureException,
 	captureLlmCall,
@@ -20,7 +20,7 @@ import {
 
 export interface TurnTelemetry {
 	readonly turnStart: Middleware<[TurnContext], Eval<void>>;
-	readonly received: Middleware<[TurnContext, Annotations], Eval<void>>;
+	readonly received: Middleware<[TurnContext, Received], Eval<void>>;
 	readonly stepEnd: Middleware<
 		[AgentTurn, AgentStep, StepVerdict],
 		StepVerdict

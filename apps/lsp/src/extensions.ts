@@ -25,6 +25,8 @@ import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
+import { semanticExtension } from "@repo/semantic-extension";
+import { semanticHost } from "@repo/semantic-extension/host";
 
 export function docExtensions(): InterpExtension[] {
 	return [
@@ -34,6 +36,7 @@ export function docExtensions(): InterpExtension[] {
 		intentExtension(intentHost),
 		mcpExtension(mcpHostFor({ oauth: new FileOAuthStore() })),
 		llmExtension(llmHost),
+		semanticExtension(semanticHost),
 		compactionExtension(compactionHost),
 	];
 }
@@ -58,6 +61,7 @@ export function sessionExtensions(): InterpExtension[] {
 			policy: permissions.rules,
 		}),
 		llmExtension(llmHost),
+		semanticExtension(semanticHost),
 		compactionExtension(compactionHost),
 		memory,
 		proseExtension(proseHost),

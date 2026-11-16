@@ -1,4 +1,4 @@
-import type { Annotations, StepAnnotations } from "@repo/interpreter/session";
+import { ENTRY_TYPE, type Entry, type Received } from "@repo/shared/journal";
 import {
 	contentToText,
 	ENVELOPE_KEYS,
@@ -39,34 +39,31 @@ const encoder = new TextEncoder();
 
 const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 
-function mergeInto(
-	into: Record<string, unknown>,
-	extra: Record<string, unknown>,
-): void {
-	for (const [key, value] of Object.entries(extra)) {
-		const standing = into[key];
-		into[key] =
-			Array.isArray(standing) && Array.isArray(value)
-				? [...standing, ...value]
-				: value;
-	}
-}
-
 function lastHuman(wire: WireMessage[]): number {
 	for (let i = wire.length - 1; i >= 0; i--)
 		if (wire[i].type === "human") return i;
 	return -1;
 }
 
-function annotate(
-	message: WireMessage,
-	annotations: Record<string, unknown>,
+export function entryMessage(
+	entry: Entry,
+	id: string = crypto.randomUUID(),
+	kwargs: MessageKwargs = {},
 ): WireMessage {
-	const kwargs = message.additional_kwargs ?? {};
-	const meta: Record<string, unknown> = { ...envelopeOf(kwargs).meta };
-	mergeInto(meta, annotations);
-	return { ...message, additional_kwargs: { ...kwargs, meta } };
+	return {
+		type: ENTRY_TYPE,
+		content: "",
+		id,
+		additional_kwargs: {
+			...kwargs,
+			kind: entry.kind,
+			value: entry.value,
+			...(entry.about === undefined ? {} : { about: entry.about }),
+		},
+	};
 }
+
+const ENTRY_SNAPSHOT_MS = 100;
 
 function riding(message: { additional_kwargs?: MessageKwargs }) {
 	return envelopeOf(message.additional_kwargs).riding;
@@ -85,7 +82,8 @@ function agentRole(type: string | undefined): TranscriptEntry["role"] {
 
 function wireType(
 	type: string | undefined,
-): "human" | "ai" | "system" | "tool" {
+): "human" | "ai" | "system" | "tool" | typeof ENTRY_TYPE {
+	if (type === ENTRY_TYPE) return ENTRY_TYPE;
 	if (type === "ai" || type === "assistant") return "ai";
 	if (type === "system") return "system";
 	if (type === "tool") return "tool";
@@ -120,7 +118,7 @@ function toEntry(m: ChatMessageInput): TranscriptEntry {
 	return { role, content, ...(rode === undefined ? {} : { riding: rode }) };
 }
 
-function received(input: ChatInput): Annotations | undefined {
+function received(input: ChatInput): Received | undefined {
 	const newest = input.messages?.at(-1);
 	if (newest === undefined || wireType(newest.type ?? newest.role) !== "human")
 		return undefined;
@@ -134,8 +132,9 @@ function toTranscript(input: ChatInput): TranscriptEntry[] {
 	const transcript: TranscriptEntry[] = [];
 	const read = (input.messages ?? []).filter(
 		(m) =>
-			agentRole(m.type ?? m.role) !== "tool" ||
-			envelopeOf(m.additional_kwargs).quiet !== true,
+			wireType(m.type ?? m.role) !== ENTRY_TYPE &&
+			(agentRole(m.type ?? m.role) !== "tool" ||
+				envelopeOf(m.additional_kwargs).quiet !== true),
 	);
 	for (const entry of read.map(toEntry)) {
 		const previous = transcript.at(-1);
@@ -161,13 +160,13 @@ export interface TurnStreamOptions {
 
 export type TurnRun = (
 	transcript: TranscriptEntry[],
-	received: Annotations | undefined,
+	received: Received | undefined,
 	signal: AbortSignal,
 ) => AsyncIterable<TurnEvent>;
 
 export type TurnOutcome =
 	| { readonly answer: string }
-	| { readonly held: StepAnnotations; readonly message: string }
+	| { readonly held: readonly Entry[]; readonly message: string }
 	| { readonly stopped: string };
 
 type Of<T extends TurnEvent["type"]> = Extract<TurnEvent, { type: T }>;
@@ -179,11 +178,12 @@ class TurnWire {
 	steps = 0;
 	failure: string | undefined;
 	outcome: TurnOutcome = { stopped: "stopped without answering" };
-	private held: { held: StepAnnotations; message: string } | undefined;
+	private held: { held: readonly Entry[]; message: string } | undefined;
+	private stepEntries: Entry[] = [];
 	private lastMeta: Record<string, unknown> | undefined;
 	private lastAnswer = -1;
-	private provisional: WireMessage | undefined;
 	private flushed: number;
+	private pendingSnapshot: ReturnType<typeof setTimeout> | undefined;
 	private recorded: Promise<void> = Promise.resolve();
 	private sealed = false;
 
@@ -205,11 +205,51 @@ class TurnWire {
 	}
 
 	snapshot(): boolean {
-		const shown =
-			this.provisional === undefined
-				? this.wire
-				: [...this.wire, this.provisional];
-		return this.write(sse("values", { messages: lighten(shown) }));
+		this.settleSnapshot();
+		return this.write(sse("values", { messages: lighten(this.wire) }));
+	}
+
+	private settleSnapshot(): void {
+		if (this.pendingSnapshot === undefined) return;
+		clearTimeout(this.pendingSnapshot);
+		this.pendingSnapshot = undefined;
+	}
+
+	private snapshotSoon(): boolean {
+		this.pendingSnapshot ??= setTimeout(() => {
+			this.pendingSnapshot = undefined;
+			this.snapshot();
+		}, ENTRY_SNAPSHOT_MS);
+		return true;
+	}
+
+	private recordEntry(entry: Entry): void {
+		const superseded = entry.supersedes ? this.unflushedOf(entry) : -1;
+		if (superseded === -1) {
+			this.stepEntries.push(entry);
+			this.wire.push(entryMessage(entry));
+			return;
+		}
+		const { id } = this.wire[superseded];
+		this.wire[superseded] = entryMessage(entry, id);
+		const held = this.stepEntries.findIndex(
+			(e) => e.kind === entry.kind && e.about === entry.about,
+		);
+		if (held === -1) this.stepEntries.push(entry);
+		else this.stepEntries[held] = entry;
+	}
+
+	private unflushedOf(entry: Entry): number {
+		for (let at = this.wire.length - 1; at >= this.flushed; at--) {
+			const kwargs = this.wire[at].additional_kwargs;
+			if (
+				this.wire[at].type === ENTRY_TYPE &&
+				kwargs?.kind === entry.kind &&
+				kwargs?.about === entry.about
+			)
+				return at;
+		}
+		return -1;
 	}
 
 	flush(): void {
@@ -231,6 +271,7 @@ class TurnWire {
 	}
 
 	async unrecorded(): Promise<WireMessage[]> {
+		if (this.pendingSnapshot !== undefined) this.snapshot();
 		this.sealed = true;
 		this.flush();
 		await this.recorded;
@@ -241,14 +282,9 @@ class TurnWire {
 		switch (event.type) {
 			case "delta":
 				return this.delta(event);
-			case "live":
-				this.provisional = {
-					type: "tool",
-					content: "",
-					id: `${event.stepId}:live`,
-					additional_kwargs: { ...event.annotations },
-				};
-				return this.snapshot();
+			case "entry":
+				this.recordEntry(event.entry);
+				return this.snapshotSoon();
 			case "steered":
 				this.wire.push(
 					event.source === undefined
@@ -266,14 +302,6 @@ class TurnWire {
 			case "evaluated":
 				this.wire.push(event.message);
 				return this.snapshot();
-			case "collected":
-				return (
-					!this.reviseLastHuman((m) => annotate(m, event.annotations)) ||
-					this.snapshot()
-				);
-			case "concluded":
-				this.conclude(event.annotations);
-				return this.snapshot();
 			case "rode":
 				this.reviseLastHuman((m) => carrying(m, event.text));
 				return true;
@@ -283,7 +311,6 @@ class TurnWire {
 			case "result":
 				return this.result(event);
 			case "halt":
-				this.provisional = undefined;
 				this.steps = event.steps;
 				this.outcome = this.held ?? { answer: event.answer };
 				if (this.lastMeta) {
@@ -306,7 +333,6 @@ class TurnWire {
 				);
 				return true;
 			case "failed":
-				this.provisional = undefined;
 				console.error("[ai] chat stream failed:", event.error);
 				this.failure = event.message;
 				this.outcome = { stopped: `failed: ${event.message}` };
@@ -333,6 +359,7 @@ class TurnWire {
 
 	private assistant(event: Of<"assistant">): void {
 		this.lastMeta = { ...event.meta };
+		this.stepEntries = [];
 		this.lastAnswer = this.wire.length;
 		this.wire.push({
 			type: "ai",
@@ -348,33 +375,11 @@ class TurnWire {
 
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
-		this.provisional = undefined;
 		const message = crypto.randomUUID();
-		if (event.held) this.held = { held: event.annotations, message };
-		if (this.lastMeta) mergeInto(this.lastMeta, event.annotations.step);
+		if (event.held) this.held = { held: [...this.stepEntries], message };
 		this.wire.push(toolMessage(event, message));
 		this.flush();
 		return this.snapshot();
-	}
-
-	private conclude(annotations: Record<string, unknown>): void {
-		let at = this.wire.length - 1;
-		while (at >= this.carried && this.wire[at].type !== "tool") at--;
-		if (at < this.carried) {
-			this.wire.push({
-				type: "tool",
-				content: "",
-				id: crypto.randomUUID(),
-				additional_kwargs: { ...annotations, quiet: true },
-			});
-			return;
-		}
-		const kwargs: Record<string, unknown> = {
-			...this.wire[at].additional_kwargs,
-		};
-		mergeInto(kwargs, annotations);
-		this.wire[at] = { ...this.wire[at], additional_kwargs: kwargs };
-		this.reviseFlushed(at);
 	}
 
 	private reviseLastHuman(

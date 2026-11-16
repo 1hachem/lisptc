@@ -1,15 +1,10 @@
-import { topic } from "@repo/interpreter/channels";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
-import {
-	annotating,
-	type InterpExtension,
-	type ModelDelta,
-	type SessionHooks,
-} from "@repo/interpreter/session";
+import type { InterpExtension, ModelDelta } from "@repo/interpreter/session";
+import { ENTRY_TYPE } from "@repo/shared/journal";
 import { describe, expect, test, vi } from "vitest";
 import type { WireMessage } from "../src/stream.ts";
-import { streamChat, testRepl } from "./helpers.ts";
+import { recording, streamChat, testRepl } from "./helpers.ts";
 
 const TURNS: ModelDelta[][] = [
 	[{ text: "(progress 1) (pause 250) (progress 2) (pause 250)" }],
@@ -24,42 +19,32 @@ vi.mock("../src/agent.ts", () => ({
 	},
 }));
 
-const progressed = topic<number>("progressed");
-
 function progressing(): InterpExtension {
-	return Object.assign(
-		(interp: Interp): void => {
-			interp.defineGlobal(
-				newSym("progress"),
-				interp.makeBuiltIn("progress", 1, (n: unknown) => {
-					progressed.emit(interp.channels, { user: Number(n) });
-					return 0;
-				}),
-			);
-			interp.defineGlobal(
-				newSym("pause"),
-				interp.makeBuiltIn(
-					"pause",
-					1,
-					(ms: unknown) =>
-						new Promise((resolve) => setTimeout(() => resolve(0), Number(ms))),
-				),
-			);
-		},
-		{
-			session(hooks: SessionHooks): void {
-				hooks.annotate.use((buffer, into, next) => {
-					const last = buffer.collect(progressed).at(-1);
-					return next(
-						buffer,
-						last === undefined
-							? into
-							: annotating(into, "output", { progress: last }),
-					);
-				});
-			},
-		},
-	);
+	return (interp: Interp): void => {
+		interp.defineGlobal(
+			newSym("progress"),
+			interp.makeBuiltIn("progress", 1, (n: unknown) => {
+				recording(interp.channels, "progress", Number(n));
+				return 0;
+			}),
+		);
+		interp.defineGlobal(
+			newSym("doing"),
+			interp.makeBuiltIn("doing", 1, (n: unknown) => {
+				recording(interp.channels, "doing", Number(n), true);
+				return 0;
+			}),
+		);
+		interp.defineGlobal(
+			newSym("pause"),
+			interp.makeBuiltIn(
+				"pause",
+				1,
+				(ms: unknown) =>
+					new Promise((resolve) => setTimeout(() => resolve(0), Number(ms))),
+			),
+		);
+	};
 }
 
 function snapshots(text: string): WireMessage[][] {
@@ -76,10 +61,13 @@ function snapshots(text: string): WireMessage[][] {
 		);
 }
 
-const isLive = (m: WireMessage) => m.id.endsWith(":live");
+const shape = (messages: WireMessage[]) =>
+	messages.map((m) =>
+		m.type === ENTRY_TYPE ? `entry:${m.additional_kwargs?.value}` : m.type,
+	);
 
 describe("a step that is still running", () => {
-	test("shows what it has annotated so far, until its result replaces it, and is never recorded", async () => {
+	test("journals each entry as its own row the moment it is recorded, before the step's result, and records every row once", async () => {
 		const recorded: WireMessage[] = [];
 		const body = await streamChat(
 			{ messages: [{ type: "human", content: "count to two" }] },
@@ -94,33 +82,49 @@ describe("a step that is still running", () => {
 			},
 		).text();
 
-		const values = snapshots(body);
-		const provisional = values
-			.map((messages) => messages.find(isLive))
-			.filter((m) => m !== undefined);
-		const resultAt = values.findIndex((messages) =>
-			messages.some((m) => m.type === "tool" && !isLive(m)),
-		);
-		const lastLiveAt = values.findLastIndex((messages) =>
-			messages.some(isLive),
-		);
+		const values = snapshots(body).map(shape);
 
-		expect(provisional.map((m) => m.additional_kwargs)).toEqual([
-			{ progress: 1 },
-			{ progress: 2 },
-		]);
-		expect(provisional[0]).toMatchObject({ type: "tool", content: "" });
-		expect(values[lastLiveAt].map((m) => m.type)).toEqual([
+		expect(values).toContainEqual(["human", "ai", "entry:1"]);
+		expect(values).toContainEqual(["human", "ai", "entry:1", "entry:2"]);
+		expect(values.at(-1)).toEqual([
 			"human",
 			"ai",
+			"entry:1",
+			"entry:2",
 			"tool",
+			"ai",
 		]);
-		expect(lastLiveAt).toBeLessThan(resultAt);
-		expect(values[resultAt].some(isLive)).toBe(false);
-		expect(values.at(-1)?.some(isLive)).toBe(false);
-		expect(recorded.some(isLive)).toBe(false);
-		expect(
-			recorded.find((m) => m.type === "tool")?.additional_kwargs,
-		).toMatchObject({ progress: 2 });
+		expect(shape(recorded)).toEqual(["ai", "entry:1", "entry:2", "tool", "ai"]);
+		expect(new Set(recorded.map((m) => m.id)).size).toBe(recorded.length);
+	});
+});
+
+describe("a step that keeps restating one fact", () => {
+	test("stores one row for it, holding the last value, and sends fewer snapshots than it recorded entries", async () => {
+		TURNS[0] = [
+			{
+				text: "(doing 1) (doing 2) (doing 3) (doing 4) (doing 5) (pause 250)",
+			},
+		];
+		turn = 0;
+		const recorded: WireMessage[] = [];
+		const body = await streamChat(
+			{ messages: [{ type: "human", content: "work" }] },
+			{
+				repl: testRepl([progressing()]),
+				onStep: (produced) => {
+					recorded.push(...produced);
+				},
+				onTurn: (rest) => {
+					recorded.push(...rest);
+				},
+			},
+		).text();
+
+		expect(shape(recorded)).toEqual(["ai", "entry:5", "tool", "ai"]);
+		const live = snapshots(body).filter((m) =>
+			m.some((message) => message.type === ENTRY_TYPE),
+		);
+		expect(live.length).toBeLessThan(5);
 	});
 });

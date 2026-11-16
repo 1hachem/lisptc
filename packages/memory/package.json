@@ -20,6 +20,7 @@
   "dependencies": {
     "@repo/env": "workspace:*",
     "@repo/interpreter": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/shared": "workspace:*",
     "minisearch": "^7.2.0",
     "zod": "^4.4.3"

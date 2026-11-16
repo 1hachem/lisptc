@@ -11,8 +11,8 @@ Turbo tag: `runtime`.
 vocabulary of a turn. `src/stream.ts` puts a turn on the wire as server-sent
 events. `src/eval.ts` is the one-shot evaluation.
 
-`src/agent.ts` wraps the model call and yields deltas. `src/provider/` holds the
-provider registry and one file per provider. `src/prompts/lisp.ts` holds the
+`src/agent.ts` wraps the model call and yields deltas, on a chat provider from
+`@repo/models`. `src/prompts/lisp.ts` holds the
 system prompt and the step cap. `src/repl.ts` turns a transcript into model
 messages and an eval result into content. `src/telemetry.ts` is the PostHog
 side, and `src/turn-telemetry.ts` lays it over the turn's chains as their
@@ -35,7 +35,7 @@ that over `src/` by directory, type imports included, and the roster of
 exceptions is empty. The manifest carries none either: the `runtime` tag denies
 `extension` in the root `turbo.json`, so `pnpm boundaries` fails on a dependency
 as well as on an import. Do not open one.
-If the loop needs something an extension knows, it arrives as an annotation or
+If the loop needs something an extension knows, it arrives as a journal entry or
 through a slot, and the way to add it is in `packages/interpreter/AGENTS.md`.
 
 **A turn starts from a post, never from a request.** Everything that reaches
@@ -56,10 +56,10 @@ takes one, or the store and the thread to draw one from. The extensions in it,
 and the hosts under them, are assembled in `@repo/backend` and injected by the
 product app.
 
-The loop interprets no annotation, coming or going. The browser reads one by
-lane, never by key. What the model reads is what an extension emits, the same
-live and after a reload. A payload that would need interpreting belongs below
-the seam.
+The loop interprets no journal entry, coming or going. Which entries a view
+shows is that view's choice, never the loop's. What the model reads is what an
+extension emits, the same live and after a reload. A payload that would need
+interpreting belongs below the seam.
 
 A new kind of thing a turn can report is a new variant of the turn event union,
 not a side channel.
@@ -71,7 +71,7 @@ extension's sake.
 
 ## Tests
 
-`test/annotation-lane.test.ts` is where the lane rule is pinned, and
+`test/journal-forwarding.test.ts` is where the journal rule is pinned, and
 `test/turn.test.ts` covers the loop. A test drives a real REPL rather than a
 mocked one wherever it can, and that REPL is built from `test/helpers.ts`,
 whose extensions are stubs written here. A REPL with nothing installed shows the

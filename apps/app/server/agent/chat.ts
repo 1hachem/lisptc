@@ -12,7 +12,7 @@ const ENVELOPE: ReadonlySet<string> = new Set(ENVELOPE_KEYS);
 const carried = z
 	.record(z.string(), z.json())
 	.refine(
-		(annotations) => !Object.keys(annotations).some((key) => ENVELOPE.has(key)),
+		(received) => !Object.keys(received).some((key) => ENVELOPE.has(key)),
 		{
 			message: "a message envelope field cannot be sent with a message",
 		},
@@ -23,7 +23,7 @@ export const chatRequestSchema = z.object({
 		chatId: convexId<"chats">(),
 		id: z.string().min(1).optional(),
 		message: z.string(),
-		annotations: carried.optional(),
+		received: carried.optional(),
 	}),
 });
 
@@ -57,7 +57,7 @@ export const turn = {
 		request,
 		context,
 	}: Authed<z.infer<typeof chatRequestSchema>>): Promise<Response> => {
-		const { chatId, message, annotations } = context.body.input;
+		const { chatId, message, received } = context.body.input;
 		const id = context.body.input.id ?? crypto.randomUUID();
 		await convexAs(context.session).query(api.chats.get, { chatId });
 		await post(
@@ -67,7 +67,7 @@ export const turn = {
 				id,
 				text: message,
 				forms: true,
-				...(annotations === undefined ? {} : { annotations }),
+				...(received === undefined ? {} : { received }),
 			},
 			undefined,
 			identityOf(request),

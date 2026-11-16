@@ -1,13 +1,10 @@
-import { topic } from "@repo/interpreter/channels";
 import { StepHold } from "@repo/interpreter/errors";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
-import type { ModelDelta } from "@repo/interpreter/session";
-import {
-	annotating,
-	type InterpExtension,
-	type SessionHooks,
-	type TurnOutcome,
+import type {
+	InterpExtension,
+	ModelDelta,
+	TurnOutcome,
 } from "@repo/interpreter/session";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
@@ -19,8 +16,11 @@ import {
 	asking,
 	concluding,
 	extension,
+	hearing,
 	noting,
 	receiving,
+	recording,
+	reporting,
 	riding,
 	testRepl,
 } from "./helpers.ts";
@@ -73,32 +73,16 @@ vi.mock("../src/agent.ts", () => ({
 	},
 }));
 
-const waiting = topic<string>("waiting");
-
 function holding(name: string, reason: string): InterpExtension {
-	const session = (hooks: SessionHooks): void => {
-		hooks.annotate.use((buffer, into, next) => {
-			const seen = buffer.collect(waiting);
-			return next(
-				buffer,
-				seen.length === 0
-					? into
-					: annotating(into, "output", { waiting: seen }),
-			);
-		});
+	return (interp: Interp): void => {
+		interp.defineGlobal(
+			newSym(name),
+			interp.makeBuiltIn(name, 0, () => {
+				recording(interp.channels, "waiting", reason);
+				throw new StepHold(reason);
+			}),
+		);
 	};
-	return Object.assign(
-		(interp: Interp): void => {
-			interp.defineGlobal(
-				newSym(name),
-				interp.makeBuiltIn(name, 0, () => {
-					waiting.emit(interp.channels, { user: reason });
-					throw new StepHold(reason);
-				}),
-			);
-		},
-		{ session },
-	);
 }
 
 class CountingRepl extends AgentRepl {
@@ -185,7 +169,7 @@ describe("the agent turn", () => {
 		expect(events.at(-1)).toMatchObject({ answer: "three.", steps: 2 });
 	});
 
-	test("a held step reports its result and annotations before the turn halts", async () => {
+	test("a held step reports what it recorded, then its result, before the turn halts", async () => {
 		script = [[{ text: "(wait-for-human)" }], [{ text: "never asked." }]];
 
 		const events = await drain(ask, {
@@ -195,14 +179,22 @@ describe("the agent turn", () => {
 		expect(events.map((e) => e.type)).toEqual([
 			"delta",
 			"assistant",
+			"entry",
 			"result",
 			"halt",
 		]);
-		expect(events[2]).toMatchObject({
+		expect(events[2]).toEqual({
+			type: "entry",
+			entry: expect.objectContaining({
+				kind: "waiting",
+				value: "approve the write",
+			}),
+		});
+		expect(events[3]).toMatchObject({
 			type: "result",
 			step: 1,
 			failed: false,
-			annotations: { output: { waiting: ["approve the write"] } },
+			held: true,
 		});
 		expect(calls).toBe(1);
 	});
@@ -224,7 +216,7 @@ describe("the agent turn", () => {
 		expect(images.origins()).toEqual(steps);
 	});
 
-	test("a step that ends the turn reports what it shows the person before halting, out of the model's sight", async () => {
+	test("a step that ends the turn records what it shows the person, and leaves no result for the model", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "never asked." }]];
 
 		const events = await drain(ask, { repl: testRepl([asking("Pick")]) });
@@ -232,19 +224,17 @@ describe("the agent turn", () => {
 		expect(events.map((e) => e.type)).toEqual([
 			"delta",
 			"assistant",
-			"result",
+			"entry",
 			"halt",
 		]);
-		expect(events[2]).toMatchObject({
-			type: "result",
-			quiet: true,
-			annotations: { output: { asked: ["Pick"] } },
+		expect(events[2]).toEqual({
+			type: "entry",
+			entry: expect.objectContaining({ kind: "asked", value: "Pick" }),
 		});
-		expect(events[2]).not.toHaveProperty("riding");
 		expect(calls).toBe(1);
 	});
 
-	test("what the turn leaves as it settles is concluded before the turn ends", async () => {
+	test("what the turn records as it settles is journaled before the turn ends", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 
 		const events = await drain(ask, {
@@ -252,7 +242,10 @@ describe("the agent turn", () => {
 		});
 
 		expect(events.slice(-2)).toEqual([
-			{ type: "concluded", annotations: { closed: ["wrapped"] } },
+			{
+				type: "entry",
+				entry: expect.objectContaining({ kind: "closed", value: "wrapped" }),
+			},
 			expect.objectContaining({ type: "halt" }),
 		]);
 	});
@@ -264,6 +257,39 @@ describe("the agent turn", () => {
 
 		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "halt"]);
 		expect(calls).toBe(1);
+	});
+
+	test("a step that halts still reports what its evaluation recorded", async () => {
+		script = [[{ text: "three." }]];
+
+		const events = await drain(ask, { repl: testRepl([reporting("noted")]) });
+
+		expect(events.map((e) => e.type)).toEqual([
+			"delta",
+			"assistant",
+			"entry",
+			"halt",
+		]);
+		expect(events[2]).toEqual({
+			type: "entry",
+			entry: expect.objectContaining({ kind: "reported", value: "noted" }),
+		});
+	});
+
+	test("what a step records before the model answers comes before the model's answer", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+
+		const events = await drain(ask, { repl: testRepl([hearing("hi")]) });
+
+		expect(
+			events
+				.filter((e) => e.type === "entry" || e.type === "assistant")
+				.map((e) => e.type),
+		).toEqual(["entry", "assistant", "entry", "assistant"]);
+		expect(events.find((e) => e.type === "entry")).toEqual({
+			type: "entry",
+			entry: expect.objectContaining({ kind: "heard", value: "hi" }),
+		});
 	});
 
 	test("what rode the user's message stays on it for every later step", async () => {

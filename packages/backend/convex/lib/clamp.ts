@@ -1,4 +1,3 @@
-import { asksKey } from "@repo/interpreter/asks";
 import { MAX_MESSAGE_BYTES } from "../limits.js";
 
 const encoder = new TextEncoder();
@@ -6,7 +5,7 @@ const decoder = new TextDecoder();
 
 const CONTENT_SHARE = Math.floor(MAX_MESSAGE_BYTES / 2);
 
-const KEPT_FIRST: ReadonlySet<string> = new Set([asksKey.name]);
+const KEPT_FIRST: ReadonlySet<string> = new Set(["kind", "thread", "holding"]);
 
 function bytes(value: unknown): number {
 	const json = JSON.stringify(value);

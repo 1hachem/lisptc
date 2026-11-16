@@ -13,6 +13,7 @@ const ROLE_TONE: Record<Role, { label: string; tone: string }> = {
 	assistant: { label: "agent", tone: "text-blue" },
 	tool: { label: "repl", tone: "text-purple" },
 	user: { label: "user", tone: "text-dim" },
+	entry: { label: "entry", tone: "text-yellow" },
 };
 
 export function Shell({ children }: { children: ReactNode }) {

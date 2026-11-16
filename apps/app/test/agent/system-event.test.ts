@@ -50,7 +50,7 @@ vi.mock("../../server/agent/threads.ts", () => ({
 		output: "",
 		error: false,
 		message: NOTE,
-		annotations: { decided: true },
+		entries: [{ kind: "asks", value: { decided: true } }],
 	}),
 }));
 

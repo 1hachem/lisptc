@@ -2,7 +2,8 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import type { Ask } from "@repo/interpreter/asks";
+import { type Ask, asksKind } from "@repo/journal-catalog/asks";
+import { entriesIn, view } from "@repo/shared/journal";
 import {
 	QueryClient,
 	QueryClientProvider,
@@ -21,12 +22,7 @@ import {
 	vi,
 } from "vitest";
 import { AskCard } from "../src/components/ask-card.tsx";
-import {
-	type AskOutcome,
-	type AskTransport,
-	answersOf,
-	asksOf,
-} from "../src/lib/asks.ts";
+import type { AskOutcome, AskTransport } from "../src/lib/asks.ts";
 import { OAUTH_AUTHORIZED_KEY } from "../src/lib/oauth-callback.ts";
 
 const session = vi.hoisted(() => ({
@@ -102,31 +98,44 @@ const KEY = convexQuery(api.messages.transcript, {
 
 interface Row {
 	_id: string;
+	seq: number;
+	type: string;
 	wireId?: string;
 	kwargs?: Record<string, unknown>;
 }
 
 function transcript(decided?: boolean, ask: Ask = REQUEST): Row[] {
 	return [
+		{ _id: "row1", seq: 0, type: "tool", wireId: MESSAGE_ID, kwargs: {} },
 		{
-			_id: "row1",
-			wireId: MESSAGE_ID,
-			kwargs: {
-				asks: {
-					open: [ask],
-					...(decided === undefined
-						? {}
-						: {
+			_id: "row2",
+			seq: 1,
+			type: "entry",
+			wireId: "e1",
+			kwargs: { kind: "asks", value: { open: [ask] }, about: MESSAGE_ID },
+		},
+		...(decided === undefined
+			? []
+			: [
+					{
+						_id: "row3",
+						seq: 2,
+						type: "entry",
+						wireId: "e2",
+						kwargs: {
+							kind: "asks",
+							value: {
 								answered: {
 									[ask.id]: {
 										accepted: decided,
 										label: decided ? "Allowed" : "Denied",
 									},
 								},
-							}),
-				},
-			},
-		},
+							},
+							about: MESSAGE_ID,
+						},
+					},
+				]),
 	];
 }
 
@@ -138,12 +147,14 @@ function StoredCard({
 	ask?: Ask;
 }) {
 	const { data } = useQuery<Row[]>({ queryKey: KEY, queryFn: skipToken });
-	const row = data?.find((r) => (r.wireId ?? r._id) === MESSAGE_ID);
+	const entries = entriesIn(
+		(data ?? []).map((r) => ({ type: r.type, additional_kwargs: r.kwargs })),
+	);
 	return (
 		<AskCard
 			ask={ask}
 			messageId={MESSAGE_ID}
-			answered={answersOf(row?.kwargs).get(ask.id)}
+			answered={view(entries, asksKind).answered?.[ask.id]}
 			transport={transport}
 		/>
 	);
@@ -386,12 +397,20 @@ describe("a sign-in ask", () => {
 	});
 });
 
-describe("reading an ask off a message", () => {
+describe("reading an ask off the journal", () => {
 	it("keeps a choice that names no answered label, labelled by itself", () => {
 		const { done: _done, ...bare } = AUTHORIZE;
-		const [ask] = asksOf({
-			asks: { open: [{ ...SIGN_IN, choices: [bare] }] },
-		});
+		const [ask] =
+			view(
+				[
+					{
+						id: "e1",
+						kind: "asks",
+						value: { open: [{ ...SIGN_IN, choices: [bare] }] },
+					},
+				],
+				asksKind,
+			).open ?? [];
 		expect(ask?.choices).toEqual([{ ...bare, done: "Authorize" }]);
 	});
 });

@@ -1,4 +1,5 @@
-import type { ActivityEntry, Intent } from "@repo/interpreter/annotations";
+import type { ActivityEntry } from "@repo/journal-catalog/activity";
+import type { Intent } from "@repo/journal-catalog/intent";
 import {
 	type ChatMessage,
 	isParentMessage,

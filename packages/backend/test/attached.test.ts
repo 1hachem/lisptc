@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { api } from "../convex/_generated/api.js";
-import { harness, signIn } from "./helpers.ts";
+import { api, internal } from "../convex/_generated/api.js";
+import { signIn, testDeployment } from "./helpers.ts";
 
 async function chat() {
-	const t = harness();
+	const t = testDeployment();
 	const alice = await signIn(t, "alice@example.com");
 	const chatId = await alice.as.mutation(api.chats.create, {
 		workspaceId: alice.workspace,
 		title: "work",
 	});
-	return { alice, chatId };
+	return { t, alice, chatId };
 }
 
 describe("the files a message attached", () => {
@@ -45,14 +45,14 @@ describe("the files a message attached", () => {
 		);
 	});
 
-	it("refuses attachments annotated onto a stored message", async () => {
-		const { alice, chatId } = await chat();
+	it("refuses attachments revised onto a stored message", async () => {
+		const { t, alice, chatId } = await chat();
 		await alice.as.mutation(api.messages.append, {
 			chatId,
 			messages: [{ id: "t1", type: "tool", content: "" }],
 		});
 		await expect(
-			alice.as.mutation(api.messages.annotate, {
+			t.mutation(internal.threads.revise, {
 				chatId,
 				id: "t1",
 				kwargs: { attachments: [{ folder: "bin", name: "x" }] },

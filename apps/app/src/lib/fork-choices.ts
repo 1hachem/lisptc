@@ -1,5 +1,6 @@
 import type { Choice } from "@repo/components/choice-dialog.tsx";
 import type { ChatMessage } from "./chat.tsx";
+import { isEntryMessage } from "./entries.ts";
 import { isGreetingMessage } from "./greeting.ts";
 
 const SNIPPET = 90;
@@ -21,7 +22,10 @@ function snippet(content: unknown): string {
 export function forkChoices(messages: readonly ChatMessage[]): Choice[] {
 	return messages
 		.filter(
-			(message) => message.id !== undefined && !isGreetingMessage(message),
+			(message) =>
+				message.id !== undefined &&
+				!isGreetingMessage(message) &&
+				!isEntryMessage(message),
 		)
 		.map((message) => ({
 			id: message.id as string,

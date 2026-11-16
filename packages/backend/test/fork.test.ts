@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
-import { harness, type Signed, signIn } from "./helpers.ts";
+import { type Signed, signIn, testDeployment } from "./helpers.ts";
 
 afterEach(() => {
 	vi.useRealTimers();
 });
 
 async function conversation() {
-	const t = harness();
+	const t = testDeployment();
 	const alice = await signIn(t, "alice@example.com");
 	const chatId = await alice.as.mutation(api.chats.create, {
 		workspaceId: alice.workspace,
@@ -61,7 +61,10 @@ async function forkedRepl(
 	return { forked, replId };
 }
 
-async function resumed(t: ReturnType<typeof harness>, replId: Id<"repls">) {
+async function resumed(
+	t: ReturnType<typeof testDeployment>,
+	replId: Id<"repls">,
+) {
 	const latest = await t.query(internal.repls.latest, { replId });
 	return latest?.layers.map((chunks) => JSON.parse(chunks.join("")));
 }
@@ -216,6 +219,84 @@ describe("forking a chat at a message", () => {
 			...(await ctx.db.query("replLayerChunks").collect()),
 		]);
 		expect(gone).toEqual([]);
+	});
+
+	describe("an ask in the forked conversation", () => {
+		async function asked() {
+			const t = testDeployment();
+			const alice = await signIn(t, "alice@example.com");
+			const chatId = await alice.as.mutation(api.chats.create, {
+				workspaceId: alice.workspace,
+			});
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [
+					{ id: "h1", type: "human", content: "write it" },
+					{ id: "a1", type: "ai", content: "(write)" },
+					{
+						id: "e1",
+						type: "entry",
+						content: "",
+						kwargs: {
+							kind: "asks",
+							value: {
+								open: [{ id: "x1", title: "write?", prompt: "", choices: [] }],
+							},
+							about: "a1",
+						},
+					},
+					{ id: "t1", type: "tool", content: "waiting" },
+				],
+			});
+			return { alice, chatId };
+		}
+
+		const answer = {
+			kind: "asks",
+			value: { answered: { x1: { accepted: true, label: "Allowed" } } },
+		};
+		const status = async (alice: Signed, chatId: Id<"chats">) =>
+			(await alice.as.query(api.chats.get, { chatId })).status;
+
+		it("waits on its user when the fork ends on an open ask", async () => {
+			const { alice, chatId } = await asked();
+			const forked = await alice.as.mutation(api.chats.fork, {
+				chatId,
+				messageId: "t1",
+			});
+			expect(await status(alice, forked)).toBe("waiting");
+		});
+
+		it("is open again in a fork cut before its answer, and the original stays answered", async () => {
+			const { alice, chatId } = await asked();
+			await alice.as.mutation(api.chats.start, { chatId });
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status(alice, chatId)).toBe("waiting");
+			await alice.as.mutation(api.messages.record, {
+				chatId,
+				about: "t1",
+				entries: [answer],
+			});
+			const forked = await alice.as.mutation(api.chats.fork, {
+				chatId,
+				messageId: "t1",
+			});
+			expect(await status(alice, forked)).toBe("waiting");
+			expect(await status(alice, chatId)).toBeUndefined();
+		});
+
+		it("does not wait when the fork starts a new turn after the ask", async () => {
+			const { alice, chatId } = await asked();
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [{ id: "h2", type: "human", content: "never mind" }],
+			});
+			const forked = await alice.as.mutation(api.chats.fork, {
+				chatId,
+				messageId: "h2",
+			});
+			expect(await status(alice, forked)).toBeUndefined();
+		});
 	});
 
 	it("refuses a message that is not in the chat", async () => {

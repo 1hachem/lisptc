@@ -7,6 +7,7 @@ import { evalMessage } from "./eval.ts";
 import type { Envelope, Mailbox } from "./mailbox.ts";
 import {
 	type ChatMessageInput,
+	entryMessage,
 	streamTurn,
 	systemEventMessage,
 	type ThreadState,
@@ -19,7 +20,7 @@ import { runAgentTurn, type TurnEvent } from "./turn.ts";
 export interface TranscriptStore {
 	read(threadId: string): Promise<ChatMessageInput[]>;
 	append(threadId: string, messages: WireMessage[]): Promise<void>;
-	annotate(threadId: string, id: string, kwargs: MessageKwargs): Promise<void>;
+	revise(threadId: string, id: string, kwargs: MessageKwargs): Promise<void>;
 }
 
 export type TurnEnding = { failure: string } | { stopped: true };
@@ -74,9 +75,9 @@ function openingMessage(envelope: Envelope): WireMessage {
 		id: envelope.id,
 		type: "human",
 		content: envelope.text,
-		...(envelope.annotations === undefined
+		...(envelope.received === undefined
 			? {}
-			: { additional_kwargs: envelope.annotations }),
+			: { additional_kwargs: envelope.received }),
 	};
 }
 
@@ -365,7 +366,10 @@ export class Thread {
 		if (opening.kind === "user" && opening.forms && setup.runsForms) {
 			const evaluated = await evalMessage(repl, opening.text);
 			if (evaluated !== undefined) {
-				await ports.transcript.append(id, [evaluated.message]);
+				await ports.transcript.append(id, [
+					evaluated.message,
+					...evaluated.entries.map((entry) => entryMessage(entry)),
+				]);
 				quiet = evaluated.quiet;
 			}
 		}
@@ -385,7 +389,7 @@ export class Thread {
 				const stored = at < history.length ? history[at].id : message.id;
 				if (stored === undefined || message.additional_kwargs === undefined)
 					continue;
-				await ports.transcript.annotate(id, stored, message.additional_kwargs);
+				await ports.transcript.revise(id, stored, message.additional_kwargs);
 			}
 			if (produced.length > 0) await ports.transcript.append(id, produced);
 		} finally {

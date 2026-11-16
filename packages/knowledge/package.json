@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@repo/interpreter": "workspace:*",
+    "@repo/journal-catalog": "workspace:*",
     "@repo/shared": "workspace:*",
     "unpdf": "^1.9.1",
     "zod": "^4.4.3"
