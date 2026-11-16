@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -138,17 +137,24 @@ describe("onboarding scripts", () => {
 		);
 	});
 
-	it("stores the example the prompt shows", async () => {
+	it("stores the example its memory shows", async () => {
 		const { interp, store } = fresh();
-		const prompt = readFileSync(
-			new URL("../src/onboarding.ptc", import.meta.url),
-			"utf8",
+		const { memories } = onboardingExtension(onboardingHostFor(store));
+		runSync(
+			interp,
+			`(setq shipped nil)
+(defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
+(defmacro area (name &rest declared) nil)`,
 		);
-		const example = prompt.slice(
-			prompt.indexOf('(onboarding/create "welcome"'),
-			prompt.indexOf(':about "first look at app")') +
-				':about "first look at app")'.length,
+		runSync(interp, memories ?? "");
+		const body = str(
+			runSync(
+				interp,
+				'(car (cdr (assoc "internal/onboarding/write" shipped)))',
+			),
+			false,
 		);
+		const example = body.slice(body.indexOf('(onboarding/create "welcome"'));
 		expect(await ev(interp, example)).toBe('"welcome"');
 		expect(str((await store.get("welcome"))?.script)).toContain(
 			'(ui/tour "welcome"',

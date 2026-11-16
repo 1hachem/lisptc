@@ -11,5 +11,6 @@ export function onboardingHostFor(
 	return {
 		store,
 		prompt: filePrompt(new URL("./onboarding.ptc", import.meta.url)),
+		memories: filePrompt(new URL("./onboarding.memories.ptc", import.meta.url)),
 	};
 }

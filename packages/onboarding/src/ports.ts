@@ -24,6 +24,7 @@ export interface OnboardingStore {
 export interface OnboardingHost {
 	store: OnboardingStore;
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export class VolatileOnboardingStore implements OnboardingStore {
