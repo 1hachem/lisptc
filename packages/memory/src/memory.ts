@@ -2,7 +2,6 @@ import { quotient } from "@repo/interpreter/arith";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import type { Journal } from "@repo/interpreter/journal";
-import { record } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
@@ -431,7 +430,7 @@ export class MemoryBank {
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
-		record(this.journal, memoryKind, surfaced);
+		this.journal?.write(memoryKind, surfaced);
 	}
 }
 

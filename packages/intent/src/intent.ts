@@ -1,6 +1,5 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -151,7 +150,7 @@ function closeShown(
 	error?: string,
 ): void {
 	const intent = close(interp, state, clock, error);
-	if (intent !== undefined) record(interp.journal, intentKind, intent);
+	if (intent !== undefined) interp.journal.write(intentKind, intent);
 }
 
 function count(x: unknown, what: string, least: number): number {
@@ -245,7 +244,7 @@ function registerIntent(interp: Interp, clock: Clock): void {
 	);
 
 	const show = (): typeof Unspecified => {
-		record(interp.journal, intentKind, shown(states));
+		interp.journal.write(intentKind, shown(states));
 		return Unspecified;
 	};
 
@@ -388,7 +387,7 @@ function registerIntent(interp: Interp, clock: Clock): void {
 			const multi = opts.has("multi") && opts.get("multi") !== null;
 			const n = seq.get() + 1;
 			seq.set(n);
-			record(interp.journal, questionKind, {
+			interp.journal.write(questionKind, {
 				id: `q${n}`,
 				prompt,
 				choices,

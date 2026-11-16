@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { StepHold } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
@@ -54,7 +53,7 @@ function gate(): Gate {
 			newSym("guarded"),
 			interp.makeBuiltIn("guarded", 1, (frame) => {
 				if (!granted) {
-					record(interp.journal, asksKind, { open: [ASK] });
+					interp.journal.write(asksKind, { open: [ASK] });
 					throw new StepHold("guarded waits for approval");
 				}
 				granted = false;

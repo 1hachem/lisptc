@@ -1,5 +1,4 @@
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { type Ask, answering, asksKind } from "@repo/journal-catalog/asks";
 import { resolveApproval } from "./approvals.ts";
@@ -66,7 +65,7 @@ function approvalAsk(request: ApprovalRequest): Ask {
 export const uiApprover: Approver = {
 	kind: "ui",
 	ask(request, journal) {
-		record(journal, asksKind, { open: [approvalAsk(request)] });
+		journal.write(asksKind, { open: [approvalAsk(request)] });
 	},
 	session(hooks: SessionHooks, approvals: Approvals): void {
 		hooks.invoke.use(async (ctx, next) => {
@@ -81,8 +80,7 @@ export const uiApprover: Approver = {
 				by: "ui",
 			});
 			if (resolution === undefined) {
-				record(
-					ctx.interp.journal,
+				ctx.interp.journal.write(
 					asksKind,
 					answering(id, { accepted: false, label: EXPIRED }),
 				);
@@ -93,8 +91,7 @@ export const uiApprover: Approver = {
 				);
 			}
 			const { approved: accepted, scope: decidedScope } = resolution.decision;
-			record(
-				ctx.interp.journal,
+			ctx.interp.journal.write(
 				asksKind,
 				answering(id, {
 					accepted,

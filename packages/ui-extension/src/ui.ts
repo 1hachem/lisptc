@@ -3,7 +3,6 @@ import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import { BuiltInFunc, callableArity } from "@repo/interpreter/func";
 import type { Journal } from "@repo/interpreter/journal";
-import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -264,7 +263,7 @@ export class UiSurface {
 
 	render(node: UiNode): RenderedView {
 		const view = this.place(this.viewId(), node);
-		if (this.journal) record(this.journal, viewKind, { viewId: view.viewId });
+		this.journal?.write(viewKind, { viewId: view.viewId });
 		return view;
 	}
 

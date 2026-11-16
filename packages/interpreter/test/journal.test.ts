@@ -1,14 +1,7 @@
 import { type Entry, entryKind, every } from "@repo/shared/journal";
 import { describe, expect, it, test } from "vitest";
 import { z } from "zod";
-import {
-	bufferSink,
-	hitch,
-	Journal,
-	print,
-	printed,
-	record,
-} from "../src/journal.ts";
+import { bufferSink, hitch, Journal, print, printed } from "../src/journal.ts";
 import { Interp, runSync } from "../src/lisp.ts";
 
 const remark = entryKind({
@@ -42,12 +35,12 @@ describe("writing an entry", () => {
 		]);
 	});
 
-	test("gives every entry an id of its own, under the step it was written in", () => {
+	test("gives every entry an id of its own, under the evaluation it was written in", () => {
 		const { journal, buffer } = piped();
-		journal.step = 3;
+		journal.evaluation = 3;
 		journal.write(remark, { text: "a" });
 		print(journal, { user: "b" });
-		journal.step = 4;
+		journal.evaluation = 4;
 		journal.write(remark, { text: "c" });
 		expect(buffer.entries.map((e) => e.id)).toEqual(["3.1", "3.2", "4.3"]);
 	});
@@ -58,15 +51,6 @@ describe("writing an entry", () => {
 			journal.write(viewKind, { viewId: 1 } as unknown as { viewId: string }),
 		).toThrow(/"view" entry does not fit/);
 		expect(buffer.entries).toEqual([]);
-	});
-
-	test("records nothing without a journal, and still checks the value", () => {
-		expect(() => record(undefined, viewKind, { viewId: "v1" })).not.toThrow();
-		expect(() =>
-			record(undefined, viewKind, { viewId: 1 } as unknown as {
-				viewId: string;
-			}),
-		).toThrow(/"view" entry does not fit/);
 	});
 
 	test("prints nothing without a journal", () => {

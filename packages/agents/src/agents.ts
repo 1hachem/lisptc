@@ -1,7 +1,7 @@
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { implant, snapshot } from "@repo/interpreter/image";
-import { print, record } from "@repo/interpreter/journal";
+import { print } from "@repo/interpreter/journal";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -246,7 +246,7 @@ export function registerAgents(interp: Interp, host: AgentsHost): void {
 	const library = new AgentLibrary(host.folder, host.workspace, host.roster);
 
 	function report(id: string, name: string, detail: string, chat: string) {
-		record(interp.journal, activityKind, {
+		interp.journal.write(activityKind, {
 			kind: "agent",
 			icon: "agent",
 			label: name,

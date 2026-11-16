@@ -50,13 +50,13 @@ export class Journal {
 	private readonly allKinds = new Set<Listener>();
 	private readonly sinks = new Set<Sink>();
 	private written = 0;
-	step = 0;
+	evaluation = 0;
 
 	write<T, V>(kind: EntryKind<T, V>, value: T): void {
 		checked(kind, value);
 		this.written += 1;
 		this.deliver({
-			id: `${this.step}.${this.written}`,
+			id: `${this.evaluation}.${this.written}`,
 			kind: kind.name,
 			value,
 			...(kind.supersedes ? { supersedes: true } : {}),
@@ -117,15 +117,6 @@ export class Journal {
 				text: `a listener on ${entry.kind} threw: ${message}`,
 			});
 	}
-}
-
-export function record<T, V>(
-	journal: Journal | undefined,
-	kind: EntryKind<T, V>,
-	value: T,
-): void {
-	if (journal === undefined) checked(kind, value);
-	else journal.write(kind, value);
 }
 
 export function print(

@@ -55,13 +55,13 @@ describe("checkpoints", () => {
 		expect((await images.latest())?.depth).toBe(3);
 	});
 
-	it("stamps a step's journal entries with its depth, across a resume", async () => {
-		const steps: number[] = [];
+	it("stamps an evaluation's journal entries with its depth, across a resume", async () => {
+		const evaluations: number[] = [];
 		const stamp: InterpExtension = (interp: Interp): void => {
 			interp.defineGlobal(
 				newSym("stamp"),
 				new BuiltInFunc("stamp", 0, () => {
-					steps.push(interp.journal.step);
+					evaluations.push(interp.journal.evaluation);
 					return null;
 				}),
 			);
@@ -74,7 +74,7 @@ describe("checkpoints", () => {
 		const second = repl(images, [stamp]);
 		await second.resume();
 		await second.evalOutput("(stamp)");
-		expect(steps).toEqual([1, 2, 3]);
+		expect(evaluations).toEqual([1, 2, 3]);
 	});
 
 	it("resumes in a new REPL where the last one stopped", async () => {

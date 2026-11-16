@@ -429,7 +429,7 @@ export class MemoryRepl implements InMemoryRepl {
 		const interp = this.currentInterp;
 		const ctx: StepContext = { interp, ...step };
 		const { journal } = interp;
-		journal.step = this.calls + 1;
+		journal.evaluation = this.calls + 1;
 		const buffer = bufferSink();
 		const watching = live === undefined ? undefined : liveEntries(live);
 		for (const entry of this.takeBetweenSteps(journal)) {
