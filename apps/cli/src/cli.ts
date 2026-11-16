@@ -118,7 +118,7 @@ class InteractiveRepl implements Repl {
 			if (!(ex instanceof StepHold)) throw ex;
 		} finally {
 			detach();
-			for (const { content } of buffer.collect(note)) write(content);
+			for (const { content } of buffer.collect(note)) write(`${content}\n`);
 		}
 		return openAsks(buffer.entries);
 	}
@@ -137,7 +137,7 @@ class InteractiveRepl implements Repl {
 			);
 		} finally {
 			detach();
-			for (const { content } of buffer.collect(note)) write(content);
+			for (const { content } of buffer.collect(note)) write(`${content}\n`);
 		}
 	}
 }
