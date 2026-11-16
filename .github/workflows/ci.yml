@@ -12,16 +12,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  typecheck:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
@@ -42,6 +37,18 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm and Node.js
+        uses: ./.github/actions/setup
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Lint & format check
         run: pnpm lint
@@ -64,21 +71,141 @@ jobs:
       - name: Architecture
         run: pnpm check:arch
 
+  dead-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm and Node.js
+        uses: ./.github/actions/setup
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Knip
         run: pnpm knip
 
       - name: Fallow
         run: pnpm fallow --base ${{ github.event.pull_request.base.sha || 'origin/main' }}
 
+  test-plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm and Node.js
+        uses: ./.github/actions/setup
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore the recorded test timings
+        uses: actions/cache/restore@v4
+        with:
+          path: test-timings.json
+          key: test-timings-${{ github.run_id }}
+          restore-keys: test-timings-
+
+      - name: Plan the test shards
+        id: plan
+        run: |
+          affected=${{ github.event_name == 'pull_request' && '--affected' || '' }}
+          pnpm exec turbo run test:coverage $affected --dry=json > "$RUNNER_TEMP/dry-run.json"
+          shards=$(pnpm -s test:shards plan "$RUNNER_TEMP/dry-run.json" test-timings.json)
+          echo "$shards"
+          echo "shards=$shards" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: test-plan
+    if: needs.test-plan.outputs.shards != '[]'
+    name: test (${{ matrix.shard.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.test-plan.outputs.shards) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm and Node.js
+        uses: ./.github/actions/setup
+
+      - name: Fetch the turbo remote cache credentials from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /turbo
+          export-type: env
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Test with coverage
-        run: pnpm test:coverage
+        run: pnpm exec turbo run test:coverage --concurrency=2 --summarize ${{ matrix.shard.filters }}
+
+      - name: Pack the coverage and the run summary
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/shard"
+          find apps packages -path '*/coverage/coverage-final.json' -not -path '*/node_modules/*' \
+            | tar -czf "$RUNNER_TEMP/shard/coverage.tgz" -T -
+          cp -r .turbo/runs "$RUNNER_TEMP/shard/runs"
+
+      - name: Upload the shard
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-shard-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/shard
+          retention-days: 1
+
+  coverage:
+    needs: [test-plan, test]
+    if: ${{ !cancelled() && needs.test-plan.outputs.shards != '[]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm and Node.js
+        uses: ./.github/actions/setup
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-shard-*
+          path: ${{ runner.temp }}/shards
+
+      - name: Unpack the coverage
+        run: |
+          for archive in "$RUNNER_TEMP"/shards/*/coverage.tgz; do
+            tar -xzf "$archive"
+          done
 
       - name: Merge coverage
-        if: ${{ !cancelled() }}
         run: pnpm coverage:merge
 
       - name: Report coverage on the PR
-        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        if: github.event_name == 'pull_request'
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           json-summary-path: ./coverage/coverage-summary.json
@@ -106,6 +233,27 @@ jobs:
             git commit -m "chore: update the coverage badge"
             git push origin badges
           fi
+
+      - name: Restore the recorded test timings
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/restore@v4
+        with:
+          path: test-timings.json
+          key: test-timings-${{ github.run_id }}
+          restore-keys: test-timings-
+
+      - name: Record the test timings
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          pnpm -s test:shards record test-timings.json "$RUNNER_TEMP/shards" > "$RUNNER_TEMP/test-timings.json"
+          mv "$RUNNER_TEMP/test-timings.json" test-timings.json
+
+      - name: Save the recorded test timings
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: test-timings.json
+          key: test-timings-${{ github.run_id }}
 
   test-nix:
     runs-on: ubuntu-latest
