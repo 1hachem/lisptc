@@ -1,9 +1,11 @@
 import { bufferTransport } from "@repo/interpreter/channels-host";
 import type { Conversation } from "@repo/interpreter/conversation";
 import { restore, snapshot } from "@repo/interpreter/image";
+import { journal } from "@repo/interpreter/journal";
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
+import { viewKind } from "@repo/journal-catalog/view";
 import { TAGS, widgetOf } from "@repo/ui-catalog";
 import { describe, expect, it } from "vitest";
 import {
@@ -12,7 +14,6 @@ import {
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
-	rendered,
 	type UiNode,
 	UiSurface,
 	type UiValue,
@@ -51,11 +52,12 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 	return { panel, ops };
 }
 
-function collector(interp: Interp) {
-	let view: UiNode | undefined;
+function collector(interp: Interp, views: MemoryViewStore) {
+	let viewId: string | undefined;
 	let requests: { source: string; content: string }[] = [];
-	rendered.on(interp.channels, ({ node }) => {
-		view = node;
+	journal.on(interp.channels, (entry) => {
+		if (entry.kind === viewKind.name)
+			viewId = (entry.value as { viewId: string }).viewId;
 	});
 	const conversation: Conversation = {
 		records: () => [],
@@ -67,8 +69,8 @@ function collector(interp: Interp) {
 	return {
 		conversation,
 		takeView(): UiNode | undefined {
-			const v = view;
-			view = undefined;
+			const v = viewId === undefined ? undefined : views.views.get(viewId);
+			viewId = undefined;
 			return v;
 		},
 		takeRequests(): { source: string; content: string }[] {
@@ -87,10 +89,11 @@ function fresh(): {
 } {
 	const surface = new UiSurface();
 	const { panel, ops } = panelOf([]);
-	const host = uiHostFor({ panel });
+	const views = new MemoryViewStore();
+	const host = uiHostFor({ panel, views });
 	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 	runSync(interp, prelude);
-	return { interp, surface, ui: collector(interp), ops };
+	return { interp, surface, ui: collector(interp, views), ops };
 }
 
 async function click(
@@ -826,7 +829,7 @@ describe("the view store", () => {
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 		runSync(interp, prelude);
-		return { surface, views, interp, ui: collector(interp) };
+		return { surface, views, interp, ui: collector(interp, views) };
 	}
 
 	it("writes every render of a step into one view", () => {

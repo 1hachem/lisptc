@@ -1,4 +1,4 @@
-import { type Channels, topic } from "@repo/interpreter/channels";
+import type { Channels } from "@repo/interpreter/channels";
 import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -75,8 +75,6 @@ export interface RenderedView {
 	viewId: string;
 	node: UiNode;
 }
-
-export const rendered = topic<RenderedView>("ui");
 
 const handlerCodec: StateCodec<[string, unknown][]> = {
 	toLisp: (handlers) =>
@@ -266,11 +264,7 @@ export class UiSurface {
 
 	render(node: UiNode): RenderedView {
 		const view = this.place(this.viewId(), node);
-		const channels = this.channels;
-		if (channels) {
-			rendered.emit(channels, { user: view });
-			record(channels, viewKind, { viewId: view.viewId });
-		}
+		if (this.channels) record(this.channels, viewKind, { viewId: view.viewId });
 		return view;
 	}
 
