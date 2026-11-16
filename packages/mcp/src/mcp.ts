@@ -283,12 +283,12 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 		}),
 };
 
-function entryOf(servers: Servers, name: string): ServerEntry | undefined {
+function serverEntry(servers: Servers, name: string): ServerEntry | undefined {
 	return servers.get().find((entry) => entry.name === name);
 }
 
 function statusOf(servers: Servers, name: string): LispKeyword {
-	return newLispKeyword(entryOf(servers, name)?.state ?? "unloaded");
+	return newLispKeyword(serverEntry(servers, name)?.state ?? "unloaded");
 }
 
 function toolSyms(entry: ServerEntry): Sym[] {
@@ -611,7 +611,7 @@ function doUnload(
 	servers: Servers,
 	name: string,
 ): Sym[] {
-	const entry = entryOf(servers, name);
+	const entry = serverEntry(servers, name);
 	if (!entry) throw new EvalException("MCP server not loaded", name, false);
 	if (entry.state === "loaded")
 		void client.disconnect(entry.serverId).catch(() => {});
@@ -638,7 +638,7 @@ function notLoaded(
 	const server = serverOf(error);
 	if (
 		server === undefined ||
-		entryOf(servers, server) !== undefined ||
+		serverEntry(servers, server) !== undefined ||
 		!predefined.has(server)
 	)
 		return undefined;
@@ -680,7 +680,7 @@ function callTool(
 	f: unknown[],
 ): Promise<unknown> {
 	const name = `${ref.server}/${ref.tool}`;
-	const entry = entryOf(servers, ref.server);
+	const entry = serverEntry(servers, ref.server);
 	if (entry === undefined)
 		throw new EvalException("MCP server not loaded", ref.server, false);
 	if (entry.state !== "loaded")
@@ -762,7 +762,7 @@ function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
 					`${ref.server}/${ref.tool}`,
 					false,
 				);
-			const entry = entryOf(wiring.servers, ref.server);
+			const entry = serverEntry(wiring.servers, ref.server);
 			return entry?.state === "dormant"
 				? wiring.reconnect(entry).then(() => callTool(wiring, ref, f))
 				: callTool(wiring, ref, f);
@@ -916,7 +916,7 @@ export function registerMcp(
 			interp.journal.write(activityKind, {
 				kind: "mcp",
 				icon: iconOf(
-					state === "done" ? entryOf(servers, name)?.icons : undefined,
+					state === "done" ? serverEntry(servers, name)?.icons : undefined,
 					manifestIcons(conf),
 				),
 				label: `load-mcp · ${name}`,
@@ -1004,7 +1004,7 @@ export function registerMcp(
 			const conf = connConfigFromArgs(rest, shown(), toolkit.local, commands);
 			if ("local" in conf && conf.local === true)
 				yield* interp.guard(`${LOCAL_GATE}${conf.name}`, []);
-			if (entryOf(servers, conf.name))
+			if (serverEntry(servers, conf.name))
 				doUnload(interp, client, servers, conf.name);
 			return startLoad(rest);
 		},
@@ -1085,7 +1085,7 @@ export function registerMcp(
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(shown(), name);
-			if (entryOf(servers, name)) doUnload(interp, client, servers, name);
+			if (serverEntry(servers, name)) doUnload(interp, client, servers, name);
 			return withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout").then(
 				() => newLispKeyword("logged-out"),
 			);
