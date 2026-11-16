@@ -2,7 +2,7 @@ import { providerSpecs } from "@repo/env/providers";
 import type { ModelDelta } from "@repo/interpreter/session";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { Envelope } from "../src/mailbox.ts";
+import type { Mail } from "../src/mailbox.ts";
 import { replResultContent } from "../src/repl.ts";
 import type { ChatInput } from "../src/stream.ts";
 import {
@@ -233,7 +233,7 @@ describe("chat stream", () => {
 	});
 
 	test("a steer posted mid-turn is recorded in order", async () => {
-		const waiting: Envelope[] = [
+		const waiting: Mail[] = [
 			{ kind: "user", id: "s1", text: "use hex", forms: true },
 		];
 		const recorded: { type: string; content: string; id: string }[] = [];
@@ -261,7 +261,7 @@ describe("chat stream", () => {
 	});
 
 	test("an event taken mid-turn is recorded as a system message", async () => {
-		const waiting: Envelope[] = [
+		const waiting: Mail[] = [
 			{ kind: "event", id: "e1", source: "agent:r", text: "(+ 1 2)" },
 		];
 		const messages = await finalMessages(

@@ -1,7 +1,7 @@
 import type { Awaitable } from "@repo/shared/host";
 import type { Received } from "@repo/shared/journal";
 
-export type Envelope =
+export type Mail =
 	| {
 			kind: "user";
 			id: string;
@@ -21,21 +21,21 @@ export type Envelope =
 	  };
 
 export interface Mailbox {
-	post(threadId: string, envelope: Envelope): Awaitable<void>;
-	take(threadId: string, max?: number): Awaitable<Envelope[]>;
+	post(threadId: string, mail: Mail): Awaitable<void>;
+	take(threadId: string, max?: number): Awaitable<Mail[]>;
 	withdraw(threadId: string, id: string): Awaitable<boolean>;
 }
 
 export class MemoryMailbox implements Mailbox {
-	private readonly waiting = new Map<string, Envelope[]>();
+	private readonly waiting = new Map<string, Mail[]>();
 
-	post(threadId: string, envelope: Envelope): void {
+	post(threadId: string, mail: Mail): void {
 		const queue = this.waiting.get(threadId);
-		if (queue === undefined) this.waiting.set(threadId, [envelope]);
-		else queue.push(envelope);
+		if (queue === undefined) this.waiting.set(threadId, [mail]);
+		else queue.push(mail);
 	}
 
-	take(threadId: string, max = Number.POSITIVE_INFINITY): Envelope[] {
+	take(threadId: string, max = Number.POSITIVE_INFINITY): Mail[] {
 		const queue = this.waiting.get(threadId);
 		if (queue === undefined) return [];
 		const taken = queue.splice(0, max);
@@ -45,7 +45,7 @@ export class MemoryMailbox implements Mailbox {
 
 	withdraw(threadId: string, id: string): boolean {
 		const queue = this.waiting.get(threadId);
-		const at = queue?.findIndex((envelope) => envelope.id === id) ?? -1;
+		const at = queue?.findIndex((mail) => mail.id === id) ?? -1;
 		if (queue === undefined || at === -1) return false;
 		queue.splice(at, 1);
 		if (queue.length === 0) this.waiting.delete(threadId);

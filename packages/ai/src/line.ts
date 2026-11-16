@@ -6,7 +6,7 @@ import {
 	envelopeOf,
 	type MessageKwargs,
 } from "@repo/shared/messages";
-import type { Envelope } from "./mailbox.ts";
+import type { Mail } from "./mailbox.ts";
 import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
 export interface ChatMessageInput {
@@ -47,16 +47,16 @@ export function isPrompt(line: Line): line is PromptLine {
 	return line.kind === "user";
 }
 
-export function envelopeLine(envelope: Envelope): PostedLine {
-	if (envelope.kind === "user") return { kind: "user", text: envelope.text };
+export function mailLine(mail: Mail): PostedLine {
+	if (mail.kind === "user") return { kind: "user", text: mail.text };
 	return {
 		kind: "record",
 		record: {
-			role: envelope.noted ? "system" : "user",
-			content: envelope.text,
-			source: envelope.source,
+			role: mail.noted ? "system" : "user",
+			content: mail.text,
+			source: mail.source,
 		},
-		...(envelope.failed ? { failed: true as const } : {}),
+		...(mail.failed ? { failed: true as const } : {}),
 	};
 }
 

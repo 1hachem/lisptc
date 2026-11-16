@@ -1,4 +1,4 @@
-import type { Envelope, PostOptions } from "@repo/ai";
+import type { Mail, PostOptions } from "@repo/ai";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { type Method, postJson as send } from "../helpers.ts";
 
@@ -7,7 +7,7 @@ const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 const world = vi.hoisted(() => ({
 	posted: [] as {
 		chatId: string;
-		envelope: Envelope;
+		mail: Mail;
 		options?: PostOptions;
 	}[],
 	failed: false,
@@ -38,8 +38,8 @@ vi.mock("../../server/agent/convex.ts", () => ({
 
 vi.mock("../../server/agent/threads.ts", () => ({
 	threads: {},
-	post: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
-		world.posted.push({ chatId, envelope, options });
+	post: async (chatId: string, mail: Mail, options?: PostOptions) => {
+		world.posted.push({ chatId, mail, options });
 		return {
 			opened: Promise.resolve(undefined),
 			ended: Promise.resolve({ answer: "done." }),

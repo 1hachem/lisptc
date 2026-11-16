@@ -1,5 +1,5 @@
 import {
-	type Envelope,
+	type Mail,
 	MemoryMailbox,
 	type Posted,
 	type PostOptions,
@@ -44,12 +44,12 @@ export const threads = new Threads(
 
 export function post(
 	chatId: Id<"chats">,
-	envelope: Envelope,
+	mail: Mail,
 	options?: PostOptions,
 	identity?: Identity,
 ): Promise<Posted> {
 	if (identity !== undefined) telemetry.set(chatId, identity);
-	return threads.get(chatId).post(envelope, options);
+	return threads.get(chatId).post(mail, options);
 }
 
 export function watchThread(

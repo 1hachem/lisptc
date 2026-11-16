@@ -3,8 +3,8 @@ import type { AgentRepl } from "@repo/repl/repl";
 import type { Awaitable } from "@repo/shared/host";
 import { envelopeOf } from "@repo/shared/messages";
 import { Budget, type Limits } from "./budget.ts";
-import { envelopeLine, lineWire, type WireMessage } from "./line.ts";
-import type { Envelope } from "./mailbox.ts";
+import { lineWire, mailLine, type WireMessage } from "./line.ts";
+import type { Mail } from "./mailbox.ts";
 import { entryMessage, type TurnOutcome } from "./stream.ts";
 import { type PostOptions, Thread, type ThreadPorts } from "./thread.ts";
 import { type UiActionResult, uiActionOn } from "./ui-action.ts";
@@ -51,7 +51,7 @@ interface Live {
 
 interface Job {
 	readonly thread: string;
-	envelope: string;
+	mail: string;
 	readonly replyTo?: string;
 	state: JobState;
 	outcome?: TurnOutcome;
@@ -201,13 +201,13 @@ export class Threads {
 
 	async ask(
 		to: string,
-		envelope: Envelope,
+		mail: Mail,
 		{ replyTo, ...options }: AskOptions = {},
 	): Promise<string> {
 		const id = crypto.randomUUID();
 		const job: Job = {
 			thread: to,
-			envelope: envelope.id,
+			mail: mail.id,
 			state: "pending",
 			...(replyTo === undefined ? {} : { replyTo }),
 		};
@@ -220,7 +220,7 @@ export class Threads {
 			},
 			{ once: true },
 		);
-		await this.run(id, job, envelope, options);
+		await this.run(id, job, mail, options);
 		return id;
 	}
 
@@ -250,7 +250,7 @@ export class Threads {
 		target: string,
 		notes: readonly ConversationRecord[],
 	): Promise<void> {
-		const told: Envelope[] = notes.map(({ role, content, source }) => ({
+		const told: Mail[] = notes.map(({ role, content, source }) => ({
 			kind: "event",
 			id: crypto.randomUUID(),
 			source: source ?? "system",
@@ -259,10 +259,8 @@ export class Threads {
 		}));
 		const waking = told.pop();
 		if (waking === undefined) return;
-		for (const envelope of told)
-			await this.get(target).place(
-				lineWire(envelopeLine(envelope), envelope.id),
-			);
+		for (const mail of told)
+			await this.get(target).place(lineWire(mailLine(mail), mail.id));
 		await this.followUp(target, waking);
 	}
 
@@ -279,26 +277,26 @@ export class Threads {
 		return holding === undefined ? { thread } : { thread, asked: holding };
 	}
 
-	private async followUp(target: string, envelope: Envelope): Promise<void> {
+	private async followUp(target: string, mail: Mail): Promise<void> {
 		const id = this.asking.get(target);
 		const job = id === undefined ? undefined : this.jobs.get(id);
 		if (id === undefined || job === undefined || job.state !== "held") {
-			await this.get(target).post(envelope);
+			await this.get(target).post(mail);
 			return;
 		}
 		this.asking.delete(target);
 		job.state = "pending";
-		job.envelope = envelope.id;
-		await this.run(id, job, envelope);
+		job.mail = mail.id;
+		await this.run(id, job, mail);
 	}
 
 	private async run(
 		id: string,
 		job: Job,
-		envelope: Envelope,
+		mail: Mail,
 		options?: PostOptions,
 	): Promise<void> {
-		const posted = await this.get(job.thread).post(envelope, options);
+		const posted = await this.get(job.thread).post(mail, options);
 		void posted.ended
 			.then((outcome) => this.settle(id, job, outcome))
 			.catch((error: unknown) =>
@@ -373,7 +371,7 @@ export class Threads {
 				return true;
 			}
 			job.state = "cancelled";
-			if (await this.get(job.thread).withdraw(job.envelope)) return true;
+			if (await this.get(job.thread).withdraw(job.mail)) return true;
 			return await this.cancel(job.thread);
 		}
 		return await this.halt(
@@ -483,7 +481,7 @@ export class Threads {
 		const to = job.replyTo;
 		if (to === undefined) return;
 		const lineage = await this.lineage(job.thread).catch((): Lineage => ({}));
-		const envelope: Envelope = {
+		const mail: Mail = {
 			kind: "event",
 			id: crypto.randomUUID(),
 			source: `agent:${nameOf(lineage)}`,
@@ -494,8 +492,8 @@ export class Threads {
 		};
 		const onward = this.returns.get(to);
 		try {
-			if (onward === undefined) await this.get(to).post(envelope);
-			else await this.ask(to, envelope, { replyTo: onward });
+			if (onward === undefined) await this.get(to).post(mail);
+			else await this.ask(to, mail, { replyTo: onward });
 		} catch (error) {
 			console.error(`[ai] job=${id} reply to ${to} was lost:`, error);
 		}

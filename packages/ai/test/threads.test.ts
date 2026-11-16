@@ -4,7 +4,7 @@ import type { ChatMessage } from "@repo/shared/messages";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
 import type { ChatMessageInput, WireMessage } from "../src/line.ts";
-import { type Envelope, MemoryMailbox } from "../src/mailbox.ts";
+import { type Mail, MemoryMailbox } from "../src/mailbox.ts";
 import { type Lineage, Threads, type ThreadsOptions } from "../src/threads.ts";
 import {
 	approvingByNote,
@@ -90,7 +90,7 @@ class World {
 	}
 }
 
-function user(text: string): Envelope {
+function user(text: string): Mail {
 	return { kind: "user", id: crypto.randomUUID(), text, forms: false };
 }
 

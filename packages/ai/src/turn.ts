@@ -17,15 +17,15 @@ import type { StepMeta } from "@repo/shared/messages";
 import { type AgentConfig, streamAgent } from "./agent.ts";
 import { evalMessage } from "./eval.ts";
 import {
-	envelopeLine,
 	isPrompt,
 	type Line,
 	lineChat,
 	lineRecord,
+	mailLine,
 	type PostedLine,
 	ranByUser,
 } from "./line.ts";
-import type { Envelope } from "./mailbox.ts";
+import type { Mail } from "./mailbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
 import { evalCode, replResultContent, stripFences } from "./repl.ts";
 import type { TraceContext } from "./telemetry.ts";
@@ -39,7 +39,7 @@ export interface TurnOptions {
 	signal?: AbortSignal;
 	identity?: { distinctId?: string; sessionId?: string };
 	maxSteps?: number;
-	inbox?: () => Promise<Envelope[]>;
+	inbox?: () => Promise<Mail[]>;
 	runsForms?: boolean;
 	received?: Received;
 }
@@ -144,12 +144,12 @@ async function* takeSteers({
 	runsForms,
 }: Turn): AsyncGenerator<TurnEvent, number> {
 	let taken = 0;
-	for (const envelope of (await inbox?.()) ?? []) {
-		const line = envelopeLine(envelope);
-		yield { type: "steered", id: envelope.id, line };
+	for (const mail of (await inbox?.()) ?? []) {
+		const line = mailLine(mail);
+		yield { type: "steered", id: mail.id, line };
 		const evaluated =
-			runsForms && envelope.kind === "user" && envelope.forms
-				? await evalMessage(repl, envelope.text)
+			runsForms && mail.kind === "user" && mail.forms
+				? await evalMessage(repl, mail.text)
 				: undefined;
 		if (evaluated === undefined) {
 			lines.push(line);
@@ -203,7 +203,7 @@ interface Turn {
 	readonly ran: { provider: string; model: string };
 	readonly maxSteps: number;
 	readonly signal?: AbortSignal;
-	readonly inbox?: () => Promise<Envelope[]>;
+	readonly inbox?: () => Promise<Mail[]>;
 	readonly runsForms: boolean;
 	readonly received?: Received;
 	readonly agent: AgentTurn;
