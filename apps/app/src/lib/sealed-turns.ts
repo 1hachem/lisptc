@@ -2,11 +2,17 @@ import {
 	type ChatMessage,
 	isToolMessage,
 	type StepMeta,
+	toolActivity,
 } from "@repo/components";
+import type { ActivityEntry } from "@repo/journal-catalog/activity";
 import type { Progress } from "@repo/journal-catalog/intent";
 import { toolFailed } from "./chat.tsx";
 import { shapeTurn, type Turn } from "./turn-groups.ts";
-import { placeTimeline, type TimelineEntry } from "./turn-timeline.ts";
+import {
+	placeTimeline,
+	type TimelineEntry,
+	turnTimeline,
+} from "./turn-timeline.ts";
 
 export type Step =
 	| {
@@ -245,14 +251,25 @@ function settleSteps(
 	return settled.every((step, at) => step === steps[at]) ? steps : settled;
 }
 
+const activityOf = new WeakMap<ChatMessage, readonly ActivityEntry[]>();
+
+function activityIn(message: ChatMessage): readonly ActivityEntry[] {
+	const known = activityOf.get(message);
+	if (known !== undefined) return known;
+	const found = toolActivity(message);
+	activityOf.set(message, found);
+	return found;
+}
+
 function settledAcross(moment: Moment): Map<string, TimelineEntry> {
-	const rows = new Map<string, TimelineEntry>();
-	for (const [at, turn] of moment.turns.entries())
-		for (const [id, row] of latestRows(
-			drawTurn(turn, at, false, moment.meta, undefined).steps,
-		))
-			if (row.state !== "running" || !rows.has(id)) rows.set(id, row);
-	return rows;
+	const merged = new Map<string, ActivityEntry>();
+	for (const turn of moment.turns)
+		for (const message of turn.steps)
+			for (const entry of activityIn(message))
+				merged.set(entry.id, { ...merged.get(entry.id), ...entry });
+	return new Map(
+		turnTimeline(undefined, [...merged.values()]).map((row) => [row.id, row]),
+	);
 }
 
 function settleEarlier(
