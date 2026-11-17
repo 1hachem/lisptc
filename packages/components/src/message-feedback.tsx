@@ -1,5 +1,7 @@
 "use client";
 
+import { ThumbsDownIcon, ThumbsUpIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "@repo/ui/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { quip, surveyResponse, type Thumb } from "./feedback.ts";
@@ -9,13 +11,11 @@ export function MessageFeedback({
 	capture,
 	onRate,
 	className,
-	reveal = "hover",
 	anchor,
 }: {
 	capture: (properties: Record<string, unknown>) => void;
 	onRate?: (thumb: Thumb) => void;
 	className?: string;
-	reveal?: "hover" | "always";
 	anchor?: Marker;
 }) {
 	const [thumb, setThumb] = useState<Thumb | null>(null);
@@ -24,10 +24,6 @@ export function MessageFeedback({
 	const [draft, setDraft] = useState("");
 	const [thanked, setThanked] = useState<string | null>(null);
 	const field = useRef<HTMLInputElement>(null);
-	const resting =
-		reveal === "always"
-			? "text-dim"
-			: "text-dim opacity-0 focus:opacity-100 group-hover:opacity-100";
 
 	useEffect(() => {
 		if (asking) field.current?.focus();
@@ -63,25 +59,33 @@ export function MessageFeedback({
 			>
 				<button
 					className={cn(
-						"transition-opacity hover:text-fg",
-						thumb === "up" ? "text-yellow opacity-100" : resting,
+						"hover:text-fg",
+						thumb === "up" ? "text-yellow" : "text-dim",
 					)}
 					onClick={() => rate("up")}
 					title="helpful"
 					type="button"
 				>
-					▲
+					<HugeiconsIcon
+						icon={ThumbsUpIcon}
+						aria-hidden
+						className="size-icon"
+					/>
 				</button>
 				<button
 					className={cn(
-						"transition-opacity hover:text-fg",
-						thumb === "down" ? "text-yellow opacity-100" : resting,
+						"hover:text-fg",
+						thumb === "down" ? "text-yellow" : "text-dim",
 					)}
 					onClick={() => rate("down")}
 					title="not helpful"
 					type="button"
 				>
-					▼
+					<HugeiconsIcon
+						icon={ThumbsDownIcon}
+						aria-hidden
+						className="size-icon"
+					/>
 				</button>
 			</div>
 
