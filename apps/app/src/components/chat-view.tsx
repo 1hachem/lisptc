@@ -444,6 +444,7 @@ function StepThinking({ thinking }: { thinking: string }) {
 	return (
 		<button
 			type="button"
+			{...anchorOf("chat/thinking")}
 			data-step-thinking
 			aria-expanded={open}
 			onClick={() => setOpen((shown) => !shown)}

@@ -181,9 +181,9 @@ const REGIONS = {
 		"the user asks where something is in the app's sidebar: the workspace, home, a new chat, a folder, the readme, settings, preferences, the account or signing out",
 	folders:
 		"the user asks where to find, search, upload, select, rename, archive or delete a chat or a file",
-	chat: "the user asks where something is in a chat: the message box, sending, stopping, attaching, a message, its trace, its details, feedback, the todo or sub-agent threads",
+	chat: "the user asks where something is in a chat: the message box, sending, stopping, attaching, a message, its trace and finding in it, thinking, its details, feedback, the todo or sub-agent threads",
 	pages:
-		"the user asks where one preference is changed: theme, font, animation, the bottom bar, the sidebars, input helpers, developer or desktop switches",
+		"the user asks where something is on a page or an open file: a preference, a workspace setting, the account, the readme, a download, restoring from the bin, a memory, a permission rule, an onboarding or a sub-agent",
 	panel:
 		"the user asks about tabs, panes, splitting, resizing, the bottom bar or zoom",
 } as const;
@@ -200,6 +200,7 @@ function regionOf(id: AnchorId): Region {
 		case "chat":
 			return "chat";
 		case "page":
+		case "file":
 			return "pages";
 		case "folder":
 			return "folders";

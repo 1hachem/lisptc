@@ -1,6 +1,6 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
-import { contentRegion } from "@repo/ui-catalog";
+import { anchorOf, contentRegion } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { DeleteAccount } from "./delete-account.tsx";
 
@@ -14,7 +14,10 @@ export function AccountPage() {
 		>
 			<div className="mx-auto flex w-full max-w-[680px] flex-col gap-6">
 				<div className="font-mono text-[11.5px] text-dim">account</div>
-				<section className="flex flex-col gap-1 text-[12px]">
+				<section
+					{...anchorOf("account/user")}
+					className="flex flex-col gap-1 text-[12px]"
+				>
 					<div className="text-fg">{user?.name || user?.email || "…"}</div>
 					{user?.name ? <div className="text-dim">{user.email}</div> : null}
 				</section>

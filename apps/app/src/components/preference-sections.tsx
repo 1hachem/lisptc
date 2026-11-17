@@ -14,7 +14,7 @@ import {
 import type { StatusBarItem } from "@repo/shared/status-bar";
 import { fonts } from "@repo/ui";
 import { motions } from "@repo/ui/motions.ts";
-import { anchorOf } from "@repo/ui-catalog";
+import { type AnchorMark, anchorOf } from "@repo/ui-catalog";
 import { useEffect, useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
 import { inDesktopShell, useDesktopSettings } from "../lib/desktop-shell.ts";
@@ -204,6 +204,7 @@ function ThemeList({ open }: { open: boolean }) {
 			})}
 			<button
 				type="button"
+				{...anchorOf("preferences/all-themes")}
 				onClick={openThemePicker}
 				className="cursor-pointer text-left text-dim hover:text-fg"
 			>
@@ -248,7 +249,7 @@ function PanelMotionToggle() {
 	const { panelMotion, setPanelMotion } = usePanelMotion();
 	return (
 		<div
-			{...anchorOf("preferences/motion")}
+			{...anchorOf("preferences/panel-motion")}
 			className="flex flex-col gap-1.5 px-4 text-[11.5px]"
 		>
 			{[true, false].map((on) => {
@@ -276,14 +277,17 @@ function OnOffToggle({
 	label,
 	on,
 	set,
+	anchor,
 }: {
 	label: string;
 	on: boolean;
 	set: (on: boolean) => void;
+	anchor: AnchorMark;
 }) {
 	return (
 		<button
 			type="button"
+			{...anchor}
 			aria-pressed={on}
 			onClick={() => set(!on)}
 			className="flex w-full cursor-pointer items-baseline gap-2 text-left"
@@ -308,8 +312,14 @@ function DeveloperToggles() {
 				label="trace beside chat"
 				on={traceBesideChat}
 				set={setTraceBesideChat}
+				anchor={anchorOf("preferences/trace-beside-chat")}
 			/>
-			<OnOffToggle label="show in trace" on={traceLink} set={setTraceLink} />
+			<OnOffToggle
+				label="show in trace"
+				on={traceLink}
+				set={setTraceLink}
+				anchor={anchorOf("preferences/trace-link")}
+			/>
 		</div>
 	);
 }
@@ -326,11 +336,13 @@ function DesktopToggles() {
 				label="keep running when closed"
 				on={settings.closeToTray}
 				set={(closeToTray) => update({ closeToTray })}
+				anchor={anchorOf("preferences/close-to-tray")}
 			/>
 			<OnOffToggle
 				label="start at login"
 				on={settings.openAtLogin}
 				set={(openAtLogin) => update({ openAtLogin })}
+				anchor={anchorOf("preferences/open-at-login")}
 			/>
 		</div>
 	);

@@ -1,6 +1,7 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Doc, Id } from "@repo/backend/dataModel";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { restoreFailure } from "../lib/bin.ts";
@@ -24,6 +25,7 @@ function RestoreAction({
 			{failure && <span className="text-red">{failure}</span>}
 			<button
 				type="button"
+				{...anchorOf("bin/restore")}
 				className="text-dim hover:text-fg"
 				onClick={async () => {
 					const restored = await restore({ workspaceId, name });

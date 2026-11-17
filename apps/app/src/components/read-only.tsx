@@ -1,17 +1,23 @@
+import type { AnchorMark } from "@repo/ui-catalog";
 import type { ReactNode } from "react";
 import { callOf, type Datum, plainText, readForm } from "../lib/form-reader.ts";
 
 export function Field({
 	label,
 	hint,
+	anchor,
 	children,
 }: {
 	label: string;
 	hint?: string;
+	anchor?: AnchorMark;
 	children: ReactNode;
 }) {
 	return (
-		<section className="flex flex-col gap-1.5 border-bg2 border-t pt-3">
+		<section
+			{...anchor}
+			className="flex flex-col gap-1.5 border-bg2 border-t pt-3"
+		>
 			<div className="flex items-baseline gap-3">
 				<span className="flex-1 text-[11px] text-dim uppercase tracking-[0.14em]">
 					{label}

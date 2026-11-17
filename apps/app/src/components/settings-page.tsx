@@ -6,6 +6,7 @@ import { WORKSPACE_ICONS, workspaceIcon } from "@repo/backend/workspace-icons";
 import { ThemeSwatches } from "@repo/components";
 import { DEFAULT_CHOICE, PROVIDER_CATALOG } from "@repo/shared/providers";
 import { Input } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAppearance } from "../lib/appearance.tsx";
@@ -27,7 +28,11 @@ function NameField({ workspace }: { workspace: Doc<"workspaces"> }) {
 		attempt(() => rename({ workspaceId: workspace._id, name }));
 	};
 	return (
-		<Field label="name" hint={failure ?? undefined}>
+		<Field
+			label="name"
+			hint={failure ?? undefined}
+			anchor={anchorOf("settings/name")}
+		>
 			<form
 				onSubmit={(event) => {
 					event.preventDefault();
@@ -67,7 +72,7 @@ function ModelField({ workspace }: { workspace: Doc<"workspaces"> }) {
 	const provider = PROVIDER_CATALOG[choice.provider];
 	const model = provider.models.find((entry) => entry.id === choice.model);
 	return (
-		<Field label="model">
+		<Field label="model" anchor={anchorOf("settings/model")}>
 			<div className="flex items-baseline gap-3">
 				<span className="min-w-0 flex-1 truncate">
 					{model?.name ?? choice.model}
@@ -83,7 +88,7 @@ function IconField({ workspace }: { workspace: Doc<"workspaces"> }) {
 	const setIcon = useSetIcon();
 	const current = workspaceIcon(workspace);
 	return (
-		<Field label="icon">
+		<Field label="icon" anchor={anchorOf("settings/icon")}>
 			<div className="flex flex-wrap gap-1">
 				{WORKSPACE_ICONS.map((icon) => (
 					<button
@@ -106,7 +111,7 @@ function IconField({ workspace }: { workspace: Doc<"workspaces"> }) {
 function ThemeField() {
 	const { theme, openThemePicker } = useAppearance();
 	return (
-		<Field label="theme">
+		<Field label="theme" anchor={anchorOf("settings/theme")}>
 			<div className="flex items-center gap-3">
 				<ThemeSwatches theme={theme} />
 				<span className="min-w-0 flex-1 truncate">{theme.name}</span>

@@ -1,6 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { definitionOf } from "../lib/agent-definition.ts";
 import type { PermissionRule } from "../lib/files.ts";
@@ -10,12 +11,16 @@ import { Field, RuleCard } from "./read-only.tsx";
 function PermissionsField({ rules }: { rules: PermissionRule[] }) {
 	if (rules.length === 0)
 		return (
-			<Field label="permissions">
+			<Field label="permissions" anchor={anchorOf("agent/permissions")}>
 				<span className="text-dim">same as the workspace</span>
 			</Field>
 		);
 	return (
-		<Field label="permissions" hint="tighten the workspace rules">
+		<Field
+			label="permissions"
+			hint="tighten the workspace rules"
+			anchor={anchorOf("agent/permissions")}
+		>
 			<div className="flex flex-col gap-3">
 				{rules.map((rule) => (
 					<RuleCard key={rule.start} source={rule.source} />
@@ -33,12 +38,12 @@ function AgentDefinition({ text }: { text: string }) {
 	return (
 		<div className="flex flex-col gap-4">
 			<h1 className="break-words font-medium text-[15px] text-fg">{name}</h1>
-			<Field label="instructions">
+			<Field label="instructions" anchor={anchorOf("agent/instructions")}>
 				<p className="whitespace-pre-wrap break-words leading-relaxed">
 					{prompt}
 				</p>
 			</Field>
-			<Field label="step budget">
+			<Field label="step budget" anchor={anchorOf("agent/budget")}>
 				{budget === undefined ? (
 					<span className="text-dim">no cap</span>
 				) : (

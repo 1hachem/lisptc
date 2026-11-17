@@ -206,6 +206,7 @@ export type AnchorLocation =
 	| { kind: "sidebar"; folder?: SidebarFolder }
 	| { kind: "chat" }
 	| { kind: "folder"; folder: SidebarFolder }
+	| { kind: "file"; folder: SidebarFolder }
 	| { kind: "page"; page: PageId };
 
 function anchor(doc: string, location: AnchorLocation, opens?: PageId) {
@@ -220,12 +221,22 @@ const CHAT: AnchorLocation = { kind: "chat" };
 
 const PREFERENCES: AnchorLocation = { kind: "page", page: "preferences" };
 
+const SETTINGS: AnchorLocation = { kind: "page", page: "settings" };
+
+const ACCOUNT: AnchorLocation = { kind: "page", page: "account" };
+
+const README: AnchorLocation = { kind: "page", page: "readme" };
+
 function inFolder(folder: SidebarFolder): AnchorLocation {
 	return { kind: "folder", folder };
 }
 
 function onFolder(folder: SidebarFolder): AnchorLocation {
 	return { kind: "sidebar", folder };
+}
+
+function inFile(folder: SidebarFolder): AnchorLocation {
+	return { kind: "file", folder };
 }
 
 export const anchors = {
@@ -312,7 +323,85 @@ export const anchors = {
 	),
 	"preferences/theme": anchor("preferences: theme", PREFERENCES),
 	"preferences/font": anchor("preferences: font", PREFERENCES),
-	"preferences/motion": anchor("preferences: animation", PREFERENCES),
+	"preferences/motion": anchor(
+		"preferences: how dragged rows move",
+		PREFERENCES,
+	),
+	"preferences/panel-motion": anchor(
+		"preferences: animate panes or keep them still",
+		PREFERENCES,
+	),
+	"preferences/all-themes": anchor(
+		"preferences: all themes..., opens theme picker",
+		PREFERENCES,
+	),
+	"preferences/trace-beside-chat": anchor(
+		"preferences: open trace beside chat",
+		PREFERENCES,
+	),
+	"preferences/trace-link": anchor(
+		"preferences: show in trace link on answers",
+		PREFERENCES,
+	),
+	"preferences/close-to-tray": anchor(
+		"preferences: desktop app keeps running when closed",
+		PREFERENCES,
+	),
+	"preferences/open-at-login": anchor(
+		"preferences: desktop app starts at login",
+		PREFERENCES,
+	),
+	"settings/name": anchor("settings: workspace name, type to rename", SETTINGS),
+	"settings/model": anchor(
+		"settings: change model workspace runs on",
+		SETTINGS,
+	),
+	"settings/icon": anchor("settings: workspace icon choices", SETTINGS),
+	"settings/theme": anchor("settings: change theme", SETTINGS),
+	"account/user": anchor("account: user name and email", ACCOUNT),
+	"account/delete": anchor(
+		"account: delete account, type phrase to confirm",
+		ACCOUNT,
+	),
+	"readme/editor": anchor("readme text, type to edit, saves itself", README),
+	"readme/saved": anchor("readme save state, top right", README),
+	"file/download": anchor(
+		"download, top right of open file",
+		inFile("knowledge"),
+	),
+	"file/keep": anchor(
+		"keep in knowledge, on open attachment",
+		inFile("attachments"),
+	),
+	"file/audio": anchor(
+		"play and seek, on open audio file",
+		inFile("knowledge"),
+	),
+	"bin/restore": anchor("restore, on open deleted file", inFile("bin")),
+	"memory/remembers": anchor(
+		"open memory: what it remembers",
+		inFile("memories"),
+	),
+	"memory/when": anchor("open memory: when it comes back", inFile("memories")),
+	"memory/links": anchor("open memory: linked memories", inFile("memories")),
+	"memory/use": anchor("open memory: how often recalled", inFile("memories")),
+	"permissions/rule": anchor(
+		"open permission: rule and what it does",
+		inFile("permissions"),
+	),
+	"onboarding/script": anchor(
+		"open onboarding: its script",
+		inFile("onboarding"),
+	),
+	"agent/instructions": anchor(
+		"open sub-agent: its instructions",
+		inFile("sub-agents"),
+	),
+	"agent/budget": anchor("open sub-agent: step budget", inFile("sub-agents")),
+	"agent/permissions": anchor(
+		"open sub-agent: its own permissions",
+		inFile("sub-agents"),
+	),
 	"preferences/metadata": anchor(
 		"preferences: details under answers",
 		PREFERENCES,
@@ -351,6 +440,10 @@ export const anchors = {
 	"chat/queued": anchor("queued message, x removes it", CHAT),
 	"chat/children": anchor("sub-agent threads under message", CHAT),
 	"chat/avatar": anchor("agent avatar, click pokes it", CHAT),
+	"chat/thinking": anchor("agent thinking line, click unfolds it", CHAT),
+	"trace/find": anchor("find in trace box, top of trace", CHAT),
+	"trace/lanes": anchor("trace lane toggles: show or hide kinds", CHAT),
+	"trace/entry": anchor("trace row, click unfolds it", CHAT),
 	"panel/tab": anchor("tab at top of panel, click switches", SHELL),
 	"panel/tab-close": anchor("x on tab, on hover: closes it", SHELL),
 	"panel/split": anchor("pane menu: split, maximize, close pane", SHELL),

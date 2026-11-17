@@ -113,6 +113,7 @@ export function reveal(location: AnchorLocation, revealer: Revealer): void {
 			revealer.openChat();
 			return;
 		case "folder":
+		case "file":
 			revealer.openSidebar(revealer.sideOf(location.folder));
 			revealer.openFolder(location.folder);
 			return;

@@ -1,6 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { permissionRules } from "../lib/files.ts";
 import { PageView } from "./file-view.tsx";
@@ -27,7 +28,7 @@ export function PermissionPage({
 					{source === undefined ? "loading…" : "no such rule"}
 				</div>
 			) : (
-				<Field label="rule">
+				<Field label="rule" anchor={anchorOf("permissions/rule")}>
 					<RuleCard source={found.source} />
 				</Field>
 			)}

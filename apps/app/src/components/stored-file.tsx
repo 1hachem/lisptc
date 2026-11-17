@@ -2,7 +2,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
-import { contentRegion } from "@repo/ui-catalog";
+import { anchorOf, contentRegion } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
@@ -172,6 +172,7 @@ export function DownloadButton({ name, url }: { name: string; url: string }) {
 	return (
 		<button
 			type="button"
+			{...anchorOf("file/download")}
 			onClick={() => attempt(() => saveAs(name, url))}
 			title={failure ?? undefined}
 			className={failure ? "text-red" : "text-dim hover:text-fg"}
@@ -218,6 +219,7 @@ function KeepAction({
 			{failure && <span className="text-red">{failure}</span>}
 			<button
 				type="button"
+				{...anchorOf("file/keep")}
 				className="text-dim hover:text-fg"
 				onClick={async () => {
 					const refused = await keep({ workspaceId, name });

@@ -154,7 +154,7 @@ describe("an anchor's location", () => {
 		for (const id of ANCHOR_IDS) {
 			const { location } = anchors[id];
 			if (location.kind === "page") expect(isPage(location.page)).toBe(true);
-			if (location.kind === "folder")
+			if (location.kind === "folder" || location.kind === "file")
 				expect(SIDEBAR_FOLDERS).toContain(location.folder);
 		}
 		expect(anchors["chats/search"].location).toEqual({
