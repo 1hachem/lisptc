@@ -1,5 +1,6 @@
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
-import { Interp } from "@repo/interpreter/lisp";
+import { bufferSink } from "@repo/interpreter/journal";
 import { openSession } from "@repo/interpreter/session";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
@@ -492,16 +493,21 @@ describe("a message the user attached files to", () => {
 				maxDownloadBytes: 1024,
 			}),
 		);
-		const interp = new Interp({ extensions: [extension] });
-		const said: string[] = [];
-		await driveAsync(
-			openSession([extension]).received.run(
-				() => settled(undefined),
-				{ interp, emit: (text) => said.push(text) },
-				received,
-			),
-		);
-		return said;
+		const interp = new ConversationInterpreter({ extensions: [extension] });
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
+		try {
+			await driveAsync(
+				openSession([extension]).received.run(
+					() => settled(undefined),
+					{ interp },
+					received,
+				),
+			);
+		} finally {
+			detach();
+		}
+		return buffer.collect(note).map((record) => record.content);
 	}
 
 	it("tells the model which files came with it", async () => {

@@ -133,24 +133,25 @@ describe("extracting, then echoing", () => {
 describe("capping echo output", () => {
 	it("stops a long echo loop for the model and says how much it dropped", async () => {
 		const r = await repl();
-		const out = await r.eval("(dotimes (i 20) (echo i))");
-		expect(out).toContain("0\n1\n2\n3\n4\n5\n");
-		expect(out).toContain("14 more words of echo output not shown to you");
-		expect(out).not.toContain("7\n");
+		const { model, notes } = await r.evalOutput("(dotimes (i 20) (echo i))");
+		expect(model).toContain("0\n1\n2\n3\n4\n5\n");
+		expect(model).not.toContain("7\n");
+		expect(notes.map((n) => n.content)).toEqual([
+			expect.stringContaining("14 more words of echo output not shown to you"),
+		]);
 	});
 
 	it("hands the human the whole output while capping the model's copy", async () => {
 		const r = await repl();
-		const { model, user } = await r.evalOutput("(dotimes (i 20) (echo i))");
-		expect(model).toContain("not shown to you");
+		const { model, user, notes } = await r.evalOutput(
+			"(dotimes (i 20) (echo i))",
+		);
 		expect(user).not.toContain("not shown to you");
 		expect(user).toContain("19\n");
 		expect(user.endsWith("19\n")).toBe(true);
 		expect(model).toContain("nil\n");
 		expect(user).not.toContain("nil");
-		expect(model.endsWith("echo a named value you can page through\n")).toBe(
-			true,
-		);
+		expect(notes.map((n) => n.source)).toEqual(["compaction"]);
 	});
 
 	it("leaves short output exactly as it was written", async () => {

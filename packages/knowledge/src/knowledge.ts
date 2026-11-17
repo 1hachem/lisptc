@@ -1,6 +1,5 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { zString } from "@repo/interpreter/schema";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
@@ -33,7 +32,7 @@ function registerAttach(interp: Interp, { store }: KnowledgeHost): void {
 						`no file named ${checked} in ${folder}`,
 						name,
 					);
-				record(interp.channels, attachmentsKind, [{ folder, name: checked }]);
+				interp.journal.write(attachmentsKind, [{ folder, name: checked }]);
 				return checked;
 			},
 		);
@@ -43,7 +42,8 @@ function attachSession(hooks: SessionHooks): void {
 	hooks.received.use(function* (ctx, received, next) {
 		const files = readReceived(received, attachmentsKind) ?? [];
 		if (files.length > 0)
-			ctx.emit(
+			ctx.interp.conversation.append(
+				"knowledge",
 				`user attached: ${files.map(({ folder, name }) => `${folder}/${name}`).join(", ")}`,
 			);
 		yield* next(ctx, received);

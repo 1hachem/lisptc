@@ -3,10 +3,8 @@ import type { Middleware } from "@repo/interpreter/hooks";
 import { llmSlot } from "@repo/interpreter/observe";
 import type {
 	AgentEnd,
-	AgentStep,
 	AgentTurn,
 	SessionHooks,
-	StepVerdict,
 	TurnContext,
 } from "@repo/interpreter/session";
 import type { Received } from "@repo/shared/journal";
@@ -18,13 +16,19 @@ import {
 	type TraceContext,
 } from "./telemetry.ts";
 
+interface EvaluatedStep {
+	readonly step: number;
+	readonly code: string;
+	readonly output: string;
+	readonly error: boolean;
+	readonly failed: boolean;
+	readonly latencyMs: number;
+}
+
 export interface TurnTelemetry {
 	readonly turnStart: Middleware<[TurnContext], Eval<void>>;
 	readonly received: Middleware<[TurnContext, Received], Eval<void>>;
-	readonly stepEnd: Middleware<
-		[AgentTurn, AgentStep, StepVerdict],
-		StepVerdict
-	>;
+	readonly stepEnd: (step: EvaluatedStep) => void;
 	readonly settled: Middleware<[AgentTurn, AgentEnd], void>;
 }
 
@@ -46,7 +50,7 @@ export function turnTelemetry(
 				throw err;
 			}
 		},
-		stepEnd: (turn, step, verdict, next) => {
+		stepEnd: (step) => {
 			captureReplEval(trace, {
 				step: step.step,
 				source: step.code,
@@ -54,7 +58,6 @@ export function turnTelemetry(
 				error: step.error || step.failed,
 				latencyMs: step.latencyMs,
 			});
-			return next(turn, step, verdict);
 		},
 		settled: (turn, end, next) => {
 			if (end.failure && !end.failure.cancelled)

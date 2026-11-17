@@ -1,5 +1,4 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import {
@@ -46,14 +45,14 @@ async function activityOf(
 	);
 	const interp = new Interp({ extensions: [extension] });
 	await runAsync(interp, prelude);
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		await runAsync(interp, code).catch(() => undefined);
 	} finally {
 		detach();
 	}
-	return view(buffer.collect(journal), activityKind);
+	return view(buffer.entries, activityKind);
 }
 
 describe("a knowledge file read or write", () => {

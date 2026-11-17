@@ -1,7 +1,7 @@
 import { ENTRY_TYPE } from "@repo/shared/journal";
 import { lighten } from "@repo/shared/messages";
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, type Infer, v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import {
@@ -189,29 +189,6 @@ async function settleWaiting(
 		await ctx.db.patch(chat._id, { status: undefined });
 }
 
-export async function reviseIn(
-	ctx: MutationCtx,
-	chat: Doc<"chats">,
-	id: string,
-	kwargs: Record<string, unknown>,
-): Promise<void> {
-	const chatId = chat._id;
-	const row = await ctx.db
-		.query("messages")
-		.withIndex("by_chat_wire", (q) => q.eq("chatId", chatId).eq("wireId", id))
-		.first();
-	if (row === null) throw new ConvexError({ code: "MESSAGE_NOT_FOUND" });
-	const merged = deepMerge(row.kwargs ?? {}, kwargs);
-	checkAttachments(merged);
-	const clamped = clamp(row.content, merged);
-	await ctx.db.patch(row._id, {
-		content: clamped.content,
-		kwargs: clamped.kwargs,
-		truncated: clamped.truncated || row.truncated ? true : undefined,
-	});
-	await settleWaiting(ctx, chat);
-}
-
 const entry = v.object({ kind: v.string(), value: v.any() });
 
 export const record = mutation({
@@ -236,25 +213,6 @@ export const record = mutation({
 		return ids;
 	},
 });
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function deepMerge(
-	into: Record<string, unknown>,
-	from: Record<string, unknown>,
-): Record<string, unknown> {
-	const merged: Record<string, unknown> = { ...into };
-	for (const [key, value] of Object.entries(from)) {
-		const standing = merged[key];
-		merged[key] =
-			isPlainObject(standing) && isPlainObject(value)
-				? deepMerge(standing, value)
-				: value;
-	}
-	return merged;
-}
 
 export const purge = internalMutation({
 	args: { chatId: v.id("chats") },

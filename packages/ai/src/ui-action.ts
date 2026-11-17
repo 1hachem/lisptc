@@ -1,3 +1,4 @@
+import type { ConversationRecord } from "@repo/interpreter/conversation";
 import type { AgentRepl } from "@repo/repl/repl";
 import type { Entry } from "@repo/shared/journal";
 import type { Repls } from "./repl-store.ts";
@@ -5,8 +6,11 @@ import type { Repls } from "./repl-store.ts";
 export interface UiActionResult {
 	output: string;
 	error: boolean;
-	message?: string;
 	entries: readonly Entry[];
+}
+
+interface UiActionRun extends UiActionResult {
+	notes: readonly ConversationRecord[];
 }
 
 export async function runUiAction<Id extends string>(
@@ -22,23 +26,24 @@ export async function uiActionOn(
 	repl: AgentRepl,
 	action: string,
 	values: Record<string, unknown>,
-): Promise<UiActionResult> {
+): Promise<UiActionRun> {
 	try {
-		const { user, entries, message, failed } = await repl.invokeUi(
+		const { user, entries, failed, notes } = await repl.invokeUi(
 			action,
 			values,
 		);
 		return {
 			output: user,
 			error: failed,
-			message,
 			entries,
+			notes,
 		};
 	} catch (ex) {
 		return {
 			output: ex instanceof Error ? ex.message : String(ex),
 			error: true,
 			entries: [],
+			notes: [],
 		};
 	}
 }

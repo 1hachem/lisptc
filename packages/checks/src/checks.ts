@@ -369,7 +369,7 @@ export class Checks {
 					this.positions(
 						(event) =>
 							(event.kind === "form" && event.error !== undefined) ||
-							(event.kind === "note" && event.severity === "critical"),
+							(event.kind === "hitch" && event.severity === "critical"),
 					),
 				),
 		);
@@ -383,7 +383,7 @@ export class Checks {
 			() =>
 				toList(
 					this.positions(
-						(event) => event.kind === "note" && event.severity === "warning",
+						(event) => event.kind === "hitch" && event.severity === "warning",
 					),
 				),
 		);

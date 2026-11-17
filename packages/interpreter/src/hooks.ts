@@ -29,7 +29,3 @@ export class Chain<A extends unknown[], R> {
 		return next(...args);
 	}
 }
-
-export function noOpinion(): undefined {
-	return undefined;
-}

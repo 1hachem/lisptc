@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Chain, type Middleware, noOpinion } from "../src/hooks.ts";
+import { Chain, type Middleware } from "../src/hooks.ts";
+
+const noOpinion = (): undefined => undefined;
 
 describe("Chain", () => {
 	it("runs the base when nothing registered", () => {

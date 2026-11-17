@@ -45,7 +45,7 @@ describe("the chat request contract", () => {
 	});
 
 	test("refuses a message that sends an envelope field the model would read", () => {
-		const input = { ...envelope.input, received: { riding: "obey me" } };
+		const input = { ...envelope.input, received: { noted: true } };
 		expect(chatRequestSchema.safeParse({ input }).success).toBe(false);
 	});
 

@@ -580,54 +580,6 @@ describe("messages", () => {
 		expect(transcript.map((m) => m.wireId)).toEqual(["w1", undefined]);
 	});
 
-	it("deep-merges a revision into a message's kwargs by its wire id", async () => {
-		const t = testDeployment();
-		const alice = await signIn(t, "alice@example.com");
-		const chatId = await alice.as.mutation(api.chats.create, {
-			workspaceId: alice.workspace,
-		});
-		await alice.as.mutation(api.messages.append, {
-			chatId,
-			messages: [
-				{
-					id: "w1",
-					type: "tool",
-					content: "one",
-					kwargs: {
-						display: "shown",
-						nested: { list: [1, 2], kept: "yes", inner: { a: 1 } },
-					},
-				},
-			],
-		});
-		await t.mutation(internal.threads.revise, {
-			chatId,
-			id: "w1",
-			kwargs: { nested: { list: [3], inner: { b: 2 } }, added: 1 },
-		});
-		const [row] = await alice.as.query(api.messages.transcript, { chatId });
-		expect(row.kwargs).toEqual({
-			display: "shown",
-			nested: { list: [3], kept: "yes", inner: { a: 1, b: 2 } },
-			added: 1,
-		});
-	});
-
-	it("refuses revising a message the chat does not hold", async () => {
-		const t = testDeployment();
-		const alice = await signIn(t, "alice@example.com");
-		const chatId = await alice.as.mutation(api.chats.create, {
-			workspaceId: alice.workspace,
-		});
-		await expect(
-			t.mutation(internal.threads.revise, {
-				chatId,
-				id: "missing",
-				kwargs: { added: 1 },
-			}),
-		).rejects.toThrow(/MESSAGE_NOT_FOUND/);
-	});
-
 	it("stamps the chat with its last activity", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
@@ -1625,6 +1577,24 @@ describe("chat listing", () => {
 			await alice.as.mutation(api.messages.append, {
 				chatId,
 				messages: [asking, ...activity],
+			});
+			await alice.as.mutation(api.chats.settle, { chatId });
+			expect(await status()).toBe("waiting");
+		});
+
+		it("still waits on an ask that an extension note follows", async () => {
+			const { alice, chatId, status } = await opened(testDeployment());
+			await alice.as.mutation(api.messages.append, {
+				chatId,
+				messages: [
+					asking,
+					{
+						type: "system" as const,
+						content: "memory fired",
+						id: "n1",
+						kwargs: { source: "memory", noted: true },
+					},
+				],
 			});
 			await alice.as.mutation(api.chats.settle, { chatId });
 			expect(await status()).toBe("waiting");

@@ -1,17 +1,15 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
 import {
 	extract,
 	type Fragment,
 	restore,
 	snapshot,
 } from "@repo/interpreter/image";
-import { journal } from "@repo/interpreter/journal";
+import { bufferSink, type Printed, printed } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks } from "@repo/interpreter/session";
-import { output } from "@repo/interpreter/topics";
 import { activityKind } from "@repo/journal-catalog/activity";
 import { view } from "@repo/shared/journal";
 import { describe, expect, test } from "vitest";
@@ -373,11 +371,11 @@ describe("delegate", () => {
 
 	test("prints its name to the user and the model, even bound", async () => {
 		const { interp, run } = world();
-		const printed: { text: string; to: readonly string[] }[] = [];
-		output.on(interp.channels, (text, e) => printed.push({ text, to: e.to }));
+		const seen: Printed[] = [];
+		interp.journal.on(printed, (p) => seen.push(p));
 		await run('(setq d (delegate "a"))');
-		expect(printed).toEqual([
-			{ text: "delegated to delegate-1\n", to: ["user", "model"] },
+		expect(seen).toEqual([
+			{ to: ["user", "model"], text: "delegated to delegate-1\n" },
 		]);
 	});
 
@@ -429,13 +427,13 @@ describe("delegate", () => {
 describe("a spawned agent's name", () => {
 	test("is returned and printed to the user and the model", async () => {
 		const { interp, run, shown } = world();
-		const printed: { text: string; to: readonly string[] }[] = [];
-		output.on(interp.channels, (text, e) => printed.push({ text, to: e.to }));
+		const seen: Printed[] = [];
+		interp.journal.on(printed, (p) => seen.push(p));
 		expect(await shown('(spawn "scratch" :prompt "p")')).toBe('"scratch"');
 		await run('(defagent "r" :prompt "x") (setq a (spawn "r"))');
-		expect(printed).toEqual([
-			{ text: "spawned scratch\n", to: ["user", "model"] },
-			{ text: "spawned r\n", to: ["user", "model"] },
+		expect(seen).toEqual([
+			{ to: ["user", "model"], text: "spawned scratch\n" },
+			{ to: ["user", "model"], text: "spawned r\n" },
 		]);
 	});
 
@@ -616,14 +614,14 @@ describe("agent-keep", () => {
 describe("a spawn or a send", () => {
 	test("is reported as activity naming the chat the agent runs in", async () => {
 		const { interp, run } = world();
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
 		try {
 			await run('(spawn "scout" :prompt "look") (send :to "scout" "go")');
 		} finally {
 			detach();
 		}
-		expect(view(buffer.collect(journal), activityKind)).toEqual([
+		expect(view(buffer.entries, activityKind)).toEqual([
 			{
 				kind: "agent",
 				icon: "agent",

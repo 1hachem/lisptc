@@ -1,14 +1,14 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
-import { journal } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { bufferSink, hitch } from "@repo/interpreter/journal";
+import { runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks, type SessionHooks } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
+import { asksKind } from "@repo/journal-catalog/asks";
 import type { Entry } from "@repo/shared/journal";
-import { requested } from "../src/channel.ts";
+import { MemoryApprovals } from "../src/approvals.ts";
 import {
 	type PermissionsExtension,
 	permissionsExtension,
@@ -31,8 +31,17 @@ export interface StepRun {
 	message?: string;
 }
 
+class OpenedApprovals extends MemoryApprovals {
+	readonly opened: ApprovalRequest[] = [];
+
+	override open(request: ApprovalRequest): void {
+		this.opened.push(request);
+		super.open(request);
+	}
+}
+
 export interface Session {
-	interp: Interp;
+	interp: ConversationInterpreter;
 	extension: PermissionsExtension;
 	hooks: SessionHooks;
 	host: PermissionsHost;
@@ -48,24 +57,27 @@ export function session(
 	bounds?: readonly string[],
 ): Session {
 	let now = 1_000;
+	const approvals = new OpenedApprovals();
 	const host: PermissionsHost = {
 		...permissionsHostFor({
 			store: new MemoryPermissionsStore(source),
 			...(approvers === undefined ? {} : { approvers }),
 		}),
+		approvals,
 		clock: { now: () => now++ },
 		...(asks === undefined ? {} : { asks }),
 		...(bounds === undefined ? {} : { bounds }),
 	};
 	const extension = permissionsExtension(host);
-	const interp = new Interp({ extensions: [extension] });
+	const interp = new ConversationInterpreter({ extensions: [extension] });
 	runSync(interp, prelude);
 	const hooks = newSessionHooks();
 	extension.session?.(hooks);
 
 	async function within(body: () => Promise<unknown>): Promise<StepRun> {
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
+		const opened = approvals.opened.length;
 		let value: string | undefined;
 		let failed = false;
 		let held = false;
@@ -78,18 +90,19 @@ export function session(
 		} finally {
 			detach();
 		}
-		const message = hooks.message.run(() => undefined, buffer);
+		const notes = buffer.collect(note).map((record) => record.content);
+		const message = notes.length === 0 ? undefined : notes.join("\n\n");
 		return {
 			...(value === undefined ? {} : { value }),
 			failed,
 			held,
 			report: buffer
-				.collect(note)
+				.collect(hitch)
 				.filter((n) => n.kind !== "skipped")
 				.map((n) => n.text)
 				.join(""),
-			requests: buffer.collect(requested),
-			entries: buffer.collect(journal),
+			requests: approvals.opened.slice(opened),
+			entries: buffer.entries.filter((e) => e.kind === asksKind.name),
 			...(message === undefined ? {} : { message }),
 		};
 	}
@@ -106,7 +119,7 @@ export function session(
 					async () => {
 						value = (await runAsync(interp, code)).value;
 					},
-					{ interp, code, emit: () => {} },
+					{ interp, code, author: "assistant" },
 				);
 				return value;
 			});
@@ -123,10 +136,7 @@ export function session(
 		turnStart: () =>
 			within(async () => {
 				await driveAsync(
-					hooks.turnStart.run(() => settled(undefined), {
-						interp,
-						emit: () => {},
-					}),
+					hooks.turnStart.run(() => settled(undefined), { interp }),
 				);
 				return undefined;
 			}),

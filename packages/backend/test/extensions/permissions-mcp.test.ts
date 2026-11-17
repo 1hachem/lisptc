@@ -113,7 +113,7 @@ describe("permissions over a loaded MCP server", () => {
 			approved: true,
 			scope: "once",
 		});
-		expect(decided.message).toContain(
+		expect(decided.notes.map((said) => said.content).join("\n")).toContain(
 			"it is applied to the permissions config",
 		);
 		expect((await repl.evalOutput('(fx/echo :message "y")')).failed).toBe(true);
@@ -165,8 +165,13 @@ describe("permissions over a loaded MCP server", () => {
 			scope: "once",
 		});
 		expect(decided.failed).toBe(false);
-		expect(decided.message).toContain("approved fx/send_mail");
-		expect(decided.message).toContain("The held step carried on");
+		expect(decided.notes.map((said) => said.content).join("\n")).toContain(
+			"approved fx/send_mail",
+		);
+		expect(decided.notes.at(-1)).toMatchObject({
+			role: "system",
+			content: expect.stringContaining("The held step carried on"),
+		});
 		expect(client.calls.map((c) => c.tool)).toEqual(["send_mail"]);
 
 		const again = await repl.evalOutput('(fx/send_mail :message "hello")');

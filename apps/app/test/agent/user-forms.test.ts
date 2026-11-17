@@ -1,4 +1,4 @@
-import type { Envelope, PostOptions } from "@repo/ai";
+import type { Mail, PostOptions } from "@repo/ai";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { type Method, postJson as send, serve } from "../helpers.ts";
 
@@ -7,7 +7,7 @@ const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 const world = vi.hoisted(() => ({
 	posted: [] as {
 		chatId: string;
-		envelope: Envelope;
+		mail: Mail;
 		options?: PostOptions;
 	}[],
 	running: true,
@@ -38,8 +38,8 @@ vi.mock("../../server/agent/convex.ts", () => ({
 
 vi.mock("../../server/agent/threads.ts", () => ({
 	threads: {},
-	post: async (chatId: string, envelope: Envelope, options?: PostOptions) => {
-		world.posted.push({ chatId, envelope, options });
+	post: async (chatId: string, mail: Mail, options?: PostOptions) => {
+		world.posted.push({ chatId, mail, options });
 		return { ended: Promise.resolve({ answer: "done." }) };
 	},
 	watchThread: (chatId: string, signal: AbortSignal) => {
@@ -73,7 +73,7 @@ beforeEach(() => {
 });
 
 describe("a typed message", () => {
-	test("is posted to its chat's thread as a user envelope whose forms may run", async () => {
+	test("is posted to its chat's thread as a user mail whose forms may run", async () => {
 		await send(turn, {
 			input: {
 				chatId: CHAT,
@@ -84,7 +84,7 @@ describe("a typed message", () => {
 		expect(world.posted).toEqual([
 			{
 				chatId: CHAT,
-				envelope: {
+				mail: {
 					kind: "user",
 					id: expect.stringMatching(/^[0-9a-f-]{36}$/),
 					text: "what is (+ 1 2)",
@@ -102,7 +102,7 @@ describe("a typed message", () => {
 		});
 		expect(response.status).toBe(202);
 		expect(await response.json()).toEqual({ accepted: true, id: "m1" });
-		expect(world.posted[0].envelope.id).toBe("m1");
+		expect(world.posted[0].mail.id).toBe("m1");
 	});
 
 	test("is never posted to a chat the caller cannot read", async () => {
@@ -163,7 +163,7 @@ describe("a steer", () => {
 		});
 		expect(response.status).toBe(202);
 		expect(await response.json()).toEqual({ accepted: true });
-		expect(world.posted[0].envelope).toEqual({
+		expect(world.posted[0].mail).toEqual({
 			kind: "user",
 			id: "s1",
 			text: "also (+ 1 2)",

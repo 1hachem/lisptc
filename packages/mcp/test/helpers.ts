@@ -1,6 +1,5 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { bufferSink, hitch } from "@repo/interpreter/journal";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
-import { note } from "@repo/interpreter/topics";
 import type { McpExtensionHost } from "../src/mcp.ts";
 import type {
 	ConnConfig,
@@ -40,8 +39,8 @@ export function recordingHost(): McpHost & {
 }
 
 export function reportOf(interp: Interp, code: string): string {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		runSync(interp, code);
 	} catch {
@@ -49,7 +48,7 @@ export function reportOf(interp: Interp, code: string): string {
 		detach();
 	}
 	return buffer
-		.collect(note)
+		.collect(hitch)
 		.filter((n) => n.kind === "failed")
 		.map((n) => n.text)
 		.join("");

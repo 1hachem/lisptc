@@ -8,8 +8,7 @@
     "./arith": "./src/arith.ts",
     "./journal": "./src/journal.ts",
     "./async": "./src/async.ts",
-    "./channels": "./src/channels.ts",
-    "./channels-host": "./src/channels-host.ts",
+    "./conversation": "./src/conversation.ts",
     "./core-builtins": "./src/core-builtins.ts",
     "./docs": "./src/docs.ts",
     "./drive": "./src/drive.ts",
@@ -31,7 +30,6 @@
     "./session": "./src/session.ts",
     "./source": "./src/source.ts",
     "./timeout": "./src/timeout.ts",
-    "./topics": "./src/topics.ts",
     "./types": "./src/types.ts"
   },
   "engines": {

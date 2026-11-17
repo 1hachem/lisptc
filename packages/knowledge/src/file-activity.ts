@@ -1,6 +1,5 @@
 import type { Eval } from "@repo/interpreter/drive";
 import { messageOf } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	type ActivityEntry,
@@ -39,7 +38,7 @@ export function* reporting<T>(
 	calls.set(n);
 	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
-		record(interp.channels, activityKind, {
+		interp.journal.write(activityKind, {
 			kind: "file",
 			icon: verb,
 			label: `knowledge · ${verb}`,

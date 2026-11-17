@@ -1,5 +1,4 @@
 import { isNumeric } from "@repo/interpreter/arith";
-import { topic } from "@repo/interpreter/channels";
 import type { DocArg, DocArgSpec, DocValue } from "@repo/interpreter/docs";
 import { settled } from "@repo/interpreter/drive";
 import {
@@ -8,7 +7,6 @@ import {
 	StepHold,
 	UnresolvedHead,
 } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import type { Interp, State, StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -121,7 +119,7 @@ function announceMachine(hooks: SessionHooks, machine: UserMachine): void {
 	hooks.beginStep.use(function* (ctx, next) {
 		const now = yield* settled(machine.refresh());
 		if (now !== known && machine.servers().length > 0)
-			ctx.emit(machineNotice(machine, now));
+			ctx.interp.conversation.append("mcp", machineNotice(machine, now));
 		known = now;
 		yield* next(ctx);
 	});
@@ -147,12 +145,6 @@ const callSeqCodec: StateCodec<number> = {
 	toLisp: (n) => BigInt(n),
 	fromLisp: (x) => Number(x),
 };
-
-const authorizationAnswered = topic<{
-	id: string;
-	server: string;
-	approved: boolean;
-}>("mcp-authorization-answered");
 
 function authorizationAsk(server: string, url: string): Ask {
 	const id = new URL(url).searchParams.get("state") ?? url;
@@ -185,7 +177,7 @@ function authorizationAsk(server: string, url: string): Ask {
 
 function holdForAuthorization(interp: Interp, error: unknown): unknown {
 	if (!(error instanceof AuthorizationRequired)) return error;
-	record(interp.channels, asksKind, {
+	interp.journal.write(asksKind, {
 		open: [authorizationAsk(error.server, error.url)],
 	});
 	return new StepHold(
@@ -204,28 +196,19 @@ function answerAuthorization(hooks: SessionHooks): void {
 				false,
 			);
 		const accepted = approved === true || approved === "true";
-		authorizationAnswered.emit(ctx.interp.channels, {
-			user: { id, server, approved: accepted },
-		});
-		record(
-			ctx.interp.channels,
+		ctx.interp.conversation.append(
+			"mcp",
+			accepted
+				? `The user authorized "${server}". Run (load-mcp "${server}") again and carry on with what you were doing.`
+				: `The user declined to authorize "${server}". Do not load it again unless they ask.`,
+		);
+		ctx.interp.journal.write(
 			asksKind,
 			answering(id, {
 				accepted,
 				label: accepted ? "Authorized" : "Not authorized",
 			}),
 		);
-	});
-	hooks.message.use((buffer, next) => {
-		const answers = buffer.collect(authorizationAnswered);
-		if (answers.length === 0) return next(buffer);
-		return answers
-			.map(({ server, approved }) =>
-				approved
-					? `The user authorized "${server}". Run (load-mcp "${server}") again and carry on with what you were doing.`
-					: `The user declined to authorize "${server}". Do not load it again unless they ask.`,
-			)
-			.join("\n\n");
 	});
 }
 
@@ -300,12 +283,12 @@ const serverCodec: StateCodec<ServerEntry[]> = {
 		}),
 };
 
-function entryOf(servers: Servers, name: string): ServerEntry | undefined {
+function serverEntry(servers: Servers, name: string): ServerEntry | undefined {
 	return servers.get().find((entry) => entry.name === name);
 }
 
 function statusOf(servers: Servers, name: string): LispKeyword {
-	return newLispKeyword(entryOf(servers, name)?.state ?? "unloaded");
+	return newLispKeyword(serverEntry(servers, name)?.state ?? "unloaded");
 }
 
 function toolSyms(entry: ServerEntry): Sym[] {
@@ -628,7 +611,7 @@ function doUnload(
 	servers: Servers,
 	name: string,
 ): Sym[] {
-	const entry = entryOf(servers, name);
+	const entry = serverEntry(servers, name);
 	if (!entry) throw new EvalException("MCP server not loaded", name, false);
 	if (entry.state === "loaded")
 		void client.disconnect(entry.serverId).catch(() => {});
@@ -655,7 +638,7 @@ function notLoaded(
 	const server = serverOf(error);
 	if (
 		server === undefined ||
-		entryOf(servers, server) !== undefined ||
+		serverEntry(servers, server) !== undefined ||
 		!predefined.has(server)
 	)
 		return undefined;
@@ -697,7 +680,7 @@ function callTool(
 	f: unknown[],
 ): Promise<unknown> {
 	const name = `${ref.server}/${ref.tool}`;
-	const entry = entryOf(servers, ref.server);
+	const entry = serverEntry(servers, ref.server);
 	if (entry === undefined)
 		throw new EvalException("MCP server not loaded", ref.server, false);
 	if (entry.state !== "loaded")
@@ -718,7 +701,7 @@ function callTool(
 	const icon = iconOf(tool.icons, entry.icons);
 	const startedAt = clock.now();
 	const report = (state: ActivityEntry["state"], error?: unknown): void =>
-		record(interp.channels, activityKind, {
+		interp.journal.write(activityKind, {
 			kind: "mcp",
 			icon,
 			label: toolLabel(ref.server, tool),
@@ -779,7 +762,7 @@ function toolBuiltIn(wiring: Wiring, ref: ToolRef): unknown {
 					`${ref.server}/${ref.tool}`,
 					false,
 				);
-			const entry = entryOf(wiring.servers, ref.server);
+			const entry = serverEntry(wiring.servers, ref.server);
 			return entry?.state === "dormant"
 				? wiring.reconnect(entry).then(() => callTool(wiring, ref, f))
 				: callTool(wiring, ref, f);
@@ -930,10 +913,10 @@ export function registerMcp(
 		loads.set(n);
 		const startedAt = clock.now();
 		const report = (state: ActivityEntry["state"], error?: unknown): void =>
-			record(interp.channels, activityKind, {
+			interp.journal.write(activityKind, {
 				kind: "mcp",
 				icon: iconOf(
-					state === "done" ? entryOf(servers, name)?.icons : undefined,
+					state === "done" ? serverEntry(servers, name)?.icons : undefined,
 					manifestIcons(conf),
 				),
 				label: `load-mcp · ${name}`,
@@ -1021,7 +1004,7 @@ export function registerMcp(
 			const conf = connConfigFromArgs(rest, shown(), toolkit.local, commands);
 			if ("local" in conf && conf.local === true)
 				yield* interp.guard(`${LOCAL_GATE}${conf.name}`, []);
-			if (entryOf(servers, conf.name))
+			if (serverEntry(servers, conf.name))
 				doUnload(interp, client, servers, conf.name);
 			return startLoad(rest);
 		},
@@ -1102,7 +1085,7 @@ export function registerMcp(
 			const args = listToArray(rest);
 			const name = typeof args[0] === "string" ? args[0] : asName(args[0]);
 			const conf = oauthServer(shown(), name);
-			if (entryOf(servers, name)) doUnload(interp, client, servers, name);
+			if (serverEntry(servers, name)) doUnload(interp, client, servers, name);
 			return withTimeout(client.logout(conf), CALL_TIMEOUT_MS, "logout").then(
 				() => newLispKeyword("logged-out"),
 			);

@@ -26,9 +26,9 @@ function opaque(): InterpExtension {
 function breaking(): InterpExtension {
 	return Object.assign((_: Interp) => {}, {
 		session(hooks: SessionHooks): void {
-			hooks.stepOutput.use((ctx, out, next) => {
+			hooks.evalStep.use(async (ctx, next) => {
+				await next(ctx);
 				if (ctx.code.includes("boom")) throw new Error("host broke");
-				return next(ctx, out);
 			});
 		},
 	});
@@ -55,13 +55,13 @@ describe("checkpoints", () => {
 		expect((await images.latest())?.depth).toBe(3);
 	});
 
-	it("stamps a step's channel envelopes with its depth, across a resume", async () => {
-		const steps: number[] = [];
+	it("stamps an evaluation's journal entries with its depth, across a resume", async () => {
+		const evaluations: number[] = [];
 		const stamp: InterpExtension = (interp: Interp): void => {
 			interp.defineGlobal(
 				newSym("stamp"),
 				new BuiltInFunc("stamp", 0, () => {
-					steps.push(interp.channels.step);
+					evaluations.push(interp.journal.evaluation);
 					return null;
 				}),
 			);
@@ -74,7 +74,7 @@ describe("checkpoints", () => {
 		const second = repl(images, [stamp]);
 		await second.resume();
 		await second.evalOutput("(stamp)");
-		expect(steps).toEqual([1, 2, 3]);
+		expect(evaluations).toEqual([1, 2, 3]);
 	});
 
 	it("resumes in a new REPL where the last one stopped", async () => {
@@ -100,7 +100,7 @@ describe("checkpoints", () => {
 		const out = await r.evalOutput("(setq h (opaque))");
 		await settle();
 		expect(images.origins()).toEqual([]);
-		expect(out.message).toBeUndefined();
+		expect(out.notes).toEqual([]);
 	});
 
 	it("recovers to the last checkpoint after a step the host broke on", async () => {
@@ -138,7 +138,7 @@ describe("checkpoints", () => {
 		}
 		const images = new FlakyStore();
 		const r = repl(images);
-		expect((await r.evalOutput("(setq a 1)")).message).toBeUndefined();
+		expect((await r.evalOutput("(setq a 1)")).notes).toEqual([]);
 		await r.evalOutput("(setq a 2)", "second");
 		await settle();
 		expect(images.origins()).toEqual(["second"]);
@@ -163,7 +163,7 @@ describe("checkpoints", () => {
 	it("keeps the conversation globals in the image, still sealed", async () => {
 		const images = new MemoryImageStore();
 		const first = new AgentRepl({ extensions: [], images });
-		first.setConversationVars({ "user-messages": ["hi"] });
+		first.seed([{ role: "user", content: "hi" }], 0);
 		await first.evalOutput("(setq seen (length user-messages))");
 		await settle();
 		const second = new AgentRepl({ extensions: [], images });

@@ -1,5 +1,6 @@
 import {
 	type ChatMessage,
+	isNoteMessage,
 	isSystemMessage,
 	isToolMessage,
 	isUserMessage,
@@ -18,6 +19,7 @@ function render(message: ChatMessage): string | null {
 		const { output, error } = toolResult(message);
 		return section(error ? "repl (error)" : "repl", output);
 	}
+	if (isNoteMessage(message)) return section("note", messageText(message));
 	if (isSystemMessage(message)) return section("system", messageText(message));
 	return section(
 		isUserMessage(message) ? "user" : "assistant",

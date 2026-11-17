@@ -9,7 +9,6 @@ import { lineageOf, settleChat, spawnUnder, startChat } from "./chats.js";
 import {
 	appendTo,
 	incomingMessages,
-	reviseIn,
 	transcriptMessages,
 	transcriptOf,
 } from "./messages.js";
@@ -72,19 +71,6 @@ export const append = internalMutation({
 	returns: v.array(v.id("messages")),
 	handler: async (ctx, { chatId, messages }) =>
 		await appendTo(ctx, await threadChat(ctx, chatId), messages),
-});
-
-export const revise = internalMutation({
-	args: {
-		chatId: v.id("chats"),
-		id: v.string(),
-		kwargs: v.record(v.string(), v.any()),
-	},
-	returns: v.null(),
-	handler: async (ctx, { chatId, id, kwargs }) => {
-		await reviseIn(ctx, await threadChat(ctx, chatId), id, kwargs);
-		return null;
-	},
 });
 
 export const start = internalMutation({

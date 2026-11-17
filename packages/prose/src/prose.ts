@@ -1,11 +1,12 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
+import { effect } from "@repo/interpreter/effects";
 import { UnresolvedHead } from "@repo/interpreter/errors";
+import { hitch, printed } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { Reader, readFailure } from "@repo/interpreter/reader";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
-import { note } from "@repo/interpreter/topics";
 import {
 	endOfForm,
 	type FormJudge,
@@ -22,9 +23,7 @@ export function proseExtension(host: ProseHost): InterpExtension {
 			next(
 				interp,
 				stripProse(text, (what) =>
-					note.emit(interp.channels, {
-						model: { kind: "skipped", text: what },
-					}),
+					interp.journal.write(hitch, { kind: "skipped", text: what }),
 				),
 			),
 		);
@@ -53,13 +52,47 @@ export function proseExtension(host: ProseHost): InterpExtension {
 				...next(interp, code),
 				...proseSkipped(interp, code),
 			]);
-			hooks.answered.use((ctx, out, next) => {
-				if (formsOnly(ctx.code).trim() === "") return true;
-				if (out.model !== "" || out.skipped.length === 0) return next(ctx, out);
-				return !isTruncated(ctx.code);
+			hooks.evalStep.use(async (ctx, next) => {
+				if (ctx.author !== "assistant") return next(ctx);
+				const skipped: string[] = [];
+				let printedForModel = false;
+				let held = false;
+				const unskip = ctx.interp.journal.on(hitch, (n) => {
+					if (n.kind === "held") held = true;
+					if (n.kind === "skipped" && !skipped.includes(n.text))
+						skipped.push(n.text);
+				});
+				const unprint = ctx.interp.journal.on(printed, (p) => {
+					if (p.to.includes("model")) printedForModel = true;
+				});
+				try {
+					await next(ctx);
+				} finally {
+					unskip();
+					unprint();
+				}
+				const answered =
+					formsOnly(ctx.code).trim() === "" ||
+					(!printedForModel &&
+						!held &&
+						skipped.length > 0 &&
+						!isTruncated(ctx.code));
+				if (!answered) return;
+				ctx.interp.journal.write(effect, { type: "end" });
+				if (skipped.length > 0)
+					ctx.interp.conversation.append("prose", ranNothing(skipped));
 			});
 		},
 	});
+}
+
+function ranNothing(skipped: readonly string[]): string {
+	return [
+		"your previous reply ran nothing: a parenthesis in prose is read as prose.",
+		...skipped.map((what) => `skipped ${what}`),
+		"put parentheses only around code you mean to run.",
+		"this note is not from the user. Do not mention it, apologise for it, or explain it. Answer the user's next message without repeating that shape.",
+	].join("\n");
 }
 
 const proseJudge: FormJudge = {

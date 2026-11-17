@@ -28,7 +28,7 @@ function runtimeFor(events: EvalTurnEvent[]): EvalRuntime<EvalSpec, object> {
 			output: "",
 			error: false,
 			entries: [],
-			emitted: "",
+			notes: [],
 		}),
 		resultContent: (output) => output,
 		systemPrompt: () => "",

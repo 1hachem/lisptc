@@ -18,12 +18,6 @@ import {
 } from "react";
 import { attachedTo } from "../lib/attached-files.ts";
 import {
-	CHANNELS,
-	channelOf,
-	EVERY_CHANNEL,
-	type Shown,
-} from "../lib/channels.ts";
-import {
 	type ChatMessage,
 	isParentMessage,
 	isSystemMessage,
@@ -31,6 +25,7 @@ import {
 	messageText,
 } from "../lib/chat.tsx";
 import { entriesOfMessage, isEntryMessage } from "../lib/entries.ts";
+import { EVERY_LANE, LANES, laneOf, type Shown } from "../lib/lanes.ts";
 import { messageMatches } from "../lib/trace-find.ts";
 import { useTrace } from "../lib/trace-source.tsx";
 import {
@@ -41,11 +36,11 @@ import {
 } from "../lib/trace-steps.ts";
 import { AttachedFiles } from "./attached-files.tsx";
 import {
-	ChannelsShown,
 	ChatLine,
+	LanesShown,
 	Revealed,
 	ToolMessage,
-	useChannels,
+	useLanes,
 } from "./chat-view.tsx";
 import { MessageMeta } from "./message-meta.tsx";
 
@@ -115,7 +110,7 @@ function FindBar({
 	);
 }
 
-function ChannelToggles({
+function LaneToggles({
 	shown,
 	toggle,
 }: {
@@ -124,7 +119,7 @@ function ChannelToggles({
 }) {
 	return (
 		<div className="flex flex-wrap gap-x-3 gap-y-1 border-dim/20 border-b px-4 py-1.5 text-[11px]">
-			{CHANNELS.map((c) => (
+			{LANES.map((c) => (
 				<button
 					key={c.id}
 					type="button"
@@ -159,7 +154,7 @@ function EntryLine({
 	message: ChatMessage;
 	focused: boolean;
 }) {
-	const memory = shownMemory(message, useChannels());
+	const memory = shownMemory(message, useLanes());
 	if (memory === undefined) return null;
 	return <MessageMemories memories={[memory]} focused={focused} />;
 }
@@ -308,7 +303,7 @@ function messageKind(parent: boolean, system: boolean): MessageKind {
 }
 
 function MessageMark({ kind }: { kind: MessageKind }) {
-	const marked = channelOf(
+	const marked = laneOf(
 		kind === "agent" ? "agents" : kind === "system" ? "system" : "user",
 	);
 	return (
@@ -348,7 +343,7 @@ function MessageEntry({
 	message: ChatMessage;
 	flashing: string | undefined;
 }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	const matched = useMatched(message);
 	const [unfolded, setOpen] = useState(false);
 	const open = unfolded || matched;
@@ -414,7 +409,7 @@ function TraceEntries({
 	flashing?: string;
 	focused?: string;
 }) {
-	const shown = useChannels();
+	const shown = useLanes();
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-3">
 			{entries.map((entry) => {
@@ -524,7 +519,7 @@ export function TraceLines({
 	messages: readonly ChatMessage[];
 	turn?: string;
 }) {
-	const [shown, setShown] = useState<Shown>(EVERY_CHANNEL);
+	const [shown, setShown] = useState<Shown>(EVERY_LANE);
 	const scroller = useRef<HTMLDivElement>(null);
 	const entries = useMemo(() => traceEntries(messages), [messages]);
 	const flashing = useFlash(turn);
@@ -540,7 +535,7 @@ export function TraceLines({
 		}
 	};
 	return (
-		<ChannelsShown shown={shown}>
+		<LanesShown shown={shown}>
 			<FindQuery.Provider value={find.query}>
 				<section
 					aria-label="trace"
@@ -548,7 +543,7 @@ export function TraceLines({
 					onKeyDown={onKeyDown}
 				>
 					<FindBar {...find} />
-					<ChannelToggles shown={shown} toggle={toggle} />
+					<LaneToggles shown={shown} toggle={toggle} />
 					<div
 						ref={scroller}
 						className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]"
@@ -563,7 +558,7 @@ export function TraceLines({
 					</div>
 				</section>
 			</FindQuery.Provider>
-		</ChannelsShown>
+		</LanesShown>
 	);
 }
 
