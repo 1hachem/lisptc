@@ -24,7 +24,6 @@ import {
 	lineRecord,
 	mailLine,
 	type PostedLine,
-	ranByUser,
 } from "./line.ts";
 import type { Mail } from "./mailbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -169,7 +168,7 @@ async function* takeSteers({
 			continue;
 		}
 		const { message, quiet, entries, notes } = evaluated;
-		lines.push(line, ranByUser(message.content));
+		lines.push(line, { kind: "result", text: message.content });
 		if (!quiet) taken += 1;
 		yield { type: "evaluated", message };
 		yield* recorded(entries);
