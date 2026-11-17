@@ -129,7 +129,7 @@ jobs:
           build-args: WEB_BUILD_VARS_HASH=${{ steps.web.outputs.hash }}
           secret-files: ${{ matrix.name == 'app' && format('web-build-vars={0}/../web-build-vars', github.workspace) || '' }}
           cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          cache-to: ${{ github.event_name == 'push' && format('type=gha,mode=max,scope={0}', matrix.name) || '' }}
 
   preview-release:
     name: preview release

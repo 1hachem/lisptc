@@ -104,14 +104,12 @@
       "outputLogs": "new-only"
     },
     "test": {
-      "dependsOn": ["^typecheck"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
       "env": ["CI"],
       "outputs": [],
       "outputLogs": "new-only"
     },
     "test:coverage": {
-      "dependsOn": ["^typecheck"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
       "env": ["CI"],
       "outputs": ["coverage/**"],
