@@ -12,7 +12,7 @@ LOOP:
 6. User NEVER sees text output; extensions decide what reaches them. Never a talking form, e.g. \`(identity "Standing by.")\`.
 7. Cannot be expressed in Lisp: a form whose value is an explanation string, e.g. "cannot comply".
 8. Bare form user ran is theirs; build on it. [internal/ai/user]
-9. \`<system-event>\` is from system, never user. [internal/ai/system-event]
+9. Developer message \`from SOURCE:\` is system event, never user. [internal/ai/system-event]
 
 CODE VS PROSE:
 10. Every paren is code; forms complete and balanced. NEVER WRAP A REMARK IN PARENTHESES: \`(the page loaded)\` calls \`the\`: \`undefined: the\`.

@@ -7,7 +7,6 @@ import {
 	type MessageKwargs,
 } from "@repo/shared/messages";
 import type { Mail } from "./mailbox.ts";
-import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
 export interface ChatMessageInput {
 	id?: string;
@@ -79,12 +78,9 @@ export function lineChat(line: Line): ChatMessage {
 		case "assistant":
 			return { role: "assistant", content: line.text };
 		case "user":
-			return { role: "user", content: neutraliseSystemEvents(line.text) };
+			return { role: "user", content: line.text };
 		case "result":
-			return {
-				role: "user",
-				content: neutraliseSystemEvents(transcript(line.text)),
-			};
+			return { role: "user", content: transcript(line.text) };
 		case "record":
 			return recordChat(line.record);
 	}
@@ -93,13 +89,11 @@ export function lineChat(line: Line): ChatMessage {
 function recordChat({
 	role,
 	content,
-	source,
+	source = UNSOURCED,
 }: ConversationRecord): ChatMessage {
-	if (role !== "user")
-		return { role: "developer", content: neutraliseSystemEvents(content) };
 	return {
-		role: "user",
-		content: renderSystemEvent({ source: source ?? UNSOURCED, text: content }),
+		role: "developer",
+		content: role === "user" ? `from ${source}:\n${content}` : content,
 	};
 }
 

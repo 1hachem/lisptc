@@ -21,7 +21,6 @@ export {
 	entryMessage,
 	type TurnOutcome,
 } from "./stream.ts";
-export { renderSystemEvent, type SystemEvent } from "./system-event.ts";
 export {
 	captureException,
 	initTelemetry,
