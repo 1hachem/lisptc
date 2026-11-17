@@ -70,6 +70,27 @@ function adopt(chain: TurnLink[], introduces: string[]): void {
 	else current.introduces.push(...introduces);
 }
 
+function callLink(
+	call: ChatMessage | undefined,
+	result: ChatMessage,
+	intent: Intent | undefined,
+	doing: string | undefined,
+	introduces: string[],
+	ran: boolean,
+): TurnLink {
+	const said = intent?.doing;
+	const progress = intent?.progress;
+	return {
+		kind: "call",
+		call,
+		result,
+		...(said !== undefined && said !== doing ? { doing: said } : {}),
+		introduces,
+		...(progress !== undefined ? { progress } : {}),
+		ran,
+	};
+}
+
 export function shapeTurn(turn: Turn): TurnShape {
 	const shape: TurnShape = {
 		activity: [],
@@ -103,19 +124,7 @@ export function shapeTurn(turn: Turn): TurnShape {
 		const ran = userRun;
 		userRun = false;
 		if (ran || !toolQuiet(message)) {
-			shape.chain.push({
-				kind: "call",
-				call,
-				result: message,
-				...(intent?.doing !== undefined && intent.doing !== doing
-					? { doing: intent.doing }
-					: {}),
-				introduces,
-				...(intent?.progress !== undefined
-					? { progress: intent.progress }
-					: {}),
-				ran,
-			});
+			shape.chain.push(callLink(call, message, intent, doing, introduces, ran));
 			logged = Math.max(logged, log.length);
 			doing = intent?.doing ?? doing;
 		} else adopt(shape.chain, introduces);
