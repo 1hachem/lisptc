@@ -25,6 +25,7 @@ export async function prefetchSidebar(
 		queryClient.ensureQueryData(
 			convexQuery(api.permissions.get, { workspaceId }),
 		),
+		queryClient.ensureQueryData(convexQuery(api.graphs.list, { workspaceId })),
 		queryClient.ensureQueryData(
 			convexQuery(api.files.list, { workspaceId, folder: "knowledge" }),
 		),

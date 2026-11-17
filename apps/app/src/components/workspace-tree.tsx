@@ -7,6 +7,7 @@ import {
 	Delete02Icon,
 	File01Icon,
 	FlashIcon,
+	HierarchyCircle01Icon,
 	Home01Icon,
 	InformationCircleIcon,
 	PaintBoardIcon,
@@ -64,6 +65,7 @@ const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	memories: StickyNote01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
+	graphs: HierarchyCircle01Icon,
 	attachments: Attachment01Icon,
 	bin: Delete02Icon,
 	"sub-agents": restingIcon(),
@@ -84,6 +86,10 @@ export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
 
 function memoryPage(key: string): PanelContent {
 	return { kind: "page", page: "memory", id: key, title: `memories/${key}` };
+}
+
+function graphPage(name: string): PanelContent {
+	return { kind: "page", page: "graph", id: name, title: `graphs/${name}` };
 }
 
 function permissionPage(index: number, name: string): PanelContent {
@@ -168,6 +174,21 @@ function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 				/>
 			}
 			link={linkTo(memory.workspaceId, page)}
+		/>
+	);
+}
+
+function GraphFile({ graph }: { graph: Doc<"graphs"> }) {
+	const shown = useShown();
+	const page = graphPage(graph.name);
+
+	return (
+		<TreeFile
+			name={graph.name}
+			depth={1}
+			selected={shown(page)}
+			onDragStart={dragsAs(page)}
+			link={linkTo(graph.workspaceId, page)}
 		/>
 	);
 }
@@ -273,6 +294,9 @@ export function WorkspaceTree({
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
+	const { data: graphs } = useQuery(
+		convexQuery(api.graphs.list, { workspaceId }),
+	);
 
 	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
 		<TreeFolder {...folder(name)} onCreate="disabled" createLabel="coming soon">
@@ -302,6 +326,13 @@ export function WorkspaceTree({
 		),
 		knowledge: () => (
 			<KnowledgeFolder workspaceId={workspaceId} folder={folder("knowledge")} />
+		),
+		graphs: () => (
+			<TreeFolder {...folder("graphs")}>
+				<Listing items={graphs} empty="no graphs yet">
+					{(graph) => <GraphFile key={graph._id} graph={graph} />}
+				</Listing>
+			</TreeFolder>
 		),
 		attachments: () => (
 			<AttachmentsFolder

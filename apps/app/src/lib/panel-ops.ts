@@ -11,6 +11,7 @@ export type Folder = "attachments" | "knowledge";
 
 const PAGES = [
 	"memory",
+	"graph",
 	"permission",
 	"readme",
 	"settings",
