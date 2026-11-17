@@ -1,6 +1,6 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { useCallback, useMemo, useRef, useState } from "react";
 import type { Command } from "@repo/ui-catalog";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { newestFirst } from "./message-history.ts";
 import type { Flash } from "./notice.ts";
 

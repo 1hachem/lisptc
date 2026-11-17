@@ -4,6 +4,7 @@ import {
 	type MenuTextMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { useIsMobile } from "@repo/ui";
+import { COMMANDS, type Command } from "@repo/ui-catalog";
 import { $getRoot } from "lexical";
 import {
 	type RefObject,
@@ -12,7 +13,6 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { COMMANDS, type Command } from "@repo/ui-catalog";
 import { matchesCommand } from "../lib/commands.ts";
 import { TypeaheadMenu } from "./typeahead-menu.tsx";
 
