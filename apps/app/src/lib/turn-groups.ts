@@ -7,7 +7,7 @@ import {
 	toolActivity,
 } from "@repo/components";
 import type { ActivityEntry } from "@repo/journal-catalog/activity";
-import type { Intent } from "@repo/journal-catalog/intent";
+import type { Intent, Progress } from "@repo/journal-catalog/intent";
 import { toolFailed, toolIntent, toolQuiet } from "./chat.tsx";
 
 export interface Turn {
@@ -42,7 +42,7 @@ export type TurnLink =
 			result: ChatMessage;
 			doing?: string;
 			introduces: string[];
-			progress: boolean;
+			progress?: Progress;
 			ran: boolean;
 	  };
 
@@ -85,7 +85,6 @@ export function shapeTurn(turn: Turn): TurnShape {
 	let call: ChatMessage | undefined;
 	let doing: string | undefined;
 	let logged = 0;
-	let progressed = false;
 	let userRun = turn.asked !== undefined && isUserMessage(turn.asked);
 	for (const message of turn.steps) {
 		if (isSystemMessage(message)) continue;
@@ -105,7 +104,6 @@ export function shapeTurn(turn: Turn): TurnShape {
 				.filter((entry) => !activity.has(entry.id))
 				.map((entry) => `activity:${entry.id}`),
 		];
-		const progress: boolean = !progressed && intent?.progress !== undefined;
 		const ran = userRun;
 		userRun = false;
 		if (ran || !toolQuiet(message)) {
@@ -117,11 +115,12 @@ export function shapeTurn(turn: Turn): TurnShape {
 					? { doing: intent.doing }
 					: {}),
 				introduces,
-				progress,
+				...(intent?.progress !== undefined
+					? { progress: intent.progress }
+					: {}),
 				ran,
 			});
 			logged = Math.max(logged, log.length);
-			progressed ||= progress;
 			doing = intent?.doing ?? doing;
 		} else adopt(shape.chain, introduces);
 		call = undefined;

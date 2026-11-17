@@ -53,6 +53,7 @@ export interface ChatSession {
 	meta: Record<string, StepMeta>;
 	fresh: boolean;
 	isLoading: boolean;
+	waiting: boolean;
 	chatId: Id<"chats"> | null;
 	draftChatId: Id<"chats"> | null;
 	workspaceId: Id<"workspaces">;
@@ -474,19 +475,25 @@ function useTranscript(chatId: Id<"chats"> | null) {
 			),
 		[watched, persisted],
 	);
-	const running = useStreaming(chatId);
-	return { watched, persisted, streamed, running };
+	const status = useChatStatus(chatId);
+	return {
+		watched,
+		persisted,
+		streamed,
+		running: status === "streaming",
+		waiting: status === "waiting",
+	};
 }
 
 function watchedFailure(watched: Watched): string | undefined {
 	return watched.status === "errored" ? watched.failure : undefined;
 }
 
-function useStreaming(chatId: Id<"chats"> | null): boolean {
+function useChatStatus(chatId: Id<"chats"> | null) {
 	const { data: chat } = useQuery(
 		convexQuery(api.chats.get, chatId ? { chatId } : "skip"),
 	);
-	return chat?.status === "streaming";
+	return chat?.status;
 }
 
 function usePersisted(chatId: Id<"chats"> | null): Sequenced[] {
@@ -540,6 +547,7 @@ function useSessionStore(
 			meta: {},
 			fresh,
 			isLoading: false,
+			waiting: false,
 			chatId,
 			draftChatId: null,
 			workspaceId,
@@ -587,7 +595,8 @@ export function ChatProvider({
 	const announce = useRef(onOpened);
 	announce.current = onOpened;
 	const drafted = useDrafted(workspaceId, chatId);
-	const { watched, persisted, streamed, running } = useTranscript(chatId);
+	const { watched, persisted, streamed, running, waiting } =
+		useTranscript(chatId);
 
 	const greeting = useGreeting(greetingKey);
 
@@ -595,8 +604,14 @@ export function ChatProvider({
 	const [pending, setPending] = usePending(chatId);
 
 	const turns = useMemo(
-		() => timelineOf(persisted, streamed, running, pendingIn(pending, chatId)),
-		[streamed, persisted, running, pending, chatId],
+		() =>
+			timelineOf(
+				persisted,
+				streamed,
+				running || waiting,
+				pendingIn(pending, chatId),
+			),
+		[streamed, persisted, running, waiting, pending, chatId],
 	);
 
 	const messages = useMemo(
@@ -635,6 +650,7 @@ export function ChatProvider({
 			greeting: greetingText(greeting),
 			fresh,
 			isLoading: running,
+			waiting,
 			chatId,
 			draftChatId: chatId === null ? drafted : null,
 			workspaceId,
@@ -655,6 +671,7 @@ export function ChatProvider({
 		greeting,
 		fresh,
 		running,
+		waiting,
 		watched,
 		failure,
 		chatId,
