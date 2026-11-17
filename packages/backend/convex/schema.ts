@@ -85,6 +85,7 @@ export const panelContent = v.union(
 		kind: v.literal("page"),
 		page: v.union(
 			v.literal("memory"),
+			v.literal("graph"),
 			v.literal("permission"),
 			v.literal("readme"),
 			v.literal("settings"),
@@ -337,6 +338,15 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_key", ["workspaceId", "key"]),
+
+	graphs: defineTable({
+		workspaceId: v.id("workspaces"),
+		name: v.string(),
+		source: v.string(),
+		updatedAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_workspace_name", ["workspaceId", "name"]),
 
 	sources: defineTable({
 		workspaceId: v.id("workspaces"),

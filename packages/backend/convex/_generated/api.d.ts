@@ -14,6 +14,7 @@ import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
 import type * as desktops from "../desktops.js";
 import type * as files from "../files.js";
+import type * as graphs from "../graphs.js";
 import type * as http from "../http.js";
 import type * as layouts from "../layouts.js";
 import type * as lib_acting from "../lib/acting.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   desktops: typeof desktops;
   files: typeof files;
+  graphs: typeof graphs;
   http: typeof http;
   layouts: typeof layouts;
   "lib/acting": typeof lib_acting;

@@ -11,6 +11,8 @@ import type { Image } from "@repo/interpreter/image";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
+import { kgExtension } from "@repo/kg-extension";
+import { kgHostFor } from "@repo/kg-extension/host";
 import { knowledgeExtension } from "@repo/knowledge-extension";
 import { knowledgeHostFor } from "@repo/knowledge-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
@@ -53,6 +55,7 @@ import {
 import type { subAgent } from "../convex/schema.js";
 import { SupervisedAgents } from "./agent-threads.ts";
 import { BridgedHost, type Desktop } from "./desktop-bridge.ts";
+import { ConvexGraphStore } from "./graph-store.ts";
 import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
@@ -132,6 +135,9 @@ export async function workspaceExtensions(
 			binTtlMs: BIN_TTL_MS,
 		}),
 	);
+	const kg = kgExtension(
+		kgHostFor({ store: new ConvexGraphStore(workspaceId, connect) }),
+	);
 	const agents = agentsExtension(
 		agentsHostFor({
 			folder: new ConvexSourceFolder(connect),
@@ -148,6 +154,7 @@ export async function workspaceExtensions(
 				...memory.asks,
 				...workspace.asks,
 				...knowledge.asks,
+				...kg.asks,
 				...agents.asks,
 				...LOCAL_ASKS,
 			],
@@ -211,6 +218,7 @@ export async function workspaceExtensions(
 		memory,
 		workspace,
 		knowledge,
+		kg,
 		preferences,
 		proseExtension(proseHost),
 		ui,
