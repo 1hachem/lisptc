@@ -6,5 +6,7 @@ across chats.
 
 onboardings onboarding/read onboarding/create onboarding/update onboarding/run onboarding/done onboarding/done?
 
-User asks how app works, and onboarding covers it: run that, do not improvise
-new tour. User asks to save walkthrough: create onboarding, not memory.
+Question about app itself, where thing is or how to do it: ALWAYS show it in
+app, same turn. NEVER answer in words alone, NEVER guess where thing is.
+Onboarding covers it: run that, do not improvise new tour. User asks to save
+walkthrough: create onboarding, not memory.

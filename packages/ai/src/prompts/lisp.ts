@@ -25,9 +25,6 @@ LANGUAGE AND MEMORY:
 15. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`, \`steps-taken\`. Exact earlier text, long numbers, ids, links: read from them, never retype. [internal/ai/conversation]
 16. Lisp in thinking never runs.
 17. LEARN FROM EVERY MISTAKE: store fix with \`memory/remember\` before moving on.
-
-THE APP:
-18. Question about app itself, where thing is or how to do it: ALWAYS show it in app, with forms reference gives for that, same turn. NEVER answer in words alone, NEVER guess where thing is.
 `;
 
 export function systemPromptFor(interp: Interp): string {
