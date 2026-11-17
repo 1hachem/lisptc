@@ -140,6 +140,50 @@ export function isPage(id: string): id is PageId {
 	return Object.hasOwn(pages, id);
 }
 
+export interface Command {
+	name: string;
+	desc: string;
+	hint?: string;
+	desktopOnly?: boolean;
+	takesArgument?: boolean;
+	aliases?: string[];
+}
+
+export const COMMANDS: readonly Command[] = [
+	{
+		name: "/attachment",
+		desc: "attach files to the next message",
+		aliases: ["/attach", "/upload"],
+	},
+	{ name: "/copy", desc: "copy the conversation to the clipboard" },
+	{ name: "/dark", desc: "switch to the dark variant of the theme" },
+	{ name: "/font", desc: "choose the font" },
+	{ name: "/light", desc: "switch to the light variant of the theme" },
+	{ name: "/model", desc: "choose the model this workspace runs on" },
+	{ name: "/new", desc: "start a fresh session", aliases: ["/clear"] },
+	{ name: "/preferences", desc: "open the preferences page" },
+	{ name: "/prompt", desc: "search the prompts sent in this workspace" },
+	{
+		name: "/revert",
+		desc: "fork the chat and its repl at an earlier message",
+		aliases: ["/fork"],
+	},
+	{
+		name: "/sidebar",
+		desc: "toggle the left sidebar",
+		desktopOnly: true,
+		aliases: ["/left"],
+	},
+	{
+		name: "/right",
+		desc: "toggle the right sidebar",
+		desktopOnly: true,
+		aliases: ["/panel"],
+	},
+	{ name: "/theme", desc: "choose the colour theme" },
+	{ name: "/trace", desc: "toggle the trace beside this chat" },
+];
+
 export const SIDEBAR_FOLDERS = [
 	"chat",
 	"memories",
@@ -300,7 +344,7 @@ export const anchors = {
 	"chat/read-more": anchor("read more, on long message", CHAT),
 	"chat/attachment": anchor("file attached to message, click opens it", CHAT),
 	"chat/message": anchor("agent message, click opens its trace", CHAT),
-	"chat/meta": anchor("line under answer: model, cost, trace", CHAT),
+	"chat/meta": anchor("line under answer: time, tokens, model, trace", CHAT),
 	"chat/ask": anchor("card asking user to allow or deny", CHAT),
 	"chat/feedback": anchor("feedback buttons under answer", CHAT),
 	"chat/todo": anchor("agent todo card, click folds it", CHAT),

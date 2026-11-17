@@ -27,8 +27,12 @@ import {
 import { openQuestion } from "../src/lib/question.ts";
 import { sidewaysLeaks } from "./helpers.ts";
 
+vi.mock("@repo/ui-catalog", async (actual) => ({
+	...(await actual<typeof import("@repo/ui-catalog")>()),
+	COMMANDS: [{ name: "/clear", desc: "start a fresh session" }],
+}));
+
 vi.mock("../src/lib/commands.ts", () => ({
-	commands: [{ name: "/clear", desc: "start a fresh session" }],
 	matchesCommand: (command: { name: string }, typed: string) =>
 		command.name.slice(1).startsWith(typed.toLowerCase()),
 }));
