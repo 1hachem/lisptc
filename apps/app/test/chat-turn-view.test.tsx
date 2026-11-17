@@ -1561,12 +1561,7 @@ describe("a turn shown while the agent streams", () => {
 
 		session.messages = [
 			...running.slice(0, 2),
-			{
-				id: "t2",
-				type: "tool",
-				content: "",
-				entries: activities(timed("fetch", 100, "done", 80)),
-			},
+			running[2] as ChatMessage,
 			answered("a3", "Fetched, stored."),
 			{ id: "h3", type: "human", content: "steer" },
 			answered("a4", "Steered."),
@@ -1574,5 +1569,32 @@ describe("a turn shown while the agent streams", () => {
 		await draw();
 
 		expect(turn("h2")).toBe(frozen);
+	});
+
+	it("settles a row an earlier step started once its call finishes, in a later step or a later turn", async () => {
+		const { host, draw } = await stream();
+		session.isLoading = true;
+		session.messages = running;
+		await draw();
+		const fetch = () =>
+			[...host.querySelectorAll('[data-turn="h2"] [data-timeline]')].map((li) =>
+				li.getAttribute("data-timeline"),
+			);
+
+		expect(fetch()).toEqual(["running"]);
+
+		session.messages = [
+			...running,
+			{ id: "h3", type: "human", content: "next" },
+			{
+				id: "t3",
+				type: "tool",
+				content: "",
+				entries: activities(timed("fetch", 100, "done", 80)),
+			},
+		];
+		await draw();
+
+		expect(fetch()).toEqual(["done"]);
 	});
 });
