@@ -132,9 +132,7 @@ function wireLine(message: ChatMessageInput): Line | undefined {
 		case "ai":
 			return { kind: "assistant", text };
 		case "tool":
-			return envelopeOf(message.additional_kwargs).quiet === true
-				? undefined
-				: { kind: "result", text };
+			return { kind: "result", text };
 		case "system": {
 			const {
 				source = UNSOURCED,

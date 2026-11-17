@@ -48,6 +48,13 @@ export function isSystemMessage(message: ChatMessage): boolean {
 	return message.type === "system";
 }
 
+export function isNoteMessage(message: ChatMessage): boolean {
+	return (
+		isSystemMessage(message) &&
+		envelopeOf(message.additional_kwargs).noted === true
+	);
+}
+
 export function isUserMessage(message: ChatMessage): boolean {
 	return message.type === "human" || message.type === "user";
 }

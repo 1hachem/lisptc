@@ -299,7 +299,10 @@ class TurnWire {
 	private result(event: Of<"result">): boolean {
 		this.steps = event.step;
 		const message = crypto.randomUUID();
-		if (event.held) this.held = { held: [...this.stepEntries], message };
+		if (event.held) {
+			this.held = { held: [...this.stepEntries], message };
+			if (this.lastMeta) this.lastMeta.steps = event.step;
+		}
 		this.wire.push(toolMessage(event, message));
 		this.flush();
 		return this.snapshot();
