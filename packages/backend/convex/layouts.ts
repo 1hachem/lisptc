@@ -106,6 +106,65 @@ export const apply = mutation({
 	},
 });
 
+export const trace = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+		shown: v.boolean(),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, { workspaceId, chatId, shown }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const row = await stored(ctx, workspaceId);
+		if (row === null) return false;
+		const tabs = row.layout.nodes.flatMap((node) =>
+			node.kind === "pane" ? node.tabs : [],
+		);
+		const beside = tabs.some(
+			(tab) => tab.content.kind === "chat" && tab.content.chatId === chatId,
+		);
+		const alone = tabs
+			.filter(
+				(tab) => tab.content.kind === "trace" && tab.content.chatId === chatId,
+			)
+			.map((tab) => tab.id);
+		const toggled: PanelLayout = {
+			...row.layout,
+			nodes: row.layout.nodes.map((node) =>
+				node.kind === "pane"
+					? {
+							...node,
+							tabs: node.tabs.map((tab) =>
+								tab.content.kind === "chat" && tab.content.chatId === chatId
+									? {
+											...tab,
+											content: {
+												...tab.content,
+												trace: {
+													...tab.content.trace,
+													shown: shown ? "open" : "collapsed",
+												},
+											},
+										}
+									: tab,
+							),
+						}
+					: node,
+			),
+		};
+		const next = shown
+			? toggled
+			: flatten(
+					applyPanelOps(
+						unflatten<PanelContent>(toggled),
+						alone.map((tab) => ({ op: "close" as const, tab })),
+					),
+				);
+		await write(ctx, workspaceId, checked(next));
+		return beside;
+	},
+});
+
 export const purge = internalMutation({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.null(),

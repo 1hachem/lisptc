@@ -22,6 +22,7 @@ export type PanelOp =
 export interface PanelStore {
 	apply(ops: readonly PanelOp[]): Awaitable<void>;
 	tabs(): Awaitable<PanelTab[]>;
+	trace(shown: boolean): Awaitable<boolean>;
 }
 
 export function fileTab(folder: Folder, name: string): string {

@@ -796,6 +796,60 @@ describe("panel layout access", () => {
 		).rejects.toThrow();
 	});
 
+	it("shows and hides a chat's trace beside it, for the owner alone", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.layouts.apply, {
+			workspaceId: bob.workspace,
+			ops: [
+				{
+					op: "open",
+					tab: "chat:c1",
+					split: "here",
+					content: { kind: "chat", chatId: "c1", title: "chat" },
+				},
+				{
+					op: "open",
+					tab: "trace:c1",
+					split: "right",
+					content: { kind: "trace", chatId: "c1", title: "trace" },
+				},
+			],
+		});
+		const shown = async () =>
+			(
+				await bob.as.query(api.layouts.get, { workspaceId: bob.workspace })
+			)?.nodes.flatMap((node) =>
+				node.kind === "pane"
+					? node.tabs.map((tab) =>
+							tab.content.kind === "chat"
+								? [tab.id, tab.content.trace?.shown]
+								: [tab.id],
+						)
+					: [],
+			);
+		const trace = (chatId: string, on: boolean) =>
+			bob.as.mutation(api.layouts.trace, {
+				workspaceId: bob.workspace,
+				chatId,
+				shown: on,
+			});
+
+		expect(await trace("c1", true)).toBe(true);
+		expect(await shown()).toEqual([["chat:c1", "open"], ["trace:c1"]]);
+		expect(await trace("c1", false)).toBe(true);
+		expect(await shown()).toEqual([["chat:c1", "collapsed"]]);
+		expect(await trace("c2", true)).toBe(false);
+		await expect(
+			alice.as.mutation(api.layouts.trace, {
+				workspaceId: bob.workspace,
+				chatId: "c1",
+				shown: true,
+			}),
+		).rejects.toThrow();
+	});
+
 	it("refuses panel ops that would grow the layout past its size", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");

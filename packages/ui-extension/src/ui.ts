@@ -605,6 +605,19 @@ function registerUi(
 	);
 
 	interp.defGen(
+		"ui/trace",
+		-1,
+		"(ui/trace [shown])",
+		"Show this chat's trace beside it, or hide it with nil, as the user would with /trace. Hiding also closes a tab that holds this chat's trace. Returns t if this chat is open in the panel to show it beside, nil if it is not.",
+		z.tuple([zList]),
+		function* ([rest]): Eval {
+			const args = listElements(rest) ?? [];
+			const shown = args.length === 0 || args[0] !== null;
+			return (yield* settled(panel.trace(shown))) || null;
+		},
+	);
+
+	interp.defGen(
 		"ui/focus",
 		1,
 		"(ui/focus tab)",
@@ -620,7 +633,7 @@ function registerUi(
 		"ui/tabs",
 		0,
 		"(ui/tabs)",
-		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
+		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat, :trace or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
 		z.tuple([]),
 		function* (): Eval {
 			const tabs = yield* settled(panel.tabs());

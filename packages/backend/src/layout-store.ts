@@ -41,6 +41,15 @@ export class ConvexLayoutStore implements PanelStore {
 		);
 	}
 
+	async trace(shown: boolean): Promise<boolean> {
+		if (this.chatId === undefined) return false;
+		return await this.connect().mutation(api.layouts.trace, {
+			workspaceId: this.workspaceId,
+			chatId: this.chatId,
+			shown,
+		});
+	}
+
 	private placed(op: PanelOp): StoredOp {
 		if (
 			op.op !== "open" ||

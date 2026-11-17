@@ -81,6 +81,7 @@ describe("a step that opens panel tabs", () => {
 							},
 						]
 					: [],
+			trace: () => false,
 		};
 		const out = await memoryRepl(
 			modelFacing(undefined, undefined, panel),
@@ -105,6 +106,7 @@ describe("a step that opens panel tabs", () => {
 				throw new Error("layout too large");
 			},
 			tabs: () => [],
+			trace: () => false,
 		};
 		const out = await memoryRepl(
 			modelFacing(undefined, undefined, panel),

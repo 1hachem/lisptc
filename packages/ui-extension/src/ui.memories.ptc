@@ -52,7 +52,7 @@ thing, so send once. Only handlers deliver: ui/send in your own step does nothin
 you already take a turn. Write a request, \"search the issues for auth\", not a
 note, \"user clicked search\".")
 
-(memory "internal/ui/panels" :when "a file or view must open beside the chat, or a tab must be shown, moved, focused or closed"
+(memory "internal/ui/panels" :when "a file or view must open beside the chat, a tab must be shown, moved, focused or closed, or the trace shown or hidden"
   (format nil "Panel beside chat: tabs in splits, any number across, up to ~d
   stacked down. Folder is one of ~{~s~^ ~}. :split is one of ~{~s~^ ~};
   ~s (default) adds tab to focused split, others open new split
@@ -65,7 +65,10 @@ note, \"user clicked search\".")
   tab id.
 - (ui/close tab) · (ui/focus tab) by id open returned. ui/close gives t if tab
   was open, nil if not.
-- (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:page :title
+- (ui/trace) shows this chat's trace beside it, (ui/trace nil) hides it, as
+  /trace would; hide also closes trace tab of this chat. t if chat open in
+  panel, nil if not.
+- (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:trace|:page :title
   title :shown t :focused t) . User opens, closes, moves tabs too: read it
   before closing or focusing by id from earlier step.
 - (ui/file-link text folder name) widget; click opens file in tab. List
@@ -148,6 +151,7 @@ your reply. Returns anchor.
 - :click t shows pointer clicking anchor.
 - :open page: pointer clicks anchor, then page opens beside chat, as if user
   clicked it. Pages: ~{~a~^ ~}.
+- Anchor inside trace: (ui/trace) first, hidden till then.
 - :fill only on ~s: text lands in message box after pointer, user sends it.
   Show power user a slash command by filling it, never by running it:
 (ui/point ~s :fill \"/trace\")
@@ -231,7 +235,8 @@ inside trace.
 Trace: every step of a turn, your prose and code, results, ui, memories
 recalled, asks, thinking. Opens beside chat on click of agent message, show
 in trace, or /trace. Find box, and toggles for what it shows. Tell user to
-read it when they ask why you did something.")
+read it when they ask why you did something. You open it with (ui/trace) ,
+close with (ui/trace nil) .")
 
 (memory "internal/ui/commands" :when "the user asks what slash commands exist, how to do something a command does, or the agent would point the user at one"
   (format nil "User types / in message box for commands. They run in app, not in this

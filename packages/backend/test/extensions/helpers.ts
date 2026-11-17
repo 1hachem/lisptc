@@ -30,7 +30,7 @@ import { uiHostFor } from "@repo/ui-extension/host";
 export function modelFacing(
 	compactor?: Compactor,
 	scope?: string,
-	panel: PanelStore = { apply: () => {}, tabs: () => [] },
+	panel: PanelStore = { apply: () => {}, tabs: () => [], trace: () => false },
 	views: ViewStore = new MemoryViewStore(),
 ): InterpExtension[] {
 	return [

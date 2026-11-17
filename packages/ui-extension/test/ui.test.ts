@@ -33,9 +33,13 @@ import { uiHostFor } from "../src/ui-host.ts";
 import { MemoryViewStore } from "../src/view-store.ts";
 import { WIDGET_FORMS } from "../src/widgets.ts";
 
-function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
+function panelOf(
+	saved: PanelTab[],
+	beside = false,
+): { panel: PanelStore; ops: PanelOp[]; traces: boolean[] } {
 	let tabs = [...saved];
 	const ops: PanelOp[] = [];
+	const traces: boolean[] = [];
 	const without = (id: string) => tabs.filter((tab) => tab.id !== id);
 	const panel: PanelStore = {
 		apply(applied) {
@@ -57,8 +61,12 @@ function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 			}
 		},
 		tabs: () => tabs,
+		trace(shown) {
+			traces.push(shown);
+			return beside;
+		},
 	};
-	return { panel, ops };
+	return { panel, ops, traces };
 }
 
 function collector(interp: Interp, views: MemoryViewStore) {
@@ -1134,6 +1142,27 @@ describe("tours", () => {
 		expect(ev("(ui/tour-done? 'upload-files)")).toBe("nil");
 		tours.done.add("upload-files");
 		expect(ev("(ui/tour-done? 'upload-files)")).toBe("t");
+	});
+
+	it("shows and hides this chat's trace through the panel port", () => {
+		const { panel, traces } = panelOf([], true);
+		const interp = new Interp({
+			extensions: [uiExtension(uiHostFor({ panel }))],
+		});
+		runSync(interp, prelude);
+		expect(str(runSync(interp, "(ui/trace)"))).toBe("t");
+		expect(str(runSync(interp, "(ui/trace nil)"))).toBe("t");
+		expect(str(runSync(interp, "(ui/trace t)"))).toBe("t");
+		expect(traces).toEqual([true, false, true]);
+	});
+
+	it("answers nil when this chat is not open to show its trace beside", () => {
+		const { panel } = panelOf([]);
+		const interp = new Interp({
+			extensions: [uiExtension(uiHostFor({ panel }))],
+		});
+		runSync(interp, prelude);
+		expect(str(runSync(interp, "(ui/trace)"))).toBe("nil");
 	});
 
 	it("opens a page of the app beside the chat", () => {
