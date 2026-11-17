@@ -24,8 +24,6 @@ jobs:
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Version from the tag
         id: version

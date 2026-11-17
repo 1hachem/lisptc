@@ -1,5 +1,10 @@
 name: Setup
-description: Install pnpm and Node.js with the pnpm store cached
+description: Install pnpm, Node.js and the dependencies, restoring node_modules from the cache main saved
+
+inputs:
+  save-cache:
+    description: Save node_modules and the pnpm store on a miss, then delete the entries they supersede. Needs `actions write`.
+    default: "false"
 
 runs:
   using: composite
@@ -12,14 +17,70 @@ runs:
       with:
         node-version: 22
 
+    - name: Name the cache keys
+      id: keys
+      shell: bash
+      run: |
+        echo "modules=node-modules-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}" >> "$GITHUB_OUTPUT"
+        echo "store=pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore node_modules
+      id: modules
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+        key: ${{ steps.keys.outputs.modules }}
+
     - name: Locate the pnpm store
       id: store
+      if: steps.modules.outputs.cache-hit != 'true'
       shell: bash
       run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
-    - name: Cache the pnpm store
-      uses: actions/cache@v4
+    - name: Restore the pnpm store
+      id: store-cache
+      if: steps.modules.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@v4
       with:
         path: ${{ steps.store.outputs.path }}
-        key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        key: ${{ steps.keys.outputs.store }}
         restore-keys: pnpm-${{ runner.os }}-
+
+    - name: Install dependencies
+      if: steps.modules.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Save node_modules
+      if: inputs.save-cache == 'true' && steps.modules.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+        key: ${{ steps.keys.outputs.modules }}
+
+    - name: Save the pnpm store
+      if: inputs.save-cache == 'true' && steps.modules.outputs.cache-hit != 'true' && steps.store-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: ${{ steps.keys.outputs.store }}
+
+    - name: Delete the superseded dependency caches
+      if: inputs.save-cache == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        prune() {
+          gh cache list --repo "$GITHUB_REPOSITORY" --key "$1" --limit 100 --json id,key \
+            --jq ".[] | select(.key != \"$2\") | .id" \
+            | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"
+        }
+        prune "node-modules-${{ runner.os }}-" "${{ steps.keys.outputs.modules }}"
+        prune "pnpm-${{ runner.os }}-" "${{ steps.keys.outputs.store }}"
