@@ -14,10 +14,10 @@ import {
 import { checkAttachments } from "./lib/attached.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
+import { pauseChatTours } from "./lib/pauseTours.js";
 import { waitsOnUser } from "./lib/waiting.js";
 import { collect, layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
-import { pauseChatTours } from "./tours.js";
 
 const MAX_SENT = 200;
 
