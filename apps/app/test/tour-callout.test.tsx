@@ -53,6 +53,17 @@ describe("the tour callout", () => {
 		close();
 	});
 
+	it("offers next on a step that waits for a click, so the user need not click", () => {
+		const element = document.createElement("button");
+		element.getBoundingClientRect = () => new DOMRect(10, 10, 40, 20);
+		document.body.append(element);
+		const step = { anchor: "composer", say: "send", until: "click" as const };
+		const { buttons, close } = shown({ step, element });
+		expect(buttons).toEqual(["skip", "next"]);
+		close();
+		element.remove();
+	});
+
 	it("shows one button reading got it on a one-step tour", () => {
 		const { dialog, buttons, close } = shown({ count: 1 });
 		expect(buttons).toEqual(["got it"]);

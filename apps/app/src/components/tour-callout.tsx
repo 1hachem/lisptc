@@ -100,18 +100,52 @@ function usePlacement(
 	);
 }
 
-function Spotlight({ box }: { box: Box | undefined }) {
+const PULSE_MIN = 28;
+
+const PULSE_MAX = 56;
+
+function Pulse({ box }: { box: Box }) {
+	const size = Math.min(
+		PULSE_MAX,
+		Math.max(PULSE_MIN, Math.min(box.width, box.height) + 2 * RING),
+	);
+	const at: CSSProperties = {
+		top: box.top + box.height / 2 - size / 2,
+		left: box.left + box.width / 2 - size / 2,
+		width: size,
+		height: size,
+	};
+	return (
+		<>
+			<span
+				aria-hidden
+				className="absolute animate-ping rounded-full border-2 border-yellow motion-reduce:animate-none"
+				style={at}
+			/>
+			<span
+				aria-hidden
+				className="absolute rounded-full border-2 border-yellow/70"
+				style={at}
+			/>
+		</>
+	);
+}
+
+function Spotlight({ box, clicks }: { box: Box | undefined; clicks: boolean }) {
 	if (box === undefined) return <div className="absolute inset-0 bg-bg/60" />;
 	return (
-		<div
-			data-testid="tour-spotlight"
-			className="absolute rounded-sm"
-			style={{
-				...ringed(box),
-				outline: "2px solid var(--yellow)",
-				boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.55)",
-			}}
-		/>
+		<>
+			<div
+				data-testid="tour-spotlight"
+				className="absolute rounded-sm"
+				style={{
+					...ringed(box),
+					outline: "2px solid var(--yellow)",
+					boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.55)",
+				}}
+			/>
+			{clicks && <Pulse box={box} />}
+		</>
 	);
 }
 
@@ -135,21 +169,17 @@ function Controls({
 	at,
 	count,
 	labels,
-	waitsOnClick,
-	showNext,
 	onNext,
 	onSkip,
 }: {
 	at: number;
 	count: number;
 	labels: TourLabels | undefined;
-	waitsOnClick: boolean;
-	showNext: boolean;
 	onNext: () => void;
 	onSkip: () => void;
 }) {
 	const single = count === 1;
-	const skip = labels?.skip ?? (single && !waitsOnClick ? undefined : "skip");
+	const skip = labels?.skip ?? (single ? undefined : "skip");
 	const finish = labels?.done ?? (single ? "got it" : "done");
 	return (
 		<div className="flex items-center justify-end gap-2">
@@ -169,17 +199,15 @@ function Controls({
 					{skip}
 				</Button>
 			)}
-			{showNext && (
-				<Button
-					type="button"
-					size="sm"
-					variant="secondary"
-					className="rounded-none"
-					onClick={onNext}
-				>
-					{at + 1 >= count ? finish : (labels?.next ?? "next")}
-				</Button>
-			)}
+			<Button
+				type="button"
+				size="sm"
+				variant="secondary"
+				className="rounded-none"
+				onClick={onNext}
+			>
+				{at + 1 >= count ? finish : (labels?.next ?? "next")}
+			</Button>
 		</div>
 	);
 }
@@ -209,7 +237,7 @@ export function TourCallout({
 	if (step.anchor !== undefined && box === undefined && !gaveUp) return null;
 	return createPortal(
 		<div className="pointer-events-none fixed inset-0 z-[100] font-mono text-[13px]">
-			<Spotlight box={box} />
+			<Spotlight box={box} clicks={step.until === "click"} />
 			<div
 				ref={setCallout}
 				role="dialog"
@@ -224,8 +252,6 @@ export function TourCallout({
 					at={at}
 					count={count}
 					labels={labels}
-					waitsOnClick={step.until === "click" && box !== undefined}
-					showNext={step.until === "next" || box === undefined}
 					onNext={onNext}
 					onSkip={onSkip}
 				/>

@@ -174,8 +174,8 @@ through app, one step at a time, at most ~d steps. Step is plist
   ~{~a~^ ~}. Section not loaded: recall the one you need. Anchor in closed folder or page: app reveals it first.
 - :page opens that page beside chat as step starts, so anchor inside it is on
   screen. Pages: ~{~a~^ ~}.
-- :until ~a (default) waits for next button; ~a waits for click on anchor,
-  needs :anchor.
+- :until ~a (default) waits for next button; ~a pulses circle on anchor and
+  also advances on click of it, needs :anchor. Next button always there.
 - :next :done :skip name buttons. One-step tour shows only :done, \"got it\"
   unless named; :skip only when given.
 
