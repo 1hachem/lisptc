@@ -178,6 +178,95 @@ function sealSteps(kept: readonly Step[], drawn: readonly Step[]): Step[] {
 	return [...sealed, ...open];
 }
 
+function anyRunning(entries: readonly TimelineEntry[]): boolean {
+	return entries.some(
+		(entry) => entry.state === "running" || anyRunning(entry.children),
+	);
+}
+
+function byId(
+	entries: readonly TimelineEntry[],
+	into: Map<string, TimelineEntry>,
+): Map<string, TimelineEntry> {
+	for (const entry of entries) {
+		into.set(entry.id, entry);
+		byId(entry.children, into);
+	}
+	return into;
+}
+
+function latestRows(steps: readonly Step[]): Map<string, TimelineEntry> {
+	const rows = new Map<string, TimelineEntry>();
+	for (const step of steps) if (step.kind !== "text") byId(step.entries, rows);
+	return rows;
+}
+
+function settleRows(
+	entries: readonly TimelineEntry[],
+	latest: ReadonlyMap<string, TimelineEntry>,
+): readonly TimelineEntry[] {
+	let moved = false;
+	const settled = entries.map((entry) => {
+		const settledChildren = settleRows(entry.children, latest);
+		const children =
+			settledChildren === entry.children
+				? entry.children
+				: [...settledChildren];
+		const now = entry.state === "running" ? latest.get(entry.id) : undefined;
+		const next =
+			now !== undefined && now.state !== "running"
+				? { ...now, children }
+				: children === entry.children
+					? entry
+					: { ...entry, children };
+		moved ||= next !== entry;
+		return next;
+	});
+	return moved ? settled : entries;
+}
+
+function settleStep(
+	step: Step,
+	latest: ReadonlyMap<string, TimelineEntry>,
+	live: boolean,
+): Step {
+	if (step.kind === "text" || !anyRunning(step.entries)) return step;
+	const entries = settleRows(step.entries, latest);
+	if (entries === step.entries && live === step.live) return step;
+	return { ...step, entries, live };
+}
+
+function settleSteps(
+	steps: readonly Step[],
+	latest: ReadonlyMap<string, TimelineEntry>,
+	live: boolean,
+): readonly Step[] {
+	const settled = steps.map((step) => settleStep(step, latest, live));
+	return settled.every((step, at) => step === steps[at]) ? steps : settled;
+}
+
+function settledAcross(moment: Moment): Map<string, TimelineEntry> {
+	const rows = new Map<string, TimelineEntry>();
+	for (const [at, turn] of moment.turns.entries())
+		for (const [id, row] of latestRows(
+			drawTurn(turn, at, false, moment.meta, undefined).steps,
+		))
+			if (row.state !== "running" || !rows.has(id)) rows.set(id, row);
+	return rows;
+}
+
+function settleEarlier(
+	turn: ShownTurn,
+	latest: () => ReadonlyMap<string, TimelineEntry>,
+): ShownTurn {
+	if (
+		!turn.steps.some((step) => step.kind !== "text" && anyRunning(step.entries))
+	)
+		return turn;
+	const steps = settleSteps(turn.steps, latest(), false);
+	return steps === turn.steps ? turn : { ...turn, steps };
+}
+
 function withLateStats(turn: ShownTurn, meta: Moment["meta"]): ShownTurn {
 	const { stats } = turn.foot;
 	if (stats.kind !== "awaited") return turn;
@@ -192,7 +281,12 @@ function withLateStats(turn: ShownTurn, meta: Moment["meta"]): ShownTurn {
 export function seal(shown: Transcript, moment: Moment): Transcript {
 	const last = moment.turns.length - 1;
 	let agreed = true;
-	const turns = moment.turns.map((turn, at): ShownTurn => {
+	let across: Map<string, TimelineEntry> | undefined;
+	const latest = () => {
+		across ??= settledAcross(moment);
+		return across;
+	};
+	const shownAt = (turn: Turn, at: number): ShownTurn => {
 		const kept = shown.turns[at];
 		agreed &&= kept?.id === turn.id;
 		const live = at === last && moment.live;
@@ -201,11 +295,20 @@ export function seal(shown: Transcript, moment: Moment): Transcript {
 			return drawTurn(turn, at, live, moment.meta, error);
 		if (at < shown.turns.length - 1) return withLateStats(kept, moment.meta);
 		const drawn = drawTurn(turn, at, live, moment.meta, error);
+		const sealed = settleSteps(
+			kept.steps.slice(0, -1),
+			latestRows(drawn.steps),
+			live,
+		);
 		return {
 			...drawn,
 			...(kept.asked === undefined ? {} : { asked: kept.asked }),
-			steps: sealSteps(kept.steps, drawn.steps),
+			steps: sealSteps([...sealed, ...kept.steps.slice(-1)], drawn.steps),
 		};
+	};
+	const turns = moment.turns.map((turn, at) => {
+		const turnShown = shownAt(turn, at);
+		return at === last ? turnShown : settleEarlier(turnShown, latest);
 	});
 	return { turns };
 }
