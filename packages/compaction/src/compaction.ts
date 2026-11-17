@@ -535,8 +535,8 @@ function searchSummary(
 		`... ${found}${more} ${found === 1 && more === "" ? "match" : "matches"} for "${pattern}" in ${total} words; showing ${printed}`,
 	];
 	if (skipped > 0) parts.push(`${skipped} in a region already shown`);
-	const target = name === undefined ? "<value>" : name;
-	return `${parts.join(", ")}. Read a region with (echo ${target} :offset <offset>), or keep what matched with (grep ${target} "${pattern}")`;
+	const target = name === undefined ? "VALUE" : name;
+	return `${parts.join(", ")}. Read a region with (echo ${target} :offset OFFSET), or keep what matched with (grep ${target} "${pattern}")`;
 }
 
 function compile(pattern: string, ignoreCase: boolean): RegExp {

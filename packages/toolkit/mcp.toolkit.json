@@ -110,7 +110,7 @@
   },
   {
     "name": "linear",
-    "description": "Linear issue tracker over OAuth: search/list/create issues, projects, comments. First (load-mcp \"linear\") returns an authorization link; once approved, load again, running (mcp-authorize \"linear\" \"<code>\") first only if the user hands back a code.",
+    "description": "Linear issue tracker over OAuth: search/list/create issues, projects, comments. First (load-mcp \"linear\") returns an authorization link; once approved, load again, running (mcp-authorize \"linear\" \"CODE\") first only if the user hands back a code.",
     "keywords": [
       "issue",
       "issues",
@@ -137,7 +137,7 @@
   },
   {
     "name": "posthog",
-    "description": "PostHog product analytics over OAuth: query insights, dashboards, feature flags, experiments, error tracking, events, and SQL. First (load-mcp \"posthog\") returns an authorization link; once approved, load again, running (mcp-authorize \"posthog\" \"<code>\") first only if the user hands back a code. Edit `scopes` to grant more.",
+    "description": "PostHog product analytics over OAuth: query insights, dashboards, feature flags, experiments, error tracking, events, and SQL. First (load-mcp \"posthog\") returns an authorization link; once approved, load again, running (mcp-authorize \"posthog\" \"CODE\") first only if the user hands back a code. Edit `scopes` to grant more.",
     "keywords": [
       "analytics",
       "product-analytics",
@@ -191,7 +191,7 @@
   },
   {
     "name": "apify",
-    "description": "Apify over OAuth: search the Actor store and run Actors that scrape websites, crawl pages, and extract structured data, then read their results; also browse the web for RAG and fetch a page's content. First (load-mcp \"apify\") returns an authorization link; once approved, load again, running (mcp-authorize \"apify\" \"<code>\") first only if the user hands back a code.",
+    "description": "Apify over OAuth: search the Actor store and run Actors that scrape websites, crawl pages, and extract structured data, then read their results; also browse the web for RAG and fetch a page's content. First (load-mcp \"apify\") returns an authorization link; once approved, load again, running (mcp-authorize \"apify\" \"CODE\") first only if the user hands back a code.",
     "keywords": [
       "apify",
       "actor",
