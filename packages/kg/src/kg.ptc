@@ -1,0 +1,35 @@
+KNOWLEDGE GRAPHS
+
+Facts and rules in graphs, proved by logic, not guessed. Graphs persist. Every
+query sees every graph; writes go to graph in use.
+- (kg/new "name" :doc "what it holds") create graph, use it. (kg/use "name")
+write into existing one. (kg/list) · (kg/source "name") · (kg/drop "name") .
+- (kg/import "doc-graph") topic graph builds on document graph.
+- (predicate appointment-start (event :key) (time :type string)) declare args,
+  key, types (any string number symbol list) . Two facts same key, other args
+  differ = conflict: both kept out of inference until one retracted. Reuse
+  declared predicate, never invent synonym.
+- (fact (appointment-start dentist "2026-11-20T09:00") :basis observed
+  :from "mail.pdf" :at (:page 3) :quote "exact words") assert. :basis observed
+  user assumed proposed resolved, default proposed. :quote copies document text
+  exactly. Same fact again adds support. Returns id.
+- Variables start with ?. ?_ matches anything. (?h . ?t) splits list.
+- (<- (grandparent ?x ?z) (parent ?x ?y) (parent ?y ?z)) backward rule.
+- (defrule ancestor-up (parent ?x ?y) => (ancestor ?x ?y)) forward rule.
+  Conclusion may be (<- ...) to make rule from rule. Derived facts recomputed
+  on every change, hold only while premises hold.
+- Goals: (and g...) (or g...) (not g) ! (= a b) (/= a b)
+(is ?d (+ ?t 30)) bind Lisp value · (test (< ?a ?b)) Lisp guard.
+- (?- (grandparent tom ?who)) first solution ((?who . ann)) , t, or nil.
+(?all (?x ?y) goals... :limit 20) rows. (?all ?x goal) bare values.
+  :basis (observed user) only facts with such support. :budget n steps.
+- (do-solutions ((parent ?p ?c)) (echo ?p ?c)) body per solution.
+- (why goal...) proof tree: :fact with supports, :derived with rule and
+  premises, :rule with subproofs.
+- (kg/facts '(parent ?x ?_)) facts with ids and supports. (kg/conflicts) .
+- (retract (parent tom bob) :from "old.pdf") drop supports; fact gone when none
+  left. (kg/unrule "id") drop rule.
+- Lisp value into form: ,x inside any of them: (fact (owner ,doc ,who)) .
+- Search over budget fails with (:kg-budget n) , not nil. Rule calling own
+  predicate first, (<- (p ?x) (p ?y) ...) , loops: put base case and other
+  goals first.

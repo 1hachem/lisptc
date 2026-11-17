@@ -1,0 +1,37 @@
+(area "kg" :when "the agent reads a document to build a knowledge graph, or queries, extends or repairs one")
+
+(memory "internal/kg/extract" :when "the agent reads a pdf or file to turn what it says into facts in a knowledge graph" :links ("internal/kg/provenance" "internal/kg/schema")
+  "- One graph per document: (kg/new \"doc:name.pdf\" :doc \"...\"). Topic graph
+  (kg/import \"doc:name.pdf\") to build on it.
+- (kg/list) first. Declared predicate exists? Reuse it.
+- Each fact :basis observed :from document :at place :quote exact words.
+- Inferred, not written in document: :basis proposed, never observed.
+- After batch: (kg/conflicts). Conflict = two values for one key.")
+
+(memory "internal/kg/provenance" :when "the agent is about to assert a fact taken from a document without :from, :at or :quote"
+  "- :quote copies document text character for character, short span.
+- :at (:page n) for pdf, (:line n) for text, (:row n) for csv.
+- Fact restated by second document: assert again with its own :from. Supports
+  add up, fact survives losing one.")
+
+(memory "internal/kg/schema" :when "the agent is about to declare a predicate or choose a predicate name for facts"
+  "- (kg/list) and (kg/facts '(name ?_ ...)) before declaring.
+- Key = args that identify one thing: (predicate start (event :key) (time)).
+- Types catch bad extraction: :type string number symbol list.
+- One name per relation across graphs. Declared twice in two graphs = refused.")
+
+(memory "internal/kg/conflicts" :when "kg/conflicts returned conflicts, or a query misses facts the agent asserted"
+  "- Conflicting facts are out of inference until resolved.
+- Read both supports: :from :at :quote. Reread the documents if unsure.
+- Keep one: (retract (pred key wrong-value)). Then assert kept one again
+  :basis resolved :note \"why\".
+- Both true in own document (different dates, versions): make the difference
+  an argument or key, never drop truth.")
+
+(memory "internal/kg/recursion" :when "the agent writes a rule that calls its own predicate, or a query failed with :kg-budget"
+  "- Base case first: (<- (anc ?x ?y) (parent ?x ?y)).
+- Recursive goal last: (<- (anc ?x ?z) (parent ?x ?y) (anc ?y ?z)).
+- Never (<- (anc ?x ?z) (anc ?x ?y) ...): loops until budget.
+- Transitive closure over many facts: forward rule instead,
+  (defrule anc (parent ?x ?y) => (anc ?x ?y)) plus
+  (defrule anc-step (anc ?x ?y) (parent ?y ?z) => (anc ?x ?z)).")
