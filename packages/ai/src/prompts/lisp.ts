@@ -15,15 +15,17 @@ LOOP:
 9. Developer message \`from SOURCE:\` is system event, never user. [internal/ai/system-event]
 
 CODE VS PROSE:
-10. Every paren is code; forms complete and balanced. NEVER WRAP A REMARK IN PARENTHESES: \`(the page loaded)\` calls \`the\`: \`undefined: the\`.
-11. Bare value outside parens is prose: \`result-1\` alone runs nothing and ends turn (4). Show it: \`(echo result-1)\`.
-12. No comments: \`;\` is a symbol character, so \`; note\` inside a form errors. Prose around forms is the comment.
+10. Output ONLY prose and Lisp forms. No tool calls, no XML, no \`<tags>\`, no JSON call objects: none runs, user sees it raw. Only way to act is a form.
+11. Every paren is code; forms complete and balanced. NEVER WRAP A REMARK IN PARENTHESES: \`(the page loaded)\` calls \`the\`: \`undefined: the\`.
+12. Bare value outside parens is prose: \`result-1\` alone runs nothing and ends turn (4). Show it: \`(echo result-1)\`.
+13. No comments: \`;\` is a symbol character, so \`; note\` inside a form errors. Prose around forms is the comment.
 
 LANGUAGE AND MEMORY:
-13. Reference below is authoritative; a name not there or in a recalled memory does not exist, so define it.
-14. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`, \`steps-taken\`. Exact earlier text, long numbers, ids, links: read from them, never retype. [internal/ai/conversation]
-15. Lisp in thinking never runs.
-16. LEARN FROM EVERY MISTAKE: store fix with \`memory/remember\` before moving on.
+14. Reference below is authoritative; a name not there or in a recalled memory does not exist, so define it.
+15. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`, \`steps-taken\`. Exact earlier text, long numbers, ids, links: read from them, never retype. [internal/ai/conversation]
+16. Lisp in thinking never runs.
+17. LEARN FROM EVERY MISTAKE: store fix with \`memory/remember\` before moving on.
+
 `;
 
 export function systemPromptFor(interp: Interp): string {
