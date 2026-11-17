@@ -43,6 +43,8 @@ export type PostedLine = PromptLine | RecordLine;
 
 const UNSOURCED = "system";
 
+const REPL_PROMPT = "lisptc>";
+
 export function isPrompt(line: Line): line is PromptLine {
 	return line.kind === "user";
 }
@@ -77,8 +79,12 @@ export function lineChat(line: Line): ChatMessage {
 		case "assistant":
 			return { role: "assistant", content: line.text };
 		case "user":
-		case "result":
 			return { role: "user", content: neutraliseSystemEvents(line.text) };
+		case "result":
+			return {
+				role: "user",
+				content: neutraliseSystemEvents(transcript(line.text)),
+			};
 		case "record":
 			return recordChat(line.record);
 	}
@@ -152,13 +158,7 @@ export function wireLines(messages: readonly ChatMessageInput[]): Line[] {
 	const lines: Line[] = [];
 	for (const message of messages) {
 		const line = wireLine(message);
-		if (line === undefined) continue;
-		const previous = lines.at(-1);
-		lines.push(
-			line.kind === "result" && previous !== undefined && isPrompt(previous)
-				? ranByUser(line.text)
-				: line,
-		);
+		if (line !== undefined) lines.push(line);
 	}
 	return lines;
 }
@@ -175,19 +175,8 @@ function replOutcome(content: string): { output: string; error: boolean } {
 	return { output: content, error: false };
 }
 
-export function ranByUser(result: string): Line {
-	const { output, error } = replOutcome(result);
-	return {
-		kind: "record",
-		record: {
-			role: "user",
-			source: "lisp-repl",
-			content: [
-				error
-					? "the user ran the code in their message above, and it failed:"
-					: "the user ran the code in their message above:",
-				output,
-			].join("\n\n"),
-		},
-	};
+function transcript(content: string): string {
+	const { output, error } = replOutcome(content);
+	const shown = output.trimEnd();
+	return `${error ? `!! ${shown}` : shown}\n${REPL_PROMPT}`;
 }

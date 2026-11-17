@@ -239,7 +239,7 @@ describe("chat stream", () => {
 			}),
 		);
 		expect(messages[2].additional_kwargs?.value).toBe("Pick");
-		expect(sent[0].some((m) => m.content.includes("tool_result"))).toBe(false);
+		expect(sent[0].some((m) => m.content.includes("lisptc>"))).toBe(false);
 		expect(sent[0].some((m) => m.content.includes("Pick"))).toBe(false);
 	});
 
@@ -715,7 +715,7 @@ describe("chat stream", () => {
 		expect(sent[0].find((m) => m.role === "developer")).toEqual(live);
 	});
 
-	test("a user message's eval result reaches the model as a system event after it and the wire as its own row", async () => {
+	test("a user message's eval result reaches the model as REPL output after it and the wire as its own row", async () => {
 		const result = {
 			type: "tool",
 			content: replResultContent("3", false),
@@ -727,10 +727,7 @@ describe("chat stream", () => {
 
 		expect(
 			sent[0].filter((m) => m.role === "user").map((m) => m.content),
-		).toEqual([
-			"what is (+ 1 2)",
-			'<system-event source="lisp-repl">the user ran the code in their message above:\n\n3</system-event>',
-		]);
+		).toEqual(["what is (+ 1 2)", "3\nlisptc>"]);
 		const first = records(body).find((r) => r.event === "values")?.data as {
 			messages: WireMessage[];
 		};

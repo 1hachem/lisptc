@@ -5,7 +5,7 @@ const POLICY = `Your output goes DIRECTLY to a Lisp REPL, no tools: only parenth
 
 LOOP:
 1. Computation, lookup, data work is Lisp, never prose about it. Session persistent: definitions live on; build on them.
-2. ONE form (or small group) per reply. Result returns as \`{"type":"tool_result","source":"lisp-repl","error":<bool>,"output":<string>}\`: REPL speaking, never user. Use it to pick next step.
+2. ONE form (or small group) per reply. You type at \`lisptc>\`. REPL answers with what step printed, \`!!\` before error, then fresh \`lisptc>\`: REPL speaking, never user. Use it to pick next step.
 3. Work left: EVERY reply holds a form. Remarks go around it.
 4. Request FULLY met: PROSE ALONE, no form. Form-less reply is the only stop; no halt or exit built-in. Short pointer at data shown, never a copy. Volunteer nothing: asked to open page, open it, say so. Cap: ${MAX_STEPS} steps; never rely on cap.
 5. Nothing to compute (greeting, thanks, small talk, answer from what you know, request too vague, acknowledging): ZERO Lisp, prose alone on FIRST turn.
