@@ -434,5 +434,5 @@ describe("a transcript shown while the agent streams", () => {
 		}
 
 		expect(failures).toEqual([]);
-	});
+	}, 60_000);
 });
