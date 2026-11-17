@@ -8,6 +8,7 @@ import { str } from "@repo/interpreter/print";
 import { viewKind } from "@repo/journal-catalog/view";
 import {
 	ANCHOR_IDS,
+	COMMANDS,
 	PAGE_IDS,
 	pointer,
 	TAGS,
@@ -1200,6 +1201,15 @@ describe("tours", () => {
 		for (const id of ANCHOR_IDS) expect(anchored).toContain(`- ${id}:`);
 		for (const id of PAGE_IDS)
 			expect(bodies.get("internal/ui/pages")).toContain(`- ${id}:`);
+	});
+
+	it("ships every slash command in a memory, with its aliases", () => {
+		const body = shipped().get("internal/ui/commands") ?? "";
+		for (const command of COMMANDS) {
+			expect(body).toContain(`- ${command.name}: ${command.desc}`);
+			for (const alias of command.aliases ?? [])
+				expect(body).toContain(`alias ${alias}`);
+		}
 	});
 
 	it("runs the tour its memory shows", () => {

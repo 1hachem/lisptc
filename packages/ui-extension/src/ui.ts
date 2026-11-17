@@ -25,9 +25,11 @@ import type { PromptSource } from "@repo/shared/host";
 import { MAX_SPLITS } from "@repo/shared/split-layout";
 import {
 	ACTION_PROPS,
+	COMMANDS,
 	FOLDERS,
 	PAGE_IDS,
 	pages,
+	SIDEBAR_FOLDERS,
 	TAGS,
 	type Tag,
 } from "@repo/ui-catalog";
@@ -477,6 +479,34 @@ function registerUi(
 		signature: "*ui-default-split*",
 		doc: "Where a panel opens when given no :split.",
 	});
+	interp.defineGlobal(
+		newSym("*ui-sidebar-folders*"),
+		arrayToList([...SIDEBAR_FOLDERS]),
+		{
+			signature: "*ui-sidebar-folders*",
+			doc: "The folders the sidebars hold, top first by default.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*ui-commands*"),
+		arrayToList(
+			COMMANDS.map((c) =>
+				arrayToList([c.name, c.desc, arrayToList([...(c.aliases ?? [])])]),
+			),
+		),
+		{
+			signature: "*ui-commands*",
+			doc: "The slash commands the user types in the message box, each as (name what-it-does aliases).",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*ui-desktop-commands*"),
+		arrayToList(COMMANDS.filter((c) => c.desktopOnly).map((c) => c.name)),
+		{
+			signature: "*ui-desktop-commands*",
+			doc: "The slash commands offered on a desktop screen only.",
+		},
+	);
 	const widgets = newSym("ui-widgets");
 	interp.defineGlobal(widgets, arrayToList([...WIDGET_NAMES]), {
 		signature: "ui-widgets",

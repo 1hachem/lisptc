@@ -1,4 +1,4 @@
-(area "ui" :when "the agent is about to show the user something: a table, form, buttons, chart, view or panel, or a view the user clicked just came back, or the user asks where something is in the app, how to do something in it, or to open one of its pages")
+(area "ui" :when "the agent is about to show the user something: a table, form, buttons, chart, view or panel, or a view the user clicked just came back, or the user asks about the app itself: what a part of it is, where something is, how to do something in it, or to open one of its pages")
 
 (memory "internal/ui/reactive" :when "a view needs a dropdown, toggle or filter that updates it at once, without asking the agent again"
   "Reactive controls: :on-change on ui/select or ui/checkbox. One-argument
@@ -189,3 +189,51 @@ message pauses tour; tours expire on their own.
 offering, do not replay finished tour unasked."
     *ui-tour-max-steps* *ui-tour-untils* *ui-anchor-regions*
     (mapcar car *ui-pages*) (car *ui-tour-untils*) (car (cdr *ui-tour-untils*))))
+
+(memory "internal/ui/app" :when "the user asks what a part of the app is or how the app is laid out: sidebars, folders, panel, tabs, bottom bar, workspaces or pages"
+  (format nil "App user sees, around this chat:
+- Left sidebar: workspace name top left switches workspace, + beside it makes
+  new one. Then home, new chat, folders: ~{~a~^ ~}. Entries README.md,
+  settings, preferences open pages. Gear at bottom: account. User drags
+  entries, also across to right sidebar; hides them in preferences.
+- Right sidebar: closed by default, opened from right edge. Holds whatever
+  entries user moved there.
+- Panel, middle: tabs in splits. Chat is a tab too. Files, views, pages, a
+  chat's trace open as tabs. Tab x closes. Pane menu splits right or down,
+  flips split, maximizes, closes pane. Handles between panes resize.
+- Bottom bar: one button per pane to jump to it, zoom buttons and desktop app
+  status on desktop. Slots user rearranges in preferences.
+- Pages: ~{~a~^ ~}. Recall memory internal/ui/pages for what each holds.
+Chat itself: recall memory internal/ui/chat . Slash commands:
+internal/ui/commands . Pointing at any of it: internal/ui/point ."
+    *ui-sidebar-folders* (mapcar car *ui-pages*)))
+
+(memory "internal/ui/chat" :when "the user asks how the chat works: the message box, sending, stopping, queueing, attaching, the details under an answer, feedback, the todo, sub-agent threads or the trace"
+  "Message box at bottom of chat:
+- Enter sends, shift+enter new line. While you work, send turns to stop;
+  text typed then queues as next message, shown above box, x removes it.
+  Files wait until your reply ends.
+- Attach button adds files; chips show above box, x removes one.
+- / alone in box opens command menu, recall memory internal/ui/commands .
+  @ anywhere mentions a file from knowledge or attachments, or a sub-agent.
+- When you ask with fixed choices, choices replace box. Keys 1-9 pick;
+  type instead goes back to box.
+Under each answer:
+- Line of details: time, duration, steps, input, cached and output tokens,
+  model, provider, show in trace. Which show is a preference.
+- Helpful and not helpful buttons, then optional text. Long message folds
+  behind read more.
+- Todo card when you keep one; click on header folds it to a count.
+Sub-agent threads: strip at bottom left of chat; their steps also show
+inside trace.
+Trace: every step of a turn, your prose and code, results, ui, memories
+recalled, asks, thinking. Opens beside chat on click of agent message, show
+in trace, or /trace. Find box, and toggles for what it shows. Tell user to
+read it when they ask why you did something.")
+
+(memory "internal/ui/commands" :when "the user asks what slash commands exist, how to do something a command does, or the agent would point the user at one"
+  (format nil "User types / in message box for commands. They run in app, not in this
+REPL: you cannot run one, only show it with
+(ui/point ~s :fill \"/name\") .
+~{~{- ~a: ~a~{, alias ~a~}~}~%~}Desktop screen only: ~{~a~^ ~}."
+    *ui-fill-anchor* *ui-commands* *ui-desktop-commands*))
