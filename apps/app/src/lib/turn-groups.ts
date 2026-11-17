@@ -29,10 +29,6 @@ export function groupTurns(messages: readonly ChatMessage[]): Turn[] {
 	return turns;
 }
 
-export function turnMessages(turn: Turn): ChatMessage[] {
-	return turn.asked === undefined ? turn.steps : [turn.asked, ...turn.steps];
-}
-
 export type TurnLink =
 	| { kind: "text"; message: ChatMessage }
 	| { kind: "activity"; introduces: string[] }
