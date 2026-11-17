@@ -123,8 +123,18 @@ function* noting(
 	}
 }
 
-function seed({ repl, lines, steps }: Turn): void {
+function seed(turn: Turn): void {
+	const { repl, lines, steps } = turn;
+	const { interp } = repl;
+	const was = turn.seeded;
+	if (
+		was?.interp === interp &&
+		was.lines === lines.length &&
+		was.steps === steps
+	)
+		return;
 	repl.seed(lines.map(lineRecord), steps);
+	turn.seeded = { interp, lines: lines.length, steps };
 }
 
 async function* through<T extends Noted>(
@@ -159,10 +169,8 @@ async function* takeSteers({
 			continue;
 		}
 		const { message, quiet, entries, notes } = evaluated;
-		if (!quiet) {
-			lines.push(line, ranByUser(message.content));
-			taken += 1;
-		}
+		lines.push(line, ranByUser(message.content));
+		if (!quiet) taken += 1;
 		yield { type: "evaluated", message };
 		yield* recorded(entries);
 		yield* noting(lines, notes);
@@ -211,6 +219,7 @@ interface Turn {
 	readonly agent: AgentTurn;
 	readonly telemetry: TurnTelemetry;
 	steps: number;
+	seeded?: { interp: AgentRepl["interp"]; lines: number; steps: number };
 }
 
 type ModelCall = (request: ModelRequest) => AsyncIterable<ModelDelta>;
@@ -331,7 +340,10 @@ async function* evaluateStep(
 		: step >= maxSteps
 			? "capped"
 			: "continue";
-	if (verdict === "halt" && !held) return verdict;
+	if (verdict === "halt" && !held) {
+		yield* noting(lines, notes);
+		return verdict;
+	}
 	yield {
 		type: "result",
 		step,

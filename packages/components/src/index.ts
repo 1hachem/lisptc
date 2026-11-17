@@ -67,6 +67,7 @@ export {
 } from "./trace-lanes.ts";
 export {
 	type ChatMessage,
+	isNoteMessage,
 	isParentMessage,
 	isSystemMessage,
 	isToolMessage,

@@ -1,6 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
 	type ChatMessage,
+	isNoteMessage,
 	isParentMessage,
 	isSystemMessage,
 	isToolMessage,
@@ -689,7 +690,9 @@ export function ChatView() {
 	);
 	const { apply } = usePanels();
 	const lastSent = messages
-		.filter((m) => isUserMessage(m) || isSystemMessage(m))
+		.filter(
+			(m) => isUserMessage(m) || (isSystemMessage(m) && !isNoteMessage(m)),
+		)
 		.at(-1)?.id;
 	const briefing = useBriefing(chatId);
 	const turns = useMemo(
