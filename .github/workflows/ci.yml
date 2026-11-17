@@ -14,12 +14,17 @@ concurrency:
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
+        with:
+          save-cache: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
       - name: Fetch the turbo remote cache credentials from Infisical
         uses: Infisical/secrets-action@v1.0.9
@@ -32,9 +37,6 @@ jobs:
           secret-path: /turbo
           export-type: env
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Typecheck
         run: pnpm typecheck
 
@@ -46,9 +48,6 @@ jobs:
 
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Lint & format check
         run: pnpm lint
@@ -82,19 +81,25 @@ jobs:
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Knip
         run: pnpm knip
 
       - name: Fallow
         run: pnpm fallow --base ${{ github.event.pull_request.base.sha || 'origin/main' }}
 
-  test-plan:
+  test:
+    name: test (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
     outputs:
-      shards: ${{ steps.plan.outputs.shards }}
+      count: ${{ steps.plan.outputs.count }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,9 +108,6 @@ jobs:
 
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Restore the recorded test timings
         uses: actions/cache/restore@v4
@@ -119,27 +121,13 @@ jobs:
         run: |
           affected=${{ github.event_name == 'pull_request' && '--affected' || '' }}
           pnpm exec turbo run test:coverage $affected --dry=json > "$RUNNER_TEMP/dry-run.json"
-          shards=$(pnpm -s test:shards plan "$RUNNER_TEMP/dry-run.json" test-timings.json)
-          echo "$shards"
-          echo "shards=$shards" >> "$GITHUB_OUTPUT"
-
-  test:
-    needs: test-plan
-    if: needs.test-plan.outputs.shards != '[]'
-    name: test (${{ matrix.shard.name }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(needs.test-plan.outputs.shards) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm and Node.js
-        uses: ./.github/actions/setup
+          pnpm -s test:shards plan "$RUNNER_TEMP/dry-run.json" test-timings.json > "$RUNNER_TEMP/shards.json"
+          cat "$RUNNER_TEMP/shards.json"
+          echo "count=$(jq length "$RUNNER_TEMP/shards.json")" >> "$GITHUB_OUTPUT"
+          echo "filters=$(jq -r '.[${{ matrix.shard }} - 1].filters // empty' "$RUNNER_TEMP/shards.json")" >> "$GITHUB_OUTPUT"
 
       - name: Fetch the turbo remote cache credentials from Infisical
+        if: steps.plan.outputs.filters != ''
         uses: Infisical/secrets-action@v1.0.9
         with:
           method: universal
@@ -150,14 +138,18 @@ jobs:
           secret-path: /turbo
           export-type: env
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Test with coverage
-        run: pnpm exec turbo run test:coverage --concurrency=2 --summarize ${{ matrix.shard.filters }}
+        if: steps.plan.outputs.filters != ''
+        run: pnpm exec turbo run test:coverage --concurrency=2 --summarize ${{ steps.plan.outputs.filters }}
+
+      - name: Report the lone shard
+        if: ${{ !cancelled() && steps.plan.outputs.count == '1' }}
+        uses: ./.github/actions/coverage
+        with:
+          runs: .turbo/runs
 
       - name: Pack the coverage and the run summary
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.plan.outputs.filters != '' && steps.plan.outputs.count != '1' }}
         run: |
           mkdir -p "$RUNNER_TEMP/shard"
           find apps packages -path '*/coverage/coverage-final.json' -not -path '*/node_modules/*' \
@@ -165,18 +157,19 @@ jobs:
           cp -r .turbo/runs "$RUNNER_TEMP/shard/runs"
 
       - name: Upload the shard
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.plan.outputs.filters != '' && steps.plan.outputs.count != '1' }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-shard-${{ strategy.job-index }}
+          name: test-shard-${{ matrix.shard }}
           path: ${{ runner.temp }}/shard
           retention-days: 1
 
   coverage:
-    needs: [test-plan, test]
-    if: ${{ !cancelled() && needs.test-plan.outputs.shards != '[]' }}
+    needs: test
+    if: ${{ !cancelled() && needs.test.outputs.count != '' && fromJSON(needs.test.outputs.count) > 1 }}
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
@@ -185,9 +178,6 @@ jobs:
 
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Download the shards
         uses: actions/download-artifact@v4
@@ -201,59 +191,17 @@ jobs:
             tar -xzf "$archive"
           done
 
-      - name: Merge coverage
-        run: pnpm coverage:merge
-
-      - name: Report coverage on the PR
-        if: github.event_name == 'pull_request'
-        uses: davelosert/vitest-coverage-report-action@v2
-        with:
-          json-summary-path: ./coverage/coverage-summary.json
-          json-final-path: ./coverage/coverage-final.json
-
-      - name: Publish the coverage badge
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          HUSKY: "0"
-        run: |
-          dir="$RUNNER_TEMP/badges"
-          if git ls-remote --exit-code --heads origin badges >/dev/null; then
-            git fetch origin badges
-            git worktree add -B badges "$dir" origin/badges
-          else
-            git worktree add --orphan -b badges "$dir"
-          fi
-          cp coverage/badge.json "$dir/coverage.json"
-          cp coverage/badge-interpreter.json "$dir/coverage-interpreter.json"
-          cd "$dir"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add coverage.json coverage-interpreter.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: update the coverage badge"
-            git push origin badges
-          fi
-
       - name: Restore the recorded test timings
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/restore@v4
         with:
           path: test-timings.json
           key: test-timings-${{ github.run_id }}
           restore-keys: test-timings-
 
-      - name: Record the test timings
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          pnpm -s test:shards record test-timings.json "$RUNNER_TEMP/shards" > "$RUNNER_TEMP/test-timings.json"
-          mv "$RUNNER_TEMP/test-timings.json" test-timings.json
-
-      - name: Save the recorded test timings
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v4
+      - name: Report the merged shards
+        uses: ./.github/actions/coverage
         with:
-          path: test-timings.json
-          key: test-timings-${{ github.run_id }}
+          runs: ${{ runner.temp }}/shards
 
   test-nix:
     runs-on: ubuntu-latest
