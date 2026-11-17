@@ -456,7 +456,7 @@ describe("the agent turn", () => {
 		expect(seen[1].messages.at(-2)?.content).toMatch(/lisptc>$/);
 	});
 
-	test("an event never runs as lisp, and the model reads it as a system event", async () => {
+	test("an event never runs as lisp, and the model reads it as a developer message", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
 		const pending = [
 			{ kind: "event" as const, id: "s1", source: "agent:r", text: "(+ 40 2)" },
@@ -466,7 +466,8 @@ describe("the agent turn", () => {
 
 		expect(events.map((e) => e.type)).not.toContain("evaluated");
 		expect(seen[1].messages.at(-1)).toMatchObject({
-			content: '<system-event source="agent:r">(+ 40 2)</system-event>',
+			role: "developer",
+			content: "from agent:r:\n(+ 40 2)",
 		});
 	});
 
