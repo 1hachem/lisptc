@@ -31,7 +31,7 @@ login/logout only for :oauth t servers:
   login, asks user to authorize, ends turn; you are told when they answer.
 - User authorized: run (await (load-mcp \"name\")) , carry on with original
   request; redirect captured for you. Only when they hand back bare code,
-  run (mcp-authorize \"name\" \"<code>\") before that load. Never ask for code
+  run (mcp-authorize \"name\" \"CODE\") before that load. Never ask for code
   before that load failed.
 - (logout \"name\") gives :logged-out. Unloads server if loaded AND deletes
   saved tokens, so next (load-mcp \"name\") or (login \"name\") re-authorizes

@@ -173,7 +173,7 @@ describe("echo :match", () => {
 
 	it("points at grep for keeping what matched", () => {
 		expect(echoed('(echo "cat cot" :match "c[ao]t")')).toContain(
-			'(grep <value> "c[ao]t")',
+			'(grep VALUE "c[ao]t")',
 		);
 	});
 

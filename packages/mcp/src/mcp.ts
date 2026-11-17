@@ -1370,7 +1370,7 @@ function toolSignature(name: string, tool: Tool): string {
 	const required = new Set(tool.inputSchema?.required ?? []);
 	const sig = entries
 		.map(([key, spec]) => {
-			const pair = `:${key} ${schemaType(spec) || "<value>"}`;
+			const pair = `:${key} ${schemaType(spec) || "VALUE"}`;
 			return required.has(key) ? pair : `[${pair}]`;
 		})
 		.join(" ");
