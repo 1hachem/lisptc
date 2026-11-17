@@ -144,7 +144,7 @@ jobs:
 
       - name: Report the lone shard
         if: ${{ !cancelled() && steps.plan.outputs.count == '1' }}
-        uses: ./.github/actions/coverage
+        uses: ./.github/actions/report-coverage
         with:
           runs: .turbo/runs
 
@@ -199,7 +199,7 @@ jobs:
           restore-keys: test-timings-
 
       - name: Report the merged shards
-        uses: ./.github/actions/coverage
+        uses: ./.github/actions/report-coverage
         with:
           runs: ${{ runner.temp }}/shards
 
