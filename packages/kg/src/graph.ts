@@ -67,7 +67,7 @@ export interface Predicate {
 	args: Arg[];
 }
 
-export const TYPES = ["any", "string", "number", "symbol", "list"] as const;
+const TYPES = ["any", "string", "number", "symbol", "list"] as const;
 
 export function factId(term: unknown): string {
 	return `f${shortHash(str(term))}`;

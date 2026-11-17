@@ -26,11 +26,11 @@ export class Trail {
 	}
 }
 
-export function isVarSym(x: unknown): x is Sym {
+function isVarSym(x: unknown): x is Sym {
 	return x instanceof Sym && x.name.length > 1 && x.name[0] === "?";
 }
 
-export function isAnonymous(x: Sym): boolean {
+function isAnonymous(x: Sym): boolean {
 	return x.name === "?_";
 }
 

@@ -66,7 +66,7 @@ interface Choice {
 	at: number;
 }
 
-export class BudgetExceeded extends EvalException {
+class BudgetExceeded extends EvalException {
 	constructor(limit: number) {
 		super(
 			"kg/budget: the search took more inference steps than its budget",
