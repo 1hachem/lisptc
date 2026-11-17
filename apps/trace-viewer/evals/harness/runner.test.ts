@@ -391,6 +391,11 @@ describe("a case runs against a scripted model", () => {
 
 		expect(result.halted).toBe(true);
 		expect(result.transcript.at(-1)).toMatchObject({
+			role: "system",
+			source: "memory:headline-step",
+			content: expect.stringContaining("answer with the headline"),
+		});
+		expect(result.transcript.at(-2)).toMatchObject({
 			role: "entry",
 			kind: "memory",
 			value: {
@@ -399,7 +404,7 @@ describe("a case runs against a scripted model", () => {
 				on: "step",
 			},
 		});
-		expect(result.transcript.at(-2)).toMatchObject({
+		expect(result.transcript.at(-3)).toMatchObject({
 			role: "assistant",
 			content: "the headline is: Build AI workflows visually.",
 		});
