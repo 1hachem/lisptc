@@ -42,7 +42,7 @@ export interface Derived {
 	justifications: Justification[];
 }
 
-export interface DerivedRule {
+interface DerivedRule {
 	rule: Rule;
 	justifications: Justification[];
 }
@@ -73,8 +73,17 @@ export class KnowledgeBase {
 	private stale = true;
 	private index: Map<string, Clause[]> | undefined;
 
+	loading = false;
+
 	changed(graph: string): void {
-		this.dirty.add(graph);
+		if (!this.loading) this.dirty.add(graph);
+		this.stale = true;
+		this.index = undefined;
+	}
+
+	forget(graph: string): void {
+		this.graphs.delete(graph);
+		if (this.active === graph) this.active = undefined;
 		this.stale = true;
 		this.index = undefined;
 	}
@@ -342,10 +351,6 @@ export class KnowledgeBase {
 
 	derivedFact(id: string): Derived | undefined {
 		return this.derivedFacts.get(id);
-	}
-
-	derivedRule(id: string): DerivedRule | undefined {
-		return this.derivedRules.get(id);
 	}
 
 	baseFact(id: string): Fact | undefined {

@@ -51,7 +51,7 @@ interface Frame {
 }
 
 type Goals = { frame: Frame; next: Goals } | null;
-type Log = { step: Step; prev: Log } | null;
+export type Log = { step: Step; prev: Log } | null;
 
 interface State {
 	goals: Goals;
@@ -121,6 +121,12 @@ function toCode(x: unknown): unknown {
 	return t;
 }
 
+interface Control {
+	choices: Choice[];
+	backtrack: () => State | null;
+	branch: (alts: Alt[]) => State | null;
+}
+
 export class Solver {
 	steps = 0;
 
@@ -156,6 +162,7 @@ export class Solver {
 			choices.push({ trail: this.trail.mark, alts, at: 0 });
 			return backtrack();
 		};
+		const control: Control = { choices, backtrack, branch };
 		while (state !== null) {
 			if (state.goals === null) {
 				if (!onSolution(state.log)) return;
@@ -172,75 +179,17 @@ export class Solver {
 					newSym(term.name),
 				);
 			const args = argList(term);
-			switch (headName(term)) {
-				case "!":
-					choices.length = Math.min(choices.length, frame.cut);
-					state = { goals: next, log };
-					continue;
-				case "true":
-					state = { goals: next, log };
-					continue;
-				case "fail":
-					state = backtrack();
-					continue;
-				case "and":
-					state = { goals: push(args, frame.cut, frame.depth, next), log };
-					continue;
-				case "or":
-					state = branch(
-						args.map((arg) => () => ({
-							goals: push([arg], frame.cut, frame.depth, next),
-							log,
-						})),
-					);
-					continue;
-				case "not": {
-					const mark = this.trail.mark;
-					let found = false;
-					yield* this.run(
-						args,
-						() => {
-							found = true;
-							return false;
-						},
-						frame.depth + 1,
-					);
-					this.trail.undo(mark);
-					state = found
-						? backtrack()
-						: {
-								goals: next,
-								log: {
-									step: { depth: frame.depth, term, by: "not" },
-									prev: log,
-								},
-							};
-					continue;
-				}
-				case "=":
-					state = unify(args[0], args[1], this.trail)
-						? { goals: next, log }
-						: backtrack();
-					continue;
-				case "/=": {
-					const mark = this.trail.mark;
-					const same = unify(args[0], args[1], this.trail);
-					this.trail.undo(mark);
-					state = same ? backtrack() : { goals: next, log };
-					continue;
-				}
-				case "is": {
-					const value = yield* this.interp.evalGen(toCode(args[1]), null);
-					state = unify(args[0], value, this.trail)
-						? { goals: next, log }
-						: backtrack();
-					continue;
-				}
-				case "test": {
-					const value = yield* this.interp.evalGen(toCode(args[0]), null);
-					state = value === null ? backtrack() : { goals: next, log };
-					continue;
-				}
+			const builtin = yield* this.builtin(
+				term,
+				args,
+				frame,
+				next,
+				log,
+				control,
+			);
+			if (builtin !== undefined) {
+				state = builtin;
+				continue;
 			}
 			if (functorOf(term) === undefined)
 				throw new EvalException(
@@ -271,5 +220,80 @@ export class Solver {
 				}),
 			);
 		}
+	}
+
+	private *builtin(
+		term: unknown,
+		args: unknown[],
+		frame: Frame,
+		next: Goals,
+		log: Log,
+		control: Control,
+	): Eval<State | null | undefined> {
+		const proceed = { goals: next, log };
+		switch (headName(term)) {
+			case "!":
+				control.choices.length = Math.min(control.choices.length, frame.cut);
+				return proceed;
+			case "true":
+				return proceed;
+			case "fail":
+				return control.backtrack();
+			case "and":
+				return { goals: push(args, frame.cut, frame.depth, next), log };
+			case "or":
+				return control.branch(
+					args.map((arg) => () => ({
+						goals: push([arg], frame.cut, frame.depth, next),
+						log,
+					})),
+				);
+			case "not":
+				return (yield* this.provable(args, frame.depth + 1))
+					? control.backtrack()
+					: {
+							goals: next,
+							log: { step: { depth: frame.depth, term, by: "not" }, prev: log },
+						};
+			case "=":
+				return unify(args[0], args[1], this.trail)
+					? proceed
+					: control.backtrack();
+			case "/=":
+				return this.unifiable(args[0], args[1]) ? control.backtrack() : proceed;
+			case "is": {
+				const value = yield* this.interp.evalGen(toCode(args[1]), null);
+				return unify(args[0], value, this.trail)
+					? proceed
+					: control.backtrack();
+			}
+			case "test": {
+				const value = yield* this.interp.evalGen(toCode(args[0]), null);
+				return value === null ? control.backtrack() : proceed;
+			}
+		}
+		return undefined;
+	}
+
+	private *provable(goals: unknown[], depth: number): Eval<boolean> {
+		const mark = this.trail.mark;
+		let found = false;
+		yield* this.run(
+			goals,
+			() => {
+				found = true;
+				return false;
+			},
+			depth,
+		);
+		this.trail.undo(mark);
+		return found;
+	}
+
+	private unifiable(a: unknown, b: unknown): boolean {
+		const mark = this.trail.mark;
+		const same = unify(a, b, this.trail);
+		this.trail.undo(mark);
+		return same;
 	}
 }

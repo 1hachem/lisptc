@@ -125,6 +125,15 @@ describe("persistence", () => {
 		expect(second('(kg/source "family")')).toContain("Tom, father of Bob");
 	});
 
+	it("sees what another session wrote since", () => {
+		const store = new MemoryGraphStore();
+		const reader = kgRepl(store);
+		const writer = kgRepl(store);
+		reader('(kg/new "shared") (fact (seen a))');
+		writer('(kg/use "shared") (fact (seen b))');
+		expect(reader("(?all ?x (seen ?x))")).toBe("(a b)");
+	});
+
 	it("stores no derived fact", () => {
 		const store = new MemoryGraphStore();
 		const ev = kgRepl(store);

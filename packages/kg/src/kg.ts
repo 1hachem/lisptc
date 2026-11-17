@@ -1,6 +1,6 @@
 import { type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { type Interp, runSync } from "@repo/interpreter/lisp";
+import { type Interp, runGen, runSync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -21,7 +21,6 @@ import {
 	type Basis,
 	forwardParts,
 	Graph,
-	parseGraph,
 	predicateFrom,
 	printGraph,
 	supportFrom,
@@ -56,6 +55,7 @@ export function kgExtension(host: KgHost): KgExtension {
 }
 
 const MACROS: [string, string][] = [
+	["kg", "kg/open"],
 	["fact", "kg/assert"],
 	["predicate", "kg/declare"],
 	["<-", "kg/rule"],
@@ -67,6 +67,10 @@ const MACROS: [string, string][] = [
 ];
 
 const MACRO_DOCS: Record<string, [string, string]> = {
+	kg: [
+		'(kg "name" [:doc "what it holds"] [:imports ("graph"...)])',
+		"Open a graph and use it, creating it when there is none. Every stored graph is the text of a (kg ...) form followed by the forms that fill it.",
+	],
 	fact: [
 		'(fact (predicate arg...) :basis observed :from "doc" :at (:page 3) :quote "exact text" :by "agent" :note "...")',
 		"Assert a ground fact into the graph in use, with one support. :basis is observed, user, assumed, proposed or resolved, proposed when left out. Asserting the same fact again adds a support. Returns the fact id.",
@@ -171,31 +175,49 @@ export function registerKg(
 	kb: KnowledgeBase,
 	host: KgHost,
 ): void {
-	let loaded = false;
+	const seen = new Map<string, string>();
 
 	function* load(): Eval<void> {
-		if (loaded) return;
+		if (kb.loading) return;
 		const stored = yield* settled(host.store.all());
+		const present = new Set(stored.map((g) => g.name));
+		for (const name of [...seen.keys()])
+			if (!present.has(name) && !kb.dirty.has(name)) {
+				kb.forget(name);
+				seen.delete(name);
+			}
+		const active = kb.active;
 		for (const { name, source } of stored) {
+			if (seen.get(name) === source || kb.dirty.has(name)) continue;
+			kb.loading = true;
 			try {
-				kb.graphs.set(name, parseGraph(interp.readAll(source)));
+				yield* runGen(interp, source);
 			} catch (ex) {
 				throw new EvalException(
-					`graph ${name} does not read back: ${String(ex)}`,
+					`graph ${name} does not load: ${String(ex)}`,
 					name,
 				);
+			} finally {
+				kb.loading = false;
 			}
+			seen.set(name, source);
 		}
-		loaded = true;
+		kb.active =
+			active !== undefined && kb.graphs.has(active) ? active : undefined;
 	}
 
 	function* flush(): Eval<void> {
-		for (const name of kb.removed) yield* settled(host.store.remove(name));
+		for (const name of kb.removed) {
+			yield* settled(host.store.remove(name));
+			seen.delete(name);
+		}
 		kb.removed.clear();
 		for (const name of kb.dirty) {
 			const graph = kb.graphs.get(name);
-			if (graph !== undefined)
-				yield* settled(host.store.put({ name, source: printGraph(graph) }));
+			if (graph === undefined) continue;
+			const source = printGraph(graph);
+			yield* settled(host.store.put({ name, source }));
+			seen.set(name, source);
 		}
 		kb.dirty.clear();
 	}
@@ -216,6 +238,37 @@ export function registerKg(
 		schema: z.ZodType,
 		body: (args: never) => Eval,
 	) => interp.defGen(name, arity, signature, doc, schema, body as never);
+
+	def(
+		"kg/open",
+		1,
+		'(kg/open \'("name" [:doc "..."] [:imports ("graph"...)]))',
+		"The function behind kg.",
+		z.tuple([zList]),
+		function* ([items]: [List]): Eval {
+			yield* load();
+			const [name, ...options] = listToArray(items);
+			if (typeof name !== "string" || name.trim() === "")
+				throw new EvalException(
+					"a graph name must be a non-empty string",
+					name ?? null,
+				);
+			if (kb.loading || !kb.graphs.has(name)) {
+				const graph = new Graph(name);
+				const opts = parsePlist(arrayToList(options));
+				const doc = opts.get("doc");
+				if (typeof doc === "string") graph.doc = doc;
+				for (const imported of listToArray(
+					(opts.get("imports") ?? null) as List,
+				))
+					if (typeof imported === "string") graph.imports.push(imported);
+				kb.graphs.set(name, graph);
+				kb.changed(name);
+			}
+			kb.active = name;
+			return name;
+		},
+	);
 
 	def(
 		"kg/new",
@@ -295,12 +348,9 @@ export function registerKg(
 		function* ([name]: [string]): Eval {
 			yield* load();
 			kb.graph(name);
-			kb.graphs.delete(name);
+			kb.forget(name);
 			kb.dirty.delete(name);
 			kb.removed.add(name);
-			if (kb.active === name) kb.active = undefined;
-			kb.changed(name);
-			kb.dirty.delete(name);
 			return true;
 		},
 	);
