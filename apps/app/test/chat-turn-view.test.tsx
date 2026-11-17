@@ -63,6 +63,7 @@ const session = vi.hoisted(() => ({
 	meta: {},
 	error: undefined as string | undefined,
 	isLoading: false,
+	waiting: false,
 	chatId: "c1",
 	queued: [] as unknown[],
 }));
@@ -186,6 +187,8 @@ afterEach(() => {
 	prefs.clear();
 	stored.reset();
 	session.isLoading = false;
+	session.waiting = false;
+	session.meta = {};
 	session.error = undefined;
 	panels.apply.mockClear();
 });
@@ -1412,5 +1415,164 @@ describe("a step still being written", () => {
 
 		expect(host.querySelector("[data-step-call]")).toBeNull();
 		expect(host.textContent).toContain("Hello there");
+	});
+});
+
+describe("a turn shown while the agent streams", () => {
+	const answered = (id: string, text: string): ChatMessage => ({
+		id,
+		type: "ai",
+		content: text,
+		additional_kwargs: { prose: [{ span: [0, text.length], reason: "prose" }] },
+	});
+	const earlier: ChatMessage[] = [
+		{ id: "h1", type: "human", content: "first" },
+		answered("a1", "First answer."),
+	];
+	const running: ChatMessage[] = [
+		{ id: "h2", type: "human", content: "second" },
+		{ id: "a2", type: "ai", content: "(fetch)" },
+		{
+			id: "t2",
+			type: "tool",
+			content: "",
+			entries: activities(timed("fetch", 100, "started")),
+		},
+		answered("a3", "Fetching now."),
+	];
+
+	async function stream() {
+		const host = document.createElement("div");
+		document.body.append(host);
+		const root = createRoot(host);
+		roots.push(root);
+		const draw = () =>
+			act(async () =>
+				root.render(
+					<QueryClientProvider client={offline}>
+						<UIProvider>
+							<ChatView />
+						</UIProvider>
+					</QueryClientProvider>,
+				),
+			);
+		const turn = (id: string) =>
+			host.querySelector(`[data-turn="${id}"]`)?.outerHTML;
+		return { host, draw, turn };
+	}
+
+	it("leaves every earlier turn as it was through an ask, its answer and the stored copy, filling only its metadata", async () => {
+		const { host, draw, turn } = await stream();
+		stored.put({ metadata: { model: true } });
+		const withoutMeta = () => {
+			const shown = host.querySelector('[data-turn="h1"]')?.cloneNode(true);
+			if (!(shown instanceof HTMLElement)) return undefined;
+			for (const meta of shown.querySelectorAll('[data-anchor="chat/meta"]'))
+				meta.remove();
+			return shown.outerHTML;
+		};
+		session.isLoading = true;
+		session.messages = [...earlier, ...running];
+		await draw();
+		const first = withoutMeta();
+
+		session.isLoading = false;
+		session.waiting = true;
+		await draw();
+		session.isLoading = true;
+		session.waiting = false;
+		session.meta = { a1: { model: "late-model", outputTokens: 42 } };
+		session.messages = [
+			{ id: "h1", type: "human", content: "first" },
+			answered("a1", "Reworded once stored."),
+			...running,
+		];
+		await draw();
+
+		expect(withoutMeta()).toBe(first);
+		expect(turn("h1")).not.toContain("Reworded");
+		expect(turn("h1")).toContain("late-model");
+	});
+
+	it("holds the place of metadata that has not arrived, and fills it once", async () => {
+		const { host, draw } = await stream();
+		stored.put({ metadata: { model: true } });
+		session.messages = earlier;
+		await draw();
+		const pending = () =>
+			host.querySelector('[aria-label="metadata on its way"]');
+
+		expect(pending()).not.toBeNull();
+
+		session.messages = [
+			...earlier,
+			{ id: "h2", type: "human", content: "next" },
+		];
+		await draw();
+		session.meta = { a1: { model: "first-model" } };
+		await draw();
+		session.meta = { a1: { model: "second-model" } };
+		await draw();
+
+		expect(pending()).toBeNull();
+		expect(host.querySelector('[data-turn="h1"]')?.textContent).toContain(
+			"first-model",
+		);
+	});
+
+	it("holds no place for metadata the user chose not to see", async () => {
+		const { host, draw } = await stream();
+		session.messages = earlier;
+		await draw();
+
+		expect(host.querySelector('[aria-label="metadata on its way"]')).toBeNull();
+	});
+
+	it("keeps the latest turn running, with no footer, while it waits on a permission ask", async () => {
+		const { host, draw } = await stream();
+		session.isLoading = true;
+		session.messages = running;
+		await draw();
+		const rows = () =>
+			[...host.querySelectorAll("[data-timeline]")].map((li) =>
+				li.getAttribute("data-timeline"),
+			);
+		const before = rows();
+
+		session.isLoading = false;
+		session.waiting = true;
+		await draw();
+
+		expect(rows()).toEqual(before);
+		expect(host.querySelector("[data-turn-foot]")).toBeNull();
+	});
+
+	it("freezes a turn once a later one starts, whatever reaches it afterwards", async () => {
+		const { draw, turn } = await stream();
+		session.isLoading = true;
+		session.messages = running;
+		await draw();
+		session.messages = [
+			...running,
+			{ id: "h3", type: "human", content: "steer" },
+		];
+		await draw();
+		const frozen = turn("h2");
+
+		session.messages = [
+			...running.slice(0, 2),
+			{
+				id: "t2",
+				type: "tool",
+				content: "",
+				entries: activities(timed("fetch", 100, "done", 80)),
+			},
+			answered("a3", "Fetched, stored."),
+			{ id: "h3", type: "human", content: "steer" },
+			answered("a4", "Steered."),
+		];
+		await draw();
+
+		expect(turn("h2")).toBe(frozen);
 	});
 });

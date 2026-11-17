@@ -83,14 +83,18 @@ const PICKS_MODEL: ReadonlySet<MetaField> = new Set(["model", "provider"]);
 
 export function MessageMeta({
 	meta,
+	awaited = false,
 	show,
 	onPickModel,
 	onTrace,
+	className = "",
 }: {
 	meta: StepMeta | undefined;
+	awaited?: boolean;
 	show?: Partial<Record<MetaField, boolean>>;
 	onPickModel?: () => void;
 	onTrace?: () => void;
+	className?: string;
 }) {
 	const fields = show ? { ...META_FIELDS, ...show } : META_FIELDS;
 	const parts = SEGMENTS.filter((s) => fields[s.field])
@@ -102,10 +106,23 @@ export function MessageMeta({
 			(part): part is { field: MetaField; text: string } => part.text !== null,
 		);
 
-	if (parts.length === 0 && onTrace === undefined) return null;
+	const pending =
+		awaited &&
+		meta === undefined &&
+		SEGMENTS.some((segment) => fields[segment.field]);
+	if (parts.length === 0 && onTrace === undefined && !pending) return null;
 
 	return (
-		<div className="mt-1 select-none text-[11px] text-dim leading-[1.7]">
+		<div
+			className={`mt-1 select-none text-[11px] text-dim leading-[1.7] ${className}`}
+		>
+			{pending && (
+				<span
+					role="status"
+					aria-label="metadata on its way"
+					className="inline-block h-[0.9em] w-24 animate-pulse rounded-sm bg-dim/15 align-middle"
+				/>
+			)}
 			{parts.map((part, i) => (
 				<Fragment key={part.field}>
 					{i > 0 && " · "}
@@ -125,7 +142,7 @@ export function MessageMeta({
 			))}
 			{onTrace && (
 				<>
-					{parts.length > 0 && " · "}
+					{(parts.length > 0 || pending) && " · "}
 					<button
 						type="button"
 						data-show-in-trace

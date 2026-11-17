@@ -115,10 +115,24 @@ export function placeTimeline(
 		for (const id of link.introduces) if (!owner.has(id)) owner.set(id, at);
 	}
 	const placed = new Map<number, TimelineEntry[]>();
+	const put = (at: number, entry: TimelineEntry) =>
+		placed.set(at, [...(placed.get(at) ?? []), entry]);
 	for (const entry of turnTimeline(shape.intent, shape.activity, live)) {
 		const at = owner.get(entry.id);
 		if (at === undefined) continue;
-		placed.set(at, [...(placed.get(at) ?? []), entry]);
+		const stray = entry.children.filter(
+			(child) => (owner.get(child.id) ?? at) !== at,
+		);
+		put(
+			at,
+			stray.length === 0
+				? entry
+				: {
+						...entry,
+						children: entry.children.filter((child) => !stray.includes(child)),
+					},
+		);
+		for (const child of stray) put(owner.get(child.id) ?? at, child);
 	}
 	return placed;
 }
