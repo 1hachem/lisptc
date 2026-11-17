@@ -93,7 +93,8 @@
   "enabledPlugins": {
     "typesafe@typesafe-ai": true,
     "hunk-walk@lisptc": true,
-    "convex@claude-plugins-official": true
+    "convex@claude-plugins-official": true,
+    "understand-anything@understand-anything": true
   },
   "extraKnownMarketplaces": {
     "lisptc": {
