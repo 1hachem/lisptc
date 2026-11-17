@@ -12,8 +12,9 @@ import {
 	type Sink,
 } from "@repo/interpreter/journal";
 import { runAsync, runSync } from "@repo/interpreter/lisp";
-import { EndOfFile } from "@repo/interpreter/objects";
+import { EndOfFile, Unspecified } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { openSession } from "@repo/interpreter/session";
 import type { Ask, AskChoice } from "@repo/journal-catalog/asks";
@@ -52,6 +53,8 @@ class InteractiveRepl implements Repl {
 	private currentInterp: ConversationInterpreter;
 	private readonly extensions = cliExtensions();
 	private readonly hooks = openSession(this.extensions);
+	private stepping = false;
+	private depth = 0;
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
@@ -67,6 +70,19 @@ class InteractiveRepl implements Repl {
 		});
 		runSync(interp, prelude);
 		interp.journal.pipe(stdoutSink());
+		const repl = this;
+		interp.hooks.evalForm.use(function* (i, form, next) {
+			if (!repl.stepping) return yield* next(i, form);
+			repl.depth++;
+			let value: unknown;
+			try {
+				value = yield* next(i, form);
+			} finally {
+				repl.depth--;
+			}
+			if (repl.depth === 0 && value !== Unspecified) write(`${str(value)}\n`);
+			return value;
+		});
 		return interp;
 	}
 
@@ -107,6 +123,8 @@ class InteractiveRepl implements Repl {
 		const interp = this.currentInterp;
 		const buffer = bufferSink();
 		const detach = interp.journal.pipe(buffer);
+		this.stepping = true;
+		this.depth = 0;
 		try {
 			await this.hooks.evalStep.run(
 				async (ctx) => {
@@ -117,6 +135,7 @@ class InteractiveRepl implements Repl {
 		} catch (ex) {
 			if (!(ex instanceof StepHold)) throw ex;
 		} finally {
+			this.stepping = false;
 			detach();
 			for (const { content } of buffer.collect(note)) write(`${content}\n`);
 		}
@@ -176,8 +195,9 @@ async function attachLoop(): Promise<void> {
 		accum = "";
 		const refused = await runAsking({
 			run: async () => {
-				const { output, asks } = await client.step(code);
+				const { output, results, asks } = await client.step(code);
 				write(output);
+				for (const result of results) write(`${result}\n`);
 				return asks;
 			},
 			reply: (ask) => readLine(question(ask)),
