@@ -23,6 +23,7 @@
     "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
+    "@repo/kg-extension": "workspace:*",
     "@repo/language-service": "workspace:*",
     "@repo/llm-extension": "workspace:*",
     "@repo/mcp-extension": "workspace:*",

@@ -9,6 +9,8 @@ import { intentHost } from "@repo/intent-extension/host";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { introspectionExtension } from "@repo/introspection-extension";
 import { introspectionHost } from "@repo/introspection-extension/host";
+import { kgExtension } from "@repo/kg-extension";
+import { kgHost } from "@repo/kg-extension/host";
 import { llmExtension } from "@repo/llm-extension/llm-extension";
 import { llmHost } from "@repo/llm-extension/llm-host";
 import { mcpExtension } from "@repo/mcp-extension";
@@ -39,6 +41,7 @@ export function cliExtensions(): InterpExtension[] {
 		secretsExtension(secretsHostFor({ envFile: true })),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
+		kgExtension(kgHost),
 		agentsExtension(agentsHostFor()),
 		intentExtension(intentHost),
 		mcpExtension({
@@ -64,6 +67,7 @@ export function sessionExtensions(): InterpExtension[] {
 		secretsExtension(secretsHost),
 		promisesExtension(promisesHost),
 		introspectionExtension(introspectionHost),
+		kgExtension(kgHost),
 		agentsExtension(agentsHostFor()),
 		intentExtension(intentHost),
 		mcpExtension({
