@@ -1,6 +1,6 @@
 (area "onboarding" :when "the user asks how the app works, to be shown around it, or to save, change or replay a walkthrough of it")
 
-(memory "internal/onboarding/run" :when "the user asks how the app works or to be shown around it, or a tour the agent started just finished"
+(memory "internal/onboarding/run" :when "the user asks how the app works, how to do something in it or to be shown around it, or a tour the agent started just finished" :links ("internal/ui/tour")
   "- (onboardings) every onboarding as (name status about) . Status new,
   started or done for this user.
 - (onboarding/done? name) t if user done, nil if not. Check before running;
@@ -10,8 +10,8 @@
 - Finished tour sends \"I finished the welcome tour.\": then
   (onboarding/done \"welcome\") marks user onboarded. Skipped tour stays
   started.
-- No onboarding covers what user asks: show with ui/tour, recall memory
-  internal/ui/tour .")
+- No onboarding covers what user asks: show it with ui/tour, now, same turn.
+  Never answer in words alone.")
 
 (memory "internal/onboarding/write" :when "the user asks to save, change or rename a walkthrough of the app, or an onboarding must be created or updated"
   "- (onboarding/create name 'script [:about text]) saves new one. Name is

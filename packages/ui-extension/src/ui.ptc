@@ -6,4 +6,4 @@ Widget constructors: names in ui-widgets. Each has own memory ui/widget-NAME; (d
 
 ui/render, ui/send, ui/open-file, ui/open-view, ui/close, ui/focus, ui/tabs, ui/file-link, ui/forget, ui/open
 
-Show user around app itself, not a widget: ui/point marks one part, ui/tour walks through steps. ui/tour-done?
+Show user around app itself, not a widget: ui/point marks one part, ui/tour walks through steps. ui/tour-done? Every part of app has anchor: user asks where or how, point or tour, never guess in words.

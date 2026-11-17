@@ -136,13 +136,13 @@ first, so user learns where it lives, then sees it. Recall memory
 internal/ui/point for how."
     (car (cdr *ui-splits*)) (apply append *ui-pages*) (car (car *ui-pages*))))
 
-(memory "internal/ui/point" :when "the user asks where something is in the app, asks to open one of its pages, or should be shown a slash command"
+(memory "internal/ui/point" :when "the user asks where something is in the app or how to reach it, such as where to upload a file, start a chat or change a setting, asks to open one of its pages, or should be shown a slash command"
   (format nil "Point at part of app itself, not a widget.
 (ui/point anchor [:open page] [:fill text] [:mark ~s ] [:size ~s ] [:click t])
 puts pointer on anchor few seconds, no overlay, no text. Say what it is in
 your reply. Returns anchor.
-- anchor is an id, nothing else exists. Ids by part of app, in memory
-  internal/ui/anchors-PART , PART one of ~{~a~^ ~}. Recall the part you need.
+- anchor is an id from memory internal/ui/anchors-SECTION , SECTION one of
+  ~{~a~^ ~}. Nothing else exists. Section not loaded: recall the one you need.
 - :mark one of ~{~a~^ ~}. ~a (default) points at it; oval circles it.
 - :size one of ~{~a~^ ~}, ~a default: pointer size, or how loose oval sits.
 - :click t shows pointer clicking anchor.
@@ -157,19 +157,21 @@ first, never bare ui/open. User learns where it lives, then sees it. Reply
 \"Account settings live here, gear at bottom of sidebar.\" with
 (ui/point \"account\" :open \"account\")
 
+Every part of app has anchor. NEVER tell user you do not know where it is,
+NEVER guess in words: point at it.
 Point when user asks where thing is; tour when user asks how to do something
 in app, recall memory internal/ui/tour . Neither for chat content."
-    (car (cdr *ui-marks*)) (car *ui-mark-sizes*) *ui-anchor-regions*
+    (car (cdr *ui-marks*)) (car *ui-mark-sizes*) *ui-anchor-sections*
     *ui-marks* *ui-default-mark* *ui-mark-sizes* *ui-default-mark-size*
     (mapcar car *ui-pages*) *ui-fill-anchor* *ui-fill-anchor*))
 
-(memory "internal/ui/tour" :when "the user asks how to do something in the app, or should be walked through part of it step by step"
+(memory "internal/ui/tour" :when "the user asks how to do something in the app, such as upload or attach a file, start or find a chat, or change a setting, or should be walked through part of it step by step"
   (format nil "(ui/tour id step... [:next \"next\" :done \"done\" :skip \"skip\"]) walks user
 through app, one step at a time, at most ~d steps. Step is plist
 (:anchor anchor :page page :say text :until ~{~a~^|~}) .
 - :say is text of callout. No :anchor: callout in middle.
-- :anchor is id from memory internal/ui/anchors-PART , PART one of
-  ~{~a~^ ~}. Anchor in closed folder or page: app reveals it first.
+- :anchor is id from memory internal/ui/anchors-SECTION , SECTION one of
+  ~{~a~^ ~}. Section not loaded: recall the one you need. Anchor in closed folder or page: app reveals it first.
 - :page opens that page beside chat as step starts, so anchor inside it is on
   screen. Pages: ~{~a~^ ~}.
 - :until ~a (default) waits for next button; ~a waits for click on anchor,
@@ -187,7 +189,7 @@ message pauses tour; tours expire on their own.
 
 (ui/tour-done? id) t if user finished tour before, any chat. Check before
 offering, do not replay finished tour unasked."
-    *ui-tour-max-steps* *ui-tour-untils* *ui-anchor-regions*
+    *ui-tour-max-steps* *ui-tour-untils* *ui-anchor-sections*
     (mapcar car *ui-pages*) (car *ui-tour-untils*) (car (cdr *ui-tour-untils*))))
 
 (memory "internal/ui/app" :when "the user asks what a part of the app is or how the app is laid out: sidebars, folders, panel, tabs, bottom bar, workspaces or pages"

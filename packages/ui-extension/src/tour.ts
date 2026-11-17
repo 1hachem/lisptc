@@ -16,7 +16,6 @@ import { zAny, zList } from "@repo/interpreter/schema";
 import {
 	ANCHOR_IDS,
 	type AnchorId,
-	type AnchorLocation,
 	anchors,
 	FILLABLE_ANCHOR,
 	isAnchor,
@@ -176,39 +175,75 @@ function stepOf(x: unknown): TourStep {
 	};
 }
 
-const REGIONS = {
-	sidebar:
-		"the user asks where something is in the app's sidebar: the workspace, home, a new chat, a folder, the readme, settings, preferences, the account or signing out",
-	folders:
-		"the user asks where to find, search, upload, select, rename, archive or delete a chat or a file",
-	chat: "the user asks where something is in a chat: the message box, sending, stopping, attaching, a message, its trace and finding in it, thinking, its details, feedback, the todo or sub-agent threads",
-	pages:
-		"the user asks where something is on a page or an open file: a preference, a workspace setting, the account, the readme, a download, restoring from the bin, a memory, a permission rule, an onboarding or a sub-agent",
-	panel:
-		"the user asks about tabs, panes, splitting, resizing, the bottom bar or zoom",
+const POINT_MEMORY = "internal/ui/point";
+
+const SECTIONS = {
+	layout:
+		"the user asks where or how to open or close a sidebar, switch or make a workspace, or use tabs, panes, splitting, resizing, the bottom bar or zoom",
+	chats:
+		"the user asks where or how to start, find, search, rename, archive or delete a chat, or see its sub-agent threads",
+	files:
+		"the user asks where or how to upload, find, open, select, move, download, keep or delete a file, or get one back from the bin",
+	input:
+		"the user asks where or how to type or send a message, stop or queue one, attach a file to it, use / or @ in it, or answer a question the agent asked",
+	messages:
+		"the user asks about a message in a chat: reading more, the details under it, feedback, the todo, an approval card, queued messages, sub-agent threads, the agent's thinking or avatar",
+	trace:
+		"the user asks how to see what the agent did: opening the trace, finding in it, its lanes or its rows",
+	settings:
+		"the user asks where or how to rename the workspace or change its model, icon or theme",
+	preferences:
+		"the user asks where or how to change how the app looks or behaves for them: theme, font, motion, the bottom bar, sidebar entries, input helpers, details under answers, developer or desktop switches",
+	account:
+		"the user asks about their account: their name or email, signing out, or deleting the account",
+	readme: "the user asks where the workspace readme is or how to edit it",
+	agent:
+		"the user asks where to see what the agent remembers, may call or runs: its memories, permissions, onboardings, sub-agents, or the folders not ready yet",
 } as const;
 
-type Region = keyof typeof REGIONS;
+type Section = keyof typeof SECTIONS;
 
-const REGION_IDS = Object.keys(REGIONS) as Region[];
+const SECTION_IDS = Object.keys(SECTIONS) as Section[];
 
-const FRAME_ANCHOR = /^(panel|status)\b/;
+type Head<T> = T extends `${infer H}/${string}` ? H : T;
 
-function regionOf(id: AnchorId): Region {
-	const { location } = anchors[id] as { location: AnchorLocation };
-	switch (location.kind) {
-		case "chat":
-			return "chat";
-		case "page":
-		case "file":
-			return "pages";
-		case "folder":
-			return "folders";
-		case "sidebar":
-			return location.folder === undefined ? "sidebar" : "folders";
-		case "shell":
-			return FRAME_ANCHOR.test(id) ? "panel" : "sidebar";
-	}
+const SECTION_OF: Record<Head<AnchorId>, Section> = {
+	sidebar: "layout",
+	right: "layout",
+	workspace: "layout",
+	panel: "layout",
+	"status-bar": "layout",
+	status: "layout",
+	home: "chats",
+	"new-chat": "chats",
+	chats: "chats",
+	knowledge: "files",
+	attachments: "files",
+	bin: "files",
+	files: "files",
+	file: "files",
+	composer: "input",
+	chat: "messages",
+	trace: "trace",
+	settings: "settings",
+	preferences: "preferences",
+	account: "account",
+	"sign-out": "account",
+	readme: "readme",
+	memories: "agent",
+	memory: "agent",
+	permissions: "agent",
+	onboarding: "agent",
+	"sub-agents": "agent",
+	agent: "agent",
+	triggers: "agent",
+	tasks: "agent",
+	ui: "agent",
+	tests: "agent",
+};
+
+function sectionOf(id: AnchorId): Section {
+	return SECTION_OF[id.split("/")[0] as Head<AnchorId>];
 }
 
 function anchorLine(id: AnchorId): string {
@@ -217,12 +252,12 @@ function anchorLine(id: AnchorId): string {
 }
 
 export function anchorMemories(): string {
-	return REGION_IDS.map((region) => {
+	return SECTION_IDS.map((section) => {
 		const body = [
-			`Anchors, ${region}. For ui/point and ui/tour :anchor.`,
-			...ANCHOR_IDS.filter((id) => regionOf(id) === region).map(anchorLine),
+			`Anchors, ${section}. For ui/point and ui/tour :anchor.`,
+			...ANCHOR_IDS.filter((id) => sectionOf(id) === section).map(anchorLine),
 		].join("\n");
-		return `(memory "internal/ui/anchors-${region}" :when ${str(REGIONS[region])}\n  "${body.replace(/[\\"]/g, "\\$&")}")`;
+		return `(memory "internal/ui/anchors-${section}" :when ${str(SECTIONS[section])} :links (${str(POINT_MEMORY)})\n  "${body.replace(/[\\"]/g, "\\$&")}")`;
 	}).join("\n\n");
 }
 
@@ -242,9 +277,9 @@ export function registerTours(
 			"The app pages ui/open and :open take, each as (id what-it-holds).",
 		],
 		[
-			"*ui-anchor-regions*",
-			arrayToList([...REGION_IDS]),
-			"The parts of the app the anchors are filed under; memory internal/ui/anchors-REGION lists one part's anchors.",
+			"*ui-anchor-sections*",
+			arrayToList([...SECTION_IDS]),
+			"The sections of the app the anchors are filed under; memory internal/ui/anchors-SECTION lists one section's anchors.",
 		],
 		["*ui-marks*", arrayToList([...MARKS]), "The marks ui/point draws."],
 		["*ui-default-mark*", DEFAULT_MARK, "The mark ui/point draws given none."],
