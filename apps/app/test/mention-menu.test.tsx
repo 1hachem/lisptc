@@ -6,8 +6,8 @@ import {
 	type LexicalEditor,
 } from "lexical";
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/lib/commands.ts", () => ({
 	commands: [],
@@ -27,8 +27,17 @@ const files: Mentionable[] = [
 	{ folder: "sub-agents", name: "researcher", contentType: null },
 ];
 
+const mounted: { root: Root; host: HTMLElement }[] = [];
+
 beforeAll(() => {
 	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+});
+
+afterEach(() => {
+	for (const { root, host } of mounted.splice(0)) {
+		act(() => root.unmount());
+		host.remove();
+	}
 });
 
 function editorOf(field: Element | null): LexicalEditor {
@@ -41,8 +50,10 @@ function editorOf(field: Element | null): LexicalEditor {
 async function mentioning(typed: string) {
 	const host = document.createElement("div");
 	document.body.append(host);
+	const root = createRoot(host);
+	mounted.push({ root, host });
 	act(() =>
-		createRoot(host).render(
+		root.render(
 			<ChatInput onSubmit={() => true} assist={{ mentions: files }} />,
 		),
 	);
