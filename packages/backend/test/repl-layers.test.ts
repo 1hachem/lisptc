@@ -110,21 +110,6 @@ describe("repl layers", () => {
 		);
 	});
 
-	it("splits a large layer across rows and joins it back", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		const json = JSON.stringify({
-			text: "x".repeat(REPL_LAYER_CHUNK_CHARS * 2),
-		});
-		await t.mutation(internal.repls.record, {
-			replId,
-			whole: true,
-			chunks: chunked(json),
-		});
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.layers).toHaveLength(1);
-		expect(latest?.layers[0].join("")).toBe(json);
-	});
-
 	it("refuses a chunk longer than a row holds", async () => {
 		const { t, replId } = await chatOf("alice@example.com");
 		await expect(
@@ -157,6 +142,14 @@ describe("the convex image store", () => {
 		await store.save(image(["a", "b"]));
 		const resumed = await new ConvexImageStore(replId, serverOf(t)).latest();
 		expect(resumed).toEqual({ depth: 2, image: image(["a", "b"]) });
+	});
+
+	it("resumes an image larger than a row holds", async () => {
+		const { t, replId } = await chatOf("alice@example.com");
+		const large = image(["x".repeat(REPL_LAYER_CHUNK_CHARS * 2)]);
+		await new ConvexImageStore(replId, serverOf(t)).save(large);
+		const resumed = await new ConvexImageStore(replId, serverOf(t)).latest();
+		expect(resumed).toEqual({ depth: 1, image: large });
 	});
 
 	it("has nothing to resume before a save", async () => {
