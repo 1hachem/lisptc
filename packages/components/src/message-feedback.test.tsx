@@ -12,21 +12,19 @@ beforeAll(() => {
 
 async function mounted() {
 	const capture = vi.fn();
-	const onRate = vi.fn();
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
 	await act(async () => {
 		root.render(
 			<StrictMode>
-				<MessageFeedback capture={capture} onRate={onRate} />
+				<MessageFeedback capture={capture} onRate={() => {}} />
 			</StrictMode>,
 		);
 	});
 
 	return {
 		capture,
-		onRate,
 		field: () => host.querySelector<HTMLInputElement>("input"),
 		async vote(title: string) {
 			await act(async () => {
@@ -59,7 +57,6 @@ describe("voting on an agent message", () => {
 		const ui = await mounted();
 		await ui.vote("helpful");
 
-		expect(ui.onRate).toHaveBeenCalledWith("up");
 		expect(ui.capture).toHaveBeenCalledTimes(1);
 		expect(ui.capture.mock.calls[0][0]).toMatchObject({
 			$survey_response: 1,

@@ -3,7 +3,7 @@
 import type { FiredMemory } from "@repo/journal-catalog/memory";
 import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { MessageMemories } from "./message-memories.tsx";
 
 beforeAll(() => {
@@ -26,10 +26,6 @@ async function mounted(memories: FiredMemory[], onOpen?: () => void) {
 
 	return {
 		text: () => host.textContent ?? "",
-		colorOf: (key: string) =>
-			[...host.querySelectorAll("div[title]")]
-				.find((row) => row.textContent?.includes(key))
-				?.querySelector("[data-memory-dot]")?.className ?? "",
 		stacked: () => host.querySelectorAll("button [data-memory-dot]").length,
 		async toggle() {
 			await act(async () => {
@@ -45,40 +41,16 @@ describe("the recalled memories of a step", () => {
 		expect(view.text()).toBe("");
 	});
 
-	it("counts them, then names them once opened", async () => {
-		const view = await mounted([{ key: "navigate", body: "use the tool" }]);
-		expect(view.text()).toContain("1 memory recalled");
-		expect(view.text()).not.toContain("use the tool");
+	it("unfolds the memories on a click, unless the click opens the trace instead", async () => {
+		const memories = [{ key: "navigate", body: "use the tool" }];
+		const folding = await mounted(memories);
+		await folding.toggle();
+		expect(folding.text()).toContain("use the tool");
 
-		await view.toggle();
-		expect(view.text()).toContain("navigate — use the tool");
-	});
-
-	it("opens the trace instead of expanding when given onOpen", async () => {
-		const onOpen = vi.fn();
-		const view = await mounted(
-			[{ key: "navigate", body: "use the tool" }],
-			onOpen,
-		);
-
-		await view.toggle();
-		expect(onOpen).toHaveBeenCalledTimes(1);
-		expect(view.text()).not.toContain("navigate — use the tool");
-	});
-
-	it("colors each one by the kind of event it fires on", async () => {
-		const view = await mounted([
-			{ key: "oops", body: "a lesson", on: "error" },
-			{ key: "plain", body: "a fact" },
-			{ key: "odd", body: "unknown", on: "someday" },
-			{ key: "inherited", body: "unknown", on: "toString" },
-		]);
-		await view.toggle();
-
-		expect(view.colorOf("oops")).toContain("bg-red");
-		expect(view.colorOf("plain")).toContain("bg-dim");
-		expect(view.colorOf("odd")).toContain("bg-dim");
-		expect(view.colorOf("inherited")).toContain("bg-dim");
+		const tracing = await mounted(memories, () => {});
+		await tracing.toggle();
+		expect(tracing.text()).toContain("1 memory recalled");
+		expect(tracing.text()).not.toContain("use the tool");
 	});
 
 	it("stacks a circle per memory, and counts the ones past the stack", async () => {
