@@ -412,7 +412,7 @@ describe("a sign-in ask", () => {
 describe("an ask read off the journal", () => {
 	it("settles a choice that names no answered label under its own label", async () => {
 		const { done: _done, ...bare } = REQUEST.choices[2] ?? AUTHORIZE;
-		const ask = { ...REQUEST, choices: [bare] };
+		const ask = { ...REQUEST, choices: [bare] } as unknown as typeof REQUEST;
 		const card = await mount(
 			clientHolding(transcript(undefined, ask)),
 			transportResolving({ ok: true }),
