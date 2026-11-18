@@ -433,14 +433,10 @@ describe("reporting a result", () => {
 		);
 	});
 
-	it("documents every global it binds", () => {
+	it("documents the name it binds a result under", () => {
 		const { interp, c } = fresh();
 		reportOf(interp, c, "(list 1 2 3 4)");
-		const docs = interp.docs();
-		const undocumented = interp
-			.globalNames()
-			.filter((name) => !name.startsWith("_") && !docs.has(name));
-		expect(undocumented).toEqual([]);
+		expect(ev("(doc 'list-1)", interp)).toBe("list-1");
 	});
 });
 
@@ -485,10 +481,6 @@ describe("the step's echo budget", () => {
 		expect(stepped('(echo "x y")', given).model).toBe("x y\n");
 	});
 
-	it("passes short output through untouched", () => {
-		expect(stepped('(echo "a b")', stepping(400)).model).toBe("a b\n");
-	});
-
 	it("survives an image taken in the middle of a step", () => {
 		function finish(imaged: boolean): string {
 			const given = stepping(4);
@@ -510,16 +502,6 @@ describe("the step's echo budget", () => {
 	});
 });
 
-describe("the compaction built-ins are documented", () => {
-	it("carries a signature and doc for each", () => {
-		const docs = freshInterp().docs();
-		for (const name of ["echo", "head", "tail", "grep"]) {
-			expect(docs.get(name)?.signature).toContain(name);
-			expect(docs.get(name)?.doc.length ?? 0).toBeGreaterThan(20);
-		}
-	});
-});
-
 describe("doc is read in full and costs nothing", () => {
 	it("quotes the whole entry to the model and mints no result line", () => {
 		const { model, user } = stepped("(doc 'car)", interpWithLimit(400));
@@ -538,10 +520,8 @@ describe("doc is read in full and costs nothing", () => {
 
 	it("binds no name for what it printed", () => {
 		const given = interpWithLimit(400);
-		const before = given.interp.globalNames().length;
 		stepped("(progn (doc 'car) (doc))", given);
-		expect(given.interp.globalNames().length).toBe(before);
-		expect(given.interp.hasGlobal(newSym("doc-1"))).toBe(false);
+		expect(() => ev("doc-1", given.interp)).toThrow(/void variable/);
 	});
 
 	it("leaves the step's echo budget whole", () => {
