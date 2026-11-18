@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import type { SearchEngine } from "@repo/shared/search";
@@ -44,7 +43,7 @@ function loadForm(name: string, delayMs = 0): string {
 
 describe("self-evaluating keywords", () => {
 	const interp = new Interp();
-	runSync(interp, prelude);
+	boot(interp);
 
 	it("evaluates :keywords to themselves and prints with a colon", async () => {
 		expect(await evalStr(interp, "(list :query 1 :limit 2)")).toBe(
@@ -63,7 +62,7 @@ describe("self-evaluating keywords", () => {
 
 describe("MCP integration (stdio fixture)", () => {
 	const interp = mcpInterp();
-	runSync(interp, prelude);
+	boot(interp);
 
 	beforeAll(async () => {
 		await start(interp, loadForm("fx"));
@@ -193,7 +192,7 @@ describe("MCP search engine", () => {
 			}),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
@@ -212,7 +211,7 @@ describe("MCP search engine", () => {
 
 describe("mcp-shutdown undefines tool bindings", () => {
 	const interp = mcpInterp();
-	runSync(interp, prelude);
+	boot(interp);
 
 	it("removes <server>/<tool> globals so they error as void, not stale", async () => {
 		expect(await load(interp, loadForm("sfx"))).toContain("sfx/echo");
@@ -246,7 +245,7 @@ describe("loading a toolkit server by name", () => {
 			}),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
@@ -291,7 +290,7 @@ describe("a url server the interpreter starts for you", () => {
 			}),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
@@ -330,7 +329,7 @@ describe("a toolkit server bundled with the repo", () => {
 			}),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
@@ -346,7 +345,7 @@ describe("a toolkit server bundled with the repo", () => {
 
 describe("the MCP extension adds no promise vocabulary of its own", () => {
 	const interp = mcpInterp();
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
@@ -363,7 +362,7 @@ describe("the MCP extension adds no promise vocabulary of its own", () => {
 
 describe("a load runs in the background", () => {
 	const interp = mcpInterp();
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
@@ -408,7 +407,7 @@ describe("a load runs in the background", () => {
 describe("core interpreter (no mcp extension)", () => {
 	function coreInterp(): Interp {
 		const interp = new Interp();
-		runSync(interp, prelude);
+		boot(interp);
 		return interp;
 	}
 

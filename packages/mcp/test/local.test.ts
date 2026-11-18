@@ -1,5 +1,4 @@
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
@@ -19,7 +18,7 @@ function interpOn(host: McpHost): Interp {
 			}),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 
@@ -96,7 +95,7 @@ describe("load-mcp :local", () => {
 					}),
 				],
 			});
-			runSync(interp, prelude);
+			boot(interp);
 			return interp;
 		}
 
@@ -169,7 +168,7 @@ describe("load-mcp :local", () => {
 					}),
 				],
 			});
-			runSync(interp, prelude);
+			boot(interp);
 			await settle(interp, '(load-mcp "pw" :local t)');
 			expect(host.ensured[0]).toEqual({
 				name: "pw",
@@ -231,7 +230,7 @@ describe("load-mcp flags a toolkit entry declares", () => {
 				}),
 			],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		return interp;
 	}
 

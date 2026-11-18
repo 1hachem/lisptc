@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 
@@ -11,7 +10,7 @@ const FIXTURE = fileURLToPath(
 const interp = new Interp({
 	extensions: [mcpExtension({ ...mcpHost, commands: true })],
 });
-runSync(interp, prelude);
+boot(interp);
 await (runSync(
 	interp,
 	`(load-mcp :name "fx" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${FIXTURE}")))`,

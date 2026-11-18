@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -42,7 +41,7 @@ function connectedWith(
 	const interp = new Interp({
 		extensions: [mcpExtension({ ...mcpHost, client, toolkit })],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	runSync(interp, `(load-mcp "${name}"${flags})`);
 	const conf = seen[0];
 	if (!conf) throw new Error(`no config recorded for "${name}"`);

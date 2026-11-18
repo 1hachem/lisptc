@@ -1,8 +1,14 @@
+import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
-import { Reader } from "@repo/interpreter/reader";
 import { describe, expect, it } from "vitest";
-import { parseRules } from "../src/rules.ts";
+import { type PermissionRules, readRules } from "../src/rules.ts";
 import { session } from "./helpers.ts";
+
+const interp = new Interp();
+
+function parseRules(source: string): PermissionRules {
+	return readRules(interp, source);
+}
 
 const CONFIG = `
 Anything outside a form is prose, so a config can explain itself.
@@ -24,9 +30,7 @@ Anything outside a form is prose, so a config can explain itself.
 `;
 
 function form(source: string): Cell {
-	const reader = new Reader();
-	reader.push(source);
-	const read = reader.read();
+	const read = interp.read(source);
 	if (!(read instanceof Cell)) throw new Error(`not a form: ${source}`);
 	return read;
 }
@@ -135,8 +139,10 @@ describe("a permissions config", () => {
 		["(permission/server gh)", "names no rules"],
 		["(permission/server gh (hide-server x))", "unknown server rule"],
 		["(permission/allow car", "ends inside a form"],
-	])("refuses the config %s", (source, message) => {
-		expect(() => session(source)).toThrow(message);
+	])("refuses the config %s", async (source, message) => {
+		await expect(
+			runAsync(session(source).interp, "(permission/check 'car)"),
+		).rejects.toThrow(message);
 	});
 });
 

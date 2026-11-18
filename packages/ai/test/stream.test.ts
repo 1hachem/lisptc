@@ -16,6 +16,7 @@ import {
 	streamChat,
 	telling,
 	testRepl,
+	unprompted,
 } from "./helpers.ts";
 
 const emitting = (text: string) =>
@@ -72,10 +73,13 @@ function records(text: string): { event: string; data: unknown }[] {
 	return text
 		.split("\n\n")
 		.filter((record) => record.startsWith("event: "))
-		.map((record) => ({
-			event: record.slice(7, record.indexOf("\n")),
-			data: JSON.parse(record.slice(record.indexOf("data: ") + 6)),
-		}));
+		.map((record) => {
+			const event = record.slice(7, record.indexOf("\n"));
+			const data = JSON.parse(record.slice(record.indexOf("data: ") + 6));
+			return event === "values"
+				? { event, data: { ...data, messages: unprompted(data.messages) } }
+				: { event, data };
+		});
 }
 
 async function finalMessages(response: Response): Promise<WireMessage[]> {
@@ -89,7 +93,7 @@ async function finalMessages(response: Response): Promise<WireMessage[]> {
 					messages: WireMessage[];
 				},
 		);
-	return values[values.length - 1].messages;
+	return unprompted(values[values.length - 1].messages);
 }
 
 describe("chat stream", () => {
@@ -101,6 +105,13 @@ describe("chat stream", () => {
 	}
 
 	async function recorded(
+		input: ChatInput,
+		options: Partial<ChatStreamOptions> = {},
+	): Promise<WireMessage[]> {
+		return unprompted(await everything(input, options));
+	}
+
+	async function everything(
 		input: ChatInput,
 		options: Partial<ChatStreamOptions> = {},
 	): Promise<WireMessage[]> {
@@ -121,6 +132,61 @@ describe("chat stream", () => {
 		turn = 0;
 		down = false;
 		sent.length = 0;
+	});
+
+	const prompts = (messages: WireMessage[]) =>
+		messages
+			.filter((m) => m.additional_kwargs?.kind === "system-prompt")
+			.map((m) => m.additional_kwargs?.value);
+
+	test("records the system prompt a conversation ran under, once while it stays the same", async () => {
+		const first = await everything(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+		turn = 0;
+		const second = await everything(
+			{ messages: [...first, { type: "human", content: "and 2 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+
+		expect(prompts(second)).toEqual([
+			{ text: "be terse", tokens: expect.any(Number) },
+		]);
+	});
+
+	test("records the system prompt again when it changes", async () => {
+		const first = await everything(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+		turn = 0;
+		const second = await everything(
+			{ messages: [...first, { type: "human", content: "and 2 + 2?" }] },
+			{ config: { system: "be verbose" } },
+		);
+
+		expect(prompts(second)).toEqual([
+			{ text: "be terse", tokens: expect.any(Number) },
+			{ text: "be verbose", tokens: expect.any(Number) },
+		]);
+	});
+
+	test("never hands a recorded system prompt back to the model as a message", async () => {
+		const first = await everything(
+			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+		turn = 0;
+		sent.length = 0;
+		await everything(
+			{ messages: [...first, { type: "human", content: "and 2 + 2?" }] },
+			{ config: { system: "be terse" } },
+		);
+
+		for (const messages of sent)
+			for (const message of messages)
+				expect(message.content).not.toContain("be terse");
 	});
 
 	test("a step's value it never echoed reaches no snapshot the person is sent", async () => {
@@ -172,7 +238,7 @@ describe("chat stream", () => {
 			}),
 		);
 		expect(messages[2].additional_kwargs?.value).toBe("Pick");
-		expect(sent[0].some((m) => m.content.includes("tool_result"))).toBe(false);
+		expect(sent[0].some((m) => m.content.includes("lisptc>"))).toBe(false);
 		expect(sent[0].some((m) => m.content.includes("Pick"))).toBe(false);
 	});
 
@@ -242,7 +308,7 @@ describe("chat stream", () => {
 				{
 					inbox: async () => waiting.splice(0),
 					onTurn: (produced) => {
-						recorded.push(...produced);
+						recorded.push(...unprompted(produced));
 					},
 				},
 			),
@@ -313,7 +379,7 @@ describe("chat stream", () => {
 			},
 			{
 				onTurn: (messages) => {
-					recorded.push(messages);
+					recorded.push(unprompted(messages));
 				},
 			},
 		);
@@ -561,10 +627,10 @@ describe("chat stream", () => {
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
 			{
 				onStep: (produced) => {
-					steps.push(produced);
+					steps.push(unprompted(produced));
 				},
 				onTurn: (unrecorded) => {
-					rest = unrecorded;
+					rest = unprompted(unrecorded);
 				},
 			},
 		).text();
@@ -584,9 +650,10 @@ describe("chat stream", () => {
 			{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
 			{
 				onStep: async (produced) => {
-					order.push(`start ${produced.length}`);
+					const made = unprompted(produced).length;
+					order.push(`start ${made}`);
 					await new Promise((resolve) => setTimeout(resolve, 5));
-					order.push(`end ${produced.length}`);
+					order.push(`end ${made}`);
 				},
 				onTurn: () => {
 					order.push("turn");
@@ -612,7 +679,7 @@ describe("chat stream", () => {
 					),
 				]),
 				onStep: (produced) => {
-					steps.push(produced);
+					steps.push(unprompted(produced));
 				},
 				onTurn: (_rest, failed) => {
 					failure = failed;
@@ -647,7 +714,7 @@ describe("chat stream", () => {
 		expect(sent[0].find((m) => m.role === "developer")).toEqual(live);
 	});
 
-	test("a user message's eval result reaches the model as a system event after it and the wire as its own row", async () => {
+	test("a user message's eval result reaches the model as a lisp-repl note saying the user ran it, and the wire as its own row", async () => {
 		const result = {
 			type: "tool",
 			content:
@@ -660,10 +727,12 @@ describe("chat stream", () => {
 
 		expect(
 			sent[0].filter((m) => m.role === "user").map((m) => m.content),
-		).toEqual([
-			"what is (+ 1 2)",
-			'<system-event source="lisp-repl">the user ran the code in their message above:\n\n3</system-event>',
-		]);
+		).toEqual(["what is (+ 1 2)"]);
+		expect(sent[0].at(-1)).toEqual({
+			role: "developer",
+			content:
+				"from lisp-repl:\nthe user ran the code in their message above:\n\n3",
+		});
 		const first = records(body).find((r) => r.event === "values")?.data as {
 			messages: WireMessage[];
 		};

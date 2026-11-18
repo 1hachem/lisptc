@@ -1,8 +1,7 @@
 import { effect } from "@repo/interpreter/effects";
 import { StepHold } from "@repo/interpreter/errors";
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
@@ -11,7 +10,7 @@ import { agentsHostFor } from "../src/agents-host.ts";
 
 function run(code: string) {
 	const interp = new Interp({ extensions: [agentsExtension(agentsHostFor())] });
-	runSync(interp, prelude);
+	boot(interp);
 	interp.def("hold", 0, "(hold)", "", z.tuple([]), () => {
 		throw new StepHold("waiting on the user");
 	});

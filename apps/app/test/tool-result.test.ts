@@ -1,5 +1,5 @@
+import type { ChatMessage } from "@repo/components";
 import { describe, expect, test, vi } from "vitest";
-import type { ChatMessage } from "../src/lib/chat.tsx";
 
 vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: vi.fn() }));
 

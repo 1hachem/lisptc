@@ -1,7 +1,6 @@
 import { EvalException } from "@repo/interpreter/errors";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import type { LlmCall } from "@repo/interpreter/observe";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import {
@@ -81,7 +80,7 @@ function llmInterp(reply: Reply = () => "ok") {
 			),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, traced };
 }
 
@@ -145,7 +144,7 @@ describe("write", () => {
 				}),
 			],
 		});
-		runSync(stuck, prelude);
+		boot(stuck);
 		expect(await failure(stuck, '(write "hi" :timeout 10)')).toContain(
 			"write timed out",
 		);
@@ -577,7 +576,7 @@ describe("the observer", () => {
 				),
 			],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		await expect(runAsync(interp, '(write "hi")')).rejects.toThrow(
 			/upstream is down/,
 		);
@@ -602,7 +601,7 @@ describe("the observer", () => {
 				),
 			],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		expect(str((await runAsync(interp, '(write "hi")')).value)).toBe('"fine"');
 	});
 });

@@ -1,8 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import type { SecretSpec } from "../src/ports.ts";
@@ -20,7 +19,7 @@ function interpWithSecrets(record: Record<string, SecretSpec>): Interp {
 	const interp = new Interp({
 		extensions: [secretsExtension({ ...secretsHost, store })],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 
@@ -131,7 +130,7 @@ describe("secret registry (env seeding)", () => {
 		const interp = new Interp({
 			extensions: [secretsExtension({ ...secretsHost, store })],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		expect(str((await runAsync(interp, "(secrets)")).value)).toBe(
 			'(("REPL_FOO" . ""))',
 		);
@@ -158,7 +157,7 @@ describe("secret registry (.env file loading)", () => {
 		const interp = new Interp({
 			extensions: [secretsExtension({ ...secretsHost, store })],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		const keys = ev("(secrets)", interp);
 		expect(keys).toContain("REPL_LINEAR_API_KEY");
 		expect(keys).not.toContain("NOT_A_SECRET");
@@ -168,7 +167,7 @@ describe("secret registry (.env file loading)", () => {
 describe("core interpreter (no secrets extension)", () => {
 	function coreInterp(): Interp {
 		const interp = new Interp({});
-		runSync(interp, prelude);
+		boot(interp);
 		return interp;
 	}
 

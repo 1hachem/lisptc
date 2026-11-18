@@ -18,7 +18,11 @@ describe("a REPL built from a list of extensions", () => {
 		const r = memoryRepl();
 
 		expect(await r.eval("(+ 1 2)")).toBe("+-1: 3\n");
-		expect(await r.eval('(memory/remember "k" "a note")')).toContain("k");
+		expect(
+			await r.eval(
+				'(memory/remember "k" "a note" :when "the test asks for it")',
+			),
+		).toContain("k");
 		expect(await r.eval("(secrets)")).not.toContain("undefined");
 	});
 });
@@ -63,7 +67,9 @@ describe("a REPL built from a list of its own", () => {
 			memoryExtension(memoryHost, { bank }),
 		]);
 
-		await r.eval('(memory/remember "k" "a note worth keeping")');
+		await r.eval(
+			'(memory/remember "k" "a note worth keeping" :when "the test asks for it")',
+		);
 		const other = memoryRepl([
 			compactionExtension(compactionHost),
 			memoryExtension(memoryHost, { bank }),

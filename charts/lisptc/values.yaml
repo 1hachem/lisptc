@@ -71,6 +71,7 @@ synced:
   - { name: ai, path: /ai, secretName: lisptc-ai }
   - { name: analytics, path: /analytics, secretName: lisptc-analytics }
   - { name: web, path: /web, secretName: lisptc-web }
+  - { name: seed, path: /seed, secretName: lisptc-seed, modes: [preview, dev] }
   - { name: tailnet, path: /tailnet, secretName: lisptc-tailnet, modes: [preview] }
   - name: ghcr
     path: /ghcr

@@ -21,16 +21,24 @@ export interface ListForm {
 export type Node = Atom | ListForm;
 
 export function tokenizeWithPositions(text: string): Atom[] {
-	const tokenPat = tokenPattern();
 	const tokens: Atom[] = [];
-	const lines = text.split("\n");
-	for (let line = 0; line < lines.length; line++) {
-		const s = lines[line];
-		for (;;) {
-			const m = tokenPat.exec(s);
-			if (m === null) break;
-			if (m[1] !== undefined)
-				tokens.push({ kind: "atom", text: m[1], line, char: m.index });
+	let line = 0;
+	let lineStart = 0;
+	for (const m of text.matchAll(tokenPattern())) {
+		if (m[1] !== undefined)
+			tokens.push({
+				kind: "atom",
+				text: m[1],
+				line,
+				char: m.index - lineStart,
+			});
+		for (
+			let at = m[0].indexOf("\n");
+			at !== -1;
+			at = m[0].indexOf("\n", at + 1)
+		) {
+			line++;
+			lineStart = m.index + at + 1;
 		}
 	}
 	return tokens;
@@ -79,6 +87,17 @@ export interface Call {
 	head: Atom;
 	keywords: Set<string>;
 	argCount: number;
+	positional: Node[];
+}
+
+function positionalOf(items: Node[]): Node[] {
+	const positional: Node[] = [];
+	for (let at = 0; at < items.length; at++) {
+		const item = items[at];
+		if (item.kind === "atom" && isKeywordToken(item.text)) at++;
+		else positional.push(item);
+	}
+	return positional;
 }
 
 export function collectCalls(nodes: Node[], out: Call[] = []): Call[] {
@@ -94,7 +113,13 @@ export function collectCalls(nodes: Node[], out: Call[] = []): Call[] {
 					)
 					.map((item) => item.text.slice(1)),
 			);
-			out.push({ name: head.text, head, keywords, argCount: rest.length });
+			out.push({
+				name: head.text,
+				head,
+				keywords,
+				argCount: rest.length,
+				positional: positionalOf(rest),
+			});
 		}
 		collectCalls(n.items, out);
 	}

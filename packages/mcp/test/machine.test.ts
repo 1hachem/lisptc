@@ -1,8 +1,7 @@
 import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
@@ -22,10 +21,7 @@ const LOCAL: StdioConnConfig = {
 };
 
 function session(online: { value: boolean }) {
-	const machine = cachedMachine(
-		async () => online.value,
-		() => ["local-git"],
-	);
+	const machine = cachedMachine(async () => online.value);
 	const extension = mcpExtension({
 		...mcpHost,
 		toolkit: desktopToolkit(
@@ -36,7 +32,7 @@ function session(online: { value: boolean }) {
 		machine,
 	});
 	const interp = new ConversationInterpreter({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	const hooks = openSession([extension]);
 	const step = async (): Promise<string> => {
 		const buffer = bufferSink();
@@ -74,9 +70,8 @@ describe("the user's machine", () => {
 	});
 
 	it("counts a presence it cannot read as disconnected", async () => {
-		const machine = cachedMachine(
-			() => Promise.reject(new Error("convex down")),
-			() => [],
+		const machine = cachedMachine(() =>
+			Promise.reject(new Error("convex down")),
 		);
 		expect(await machine.refresh()).toBe(false);
 		expect(machine.connected()).toBe(false);
@@ -84,7 +79,7 @@ describe("the user's machine", () => {
 
 	it("answers nil to desktop-connected-p without a machine", () => {
 		const interp = new Interp({ extensions: [mcpExtension(mcpHost)] });
-		runSync(interp, prelude);
+		boot(interp);
 		expect(str(runSync(interp, "(desktop-connected-p)"))).toBe("nil");
 	});
 
@@ -99,17 +94,11 @@ describe("the user's machine", () => {
 		expect(listed()).not.toMatch(/"remote"[^)]*:local\)/);
 	});
 
-	it("tells the session when the desktop connects and disconnects", async () => {
+	it("tells the session nothing when the desktop connects or disconnects", async () => {
 		const online = { value: true };
 		const { step } = session(online);
-		expect(await step()).toMatch(/\bconnected\b.*local-git/);
 		expect(await step()).toBe("");
 		online.value = false;
-		expect(await step()).toMatch(/disconnected.*local-git/);
 		expect(await step()).toBe("");
-	});
-
-	it("says nothing at the start when no desktop is connected", async () => {
-		expect(await session({ value: false }).step()).toBe("");
 	});
 });

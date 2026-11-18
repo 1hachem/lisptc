@@ -1,13 +1,12 @@
 import { isNumeric, type Numeric } from "@repo/interpreter/arith";
 import { EvalException } from "@repo/interpreter/errors";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import {
 	Cell,
 	LispKeyword,
 	newLispKeyword,
 	Sym,
 } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { zAny, zList } from "@repo/interpreter/schema";
 import { z } from "zod";
 import type { Trace, TraceEvent } from "./trace.ts";
@@ -180,7 +179,7 @@ export class Checks {
 		private readonly source: string,
 	) {
 		this.interp = new Interp();
-		runSync(this.interp, prelude);
+		boot(this.interp);
 		this.install();
 		runSync(this.interp, MACROS);
 	}

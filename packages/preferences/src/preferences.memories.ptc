@@ -1,0 +1,74 @@
+(area "preferences" :when "the app must look or behave differently for this user: sidebar, status bar, chat display, what shows under a message (tokens, time, model), input helpers, motion, font or desktop app")
+
+(memory "internal/preferences/layout" :when "sidebar entries must be reordered, moved between sidebars or hidden, or status bar items moved, hidden or left as gaps"
+  (format nil "- Two sidebars, left and right. :sidebar is left one's entries, top first;
+  :sidebar-right is right one's. Each entry sits in one. Names come from
+(preferences) .
+(preferences/set :sidebar '(\"README.md\" \"chat\")) moves those two to top of
+  left, pulling them from right if there; rest keep their order.
+(preferences/set :sidebar-right '(\"tests\")) moves tests to top of right.
+  Same entry in both lists errors. User also drags entries within a sidebar,
+  across to other one, or in preferences page.
+- :hidden is every sidebar entry hidden. Replaces whole list:
+(preferences/set :hidden '(\"tests\" \"ui\")) hides those two, shows rest.
+'() shows all. User also toggles them in preferences page.
+- :status-bar is bottom bar's ~d slots, left to right. Items:
+  ~{~s~^ ~}. Each empty slot is gap with own name: ~{~s~^ ~}.
+(preferences/set :status-bar '(~s ~s ~s)) puts named slots first,
+  in that order, keeps rest in order. User also drags them on bar or in
+  preferences.
+- :status-bar-hidden is every bottom bar item hidden. Replaces whole list:
+(preferences/set :status-bar-hidden '(~s)) hides
+  that one. '() shows all."
+    *preferences-status-bar-slots* *preferences-status-bar-items* *preferences-status-bar-gaps*
+    (car (cdr *preferences-status-bar-items*)) (car *preferences-status-bar-gaps*) (car *preferences-status-bar-items*)
+    (car *preferences-status-bar-items*)))
+
+(memory "internal/preferences/metadata" :when "the user wants to show or hide what appears under a message: input, output or cached tokens, time, duration, steps, model or provider"
+  (format nil "- :metadata is what shows under each message. Ids: ~{~a ~a~^, ~}.
+- Token counts are :metadata ids. :input key of preferences/set is chat input
+  helpers, not tokens.
+- (preferences/set :metadata '(~a t)) shows that one, leaves
+  rest as they were. nil hides. Name several in one plist.
+- (preferences) shows what is on now. Unknown id errors, naming valid ones."
+    *preferences-metadata* (car *preferences-metadata*)))
+
+(memory "internal/preferences/chat" :when "the chat must change: which helpers the input runs, or where a trace opens"
+  (format nil "- :input is helpers chat input runs while user types. Ids: ~{~a ~a~^, ~}.
+(preferences/set :input '(~a nil)) turns that one off.
+- :trace-beside-chat t opens chat's trace in tab right of chat whenever chat
+  opens; nil opens trace only when asked. For developers:
+(preferences/set :trace-beside-chat t) .
+- :trace-link t shows \"show in trace\" on message metadata; opens trace at
+  that message. nil hides it: (preferences/set :trace-link nil) .
+- (preferences) shows what is on now."
+    *preferences-input* (car *preferences-input*)))
+
+(memory "internal/preferences/motion" :when "animations must change: how the sidebar moves on a drag, or whether panels animate when they open or split"
+  "- :motion is how sidebar animates that drag. (motions) gives alist of
+(id . description) to choose from. System asks for reduced motion: nothing
+  animates, whatever :motion says.
+- :panel-motion t animates panels as they open, split, switch tab; nil keeps
+  them still: (preferences/set :panel-motion nil) . Reduced motion wins here too.")
+
+(memory "internal/preferences/desktop" :when "the desktop app must close to the tray or start at login, or stop doing so"
+  (format nil "- (desktop-preferences) gives desktop app's own as plist of ~{~a~^ ~} .
+  Live on user's machine, not in app. Work only while desktop app connected;
+  else error says no desktop app connected.
+- :close-to-tray t keeps desktop app running in tray when window closes; nil
+  quits: (desktop-preferences/set :close-to-tray nil) .
+- :open-at-login t starts desktop app hidden in tray at login:
+(desktop-preferences/set :open-at-login t) ."
+    *preferences-desktop-keys*))
+
+(memory "internal/preferences/set" :when "a preference change just failed, or the agent must read or change the font or a chat input helper"
+  (format nil "- (preferences) gives plist of ~{~a~^ ~} .
+- Each workspace keeps own set, like theme; change here leaves other workspaces
+  alone. Theme: see (settings) .
+- (fonts) gives alist of (id . name) to choose from.
+- (preferences/set :font ~s) changes only keys you give.
+- :metadata and :input take toggle plist; toggles merge, ids not named keep
+  their value. Font id must be one (fonts) lists. Metadata and input ids must
+  be ones (preferences) already lists. Unknown one errors, naming valid ids.
+- Quote toggle plist, or keywords read as call: '(~a t) ."
+    *preferences-keys* (car (car (fonts))) (car *preferences-metadata*)))

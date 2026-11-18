@@ -4,6 +4,7 @@ import { type Journal, print } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { systemPromptKind } from "@repo/journal-catalog/system";
 import { MemoryImageStore } from "@repo/repl/image-store";
 import { AgentRepl } from "@repo/repl/repl";
 import { entryKind, every, latestOnly } from "@repo/shared/journal";
@@ -199,5 +200,13 @@ export function printing(text: string): InterpExtension {
 			print(ctx.interp.journal, { user: text, model: text });
 			return next(ctx);
 		}),
+	);
+}
+
+export function unprompted<
+	T extends { additional_kwargs?: Record<string, unknown> },
+>(messages: readonly T[]): T[] {
+	return messages.filter(
+		(m) => m.additional_kwargs?.kind !== systemPromptKind.name,
 	);
 }

@@ -1,5 +1,4 @@
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import type { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
@@ -41,7 +40,7 @@ async function loaded(client: McpClient): Promise<Interp> {
 	const interp = new Interp({
 		extensions: [mcpExtension({ ...mcpHost, commands: true, client })],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	await (runSync(
 		interp,
 		'(load-mcp :name "x" :command "node")',

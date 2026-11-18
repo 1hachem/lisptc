@@ -50,7 +50,8 @@ describe("open forms count what is still waiting to be closed", () => {
 		expect(openAtEnd('say "(hi')).toEqual({ parens: [5], inString: false });
 	});
 
-	it("ends a string at the line it opened on, as the reader does", () => {
-		expect(openAtEnd('(echo "a\n')).toEqual({ parens: [0], inString: false });
+	it("keeps a string open across lines until its closing quote, as the reader does", () => {
+		expect(openAtEnd('(echo "a\n')).toEqual({ parens: [0], inString: true });
+		expect(openAtEnd('(echo "a\nb")')).toEqual({ parens: [], inString: false });
 	});
 });

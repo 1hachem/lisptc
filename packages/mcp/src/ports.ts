@@ -102,8 +102,8 @@ export class AuthorizationRequired extends Error {
 	) {
 		super(
 			captured
-				? `authorization required for "${server}": open ${url} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "<code>"))`
-				: `authorization required for "${server}": open ${url} — once the user says they approved it, run (load-mcp "${server}") again (or, if they hand back a code instead, run (mcp-authorize "${server}" "<code>") first)`,
+				? `authorization required for "${server}": open ${url} — after approving it will be captured automatically, then run (load-mcp "${server}") again (or run (mcp-authorize "${server}" "CODE"))`
+				: `authorization required for "${server}": open ${url} — once the user says they approved it, run (load-mcp "${server}") again (or, if they hand back a code instead, run (mcp-authorize "${server}" "CODE") first)`,
 		);
 	}
 }
@@ -141,7 +141,6 @@ export interface McpHost {
 export interface UserMachine {
 	refresh(): Promise<boolean>;
 	connected(): boolean;
-	servers(): readonly string[];
 }
 
 export interface ToolkitRegistry {

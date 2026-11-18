@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { definitionOf } from "../lib/agent-definition.ts";
 import type { PermissionRule } from "../lib/files.ts";
 import { PageView } from "./file-view.tsx";
-import { Chips, Field, RuleCard } from "./read-only.tsx";
+import { Field, RuleCard } from "./read-only.tsx";
 
 function PermissionsField({ rules }: { rules: PermissionRule[] }) {
 	if (rules.length === 0)
@@ -29,7 +29,7 @@ function AgentDefinition({ text }: { text: string }) {
 	const definition = definitionOf(text);
 	if (definition === undefined)
 		return <div className="text-dim">this definition could not be read</div>;
-	const { name, prompt, budget, roster, rules } = definition;
+	const { name, prompt, budget, rules } = definition;
 	return (
 		<div className="flex flex-col gap-4">
 			<h1 className="break-words font-medium text-[15px] text-fg">{name}</h1>
@@ -45,11 +45,6 @@ function AgentDefinition({ text }: { text: string }) {
 					`${budget} steps`
 				)}
 			</Field>
-			{roster !== undefined && (
-				<Field label="may start">
-					<Chips items={roster} />
-				</Field>
-			)}
 			<PermissionsField rules={rules} />
 		</div>
 	);

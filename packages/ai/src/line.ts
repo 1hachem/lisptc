@@ -7,7 +7,6 @@ import {
 	type MessageKwargs,
 } from "@repo/shared/messages";
 import type { Mail } from "./mailbox.ts";
-import { neutraliseSystemEvents, renderSystemEvent } from "./system-event.ts";
 
 export interface ChatMessageInput {
 	id?: string;
@@ -43,6 +42,8 @@ export type PostedLine = PromptLine | RecordLine;
 
 const UNSOURCED = "system";
 
+const REPL_PROMPT = "lisptc>";
+
 export function isPrompt(line: Line): line is PromptLine {
 	return line.kind === "user";
 }
@@ -77,8 +78,9 @@ export function lineChat(line: Line): ChatMessage {
 		case "assistant":
 			return { role: "assistant", content: line.text };
 		case "user":
+			return { role: "user", content: line.text };
 		case "result":
-			return { role: "user", content: neutraliseSystemEvents(line.text) };
+			return { role: "user", content: transcript(line.text) };
 		case "record":
 			return recordChat(line.record);
 	}
@@ -87,13 +89,11 @@ export function lineChat(line: Line): ChatMessage {
 function recordChat({
 	role,
 	content,
-	source,
+	source = UNSOURCED,
 }: ConversationRecord): ChatMessage {
-	if (role !== "user")
-		return { role: "developer", content: neutraliseSystemEvents(content) };
 	return {
-		role: "user",
-		content: renderSystemEvent({ source: source ?? UNSOURCED, text: content }),
+		role: "developer",
+		content: role === "user" ? `from ${source}:\n${content}` : content,
 	};
 }
 
@@ -190,4 +190,10 @@ export function ranByUser(result: string): Line {
 			].join("\n\n"),
 		},
 	};
+}
+
+function transcript(content: string): string {
+	const { output, error } = replOutcome(content);
+	const shown = output.trimEnd();
+	return `${error ? `!! ${shown}` : shown}\n${REPL_PROMPT}`;
 }

@@ -17,7 +17,7 @@ refuse every option, and :min sets how sure it must be.
 (%choose "the app crashes when I open settings" '(:billing :technical :other))
 (%choose "what a lovely sunset" '(:billing :technical) :none :unsure :min 0.6)
 
-Rating: %score is 0 (very low) to 4 (very high), or your own levels.
+Rating: %score is 0 (very low) to 4 (very high) , or your own levels.
 (%score "the server is down and customers cannot pay" "urgency")
 (%score "can you change my avatar color" "urgency" '("can wait" "today" "right now"))
 
@@ -71,10 +71,10 @@ The first of two near-duplicates is kept.
 With :examples, %choose picks the option whose example is nearest,
 with no probability call.
 (%choose "my card was declined" '(:billing :technical)
-    :examples '((:billing "I was charged twice") (:technical "the app crashes")))
+  :examples '((:billing "I was charged twice") (:technical "the app crashes")))
 
 Fallback: a % call can time out or fail, so guard the costly guesses.
 (try
-    (%p "ship it?" "is safe to deploy" :timeout 1)
-    (catch (e)
-      0))
+  (%p "ship it?" "is safe to deploy" :timeout 1)
+  (catch (e)
+    0))

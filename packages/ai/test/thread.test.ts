@@ -11,7 +11,7 @@ import {
 	type TurnEnding,
 	type TurnSetup,
 } from "../src/thread.ts";
-import { extension, testRepl } from "./helpers.ts";
+import { extension, testRepl, unprompted } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as string[],
@@ -226,11 +226,10 @@ describe("a thread", () => {
 		});
 		await posted.ended;
 
-		expect(world.stored[0]).toMatchObject({ type: "system", id: "e1" });
-		expect(world.stored[1]).toMatchObject({ type: "ai" });
-		expect(model.calls[0].at(-1)?.content).toContain(
-			'<system-event source="agent:r">(+ 40 2)</system-event>',
-		);
+		const stored = unprompted(world.stored);
+		expect(stored[0]).toMatchObject({ type: "system", id: "e1" });
+		expect(stored[1]).toMatchObject({ type: "ai" });
+		expect(model.calls[0].at(-1)?.content).toContain("from agent:r:\n(+ 40 2)");
 	});
 
 	test("runs the forms of a user's message before the turn", async () => {

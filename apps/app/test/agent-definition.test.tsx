@@ -36,15 +36,14 @@ function page(text: string): string {
 }
 
 describe("reading a saved sub-agent", () => {
-	it("gives its name, instructions, budget, roster and permission rules", () => {
+	it("gives its name, instructions, budget and permission rules", () => {
 		const definition = definitionOf(
-			'(defagent "reader"\n  :prompt "read the docs"\n  :permissions "(permission/deny eval) (permission/ask fs/write)"\n  :roster \'("scout")\n  :budget 40)',
+			'(defagent "reader"\n  :prompt "read the docs"\n  :permissions "(permission/deny eval) (permission/ask fs/write)"\n  :budget 40)',
 		);
 		expect(definition).toMatchObject({
 			name: "reader",
 			prompt: "read the docs",
 			budget: "40",
-			roster: ["scout"],
 		});
 		expect(definition?.rules.map((rule) => rule.source)).toEqual([
 			"(permission/deny eval)",
@@ -52,24 +51,28 @@ describe("reading a saved sub-agent", () => {
 		]);
 	});
 
-	it("shows a saved agent's name, options and unquoted roster", () => {
+	it("shows a saved agent's name and options", () => {
 		const text = page(
-			'(defagent "reader"\n  :prompt "read it"\n  :permissions "(permission/deny \\"fs/*\\")"\n  :roster \'("helper" "scout")\n  :budget 40)',
+			'(defagent "reader"\n  :prompt "read it"\n  :permissions "(permission/deny \\"fs/*\\")"\n  :budget 40)',
 		);
 		expect(text).toContain("reader");
 		expect(text).toContain("read it");
 		expect(text).toContain("40 steps");
-		expect(text).toContain("helper");
-		expect(text).toContain("scout");
-		expect(text).not.toContain('"helper"');
 		expect(text).toContain("fs/*");
 	});
 
-	it("shows no step cap, no roster and the workspace rules for a bare definition", () => {
+	it("shows a definition saved with a :roster, leaving the roster out", () => {
+		const text = page(
+			'(defagent "lead"\n  :prompt "lead"\n  :roster \'("scout")\n  :budget 9)',
+		);
+		expect(text).toContain("9 steps");
+		expect(text).not.toContain("scout");
+	});
+
+	it("shows no step cap and the workspace rules for a bare definition", () => {
 		const text = page('(defagent "bare" :prompt "go")');
 		expect(text).toContain("bare");
 		expect(text).toContain("no cap");
-		expect(text).not.toContain("may start");
 		expect(text).toContain("same as the workspace");
 	});
 

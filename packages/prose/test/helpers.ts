@@ -1,8 +1,7 @@
 import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { effect, ends } from "@repo/interpreter/effects";
 import { bufferSink, hitch } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
 import type { FormSpan } from "@repo/shared/lisp-forms";
@@ -16,7 +15,7 @@ function installed(host: ProseHost = proseHost): Interp {
 
 const template = installed();
 const beforePrelude = new Map(template.globalEntries());
-runSync(template, prelude);
+boot(template);
 const templateDocs = template.docs();
 
 const builtinSymByValue = new Map(
@@ -45,7 +44,7 @@ export function proseInterp(host?: ProseHost): Interp {
 
 export function freshInterp(): Interp {
 	const interp = new Interp();
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 
@@ -109,7 +108,7 @@ export function unrunSpans(text: string): FormSpan[] {
 export async function endsTurn(reply: string): Promise<boolean> {
 	const extension = proseExtension(proseHost);
 	const interp = new ConversationInterpreter({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	const hooks = openSession([extension]);
 	const buffer = bufferSink();
 	const detach = interp.journal.pipe(buffer);

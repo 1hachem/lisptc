@@ -1,7 +1,6 @@
 import type { Eval } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
@@ -11,7 +10,7 @@ import { promisesHost } from "../src/promises-host.ts";
 
 function interpWithSlow(): Interp {
 	const interp = new Interp({ extensions: [promisesExtension(promisesHost)] });
-	runSync(interp, prelude);
+	boot(interp);
 	interp.def(
 		"slow",
 		1,
@@ -230,7 +229,7 @@ describe("a promise is the host's own promise", () => {
 describe("a promise built-in stands on its own", () => {
 	function bare(): Interp {
 		const interp = new Interp();
-		runSync(interp, prelude);
+		boot(interp);
 		interp.def(
 			"start-doomed",
 			0,

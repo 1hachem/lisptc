@@ -1,8 +1,7 @@
 import { mkdtempSync, readdirSync, statSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it, vi } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
@@ -29,7 +28,7 @@ describe("FileOAuthStore", () => {
 				mcpExtension(mcpHostFor({ oauth: new FileOAuthStore(dir) })),
 			],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		try {
 			expect(str((await runAsync(interp, '(login "linear")')).value)).toBe(
 				":logged-in",

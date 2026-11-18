@@ -1,12 +1,13 @@
 import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { bufferSink } from "@repo/interpreter/journal";
+import { newSym } from "@repo/interpreter/objects";
 import { openSession } from "@repo/interpreter/session";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { knowledgeExtension } from "../src/knowledge.ts";
 import { knowledgeHostFor } from "../src/knowledge-host.ts";
 import { MemoryKnowledgeStore } from "../src/memory-store.ts";
-import { pdfSaying, type World, world } from "./helpers.ts";
+import { EXPIRY, pdfSaying, type World, world } from "./helpers.ts";
 
 const decoder = new TextDecoder();
 
@@ -21,6 +22,7 @@ describe("what waits on the user", () => {
 			knowledgeHostFor({
 				store: new MemoryKnowledgeStore(),
 				maxDownloadBytes: 1024,
+				...EXPIRY,
 			}),
 		);
 		expect(extension.asks).toEqual([
@@ -44,6 +46,7 @@ describe("a download", () => {
 		return knowledgeHostFor({
 			store: new MemoryKnowledgeStore(),
 			maxDownloadBytes: 4,
+			...EXPIRY,
 		}).downloader;
 	}
 
@@ -475,6 +478,7 @@ describe("a message the user attached files to", () => {
 			knowledgeHostFor({
 				store: new MemoryKnowledgeStore(),
 				maxDownloadBytes: 1024,
+				...EXPIRY,
 			}),
 		);
 		const interp = new ConversationInterpreter({ extensions: [extension] });
@@ -581,5 +585,24 @@ describe("a .pdf file", () => {
 		await expect(ev('(knowledge/read "locked.pdf")')).rejects.toThrow(
 			/locked.pdf is not a readable PDF: encrypted/,
 		);
+	});
+});
+
+describe("how long a file lasts", () => {
+	it("reads the expiry the host was given", async () => {
+		const interp = new ConversationInterpreter({
+			extensions: [
+				knowledgeExtension(
+					knowledgeHostFor({
+						store: new MemoryKnowledgeStore(),
+						maxDownloadBytes: 1024,
+						attachmentTtlMs: 3 * 86_400_000,
+						binTtlMs: 14 * 86_400_000,
+					}),
+				),
+			],
+		});
+		expect(interp.getGlobal(newSym("*knowledge-attachment-days*"))).toBe(3n);
+		expect(interp.getGlobal(newSym("*knowledge-bin-days*"))).toBe(14n);
 	});
 });

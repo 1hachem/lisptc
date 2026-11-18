@@ -1,17 +1,11 @@
-import { arrayToList, newSym } from "@repo/interpreter/objects";
-import { str } from "@repo/interpreter/print";
-import type { Memory } from "@repo/memory-extension/ports";
+import type { MemoryRecord } from "@repo/memory-extension/ports";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
-import { MAX_MEMORY_BYTES } from "../convex/limits.js";
-import {
-	ConvexMemoryStore,
-	type MemoryClient,
-	type StoredMemory,
-} from "../src/memory-store.ts";
+import { MAX_MEMORY_BYTES, MAX_WHEN_MEMORIES } from "../convex/limits.js";
+import { ConvexMemoryStore, type MemoryClient } from "../src/memory-store.ts";
 import { signIn, testDeployment } from "./helpers.ts";
 
-function row(key: string, body: string): StoredMemory {
+function row(key: string, body: string): MemoryRecord {
 	return { key, body, links: [], score: 1, used: 0, lastUsed: 0 };
 }
 
@@ -96,6 +90,38 @@ describe("memory access", () => {
 		).toBe(false);
 	});
 
+	it("clears every memory of a workspace and no other", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		for (const key of ["triage", "billing"])
+			await alice.as.mutation(api.memories.put, {
+				workspaceId: alice.workspace,
+				memory: row(key, '"kept"'),
+			});
+		await bob.as.mutation(api.memories.put, {
+			workspaceId: bob.workspace,
+			memory: row("triage", '"theirs"'),
+		});
+
+		expect(
+			await alice.as.mutation(api.memories.clear, {
+				workspaceId: alice.workspace,
+			}),
+		).toBe(2);
+		expect(
+			await alice.as.query(api.memories.list, {
+				workspaceId: alice.workspace,
+			}),
+		).toEqual([]);
+		expect(
+			await bob.as.query(api.memories.list, { workspaceId: bob.workspace }),
+		).toHaveLength(1);
+		await expect(
+			alice.as.mutation(api.memories.clear, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+	});
+
 	it("refuses a memory larger than the cap", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
@@ -105,6 +131,34 @@ describe("memory access", () => {
 				memory: row("huge", "x".repeat(MAX_MEMORY_BYTES + 1)),
 			}),
 		).rejects.toThrow();
+	});
+
+	it("caps the memories a judge is asked about, since each one is paid on every message", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const situational = (key: string): MemoryRecord => ({
+			...row(key, '"note"'),
+			on: `(when "${key}")`,
+		});
+		for (let i = 0; i < MAX_WHEN_MEMORIES; i++)
+			await alice.as.mutation(api.memories.put, {
+				workspaceId: alice.workspace,
+				memory: situational(`a${i}`),
+			});
+		await expect(
+			alice.as.mutation(api.memories.put, {
+				workspaceId: alice.workspace,
+				memory: situational("one-more"),
+			}),
+		).rejects.toThrow(/TOO_MANY_WHEN_MEMORIES/);
+		await alice.as.mutation(api.memories.put, {
+			workspaceId: alice.workspace,
+			memory: { ...situational("a0"), score: 2 },
+		});
+		await alice.as.mutation(api.memories.put, {
+			workspaceId: alice.workspace,
+			memory: { ...row("plain", '"note"'), on: '(user "x")' },
+		});
 	});
 });
 
@@ -136,87 +190,64 @@ describe("removing a workspace", () => {
 	});
 });
 
-async function seeded(...rows: StoredMemory[]) {
+async function workspace() {
 	const alice = await signIn(testDeployment(), "alice@example.com");
-	for (const memory of rows)
-		await alice.as.mutation(api.memories.put, {
-			workspaceId: alice.workspace,
-			memory,
-		});
 	return {
 		workspace: alice.workspace,
 		connect: () => alice.as as unknown as MemoryClient,
 	};
 }
 
-function remembered(key: string, body: unknown): Memory {
-	return { key, body, links: new Map(), score: 1, used: 0, lastUsed: 0 };
-}
+const write = (record: MemoryRecord) => ({ record, source: "" });
 
 describe("the convex memory store", () => {
 	it("writes through to convex, so a fresh store reads what another wrote", async () => {
-		const { workspace, connect } = await seeded();
-		const writer = new ConvexMemoryStore(workspace, connect);
+		const { workspace: id, connect } = await workspace();
+		const writer = new ConvexMemoryStore(id, connect);
 
-		await writer.put(remembered("triage", "logs"));
-		expect(writer.get("triage")).toMatchObject({ key: "triage" });
-		expect(
-			(await new ConvexMemoryStore(workspace, connect).get("triage"))?.body,
-		).toBe("logs");
+		await writer.put(write(row("triage", '"logs"')));
+		expect((await new ConvexMemoryStore(id, connect).get("triage"))?.body).toBe(
+			'"logs"',
+		);
 
 		expect(await writer.delete("triage")).toBe(true);
-		expect(writer.get("triage")).toBeUndefined();
 		expect(
-			await new ConvexMemoryStore(workspace, connect).get("triage"),
+			await new ConvexMemoryStore(id, connect).get("triage"),
 		).toBeUndefined();
 	});
 
-	it("hands a fresh store back the prose, links and strength another wrote", async () => {
-		const { workspace, connect } = await seeded();
-		await new ConvexMemoryStore(workspace, connect).put({
+	it("hands a fresh store back the trigger, links and strength another wrote", async () => {
+		const { workspace: id, connect } = await workspace();
+		const record: MemoryRecord = {
 			key: "triage",
-			body: "start with the logs",
-			links: new Map([["logs", 2]]),
+			body: '"start with the logs"',
+			on: '(error "timeout")',
+			links: [{ key: "logs", weight: 2 }],
 			score: 1.5,
 			used: 3,
 			lastUsed: 1_700_000_000_000,
-		});
+		};
+		await new ConvexMemoryStore(id, connect).put(write(record));
 
-		expect(
-			await new ConvexMemoryStore(workspace, connect).get("triage"),
-		).toEqual({
-			key: "triage",
-			body: "start with the logs",
-			links: new Map([["logs", 2]]),
-			score: 1.5,
-			used: 3,
-			lastUsed: 1_700_000_000_000,
-		});
-	});
-
-	it("hands a fresh store back a recipe as a form, not as prose", async () => {
-		const { workspace, connect } = await seeded();
-		await new ConvexMemoryStore(workspace, connect).put(
-			remembered(
-				"triage",
-				arrayToList([newSym("grep"), newSym("logs"), newSym("timeout")]),
-			),
+		expect(await new ConvexMemoryStore(id, connect).get("triage")).toEqual(
+			record,
 		);
-
-		const back = await new ConvexMemoryStore(workspace, connect).get("triage");
-		expect(typeof back?.body).not.toBe("string");
-		expect(str(back?.body)).toBe("(grep logs timeout)");
 	});
 
-	it("hands a fresh store back the trigger another wrote", async () => {
-		const { workspace, connect } = await seeded();
-		await new ConvexMemoryStore(workspace, connect).put({
-			...remembered("triage", "start with the logs"),
-			on: { kind: "error", pattern: "timeout" },
-		});
+	it("shows a write from elsewhere on the next listing and the next get", async () => {
+		const { workspace: id, connect } = await workspace();
+		const reader = new ConvexMemoryStore(id, connect);
+		const elsewhere = new ConvexMemoryStore(id, connect);
+		await elsewhere.put(write(row("triage", '"logs"')));
+		expect(await reader.all()).toHaveLength(1);
 
-		expect(
-			(await new ConvexMemoryStore(workspace, connect).get("triage"))?.on,
-		).toEqual({ kind: "error", pattern: "timeout" });
+		await elsewhere.put(write(row("billing", '"stripe"')));
+		await elsewhere.put(write(row("triage", '"traces"')));
+
+		expect((await reader.all()).map((memory) => memory.key).sort()).toEqual([
+			"billing",
+			"triage",
+		]);
+		expect((await reader.get("triage"))?.body).toBe('"traces"');
 	});
 });

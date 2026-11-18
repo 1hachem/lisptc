@@ -48,7 +48,9 @@ describe("prose around forms", () => {
 	});
 
 	it("does not read prose punctuation touching a form as sugar", () => {
-		expect(stripProse("and then,(+ 1 2)")).toBe("         (+ 1 2)");
+		expect(stripProse(freshInterp(), "and then,(+ 1 2)")).toBe(
+			"         (+ 1 2)",
+		);
 	});
 
 	it("does not end a form at a paren inside a string", () => {

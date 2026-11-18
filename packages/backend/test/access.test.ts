@@ -1876,7 +1876,6 @@ describe("a thread's server functions", () => {
 		name: "lead",
 		prompt: "lead",
 		bounds: ["(permission/deny fs/*)"],
-		roster: ["r"],
 		budget: 5,
 	};
 

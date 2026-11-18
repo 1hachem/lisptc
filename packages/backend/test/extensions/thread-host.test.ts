@@ -13,7 +13,6 @@ type Agent = {
 	name: string;
 	prompt: string;
 	bounds: string[];
-	roster?: string[];
 	budget?: number;
 };
 
@@ -69,7 +68,6 @@ const middle: { agent: Agent } = {
 		name: "lead",
 		prompt: "lead the dig",
 		bounds: ["(permission/deny memory/*)"],
-		roster: ["scout", "digger"],
 		budget: 12,
 	},
 };
@@ -78,7 +76,6 @@ const child: { agent: Agent } = {
 		name: "digger",
 		prompt: "dig only",
 		bounds: ["(permission/deny knowledge/*)"],
-		roster: ["digger", "writer"],
 		budget: 30,
 	},
 };

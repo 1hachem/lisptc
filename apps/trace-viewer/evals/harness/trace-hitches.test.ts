@@ -1,7 +1,6 @@
 import { Checks } from "@repo/checks/checks";
 import { Trace } from "@repo/checks/trace";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { describe, expect, test } from "vitest";
@@ -11,7 +10,7 @@ function ran(code: string): Trace {
 	const interp = new Interp({
 		extensions: [proseExtension(proseHost), trace.extension()],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	trace.beginStep(1);
 	try {
 		runSync(interp, code);

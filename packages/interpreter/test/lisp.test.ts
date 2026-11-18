@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { driveSync } from "../src/drive.ts";
 import {
+	boot,
 	type Installable,
-	type Interp,
+	Interp,
 	runAsync,
 	runSync,
 } from "../src/lisp.ts";
@@ -41,74 +42,39 @@ describe("extensions", () => {
 			`${LANGUAGE_REFERENCE}\n\nextension prompt`,
 		);
 	});
-});
 
-describe("the language reference", () => {
-	it("documents multiplication, and the empty product is 1", () => {
-		expect(LANGUAGE_REFERENCE).toContain("(* n...) product, 1 if none");
-		expect(ev("(*)")).toBe("1");
+	it("says it has booted only once every postlude has run", () => {
+		const seen: Installable = Object.assign(() => {}, {
+			postlude: "(setq during *booted*)",
+		});
+		const interp = new Interp({ extensions: [seen] });
+		expect(ev("*booted*", interp)).toBe("nil");
+		boot(interp);
+		expect(ev("(list during *booted*)", interp)).toBe("(nil t)");
+		expect(() => ev("(setq *booted* nil)", interp)).toThrow(/owned by boot/);
 	});
 
-	it.each([
-		["(* 2 3)", "6"],
-		["(* 2 3.0)", "6.0"],
-	])("shows %s is %s, and it is", (form, value) => {
-		expect(LANGUAGE_REFERENCE).toContain(`${form} is ${value}`);
-		expect(ev(form)).toBe(value);
+	it("counts as booted even when a postlude fails", () => {
+		const broken: Installable = Object.assign(() => {}, {
+			postlude: "(no-such-form)",
+		});
+		const interp = new Interp({ extensions: [broken] });
+		expect(() => boot(interp)).toThrow(/no-such-form/);
+		expect(ev("*booted*", interp)).toBe("t");
 	});
 
-	it("shows a mapcar that squares", () => {
-		const form = "(mapcar (lambda (n) (* n n)) '(1 2 3))";
-		expect(LANGUAGE_REFERENCE).toContain(`${form} gives (1 4 9)`);
-		expect(ev(form)).toBe("(1 4 9)");
-	});
-
-	it.each([
-		[`(get-in '(:theme (:accent "red")) :theme :accent)`, '"red"'],
-		[
-			`(set-in '(:theme (:accent "red")) "blue" :theme :accent)`,
-			'(:theme (:accent "blue"))',
-		],
-		["(update-in '(:n 1) (lambda (n) (+ n 1)) :n)", "(:n 2)"],
-		["(remove-in '(:a 1 :b 2) :a)", "(:b 2)"],
-	])("shows %s gives %s, and it does", (form, value) => {
-		expect(LANGUAGE_REFERENCE).toContain(`${form} gives ${value}`);
-		expect(ev(form)).toBe(value);
-	});
-
-	it("names let* as the sequential binding", () => {
-		expect(LANGUAGE_REFERENCE).toContain(
-			"(let* ((name val) ...) body...) sequential",
-		);
-		expect(ev("(let* ((a 1) (b (+ a 1))) b)")).toBe("2");
-	});
-
-	it("names the earmuffed globals that exist", () => {
-		expect(LANGUAGE_REFERENCE).toContain(
-			"Globals: *gensym-counter*, *version*.",
-		);
-		expect(() => ev("*gensym-counter*")).not.toThrow();
-		expect(() => ev("*version*")).not.toThrow();
-	});
-
-	it("shows a swap that quasiquotes a gensym temporary", () => {
-		const swap =
-			"(defmacro swap (a b)\n  (let ((tmp (gensym)))\n    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))";
-		expect(LANGUAGE_REFERENCE).toContain(swap);
-		const interp = freshInterp();
-		runSync(interp, swap);
-		expect(ev("(let ((x 1) (y 2)) (swap x y) (list x y))", interp)).toBe(
-			"(2 1)",
-		);
-		expect(ev("(let ((tmp 1) (x 2)) (swap tmp x) (list tmp x))", interp)).toBe(
-			"(2 1)",
-		);
-	});
-
-	it("shows a try whose handler runs", () => {
-		expect(LANGUAGE_REFERENCE).toContain('(try\n  (error "boom")');
-		expect(ev('(try (error "boom") (catch (e) (concat "failed: " e)))')).toBe(
-			'"failed: boom"',
+	it("boots every extension's prelude before any extension's postlude", () => {
+		const first: Installable = Object.assign(() => {}, {
+			prelude: "(setq order nil) (defun note (x) (setq order (cons x order)))",
+			postlude: '(note "first postlude")',
+		});
+		const second: Installable = Object.assign(() => {}, {
+			prelude: '(note "second prelude")',
+			postlude: '(note "second postlude")',
+		});
+		const interp = freshInterp({ extensions: [first, second] });
+		expect(ev("(reverse order)", interp)).toBe(
+			'("second prelude" "first postlude" "second postlude")',
 		);
 	});
 });
@@ -228,5 +194,20 @@ describe("runAsync", () => {
 	it("resolves to the value of the last form", async () => {
 		const { value } = await runAsync(freshInterp(), "(+ 1 2) (list 3 4)");
 		expect(str(value)).toBe("(3 4)");
+	});
+});
+
+describe("reading through the interpreter", () => {
+	it("reads one form, every form, or why the text does not read", () => {
+		const interp = freshInterp();
+		expect(str(interp.read('(a "b\nc") (d)'))).toBe('(a "b\\nc")');
+		expect(interp.readAll("(a) b 3").map((form) => str(form))).toEqual([
+			"(a)",
+			"b",
+			"3",
+		]);
+		expect(() => interp.read("(a")).toThrow(/unclosed/);
+		expect(interp.readFailure("(a")?.reason).toBe("unexpected end of input");
+		expect(interp.readFailure("(a)")).toBeUndefined();
 	});
 });

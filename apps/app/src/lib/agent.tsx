@@ -1,4 +1,5 @@
 import type { ExpressionId, StateId } from "@repo/bloub";
+import { isNoteMessage } from "@repo/components";
 import {
 	createContext,
 	useCallback,
@@ -7,7 +8,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { isNoteMessage, useChatSession } from "./chat.tsx";
+import { useChatSession } from "./chat.tsx";
 
 interface Mood {
 	state: StateId;

@@ -1,5 +1,4 @@
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
 import { DockerHost } from "../src/docker-host.ts";
 import { mcpExtension } from "../src/mcp.ts";
@@ -22,7 +21,7 @@ describe("the docker host", () => {
 				}),
 			],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		await Promise.resolve(
 			runSync(
 				interp,

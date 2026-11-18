@@ -24,9 +24,8 @@ import {
 	released,
 	type Sink,
 } from "@repo/interpreter/journal";
-import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { boot, type Interp, runAsync } from "@repo/interpreter/lisp";
 import { EndOfFile, Unspecified } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import {
 	type AgentEnd,
@@ -279,7 +278,7 @@ export class MemoryRepl implements InMemoryRepl {
 			record.end(mark, value);
 			return value;
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		this.setup(interp);
 		this.watch(interp);
 		return interp;

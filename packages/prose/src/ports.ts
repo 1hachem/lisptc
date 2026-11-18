@@ -22,6 +22,7 @@ export type ProseClassifier = (
 export interface ProseHost {
 	readonly classifiers: readonly ProseClassifier[];
 	readonly prompt: PromptSource;
+	readonly memories: PromptSource;
 }
 
 export function readsAsProse(

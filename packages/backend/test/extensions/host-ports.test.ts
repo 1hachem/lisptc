@@ -41,7 +41,7 @@ describe("a supplied store is the one the extension uses", () => {
 	it("hands what one repl remembered to another repl over the same store", async () => {
 		const store = new VolatileStore();
 		await memoryRepl([memoryExtension({ ...memoryHost, store })]).eval(
-			'(memory/remember "k" "kept here")',
+			'(memory/remember "k" "kept here" :when "the test asks for it")',
 		);
 		const other = memoryRepl([memoryExtension({ ...memoryHost, store })]);
 		expect(await other.eval('(memory/recall "kept")')).toContain("kept here");
@@ -55,10 +55,14 @@ describe("a host with no filesystem behind it still builds", () => {
 				store: new VolatileStore(),
 				clock: { now: () => 0 },
 				prompt: () => "",
+				memories: memoryHost.memories,
 				search: memoryHost.search,
+				recognize: () => new Map(),
 			}),
 		]);
-		await r.eval('(memory/remember "k" "no disk")');
+		await r.eval(
+			'(memory/remember "k" "no disk" :when "the test asks for it")',
+		);
 		expect(await r.eval('(memory/recall "disk")')).toContain("no disk");
 	});
 });

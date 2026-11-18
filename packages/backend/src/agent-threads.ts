@@ -31,12 +31,11 @@ export class SupervisedAgents implements AgentThreads {
 	) {}
 
 	async spawn({ definition, seed, chat }: Spawn): Promise<string> {
-		const { name, prompt, permissions, roster, budget } = definition;
+		const { name, prompt, permissions, budget } = definition;
 		const record = {
 			name,
 			prompt,
 			bounds: permissions === undefined ? [] : [permissions],
-			...(roster === undefined ? {} : { roster: [...roster] }),
 			...(budget === undefined ? {} : { budget }),
 		};
 		const image = seed.from === "fork" ? seed.image : undefined;

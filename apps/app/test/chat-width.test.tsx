@@ -2,13 +2,13 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import type { ChatMessage } from "@repo/components";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
 import { AgentProvider } from "../src/lib/agent.tsx";
-import type { ChatMessage } from "../src/lib/chat.tsx";
 import { UIProvider } from "../src/lib/ui.tsx";
 import { sidewaysLeaks } from "./helpers.ts";
 

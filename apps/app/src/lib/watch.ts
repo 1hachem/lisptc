@@ -1,7 +1,7 @@
+import type { ChatMessage } from "@repo/components";
 import { useEffect, useState } from "react";
 import { reportIssue } from "./analytics.tsx";
 import { apiHeaders } from "./api.ts";
-import type { ChatMessage } from "./chat.tsx";
 
 export type ThreadState = "running" | "idle" | "waiting" | "errored";
 

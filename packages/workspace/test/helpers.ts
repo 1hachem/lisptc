@@ -1,5 +1,4 @@
-import { Interp, runAsync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { bootAsync, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import {
 	type HeldChat,
@@ -84,7 +83,7 @@ export async function world(
 			),
 		],
 	});
-	await runAsync(interp, prelude);
+	await bootAsync(interp);
 	return {
 		store,
 		ev: async (code) => str((await runAsync(interp, code)).value),

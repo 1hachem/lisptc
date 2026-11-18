@@ -1,5 +1,4 @@
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import type { EmbeddingModel } from "@repo/shared/embedding";
 import type { JudgeResult, SystemOneModel } from "@repo/shared/system-one";
@@ -43,7 +42,7 @@ function repl() {
 	const interp = new Interp({
 		extensions: [semanticExtension({ ...semanticHost, systemOne, embedder })],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return {
 		run: async (code: string): Promise<Run> => {
 			const before = { judged: judged.length, embedded };

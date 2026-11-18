@@ -3,6 +3,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import type { ChatMessage } from "@repo/components";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { getFunctionName } from "convex/server";
 import { act } from "react";
@@ -49,7 +50,7 @@ vi.mock("../src/components/agent-avatar.tsx", () => ({
 
 import { ChatView } from "../src/components/chat-view.tsx";
 import { AgentProvider } from "../src/lib/agent.tsx";
-import { type ChatMessage, ChatProvider } from "../src/lib/chat.tsx";
+import { ChatProvider } from "../src/lib/chat.tsx";
 import { UIProvider } from "../src/lib/ui.tsx";
 
 const WORKSPACE = "w1" as Id<"workspaces">;

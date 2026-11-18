@@ -1,7 +1,13 @@
 import type { ModelDelta } from "@repo/interpreter/session";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WireMessage } from "../src/line.ts";
-import { extension, recording, streamChat, testRepl } from "./helpers.ts";
+import {
+	extension,
+	recording,
+	streamChat,
+	testRepl,
+	unprompted,
+} from "./helpers.ts";
 
 const TURNS: ModelDelta[][] = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 
@@ -38,11 +44,13 @@ async function finalMessages(): Promise<WireMessage[]> {
 		.split("\n\n")
 		.filter((record) => record.startsWith("event: values"))
 		.at(-1);
-	return (
-		JSON.parse(last?.slice(last.indexOf("data: ") + 6) ?? "{}") as {
-			messages: WireMessage[];
-		}
-	).messages;
+	return unprompted(
+		(
+			JSON.parse(last?.slice(last.indexOf("data: ") + 6) ?? "{}") as {
+				messages: WireMessage[];
+			}
+		).messages,
+	);
 }
 
 describe("the loop and the journal", () => {

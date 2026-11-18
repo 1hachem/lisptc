@@ -1,8 +1,7 @@
 import type { Conversation } from "@repo/interpreter/conversation";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { viewKind } from "@repo/journal-catalog/view";
 import { TAGS, widgetOf } from "@repo/ui-catalog";
@@ -90,7 +89,7 @@ function fresh(): {
 	const views = new MemoryViewStore();
 	const host = uiHostFor({ panel, views });
 	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, surface, ui: collector(interp, views), ops };
 }
 
@@ -529,7 +528,7 @@ describe("the panel beside the chat", () => {
 		const interp = new Interp({
 			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		return { ops, ev: (code: string) => str(runSync(interp, code)) };
 	}
 
@@ -616,13 +615,31 @@ describe("the catalog the frontend draws from", () => {
 	});
 });
 
+describe("ui-widgets", () => {
+	it("names every widget constructor", () => {
+		const { interp } = fresh();
+		expect(str(runSync(interp, "(length ui-widgets)"))).toBe(
+			String(TAGS.length),
+		);
+		for (const tag of TAGS)
+			expect(str(runSync(interp, `(member "ui/${tag}" ui-widgets)`))).not.toBe(
+				"nil",
+			);
+	});
+
+	it("cannot be overwritten", () => {
+		const { interp } = fresh();
+		expect(() => runSync(interp, "(setq ui-widgets nil)")).toThrow();
+	});
+});
+
 describe("the view store", () => {
 	function stored() {
 		const surface = new UiSurface();
 		const views = new MemoryViewStore();
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-		runSync(interp, prelude);
+		boot(interp);
 		const drawn: string[] = [];
 		interp.journal.onAny((entry) => {
 			if (entry.kind !== viewKind.name) return;

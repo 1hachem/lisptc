@@ -4,5 +4,6 @@ import type { DiagnosticsHost } from "./ports.ts";
 
 export const diagnosticsHost: DiagnosticsHost = {
 	prompt: filePrompt(new URL("./diagnostics.ptc", import.meta.url)),
+	memories: filePrompt(new URL("./diagnostics.memories.ptc", import.meta.url)),
 	search: nameSearchEngine,
 };

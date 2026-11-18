@@ -62,11 +62,13 @@ spec:
               {{- if and .Values.dev.enabled .Values.dev.watch }}
               pnpm exec convex dev --once --typecheck disable --codegen disable
               pnpm run migrate
+              {{- with include "lisptc.seedAccount" . }}{{ . | nindent 14 }}{{- end }}
               touch /tmp/pushed
               exec pnpm exec convex dev --typecheck disable --codegen disable
               {{- else }}
               pnpm exec convex deploy --typecheck disable --codegen disable
-              exec pnpm run migrate
+              pnpm run migrate
+              {{- with include "lisptc.seedAccount" . }}{{ . | nindent 14 }}{{- end }}
               {{- end }}
           {{- if and .Values.dev.enabled .Values.dev.watch }}
           readinessProbe:
@@ -88,3 +90,12 @@ spec:
                 secretKeyRef:
                   name: lisptc-convex
                   key: CONVEX_SELF_HOSTED_ADMIN_KEY
+            {{- if or .Values.preview.enabled .Values.dev.enabled }}
+            {{- range list "SEED_EMAIL" "SEED_PASSWORD" }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: lisptc-seed
+                  key: {{ . }}
+            {{- end }}
+            {{- end }}

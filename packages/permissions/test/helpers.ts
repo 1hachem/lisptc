@@ -2,8 +2,7 @@ import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
 import { StepHold } from "@repo/interpreter/errors";
 import { bufferSink, hitch } from "@repo/interpreter/journal";
-import { runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks, type SessionHooks } from "@repo/interpreter/session";
 import { asksKind } from "@repo/journal-catalog/asks";
@@ -70,7 +69,7 @@ export function session(
 	};
 	const extension = permissionsExtension(host);
 	const interp = new ConversationInterpreter({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	const hooks = newSessionHooks();
 	extension.session?.(hooks);
 

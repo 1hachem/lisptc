@@ -1,10 +1,16 @@
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import { driveAsync } from "@repo/interpreter/drive";
+import { boot, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { MemoryBank, memoryExtension } from "../src/memory.ts";
-import { memoryHost } from "../src/memory-host.ts";
-import { type Memory, type MemoryStore, VolatileStore } from "../src/ports.ts";
+import {
+	type MemoryRecord,
+	type MemoryStore,
+	type MemoryWrite,
+	VolatileStore,
+} from "../src/ports.ts";
+import { bareHost } from "./helpers.ts";
 
 class PromisedStore implements MemoryStore {
 	private readonly inner = new VolatileStore();
@@ -13,35 +19,39 @@ class PromisedStore implements MemoryStore {
 		return Promise.resolve().then(() => value);
 	}
 
-	all(): Promise<Memory[]> {
+	all(): Promise<MemoryRecord[]> {
 		return this.later(this.inner.all());
 	}
 
-	get(key: string): Promise<Memory | undefined> {
+	get(key: string): Promise<MemoryRecord | undefined> {
 		return this.later(this.inner.get(key));
 	}
 
-	put(memory: Memory): Promise<void> {
+	put(memory: MemoryWrite): Promise<void> {
 		return this.later(this.inner.put(memory));
 	}
 
 	delete(key: string): Promise<boolean> {
 		return this.later(this.inner.delete(key));
 	}
+
+	clear(): Promise<number> {
+		return this.later(this.inner.clear());
+	}
 }
 
-function interpWith(store: MemoryStore): Interp {
-	const interp = new Interp({
+function interpWith(store: MemoryStore): ConversationInterpreter {
+	const interp = new ConversationInterpreter({
 		extensions: [
 			memoryExtension(
-				{ ...memoryHost, store, prompt: () => "" },
+				{ ...bareHost, store, prompt: () => "" },
 				{
 					bank: new MemoryBank(store),
 				},
 			),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 
@@ -51,7 +61,7 @@ describe("a memory store that answers with promises", () => {
 
 		await runAsync(
 			interp,
-			'(memory/remember "port" "hosts declare what they need")',
+			'(memory/remember "port" "hosts declare what they need" :when "the test asks for it")',
 		);
 		const recalled = await runAsync(interp, '(memory/recall "port")');
 
@@ -62,7 +72,10 @@ describe("a memory store that answers with promises", () => {
 		const store = new PromisedStore();
 		const interp = interpWith(store);
 
-		await runAsync(interp, '(memory/remember "k" "v")');
+		await runAsync(
+			interp,
+			'(memory/remember "k" "v" :when "the test asks for it")',
+		);
 		expect(str((await runAsync(interp, "(memories)")).value)).toContain("k");
 		expect(str((await runAsync(interp, '(memory/forget "k")')).value)).toBe(
 			"t",
@@ -72,8 +85,47 @@ describe("a memory store that answers with promises", () => {
 
 	it("refuses to run under a synchronous driver rather than half-storing", () => {
 		expect(() =>
-			runSync(interpWith(new PromisedStore()), '(memory/remember "k" "v")'),
+			runSync(
+				interpWith(new PromisedStore()),
+				'(memory/remember "k" "v" :when "the test asks for it")',
+			),
 		).toThrow(/cannot suspend/);
+	});
+});
+
+describe("built-ins loading on the first message, over a store that answers with promises", () => {
+	it("evaluates a body built with format without suspending the loader, when memories are already stored", async () => {
+		const store = new PromisedStore();
+		const builtin = Object.assign(() => {}, {
+			prompt: "",
+			postlude:
+				'(memory "internal/t/formatted" :when "the test asks for it" (format nil "~d steps" 3))',
+		});
+		const fresh = () => {
+			const bank = new MemoryBank(store);
+			const interp = new ConversationInterpreter({
+				extensions: [
+					memoryExtension({ ...bareHost, store, prompt: () => "" }, { bank }),
+					builtin,
+				],
+			});
+			boot(interp);
+			return { bank, interp };
+		};
+		await runAsync(
+			fresh().interp,
+			'(memory/remember "billing" "invoices live in stripe" :when "user asks about billing")',
+		);
+		const { bank, interp } = fresh();
+		interp.seed([{ role: "user", content: "hello" }], 0);
+
+		await driveAsync(bank.hear(interp));
+
+		const recalled = await runAsync(
+			interp,
+			'(cdr (assoc "body" (car (memory/recall "internal/t/formatted"))))',
+		);
+		expect(str(recalled.value)).toBe('"3 steps"');
 	});
 });
 
@@ -81,7 +133,10 @@ describe("a synchronous store still runs synchronously", () => {
 	it("takes the whole memory surface under runSync", () => {
 		const interp = interpWith(new VolatileStore());
 
-		runSync(interp, '(memory/remember "k" "a note")');
+		runSync(
+			interp,
+			'(memory/remember "k" "a note" :when "the test asks for it")',
+		);
 
 		expect(str(runSync(interp, '(memory/recall "k")'))).toContain("a note");
 		expect(str(runSync(interp, '(memory/forget "k")'))).toBe("t");

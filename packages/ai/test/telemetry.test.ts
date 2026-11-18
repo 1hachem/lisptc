@@ -12,6 +12,7 @@ import type {
 	ModelDelta,
 	SessionHooks,
 } from "@repo/interpreter/session";
+import { recognizedKind } from "@repo/journal-catalog/memory";
 import {
 	afterAll,
 	beforeAll,
@@ -23,7 +24,7 @@ import {
 } from "vitest";
 import type { Line } from "../src/line.ts";
 import { runAgentTurn, type TurnEvent, type TurnOptions } from "../src/turn.ts";
-import { extension, testRepl } from "./helpers.ts";
+import { extension, recording, testRepl } from "./helpers.ts";
 
 const PORT = 9931;
 
@@ -309,5 +310,45 @@ describe("a traced failure", () => {
 		expect(exception.properties.received).toEqual(["said"]);
 		const { $exception_list: _trace, ...traced } = exception.properties;
 		expect(JSON.stringify(traced)).not.toContain("a secret");
+	});
+});
+
+describe("memory recognition", () => {
+	test("nests under the turn as a span, an error when it failed", async () => {
+		script = [[{ text: "three." }]];
+		let recorded = false;
+		const repl = testRepl([
+			extension((hooks) =>
+				hooks.beginStep.use(function* (ctx, next) {
+					if (!recorded)
+						recording(ctx.interp.journal, recognizedKind.name, {
+							message: "open the page",
+							scores: { "internal/browser/local": 0.9 },
+							fired: [{ key: "internal/browser/local", body: "load it" }],
+							error: "recognition failed for deploy: timed out",
+							failedAreas: ["deploy"],
+							latencyMs: 2000,
+						});
+					recorded = true;
+					yield* next(ctx);
+				}),
+			),
+		]);
+
+		const { threadId } = await run({ repl });
+		const sent = await captured(threadId);
+
+		const [trace] = named(sent, "$ai_trace");
+		const span = named(sent, "$ai_span").find(
+			(e) => e.properties.$ai_span_name === "memory recognition",
+		);
+		expect(span?.properties).toMatchObject({
+			$ai_parent_id: trace.properties.$ai_span_id,
+			$ai_latency: 2,
+			$ai_is_error: true,
+			$ai_error: "recognition failed for deploy: timed out",
+			recognition_fired: ["internal/browser/local"],
+			recognition_failed_areas: ["deploy"],
+		});
 	});
 });

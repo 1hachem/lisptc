@@ -1,5 +1,4 @@
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { MapSecretsStore } from "../src/ports.ts";
 import { secretsExtension } from "../src/secrets.ts";
@@ -15,6 +14,6 @@ function freshInterp(): Interp {
 			secretsExtension({ ...secretsHost, store: new MapSecretsStore() }),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }

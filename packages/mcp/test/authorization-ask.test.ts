@@ -1,8 +1,7 @@
 import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { StepHold } from "@repo/interpreter/errors";
 import { bufferSink } from "@repo/interpreter/journal";
-import { type Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, type Interp, runSync } from "@repo/interpreter/lisp";
 import { openSession } from "@repo/interpreter/session";
 import { type Asks, asksKind } from "@repo/journal-catalog/asks";
 import { view } from "@repo/shared/journal";
@@ -27,7 +26,7 @@ const loginClient: McpClient = {
 function session() {
 	const extension = mcpExtension({ ...mcpHost, client: loginClient });
 	const interp = new ConversationInterpreter({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, hooks: openSession([extension]) };
 }
 
