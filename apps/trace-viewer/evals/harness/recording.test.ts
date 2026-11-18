@@ -3,7 +3,6 @@ import type { Trace } from "@repo/checks/trace";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import type { AgentRepl } from "@repo/repl/repl";
-import type { SecretsStore } from "@repo/secrets-extension/ports";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { type Harness, tracedRepl } from "./harness.ts";
 import {
@@ -119,21 +118,20 @@ describe("a mocked MCP server", () => {
 		warn.mockRestore();
 	});
 
-	test("a secret never lands in the trace", async () => {
-		let secrets: SecretsStore;
-		({ repl, trace, secrets } = replFor({
+	test("keeps a secret passed to a tool out of the recorded trace", async () => {
+		const run = replFor({
 			servers: {
 				api: { tools: [{ name: "send" }], calls: { send: { ok: true } } },
 			},
-		}));
-		secrets.set({ REPL_TOKEN: "s3cr3t-value" });
-		trace.beginStep(1);
-		await repl.eval('(await (load-mcp :name "api" :command "none"))');
-		await repl.eval('(api/send :token (secret "REPL_TOKEN"))');
+		});
+		run.secrets.set({ REPL_TOKEN: "s3cr3t-value" });
+		run.trace.beginStep(1);
+		await run.repl.eval('(await (load-mcp :name "api" :command "none"))');
+		await run.repl.eval('(api/send :token (secret "REPL_TOKEN"))');
 
 		expect(
-			verdict(trace, '(defcheck it (eventually (called-server "api")))'),
+			verdict(run.trace, '(defcheck it (eventually (called-server "api")))'),
 		).toBe("true");
-		expect(JSON.stringify(trace.events)).not.toContain("s3cr3t-value");
+		expect(JSON.stringify(run.trace.events)).not.toContain("s3cr3t-value");
 	});
 });

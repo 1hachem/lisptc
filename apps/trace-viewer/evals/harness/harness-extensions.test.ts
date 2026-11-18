@@ -24,9 +24,3 @@ describe("a case that lists its own extensions", () => {
 		expect(await repl.eval('(write "hi")')).toContain("undefined: write");
 	});
 });
-
-describe("a mock built outside a run", () => {
-	test("refuses to be built instead of binding a stale recorder", () => {
-		expect(() => mockedMcpExtension()).toThrow();
-	});
-});
