@@ -1467,8 +1467,8 @@ describe("a turn shown while the agent streams", () => {
 		const withoutMeta = () => {
 			const shown = host.querySelector('[data-turn="h1"]')?.cloneNode(true);
 			if (!(shown instanceof HTMLElement)) return undefined;
-			for (const meta of shown.querySelectorAll('[data-anchor="chat/meta"]'))
-				meta.remove();
+			for (const trace of shown.querySelectorAll("[data-show-in-trace]"))
+				trace.parentElement?.remove();
 			return shown.outerHTML;
 		};
 		session.isLoading = true;
