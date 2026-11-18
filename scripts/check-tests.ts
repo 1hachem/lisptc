@@ -15,7 +15,7 @@ const BODY_LIMIT = 6000;
 const TEST_FILES = ["*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx"];
 
 const PURPOSE =
-	"A test in this repository pins behaviour, never the implementation. It drives what a caller drives: Lisp source through the REPL, a UI through what a user does to it, the chat loop through the messages it is sent, an HTTP route, a Convex function through `api`. It asserts what that caller gets back: the value, the error it can tell apart, the text a user reads, the row read back through a public query. A fake standing in for a port may have the call it receives asserted, because that call is the extension's output.";
+	"A test in this repository pins the behaviour a human would check, at the level they see it, never the implementation, so the code under it can change freely. It drives the outermost surface a human uses: Lisp source through the REPL, a UI through what a user does to it, the chat loop through the messages it is sent, a Convex function through `api`, the LSP or MCP protocol. It asserts what comes back to that human: the value, the error they can tell apart, the text they read, the effect left behind. The preferred shape is declarative: a system is given configuration or Lisp source, and its outputs and effects are asserted. A test earns its place as an edge case, a foundational behaviour or a regression. Core language semantics run through the interpreter, arithmetic included, are foundational. A route or wiring that merely answers is left to end-to-end checks on the pull request preview. A fake standing in for a port may have the call it receives asserted only when that call is the effect the extension has on the world, such as the command a server is launched with.";
 
 const QUESTIONS = {
 	heavily_mocked: {
@@ -41,17 +41,27 @@ const QUESTIONS = {
 	pins_implementation: {
 		type: "noul",
 		instructions:
-			"Does `test.body` assert how the code works rather than what a caller observes, by `test_purpose`?",
+			"Does `test.body` assert how the code works rather than what a human observes, by `test_purpose`?",
 		criteria: {
-			true: "It asserts call counts or arguments of internal mocks, prompt or message wording, markup shape, class names, data-* attributes, raw stored rows, private fields or helpers, or an internal data shape the caller never reads",
+			true: "It calls an internal module, helper or lib function directly instead of the outermost surface a human uses; or asserts that a mock, spy or callback was called or what it was handed; or asserts prompt or message wording, markup shape, class names, data-* attributes, aria state read as markup, raw stored rows, private fields, or an internal data shape the human never sees",
 			false:
-				"It asserts only what a caller of a public surface gets back, or the call a port fake receives when that call is the output",
+				"It drives the outermost surface and asserts only what a human sees come back or the effect left behind, or the call a port fake receives when that call is the extension's effect on the world",
+		},
+	},
+	too_trivial: {
+		type: "noul",
+		instructions:
+			"Is `test.body` a trivial check that any working build passes, guarding no edge case, foundational behaviour or regression, by `test_purpose`?",
+		criteria: {
+			true: "A happy path whose output restates its input, a check that something renders or exists, a route or wiring that answers with a status or an acknowledgement, or a case another case in the suite already covers at a deeper level",
+			false:
+				"It pins an edge case, a failure path, a regression, or a foundational behaviour; core language semantics through the interpreter, such as arithmetic, special forms or the reader, are foundational and never trivial",
 		},
 	},
 	declarative_behaviour: {
 		type: "noul",
 		instructions:
-			"Is `test.body` a declarative input to output check over a public surface: Lisp source in and its value or error out, or an interface (UI, chat loop, HTTP route, Convex api, LSP or MCP protocol) driven from outside with its visible result asserted?",
+			"Is `test.body` a declarative check over the outermost surface: configuration or Lisp source given to the system, and its outputs and effects asserted, or an interface (UI, chat loop, Convex api, LSP or MCP protocol) driven from outside with what a human sees asserted?",
 	},
 } as const;
 
@@ -60,6 +70,7 @@ const FAULTS = [
 	"heavily_mocked",
 	"set_up_for_success",
 	"pins_implementation",
+	"too_trivial",
 ] as const satisfies Verdict[];
 
 interface Case {
@@ -309,7 +320,7 @@ console.log(
 );
 if (failed.length > 0) {
 	console.log(
-		"A failed case mocks what it tests, cannot fail, or pins the implementation. Rewrite it to drive a public surface and assert what the caller gets back, or delete it.",
+		"A failed case mocks what it tests, cannot fail, pins the implementation, or is too trivial to keep. Delete a trivial one. Rewrite any other declaratively: give the outermost surface configuration or Lisp source, and assert the outputs and effects a human sees.",
 	);
 	process.exit(1);
 }
