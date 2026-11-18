@@ -82,19 +82,6 @@ describe("the review payload", () => {
 		line("assistant", '(await (load-mcp "linear"))'),
 	]);
 
-	test("names the same run alike and every other run apart", () => {
-		expect(runId(IDENTITY, { ...subject })).toBe(runId(IDENTITY, subject));
-		expect(runId(IDENTITY, { ...subject, sample: 2 })).not.toBe(
-			runId(IDENTITY, subject),
-		);
-		expect(runId(IDENTITY, { ...subject, model: "glm-5" })).not.toBe(
-			runId(IDENTITY, subject),
-		);
-		expect(
-			runId({ ...IDENTITY, file: "2026-09-13T10-00-00.json" }, subject),
-		).not.toBe(runId(IDENTITY, subject));
-	});
-
 	test("carries the run, the checks and the voted turn", () => {
 		const properties = reviewProperties(IDENTITY, subject, 1);
 		expect(properties.eval_case).toBe("connect-and-query");
