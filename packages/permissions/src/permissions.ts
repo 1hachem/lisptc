@@ -63,6 +63,10 @@ export class PermissionRefusal extends EvalException {
 	) {
 		super(report, name, false);
 	}
+
+	override get kind(): string {
+		return "permission-denied";
+	}
 }
 
 function strongest(rulings: readonly Ruling[]): Ruling | undefined {

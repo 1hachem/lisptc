@@ -32,6 +32,14 @@ describe("the permissions guard", () => {
 		expect(run.report).toContain("Do not call it again");
 	});
 
+	it("raises a refusal try catches as :permission-denied and retry never reruns", async () => {
+		const s = session("(permission/deny string-upcase)");
+		const run = await s.step(
+			'(let ((n 0)) (try (retry 3 (progn (setq n (+ n 1)) (string-upcase "a"))) (catch :permission-denied (e) n)))',
+		);
+		expect(run.value).toBe("1");
+	});
+
 	it("refuses a form however it is reached", async () => {
 		const s = session("(permission/deny string-upcase)");
 		expect((await s.step('(apply string-upcase \'("a"))')).failed).toBe(true);
