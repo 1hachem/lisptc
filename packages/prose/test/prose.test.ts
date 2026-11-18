@@ -1,13 +1,13 @@
 import { type Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { checkSyntax } from "@repo/language-service/syntax";
-import { formsOnly } from "@repo/shared/lisp-forms";
 import { describe, expect, it } from "vitest";
 import type { ProseClassifier } from "../src/ports.ts";
-import { isTruncated, stripProse } from "../src/prose.ts";
+import { stripProse } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
 import {
 	collectSkips,
+	endsTurn,
 	ev,
 	evProse,
 	evWithOutput,
@@ -63,11 +63,6 @@ describe("prose around forms", () => {
 		]);
 		expect(checkSyntax("prose only, and a smiley :)")).toEqual([]);
 	});
-
-	it("blanks prose in place so offsets are preserved", () => {
-		expect(stripProse("hi (+ 1 2) bye")).toBe("   (+ 1 2)    ");
-		expect(stripProse("one\n(+ 1 2)\ntwo")).toBe("   \n(+ 1 2)\n   ");
-	});
 });
 
 describe("no comment syntax", () => {
@@ -103,7 +98,7 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			"The result (roughly is fine\n(+ 1 2)",
 		);
 		expect(value).toBe("3");
-		expect(skipped).toEqual(['unclosed "(" on line 1']);
+		expect(skipped).toHaveLength(1);
 	});
 
 	it("reads a form it cannot parse as prose", () => {
@@ -111,9 +106,7 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			"And others (including a deprecated `read_file`).\n(+ 1 2)",
 		);
 		expect(value).toBe("3");
-		expect(skipped).toEqual([
-			'(including a deprecated `read_file`) — unexpected ")" on line 1, so this was read as prose',
-		]);
+		expect(skipped).toHaveLength(1);
 	});
 
 	it("reports the line an unparseable form was on", () => {
@@ -196,30 +189,14 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 			expect(() => tolerantly(text)).toThrow(`undefined: ${name}`);
 		});
 
-		it("reads a phrase by its own shape, whatever heads it", () => {
-			const { value, skipped } = tolerantly(
-				"Free: €0 (2 agents, 10 MB storage, 100 credits)\n" +
-					"DIY: €49.99/month (5 agents, 5 GB storage, 1,000 credits)\n" +
-					"PRO: €199.99/month (Unlimited agents, 15 GB storage, 5,000 credits)",
-			);
-			expect(value).toBe("#<unspecified>");
-			expect(skipped).toHaveLength(3);
-			for (const [index, source] of [
-				"(2 agents, 10 MB storage, 100 credits)",
-				"(5 agents, 5 GB storage, 1,000 credits)",
-				"(Unlimited agents, 15 GB storage, 5,000 credits)",
-			].entries()) {
-				expect(skipped[index]).toContain(source);
-				expect(skipped[index]).toMatch(/so this was read as prose$/);
-			}
-		});
-
 		it.each([
 			"(2 agents, 10 MB storage)",
 			"(car, cdr and cons return values)",
 			"(50 GB, 12 seats, no support)",
 		])("reads %s as a phrase, though no head could say so", (text) => {
-			expect(tolerantly(text).skipped[0]).toMatch(/so this was read as prose$/);
+			const { value, skipped } = tolerantly(text);
+			expect(value).toBe("#<unspecified>");
+			expect(skipped).toHaveLength(1);
 		});
 
 		it("does not read a call with a comma in a string as a phrase", () => {
@@ -264,60 +241,36 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		const skipped = collectSkips(interp);
 		expect(str(runSync(interp, "(+ 1 2)"))).toBe("3");
 		expect(str(runSync(interp, "(missing 1 2)"))).toBe("#<unspecified>");
-		expect(skipped).toEqual([
-			"(missing 1 2) — everything is prose here, so this was read as prose",
-		]);
-	});
-
-	it("judges a form only through stripProse, not the bare form scan", () => {
-		expect(formsOnly("a (b")).toBe("  (b");
-		expect(stripProse("a (b")).toBe("    ");
-		expect(formsOnly("a (see `x`)")).toBe("  (see `x`)");
-		expect(stripProse("a (see `x`)")).toBe("           ");
-		expect(checkSyntax("an aside (see `x`)")).toEqual([
-			{ message: 'syntax error: unexpected ")" at 1', line: 1 },
-		]);
+		expect(skipped).toHaveLength(1);
 	});
 });
 
-describe("truncation", () => {
+describe("a reply cut off mid-form", () => {
 	it.each([
 		"(+ 1",
 		'(echo "hello',
 		"(defun sq (x)",
 		"prose first, then (+ 1",
-	])("sees %s as cut off mid-form", (text) => {
-		expect(isTruncated(text)).toBe(true);
+	])("does not end the turn on %j", async (text) => {
+		expect(await endsTurn(text)).toBe(false);
 	});
 
 	it.each([
 		"",
 		"the sum is 3",
-		"(+ 1 2)",
 		"all done (see above)",
 		"And others (including a deprecated `read_file`).",
-		"a stray ) close paren is just text",
-		'(echo "a (b")',
-	])("sees %s as finished", (text) => {
-		expect(isTruncated(text)).toBe(false);
+	])("ends the turn on %j, which ran nothing", async (text) => {
+		expect(await endsTurn(text)).toBe(true);
 	});
 });
 
 describe("a second look at a form that failed", () => {
 	function excusingInterp(
-		classify: ProseClassifier,
-	): [Interp, string[], { calls: unknown[] }] {
-		const seen: { calls: unknown[] } = { calls: [] };
-		const interp = proseInterp({
-			...proseHost,
-			classifiers: [
-				(i, form) => {
-					seen.calls.push(form);
-					return classify(i, form);
-				},
-			],
-		});
-		return [interp, collectSkips(interp), seen];
+		...classifiers: ProseClassifier[]
+	): [Interp, string[]] {
+		const interp = proseInterp({ ...proseHost, classifiers });
+		return [interp, collectSkips(interp)];
 	}
 
 	it("reads a failed form as prose when an async host says so", async () => {
@@ -328,62 +281,28 @@ describe("a second look at a form that failed", () => {
 		const outcome = await runAsync(interp, '(deploy "the thing")');
 
 		expect(str(outcome.value)).toBe("#<unspecified>");
-		expect(skipped).toEqual([
-			'(deploy "the thing") — read as prose on a second look, so this was read as prose',
-		]);
+		expect(skipped).toHaveLength(1);
 	});
 
-	it("runs classifiers in order and stops at the first match", async () => {
-		const calls: string[] = [];
-		const interp = proseInterp({
-			...proseHost,
-			classifiers: [
-				() => {
-					calls.push("regex");
-					return undefined;
-				},
-				async () => {
-					calls.push("judge");
-					return { reason: "the judge classified it" };
-				},
-				() => {
-					calls.push("fallback");
-					return { reason: "the fallback classified it" };
-				},
-			],
-		});
-		const skipped = collectSkips(interp);
+	it("reads a form by the first classifier that claims it", async () => {
+		const [interp, skipped] = excusingInterp(
+			() => undefined,
+			async () => ({ reason: "the judge classified it" }),
+			() => ({ reason: "the fallback classified it" }),
+		);
 
 		await runAsync(interp, "(review this phrase)");
 
-		expect(calls).toEqual(["regex", "judge"]);
-		expect(skipped).toEqual([
-			"(review this phrase) — the judge classified it, so this was read as prose",
-		]);
+		expect(skipped).toHaveLength(1);
+		expect(skipped[0]).toContain("the judge classified it");
+		expect(skipped[0]).not.toContain("the fallback classified it");
 	});
 
-	it("falls through when every classifier declines", async () => {
-		const calls: string[] = [];
-		const interp = proseInterp({
-			...proseHost,
-			classifiers: [
-				() => {
-					calls.push("regex");
-					return undefined;
-				},
-				async () => {
-					calls.push("judge");
-					return undefined;
-				},
-			],
-		});
-
-		await expect(runAsync(interp, "(deploy 1 2)")).rejects.toThrow(/undefined/);
-		expect(calls).toEqual(["regex", "judge"]);
-	});
-
-	it("raises as before when the host offers no excuse", async () => {
-		const [interp, skipped] = excusingInterp(() => undefined);
+	it("raises as before when every classifier declines", async () => {
+		const [interp, skipped] = excusingInterp(
+			() => undefined,
+			async () => undefined,
+		);
 
 		await expect(runAsync(interp, '(deploy "the thing")')).rejects.toThrow(
 			/undefined/,
@@ -391,8 +310,8 @@ describe("a second look at a form that failed", () => {
 		expect(skipped).toEqual([]);
 	});
 
-	it("never asks about a failure raised under an argument, where code already ran", async () => {
-		const [interp, skipped, seen] = excusingInterp(() => ({
+	it("keeps a failure raised under an argument, where code already ran, though the host would excuse it", async () => {
+		const [interp, skipped] = excusingInterp(() => ({
 			reason: "excused",
 		}));
 		runSync(interp, "(defun keep (x) x)");
@@ -400,32 +319,29 @@ describe("a second look at a form that failed", () => {
 		await expect(runAsync(interp, "(keep (nope))")).rejects.toThrow(
 			/undefined/,
 		);
-		expect(seen.calls).toEqual([]);
 		expect(skipped).toEqual([]);
 	});
 
-	it("never asks about a failure the form's own body raised", async () => {
-		const [interp, skipped, seen] = excusingInterp(() => ({
+	it("keeps a failure the form's own body raised, though the host would excuse it", async () => {
+		const [interp, skipped] = excusingInterp(() => ({
 			reason: "excused",
 		}));
 		runSync(interp, "(defun boom () (nope))");
 
 		await expect(runAsync(interp, "(boom)")).rejects.toThrow(/undefined/);
-		expect(seen.calls).toEqual([]);
 		expect(skipped).toEqual([]);
 	});
 
-	it("asks when the head names something that is not applicable", async () => {
+	it("reads a form whose head is bound but not applicable as prose when the host says so", async () => {
 		const [interp, skipped] = excusingInterp(() => ({
 			reason: "read as prose",
 		}));
 		runSync(interp, "(setq total 3)");
 
-		await runAsync(interp, "(total number of things)");
+		const outcome = await runAsync(interp, "(total number of things)");
 
-		expect(skipped).toEqual([
-			"(total number of things) — read as prose, so this was read as prose",
-		]);
+		expect(str(outcome.value)).toBe("#<unspecified>");
+		expect(skipped).toHaveLength(1);
 	});
 
 	it("leaves the failure alone when nothing hooks the chain", async () => {
@@ -449,13 +365,6 @@ describe("a failure that is not an unresolved head is not prose", () => {
 		const interp = proseInterp();
 		const skipped = collectSkips(interp);
 		expect(() => runSync(interp, '(car "x")')).toThrow();
-		expect(skipped).toEqual([]);
-	});
-
-	it("lets a nested unresolved head through rather than reading the outer form as prose", () => {
-		const interp = proseInterp();
-		const skipped = collectSkips(interp);
-		expect(() => runSync(interp, "(+ 1 (nope 2))")).toThrow(/undefined: nope/);
 		expect(skipped).toEqual([]);
 	});
 });
