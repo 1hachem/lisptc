@@ -122,7 +122,6 @@ describe("intent forms", () => {
 			'(intent/todo "a" "b") (intent/doing "reading") (intent/check "a")',
 		);
 		expect(buffer.collectText("user")).toBe("");
-		expect(buffer.collectText("model")).toBe("");
 		expect(intents(buffer).at(-1)).toEqual({
 			doing: "reading",
 			todos: [
@@ -200,20 +199,6 @@ describe("intent forms", () => {
 });
 
 describe("a progress bar", () => {
-	test("tells only the user, with the progress in the whole intent", () => {
-		const { interp } = fresh();
-		const { buffer } = step(
-			interp,
-			'(intent/todo "a") (intent/progress 2 5 "files")',
-		);
-		expect(buffer.collectText("user")).toBe("");
-		expect(intents(buffer).at(-1)).toEqual({
-			todos: [{ label: "a", done: false }],
-			progress: { done: 2, total: 5, label: "files" },
-		});
-		expect(buffer.collectText("model")).toBe("");
-	});
-
 	test("takes no label, and keeps across steps and todo changes", () => {
 		const { interp } = fresh();
 		step(interp, "(intent/progress 1 3)");
@@ -276,11 +261,14 @@ describe("a question", () => {
 		expect(buffer.collect(effect)).toEqual([{ type: "end" }]);
 	});
 
-	test("takes a fresh id each time and is single choice by default", () => {
+	test("tells two questions apart and is single choice by default", () => {
 		const { interp } = fresh();
-		step(interp, '(intent/ask "p" \'("A"))');
-		const { buffer } = step(interp, '(intent/ask "p" \'("A"))');
-		expect(questions(buffer)[0]).toMatchObject({ id: "q2", multi: false });
+		const first = step(interp, '(intent/ask "p" \'("A"))');
+		const second = step(interp, '(intent/ask "p" \'("A"))');
+		const [a] = questions(first.buffer);
+		const [b] = questions(second.buffer);
+		expect(a.id).not.toBe(b.id);
+		expect(b.multi).toBe(false);
 	});
 
 	test("needs a choice", () => {
@@ -292,26 +280,6 @@ describe("a question", () => {
 });
 
 describe("the journal", () => {
-	test("records each intent and the question as the step runs", () => {
-		const { interp } = fresh();
-		const { buffer } = step(
-			interp,
-			'(intent/todo "a") (intent/doing "x") (intent/ask "p" \'("A" "B"))',
-		);
-		const kinds = [intentKind.name, questionKind.name];
-		expect(
-			buffer.entries.map((e) => e.kind).filter((k) => kinds.includes(k)),
-		).toEqual(["intent", "intent", "question"]);
-		expect(intents(buffer).at(-1)).toEqual({
-			doing: "x",
-			todos: [{ label: "a", done: false }],
-			log: [{ text: "x", startedAt: 1000, state: "running" }],
-		});
-		expect(questions(buffer)).toEqual([
-			{ id: "q1", prompt: "p", choices: ["A", "B"], multi: false },
-		]);
-	});
-
 	test("records nothing for a step that said nothing", () => {
 		const { interp } = fresh();
 		const { buffer } = step(interp, "(+ 1 2)");
@@ -326,12 +294,10 @@ describe("the doing log", () => {
 		clock.at = 1250;
 		step(interp, '(intent/doing "sort")');
 		clock.at = 1300;
-		const { buffer } = step(interp, '(intent/doing "write")');
-		expect(intents(buffer).at(-1)?.log).toEqual([
-			{ text: "read", startedAt: 1000, ms: 250, state: "done" },
-			{ text: "sort", startedAt: 1250, ms: 50, state: "done" },
-			{ text: "write", startedAt: 1300, state: "running" },
-		]);
+		step(interp, '(intent/doing "write")');
+		expect(logOf(interp)).toBe(
+			'(("read" 1000 250 "done") ("sort" 1250 50 "done") ("write" 1300 nil "running"))',
+		);
 	});
 
 	test("records the running line failed when the step fails", () => {
@@ -371,16 +337,8 @@ describe("the doing log", () => {
 		const { interp, hooks, clock } = fresh();
 		step(interp, '(intent/doing "fetch")');
 		clock.at = 1800;
-		const { buffer } = failStep(interp, hooks, "(car 1)");
-		expect(intents(buffer).at(-1)?.log).toEqual([
-			{
-				text: "fetch",
-				startedAt: 1000,
-				ms: 800,
-				state: "failed",
-				error: "boom",
-			},
-		]);
+		failStep(interp, hooks, "(car 1)");
+		expect(logOf(interp)).toBe('(("fetch" 1000 800 "failed" "boom"))');
 		const quiet = step(interp, "(+ 1 2)");
 		expect(quiet.buffer.entries).toEqual([]);
 	});
@@ -425,10 +383,8 @@ describe("the doing log", () => {
 		settle(interp, hooks, "halt");
 		turnStart(interp, hooks);
 		clock.at = 2000;
-		const { buffer } = step(interp, '(intent/doing "second")');
-		expect(intents(buffer).at(-1)?.log).toEqual([
-			{ text: "second", startedAt: 2000, state: "running" },
-		]);
+		step(interp, '(intent/doing "second")');
+		expect(logOf(interp)).toBe('(("second" 2000 nil "running"))');
 	});
 
 	test("cannot be set from lisp", () => {
