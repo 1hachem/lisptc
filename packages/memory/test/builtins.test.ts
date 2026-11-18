@@ -20,12 +20,13 @@ import { openSession } from "@repo/interpreter/session";
 import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { type Entry, view } from "@repo/shared/journal";
-import type {
-	Area,
-	Cue,
-	Recognize,
-	Situation,
-	Turn,
+import {
+	type Area,
+	type Cue,
+	PartialRecognition,
+	type Recognize,
+	type Situation,
+	type Turn,
 } from "@repo/shared/recognition";
 import { describe, expect, it } from "vitest";
 import {
@@ -630,6 +631,26 @@ describe("the when trigger", () => {
 		expect(await f.hear("deploy now")).toEqual(["internal/deploy/notes"]);
 		expect(view(f.entries(), recognizedKind)).toEqual([
 			{ message: "deploy now", scores: {}, error: "timed out" },
+		]);
+	});
+
+	it("fires what the answered areas scored, and records the areas that failed", async () => {
+		const f = fixture({
+			recognize: () =>
+				Promise.reject(
+					new PartialRecognition(
+						new Map([["internal/browser/local", 0.9]]),
+						["deploy"],
+						new Error("timed out"),
+					),
+				),
+		});
+		expect(await f.hear("open the page")).toContain("internal/browser/local");
+		expect(view(f.entries(), recognizedKind)).toMatchObject([
+			{
+				scores: { "internal/browser/local": 0.9 },
+				error: "recognition failed for deploy: timed out",
+			},
 		]);
 	});
 

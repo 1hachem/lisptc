@@ -1,4 +1,4 @@
-import type { Area } from "@repo/shared/recognition";
+import { type Area, PartialRecognition } from "@repo/shared/recognition";
 import type {
 	JudgeRequest,
 	Judgment,
@@ -233,7 +233,7 @@ describe("recognizing which memories the conversation calls for", () => {
 		});
 	});
 
-	it("fires what the answered areas pick when another area fails", async () => {
+	it("hands back what the answered areas pick, naming the area that failed", async () => {
 		const { model } = systemOne(choosing({ [LOCAL.key]: 1 }));
 		const flaky: SystemOneModel = {
 			...model,
@@ -242,13 +242,19 @@ describe("recognizing which memories the conversation calls for", () => {
 					? Promise.reject(new Error("area down"))
 					: model.judge(req, signal),
 		};
-		const scores = await memorySystem(flaky)(
-			{ conversation: CONVERSATION },
-			[LOCAL, BILLING],
-			[{ ...BROWSER, open: true }],
-		);
+		const partial = await Promise.resolve(
+			memorySystem(flaky)(
+				{ conversation: CONVERSATION },
+				[LOCAL, BILLING],
+				[{ ...BROWSER, open: true }],
+			),
+		).catch((ex: unknown) => ex);
+		expect(partial).toBeInstanceOf(PartialRecognition);
+		const { scores, failed, message } = partial as PartialRecognition;
 		expect(scores.get(LOCAL.key)).toBe(1);
 		expect(scores.has(BILLING.key)).toBe(false);
+		expect(failed).toHaveLength(1);
+		expect(message).toContain("area down");
 	});
 
 	it("fails when the model leaves every area unanswered", async () => {

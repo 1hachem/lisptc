@@ -41,13 +41,14 @@ import {
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
-import type {
-	Area,
-	AreaGate,
-	Cue,
-	Recognize,
-	Situation,
-	Turn,
+import {
+	type Area,
+	type AreaGate,
+	type Cue,
+	PartialRecognition,
+	type Recognize,
+	type Situation,
+	type Turn,
 } from "@repo/shared/recognition";
 import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
@@ -840,6 +841,7 @@ export class MemoryBank {
 		try {
 			scores = yield* settled(this.recognize(situation, cues, repl.areas));
 		} catch (ex) {
+			if (ex instanceof PartialRecognition) scores = ex.scores;
 			error = ex instanceof Error ? ex.message : String(ex);
 		}
 		if (scores.size === 0 && error === undefined) return;
