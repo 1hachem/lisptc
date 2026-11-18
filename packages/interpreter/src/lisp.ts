@@ -3,6 +3,7 @@ import { dirname, resolve as resolvePath } from "node:path";
 import type { Awaitable } from "@repo/shared/host";
 import type { z } from "zod";
 import { AsyncWork } from "./async.ts";
+import { LispHashTable } from "./collections.ts";
 import { compileFunc, MACRO_EXPANSION_DEPTH } from "./compile.ts";
 import { installCore } from "./core-builtins.ts";
 import {
@@ -168,6 +169,10 @@ function copyRest(fn: Closure | BuiltInFunc, frame: unknown[]): List {
 
 function copyTree(x: unknown): unknown {
 	return x instanceof Cell ? new Cell(copyTree(x.car), copyTree(x.cdr)) : x;
+}
+
+function sealedView(x: unknown): unknown {
+	return x instanceof LispHashTable ? x.readOnly() : copyTree(x);
 }
 
 export class Interp {
@@ -514,7 +519,7 @@ export class Interp {
 		if (x instanceof Sym) {
 			const value = this.globals.get(x);
 			if (value === undefined) throw new VoidVariable(x);
-			return this.sealed.has(x) ? copyTree(value) : value;
+			return this.sealed.has(x) ? sealedView(value) : value;
 		}
 		if (x instanceof Lambda) return Closure.makeFrom(x, env);
 		return x;

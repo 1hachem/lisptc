@@ -25,7 +25,14 @@ function structuralKey(x: unknown): string {
 }
 
 export class LispHashTable {
-	private readonly entries = new Map<unknown, [unknown, unknown]>();
+	constructor(
+		private readonly entries = new Map<unknown, [unknown, unknown]>(),
+		readonly writable = true,
+	) {}
+
+	readOnly(): LispHashTable {
+		return this.writable ? new LispHashTable(this.entries, false) : this;
+	}
 
 	get size(): number {
 		return this.entries.size;

@@ -1,4 +1,5 @@
 import { quotient } from "@repo/interpreter/arith";
+import { LispHashTable } from "@repo/interpreter/collections";
 import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
@@ -204,55 +205,46 @@ function gistOf(memory: Memory): string {
 }
 
 const LIST = "memory/list";
-const DOCUMENT = "memory/_document-declarations";
+const SETTLE = "memory/_settle";
 const DECLARE_MEMORY = "memory/_declare";
 const DECLARE_AREA = "memory/_declare-area";
-const REGISTER = "memory/_register";
-const UNREGISTER = "memory/_unregister";
 const ENTRY = "memory/_entry";
 const OF_KIND = "memory/_of-kind";
 const CALLING = "memory/_calling";
 const EVERY = "memory/_every";
 const REMEMBERED_KEYS = "memory/_remembered-keys";
-const PUT_AREA = "memory/_put-area";
 const GATES = "memory/_gates";
 const UNKEYED = "";
 
+const TABLE = "*memory/table*";
+const KINDS = "*memory/kinds*";
+const HEADS = "*memory/heads*";
+const AREA_TABLE = "*memory/areas*";
+
+const TABLES: readonly (readonly [string, string])[] = [
+	[
+		TABLE,
+		"Every memory, built-in or read from the store, by key, as (form kind heads).",
+	],
+	[
+		KINDS,
+		"The keys of the memories each trigger kind fires, in the order they were filed.",
+	],
+	[
+		HEADS,
+		"The keys of the call memories each form name fires; those whose pattern names no form are under the empty string.",
+	],
+	[
+		AREA_TABLE,
+		"The situation that opens each area to recognition, in the order the areas were declared.",
+	],
+];
+
+const MEMORY_OWNER = "memory";
+
+const READERS = [ENTRY, OF_KIND, CALLING, EVERY, REMEMBERED_KEYS, GATES];
+
 const PRELUDE = `
-(setq *memory/table* (make-hash-table))
-(_set-doc '*memory/table* "*memory/table*"
-          "Every memory, built-in or read from the store, by key, as (form kind heads).")
-(setq *memory/kinds* (make-hash-table))
-(_set-doc '*memory/kinds* "*memory/kinds*"
-          "The keys of the memories each trigger kind fires, in the order they were filed.")
-(setq *memory/heads* (make-hash-table))
-(_set-doc '*memory/heads* "*memory/heads*"
-          "The keys of the call memories each form name fires; those whose pattern names no form are under the empty string.")
-(setq *memory/areas* (make-hash-table))
-(_set-doc '*memory/areas* "*memory/areas*"
-          "The situation that opens each area to recognition, in the order the areas were declared.")
-
-(defun ${UNREGISTER} (key)
-  "Drop the memory under key from every table it is filed in."
-  (let ((old (gethash key *memory/table*)))
-    (when old
-      (remhash key *memory/table*)
-      (when (cadr old)
-        (puthash (cadr old) (remove key (gethash (cadr old) *memory/kinds*)) *memory/kinds*))
-      (dolist (head (caddr old))
-        (puthash head (remove key (gethash head *memory/heads*)) *memory/heads*)))
-    key))
-
-(defun ${REGISTER} (key kind heads form)
-  "File a memory under its key, the kind of its trigger and the form names its call pattern holds."
-  (${UNREGISTER} key)
-  (puthash key (list form kind heads) *memory/table*)
-  (when kind
-    (puthash kind (append (gethash kind *memory/kinds*) (list key)) *memory/kinds*))
-  (dolist (head heads)
-    (puthash head (append (gethash head *memory/heads*) (list key)) *memory/heads*))
-  key)
-
 (defun ${ENTRY} (key)
   "The form of the memory filed under key, or nil."
   (car (gethash key *memory/table*)))
@@ -277,12 +269,6 @@ const PRELUDE = `
   (remove-if (lambda (key) (string-prefix? "${INTERNAL}" key))
              (hash-table-keys *memory/table*)))
 
-(defun ${PUT_AREA} (name situation)
-  "File an area and the situation that opens it; nil when the name is taken."
-  (unless (hash-has-key name *memory/areas*)
-    (puthash name situation *memory/areas*)
-    t))
-
 (defun ${GATES} ()
   "Every declared area as (name situation), in the order they were declared."
   (mapcar (lambda (pair) (list (car pair) (cdr pair)))
@@ -294,7 +280,7 @@ const PRELUDE = `
 (setq area
   (macro (name &rest declared)
     (list '${DECLARE_AREA} (list 'quote (cons name declared)))))
-(${DOCUMENT})
+(${SETTLE})
 `;
 
 function isDeclaration(form: unknown): boolean {
@@ -324,6 +310,16 @@ function headsOf(pattern: unknown): string[] | undefined {
 		return undefined;
 	const name = pattern.car.name;
 	return name !== ANYTHING && LITERAL_NAME.test(name) ? [name] : undefined;
+}
+
+function fileUnder(table: LispHashTable, name: unknown, key: string): void {
+	const filed = listToArray((table.get(name)?.[1] ?? null) as List);
+	table.set(name, arrayToList([...filed, key]));
+}
+
+function dropFrom(table: LispHashTable, name: unknown, key: string): void {
+	const filed = listToArray((table.get(name)?.[1] ?? null) as List);
+	table.set(name, arrayToList(filed.filter((filedKey) => filedKey !== key)));
 }
 
 function headsIn(form: unknown, into: Set<string> = new Set()): Set<string> {
@@ -573,17 +569,31 @@ export class MemoryBank {
 		return forms.flatMap((form) => formToMemory(form) ?? []);
 	}
 
-	private *file(memory: Memory): Eval<void> {
+	private table(name: string): LispHashTable {
+		return this.installed().getGlobal(newSym(name)) as LispHashTable;
+	}
+
+	private file(memory: Memory): void {
+		this.unfile(memory.key);
 		const kind = memory.on?.kind ?? null;
 		const heads =
 			kind === "call" ? (headsOf(memory.on?.pattern) ?? [UNKEYED]) : [];
-		yield* this.ask(
-			REGISTER,
+		this.table(TABLE).set(
 			memory.key,
-			kind,
-			arrayToList(heads),
-			memoryToForm(memory),
+			arrayToList([memoryToForm(memory), kind, arrayToList(heads)]),
 		);
+		if (kind !== null) fileUnder(this.table(KINDS), kind, memory.key);
+		for (const head of heads) fileUnder(this.table(HEADS), head, memory.key);
+	}
+
+	private unfile(key: string): void {
+		const filed = this.table(TABLE).get(key)?.[1];
+		if (filed === undefined) return;
+		this.table(TABLE).delete(key);
+		const [, kind, heads] = listToArray(filed as List);
+		if (typeof kind === "string") dropFrom(this.table(KINDS), kind, key);
+		for (const head of listToArray(heads as List))
+			dropFrom(this.table(HEADS), head, key);
 	}
 
 	*declare(declared: unknown): Eval<void> {
@@ -604,13 +614,15 @@ export class MemoryBank {
 				`a built-in memory body holds at most ${MAX_BUILTIN_WORDS} words; split it and link the parts`,
 				memory.key,
 			);
-		yield* this.file(memory);
+		this.file(memory);
 	}
 
-	*declareArea(declared: unknown): Eval<void> {
+	declareArea(declared: unknown): void {
 		const gate = areaFrom(declared);
-		if ((yield* this.ask(PUT_AREA, gate.name, gate.situation)) === null)
+		const areas = this.table(AREA_TABLE);
+		if (areas.get(gate.name) !== undefined)
 			throw new EvalException("two areas share this name", gate.name);
+		areas.set(gate.name, gate.situation);
 	}
 
 	*gates(): Eval<AreaGate[]> {
@@ -664,7 +676,7 @@ export class MemoryBank {
 		} catch {
 			return undefined;
 		}
-		yield* this.file(memory);
+		this.file(memory);
 		return memory;
 	}
 
@@ -687,7 +699,7 @@ export class MemoryBank {
 
 	private *stale(): Eval<void> {
 		const keys = listToArray((yield* this.ask(REMEMBERED_KEYS)) as List);
-		for (const key of keys) yield* this.ask(UNREGISTER, key);
+		for (const key of keys) this.unfile(key as string);
 		this.storeRead.set(false);
 	}
 
@@ -1192,14 +1204,23 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			doc: "The kinds of event an :on trigger can name.",
 		},
 	);
+	for (const [name, doc] of TABLES) {
+		interp.defineGlobal(newSym(name), new LispHashTable(), {
+			signature: name,
+			doc,
+		});
+		interp.seal(newSym(name), MEMORY_OWNER);
+	}
 	interp.def(
-		DOCUMENT,
+		SETTLE,
 		0,
-		`(${DOCUMENT})`,
-		"Give memory and area the documentation the memory extension declares them with, over the core's placeholders.",
+		`(${SETTLE})`,
+		"Give memory and area the documentation the memory extension declares them with, over the core's placeholders, and seal them and the forms that read the memory tables, so only this extension defines them.",
 		z.tuple([]),
 		() => {
 			documentDeclarations(interp);
+			for (const name of ["memory", "area", ...READERS])
+				interp.seal(newSym(name), MEMORY_OWNER);
 			return Unspecified;
 		},
 	);
@@ -1214,14 +1235,14 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			return Unspecified;
 		},
 	);
-	interp.defGen(
+	interp.def(
 		DECLARE_AREA,
 		1,
 		`(${DECLARE_AREA} declaration)`,
 		"File an area, as the area form declares it, with the situation that opens it to recognition. Returns nothing.",
 		z.tuple([z.unknown()]),
-		function* ([declared]): Eval {
-			yield* bank.declareArea(declared);
+		([declared]) => {
+			bank.declareArea(declared);
 			return Unspecified;
 		},
 	);

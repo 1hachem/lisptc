@@ -200,6 +200,22 @@ describe("built-in memories", () => {
 		);
 	});
 
+	it("are filed in tables the agent reads but cannot write", async () => {
+		const f = fixture();
+		expect(
+			await ev(f, '(car (gethash "internal/deploy/notes" *memory/table*))'),
+		).toContain("deploys go through task deploy");
+		for (const code of [
+			'(remhash "internal/deploy/notes" *memory/table*)',
+			"(clrhash *memory/kinds*)",
+			"(setq *memory/table* nil)",
+			"(defun memory/_entry (key) nil)",
+			"(setq memory nil)",
+		])
+			await expect(ev(f, code)).rejects.toThrow(/read-only|owned by memory/);
+		expect(await f.hear("deploy the app")).toEqual(["internal/deploy/notes"]);
+	});
+
 	it("fire on their own trigger, out of any store", async () => {
 		const f = fixture();
 		expect(await f.hear("deploy the app")).toEqual(["internal/deploy/notes"]);

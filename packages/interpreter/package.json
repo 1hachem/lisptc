@@ -8,6 +8,7 @@
     "./arith": "./src/arith.ts",
     "./journal": "./src/journal.ts",
     "./async": "./src/async.ts",
+    "./collections": "./src/collections.ts",
     "./conversation": "./src/conversation.ts",
     "./core-builtins": "./src/core-builtins.ts",
     "./docs": "./src/docs.ts",

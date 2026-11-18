@@ -200,6 +200,16 @@ const zHashTable = z.custom<LispHashTable>(
 	(x) => x instanceof LispHashTable,
 	"hash table expected",
 );
+
+function writable(table: LispHashTable): LispHashTable {
+	if (!table.writable)
+		throw new EvalException(
+			"this hash table is read-only: the extension that owns it writes it",
+			table,
+			false,
+		);
+	return table;
+}
 const zChar = z.custom<string>(
 	(x) => typeof x === "string" && [...x].length === 1,
 	"one-character string expected",
@@ -387,7 +397,7 @@ function installCollections(interp: Definer): void {
 		"Store `value` under `key` in `table`, destructively; return `value`.",
 		z.tuple([zAny, zAny, zHashTable]),
 		([key, value, table]) => {
-			table.set(key, value);
+			writable(table).set(key, value);
 			return value;
 		},
 	);
@@ -397,7 +407,7 @@ function installCollections(interp: Definer): void {
 		"(remhash key table)",
 		"Remove the entry for `key` from `table`; return t if there was one.",
 		z.tuple([zAny, zHashTable]),
-		([key, table]) => (table.delete(key) ? true : null),
+		([key, table]) => (writable(table).delete(key) ? true : null),
 	);
 	interp.def(
 		"clrhash",
@@ -406,7 +416,7 @@ function installCollections(interp: Definer): void {
 		"Remove every entry from `table`; return `table`.",
 		z.tuple([zHashTable]),
 		([table]) => {
-			table.clear();
+			writable(table).clear();
 			return table;
 		},
 	);
