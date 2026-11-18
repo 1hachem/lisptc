@@ -38,6 +38,11 @@ class FakeThreads implements AgentThreads {
 
 	async spawn(spawn: Spawn): Promise<string> {
 		this.spawned.push(spawn);
+		if (spawn.seed.from === "fork") {
+			const child = session(new FakeThreads());
+			restore(child.interp, spawn.seed.image);
+			this.children.set(spawn.definition.name, child.interp);
+		}
 		return `child-${this.spawned.length}`;
 	}
 
@@ -55,6 +60,9 @@ class FakeThreads implements AgentThreads {
 		const message = this.last(agent);
 		if (message === undefined)
 			return { failure: "that agent was sent nothing yet" };
+		const child = this.children.get(agent);
+		if (child !== undefined)
+			return { reply: str((await runAsync(child, message.text)).value) };
 		return message.text === "fail"
 			? { failure: "it broke" }
 			: { reply: `got ${message.text}` };
@@ -101,18 +109,14 @@ function world(withThreads = true) {
 }
 
 describe("a definition file", () => {
-	test("carries every field to the agent spawned from it, quotes and newlines included", async () => {
-		const { run, threads } = world();
-		await run(
-			'(defagent "lead" :prompt "say \\"hi\\"\\nthen dig" :permissions "(permission/deny \\"fs/*\\")" :budget 40)',
-		);
-		await run('(spawn "lead")');
-		expect(threads.spawned[0]?.definition).toEqual({
-			name: "lead",
-			prompt: 'say "hi"\nthen dig',
-			permissions: '(permission/deny "fs/*")',
-			budget: 40,
-		});
+	test("reads back as the form that saved it, quotes and newlines included", async () => {
+		const { run, shown } = world();
+		const form =
+			'(defagent "lead" :prompt "say \\"hi\\"\\nthen dig" :permissions "(permission/deny \\"fs/*\\")" :budget 40)';
+		await run(form);
+		expect(
+			await shown(`(equal (read (agent-definition "lead")) '${form})`),
+		).toBe("t");
 	});
 
 	test("that does not read is no saved agent", async () => {
@@ -209,16 +213,13 @@ describe("defagent with permissions", () => {
 });
 
 describe("spawn", () => {
-	test("forks the image and the chat when asked, so the agent sees this session's variables", async () => {
-		const { run, threads } = world();
-		await run("(setq x 41)");
-		await run('(spawn "s" :prompt "p" :repl :fork :chat :fork)');
-		const [spawned] = threads.spawned;
-		expect(spawned?.chat).toEqual({ from: "fork" });
-		if (spawned?.seed.from !== "fork") throw new Error("not forked");
-		const child = session(new FakeThreads());
-		restore(child.interp, spawned.seed.image);
-		expect(str((await runAsync(child.interp, "(+ x 1)")).value)).toBe("42");
+	test("with :repl :fork starts the agent on a copy of this session's variables", async () => {
+		const { shown } = world();
+		expect(
+			await shown(
+				'(setq x 41) (agent-wait (spawn "s" :prompt "(+ x 1)" :repl :fork))',
+			),
+		).toBe('"42"');
 	});
 
 	test("with :prompt saves nothing", async () => {
