@@ -3,10 +3,11 @@ import { api } from "@repo/backend/api";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { reportIssue } from "./analytics.tsx";
-import type { SidebarSide, StoredSidebars } from "./ui.tsx";
+import type { SidebarSide } from "./sidebar-order.ts";
+import type { OpenSidebars } from "./ui.tsx";
 import { useWorkspace } from "./workspace.tsx";
 
-export function useStoredSidebars(): StoredSidebars {
+export function useStoredSidebars(): OpenSidebars {
 	const workspaceId = useWorkspace().workspace?._id;
 	const { data: shown } = useQuery(
 		convexQuery(

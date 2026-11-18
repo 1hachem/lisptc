@@ -20,6 +20,7 @@ import {
 	writeBoolPref,
 } from "./prefs.ts";
 import { togglesOf } from "./resolved-preferences.ts";
+import type { SidebarSide } from "./sidebar-order.ts";
 
 type MetaShown = Record<MetaField, boolean>;
 
@@ -38,9 +39,7 @@ interface UIContextValue {
 	toggleInput: (id: InputHelper) => void;
 }
 
-export type SidebarSide = "left" | "right";
-
-export interface StoredSidebars {
+export interface OpenSidebars {
 	shown: Record<SidebarSide, boolean> | null | undefined;
 	put: (side: SidebarSide, open: boolean) => void;
 }
@@ -52,7 +51,7 @@ export function UIProvider({
 	sidebars,
 }: {
 	children: React.ReactNode;
-	sidebars?: StoredSidebars;
+	sidebars?: OpenSidebars;
 }) {
 	const [leftOpen, setLeft] = useState(() =>
 		readBoolPref(SIDEBAR_COOKIE, false),
