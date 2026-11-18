@@ -1,5 +1,4 @@
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { mcpExtension } from "@repo/mcp-extension";
 import { mcpHost } from "@repo/mcp-extension/mcp-host";
@@ -18,7 +17,7 @@ describe("secret registry (revealed only into an MCP call)", () => {
 			mcpExtension({ ...mcpHost, commands: true, client }),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");

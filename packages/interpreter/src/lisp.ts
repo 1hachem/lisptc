@@ -3,7 +3,8 @@ import { dirname, resolve as resolvePath } from "node:path";
 import type { Awaitable } from "@repo/shared/host";
 import type { z } from "zod";
 import { AsyncWork } from "./async.ts";
-import { compileFunc } from "./compile.ts";
+import { LispHashTable } from "./collections.ts";
+import { compileFunc, MACRO_EXPANSION_DEPTH } from "./compile.ts";
 import { installCore } from "./core-builtins.ts";
 import {
 	type Arity,
@@ -50,6 +51,7 @@ import {
 	assert,
 	Cell,
 	condSym,
+	EndOfFile,
 	Keyword,
 	type List,
 	lambdaSym,
@@ -64,9 +66,10 @@ import {
 	setqSym,
 	Unspecified,
 } from "./objects.ts";
+import { prelude } from "./prelude.ts";
 import { str } from "./print.ts";
 import { qqQuote } from "./quasiquote.ts";
-import { Reader } from "./reader.ts";
+import { Reader, readFailure, type SyntaxFailure } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
 import { LANGUAGE_REFERENCE } from "./source.ts";
@@ -129,6 +132,8 @@ export interface Contents {
 export interface Installable {
 	(interp: Interp): void;
 	readonly prompt?: string;
+	readonly prelude?: string;
+	readonly postlude?: string;
 }
 
 export interface InterpOptions {
@@ -177,6 +182,10 @@ function copyTree(x: unknown): unknown {
 	return x instanceof Cell ? new Cell(copyTree(x.car), copyTree(x.cdr)) : x;
 }
 
+function sealedView(x: unknown): unknown {
+	return x instanceof LispHashTable ? x.readOnly() : copyTree(x);
+}
+
 export class Interp {
 	private readonly globals: Map<Sym, unknown> = new Map();
 
@@ -205,6 +214,10 @@ export class Interp {
 	private readonly sources: Map<string, unknown> = new Map();
 
 	private readonly prompts: string[] = [];
+
+	private readonly preludes: string[] = [prelude];
+
+	private readonly postludes: string[] = [];
 
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);
@@ -276,10 +289,25 @@ export class Interp {
 			"The globals defvar declared dynamic, which let rebinds for the extent of its body.",
 		);
 		this.defineQuasiquote();
+		this.defineGlobal(BOOTED, null, {
+			signature: BOOTED.name,
+			doc: "t once the prelude and every extension's prelude and postlude have run; nil while they run.",
+		});
+		this.seal(BOOTED, "boot");
+		this.defineGlobal(
+			newSym("*max-macro-depth*"),
+			BigInt(MACRO_EXPANSION_DEPTH),
+			{
+				signature: "*max-macro-depth*",
+				doc: "How deep macro expansion nests before it stops with an error.",
+			},
+		);
 
 		for (const extension of options.extensions ?? []) {
 			extension(this);
 			if (extension.prompt) this.prompts.push(extension.prompt);
+			if (extension.prelude) this.preludes.push(extension.prelude);
+			if (extension.postlude) this.postludes.push(extension.postlude);
 		}
 	}
 
@@ -297,8 +325,42 @@ export class Interp {
 		this.seal(quasiquoteSym, "core");
 	}
 
+	bootSources(): readonly string[] {
+		return [...this.preludes, ...this.postludes];
+	}
+
 	systemPrompt(): string {
 		return [LANGUAGE_REFERENCE, ...this.prompts].join("\n\n");
+	}
+
+	read(text: string): unknown {
+		const reader = new Reader();
+		reader.push(text);
+		if (reader.isEmpty()) throw new EvalException("no expression in", text);
+		try {
+			return reader.read();
+		} catch (ex) {
+			if (ex === EndOfFile) throw new EvalException("unclosed form in", text);
+			throw ex;
+		}
+	}
+
+	readAll(text: string): unknown[] {
+		const reader = new Reader();
+		reader.push(text);
+		const forms: unknown[] = [];
+		try {
+			while (!reader.isEmpty()) forms.push(reader.read());
+		} catch (ex) {
+			if (ex === EndOfFile)
+				throw new EvalException("unclosed form at line", reader.line);
+			throw ex;
+		}
+		return forms;
+	}
+
+	readFailure(text: string): SyntaxFailure | undefined {
+		return readFailure(text);
 	}
 
 	def<T extends z.ZodType>(
@@ -557,7 +619,7 @@ export class Interp {
 		if (x instanceof Sym) {
 			const value = this.globals.get(x);
 			if (value === undefined) throw new VoidVariable(x);
-			return this.sealed.has(x) ? copyTree(value) : value;
+			return this.sealed.has(x) ? sealedView(value) : value;
 		}
 		if (x instanceof Lambda) return Closure.makeFrom(x, env);
 		return x;
@@ -845,4 +907,26 @@ export function runSync(interp: Interp, text: string): unknown {
 
 export function runAsync(interp: Interp, text: string): Promise<Outcome> {
 	return driveAsync(runGen(interp, text));
+}
+
+export const BOOTED = newSym("*booted*");
+
+export function* bootGen(interp: Interp): Eval<void> {
+	try {
+		for (const source of interp.bootSources()) yield* runGen(interp, source);
+	} finally {
+		interp.defineGlobal(BOOTED, true);
+	}
+}
+
+export function booted(interp: Interp): boolean {
+	return interp.getGlobal(BOOTED) === true;
+}
+
+export function boot(interp: Interp): void {
+	driveSync(bootGen(interp));
+}
+
+export async function bootAsync(interp: Interp): Promise<void> {
+	await driveAsync(bootGen(interp));
 }

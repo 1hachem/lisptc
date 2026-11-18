@@ -11,9 +11,8 @@ import {
 	printed,
 	type Sink,
 } from "@repo/interpreter/journal";
-import { runAsync, runSync } from "@repo/interpreter/lisp";
+import { boot, runAsync } from "@repo/interpreter/lisp";
 import { EndOfFile, Unspecified } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { openSession } from "@repo/interpreter/session";
@@ -68,7 +67,7 @@ class InteractiveRepl implements Repl {
 		const interp = new ConversationInterpreter({
 			extensions: this.extensions,
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		interp.journal.pipe(stdoutSink());
 		const repl = this;
 		interp.hooks.evalForm.use(function* (i, form, next) {

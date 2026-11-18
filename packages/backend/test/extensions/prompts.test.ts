@@ -37,13 +37,12 @@ describe("the system prompt an interpreter composes", () => {
 		expect(prompt).not.toMatch(/\(await /);
 		expect(prompt).not.toMatch(/\(secret /);
 		expect(prompt).not.toMatch(/:offset/);
-		expect(prompt).not.toMatch(/memory\/recall/);
 	});
 
 	it("teaches remembering only when memory is installed", () => {
-		const prompt = new Interp({
-			extensions: [memoryExtension(memoryHost)],
-		}).systemPrompt();
+		const extension = memoryExtension(memoryHost);
+		const interp = new Interp({ extensions: [extension] });
+		const prompt = [interp.systemPrompt(), extension.postlude].join("\n");
 
 		expect(prompt).toMatch(/MEMORY/);
 		expect(prompt).toMatch(/memory\/remember/);
@@ -64,9 +63,9 @@ describe("the system prompt an interpreter composes", () => {
 	});
 
 	it("teaches windowing only when compaction is installed", () => {
-		const prompt = new Interp({
-			extensions: [compactionExtension(compactionHost)],
-		}).systemPrompt();
+		const extension = compactionExtension(compactionHost);
+		const interp = new Interp({ extensions: [extension] });
+		const prompt = [interp.systemPrompt(), extension.postlude].join("\n");
 
 		expect(prompt).toMatch(/:offset/);
 		expect(prompt).toMatch(/EXTRACT, THEN ECHO/);

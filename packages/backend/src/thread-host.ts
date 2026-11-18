@@ -17,7 +17,7 @@ import { DEFAULT_CHOICE } from "@repo/shared/providers";
 import type { FunctionReturnType } from "convex/server";
 import { internal } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
-import { MAX_SPAWN_DEPTH, TURN_DEADLINE_MS } from "../convex/limits.js";
+import { TURN_DEADLINE_MS } from "../convex/limits.js";
 import {
 	type ChildRecord,
 	type WorkspaceClient,
@@ -34,27 +34,13 @@ export type RecordLineage = FunctionReturnType<
 export interface ThreadProfile {
 	readonly instructions?: string;
 	readonly bounds: readonly string[];
-	readonly roster?: readonly string[];
 	readonly budget?: number;
 	readonly subAgent?: true;
-}
-
-function narrowed(
-	roster: readonly string[] | undefined,
-	by: readonly string[] | undefined,
-): readonly string[] | undefined {
-	if (by === undefined) return roster;
-	if (roster === undefined) return by;
-	return roster.filter((name) => by.includes(name));
 }
 
 export function profileOf(lineage: RecordLineage): ThreadProfile {
 	const agents = lineage.flatMap(({ agent }) =>
 		agent === undefined ? [] : [agent],
-	);
-	const roster = agents.reduce<readonly string[] | undefined>(
-		(kept, agent) => narrowed(kept, agent.roster),
-		undefined,
 	);
 	const budgets = agents.flatMap(({ budget }) =>
 		budget === undefined ? [] : [budget],
@@ -63,11 +49,6 @@ export function profileOf(lineage: RecordLineage): ThreadProfile {
 	return {
 		...(instructions === undefined ? {} : { instructions }),
 		bounds: [...new Set(agents.flatMap((agent) => agent.bounds))],
-		...(lineage.length > MAX_SPAWN_DEPTH
-			? { roster: [] }
-			: roster === undefined
-				? {}
-				: { roster }),
 		...(budgets.length === 0 ? {} : { budget: Math.min(...budgets) }),
 		...(lineage[0]?.agent === undefined ? {} : { subAgent: true }),
 	};
@@ -310,7 +291,6 @@ export class ThreadHost {
 		const repl = new AgentRepl({
 			extensions: await workspaceExtensions(workspaceId, () => owner, {
 				bounds: profile.bounds,
-				...(profile.roster === undefined ? {} : { roster: profile.roster }),
 				...(profile.subAgent === undefined ? {} : { subAgent: true }),
 				...(own ? { chatId } : {}),
 				...(supervisor === undefined ? {} : { supervisor }),

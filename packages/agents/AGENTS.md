@@ -11,7 +11,7 @@ Turbo tag: `extension`.
 root passes in, `src/agents.ptc` the prompt, `src/ports.ts` the port a root
 implements and `src/definition.ts` the definition file. `src/library.ts` reads
 and writes saved definitions through the source folder port, `src/names.ts`
-holds the roster filter and the names kept for delegates, and `src/handles.ts`
+holds the names kept for delegates, and `src/handles.ts`
 the spawned agents' handles.
 
 ## Rules

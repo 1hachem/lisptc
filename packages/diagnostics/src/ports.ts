@@ -3,6 +3,7 @@ import type { SearchDocument, SearchEngine } from "@repo/shared/search";
 
 export interface DiagnosticsHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 	search: SearchEngine;
 }
 

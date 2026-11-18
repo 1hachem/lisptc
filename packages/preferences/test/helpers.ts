@@ -1,5 +1,4 @@
-import { Interp, runAsync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { bootAsync, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import type { DesktopPreferences } from "@repo/shared/desktop";
 import {
@@ -29,6 +28,19 @@ export interface World {
 	store: MemoryPreferencesStore;
 }
 
+export const HOST_CHOICES = {
+	fonts: [{ id: "geist", name: "Geist" }],
+	motions: [
+		{ id: "slide", name: "rows slide" },
+		{ id: "lift", name: "the row lifts" },
+	],
+	metadata: [
+		{ id: "input", name: "input tokens" },
+		{ id: "model", name: "model" },
+	],
+	input: [{ id: "lisp", name: "lisp" }],
+};
+
 export async function world(
 	held: Preferences = {},
 	desktop?: DesktopPreferencesPort,
@@ -39,17 +51,13 @@ export async function world(
 			preferencesExtension(
 				preferencesHostFor({
 					store,
-					fonts: [{ id: "geist", name: "Geist" }],
-					motions: [
-						{ id: "slide", name: "rows slide" },
-						{ id: "lift", name: "the row lifts" },
-					],
+					...HOST_CHOICES,
 					...(desktop === undefined ? {} : { desktop }),
 				}),
 			),
 		],
 	});
-	await runAsync(interp, prelude);
+	await bootAsync(interp);
 	return {
 		store,
 		ev: async (code) => str((await runAsync(interp, code)).value),

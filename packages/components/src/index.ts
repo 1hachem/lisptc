@@ -19,7 +19,7 @@ export {
 	RUNNING_GLYPHS,
 } from "./glyph-cycle.tsx";
 export { MessageFeedback } from "./message-feedback.tsx";
-export { MessageMemories } from "./message-memories.tsx";
+export { MessageJudgements } from "./message-judgements.tsx";
 export { useNativeDrag, useNativeDropTarget } from "./native-drag.ts";
 export { PromptDialog } from "./prompt-dialog.tsx";
 export { Scramble, type ScrambleProps } from "./scramble.tsx";
@@ -41,6 +41,48 @@ export {
 	ThemeDialog,
 	ThemeSwatches,
 } from "./theme-selector.tsx";
+export { Trace, type TraceSlots, TraceSteps } from "./trace.tsx";
+export {
+	LanesShown,
+	Revealed,
+	useLanes,
+	useTraced,
+} from "./trace-context.tsx";
+export {
+	type EntryCarrier,
+	entriesOfMessage,
+	foldEntries,
+	isEntryMessage,
+	type Placement,
+	toolActivity,
+	tracePlacement,
+} from "./trace-entries.ts";
+export {
+	EVERY_LANE,
+	LANES,
+	type Lane,
+	type LaneId,
+	laneOf,
+	type Shown,
+} from "./trace-lanes.ts";
+export {
+	type ChatMessage,
+	isNoteMessage,
+	isParentMessage,
+	isSystemMessage,
+	isToolMessage,
+	isUserMessage,
+	messageText,
+	type StepMeta,
+	stepMeta,
+	toolModelOutput,
+} from "./trace-message.ts";
+export {
+	type TraceChild,
+	type TraceEntry,
+	type TraceStep,
+	traceEntries,
+} from "./trace-steps.ts";
 export {
 	Typewriter,
 	type TypewriterProps,

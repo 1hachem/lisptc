@@ -7,6 +7,8 @@ export const SPLITS = ["here", "right", "down"] as const;
 
 export type Split = (typeof SPLITS)[number];
 
+export const DEFAULT_SPLIT: Split = "here";
+
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
 	| { kind: "view"; title: string; viewId: string };

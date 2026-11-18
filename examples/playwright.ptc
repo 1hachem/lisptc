@@ -27,7 +27,7 @@ Navigate somewhere else.
 
 A domain that can't resolve makes the tool call signal an error;
 `try`/`catch` binds the handler variable to that error, a plist
-(:kind k :message m :value v), instead of letting it propagate.
+(:kind k :message m :value v) , instead of letting it propagate.
 (try
   (playwright/browser_navigate :url "https://this-domain-does-not-exist-lisptc.invalid")
   (catch (e)

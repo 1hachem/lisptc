@@ -1,11 +1,26 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+	type ChatMessage,
+	isNoteMessage,
+	isParentMessage,
+	isSystemMessage,
+	isToolMessage,
+	isUserMessage,
+	type LaneId,
+	laneOf,
+	messageText,
+	Revealed,
+	type StepMeta,
+	toolModelOutput,
+	useLanes,
+	useTraced,
+} from "@repo/components";
 import type { Progress } from "@repo/journal-catalog/intent";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import {
 	createContext,
 	memo,
-	type ReactNode,
 	useCallback,
 	useContext,
 	useEffect,
@@ -22,23 +37,14 @@ import {
 import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import {
-	type ChatMessage,
-	isNoteMessage,
-	isParentMessage,
-	isSystemMessage,
-	isToolMessage,
-	isUserMessage,
 	messageClassified,
 	messageProse,
 	messageReasoning,
-	messageText,
 	parentSourceOf,
-	type StepMeta,
 	toolAnswers,
 	toolAsks,
 	toolFailed,
 	toolFailure,
-	toolModelOutput,
 	toolQuestion,
 	toolResult,
 	toolResults,
@@ -48,7 +54,6 @@ import {
 	useChatSession,
 } from "../lib/chat.tsx";
 import { isGreetingMessage } from "../lib/greeting.ts";
-import { EVERY_LANE, type LaneId, laneOf, type Shown } from "../lib/lanes.ts";
 import { useModelPicker } from "../lib/model-picker.tsx";
 import { traceOpen } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
@@ -80,10 +85,6 @@ import { UserLine } from "./user-line.tsx";
 const CHAT_FOLD = { lines: 25, chars: Number.POSITIVE_INFINITY };
 const TRACE_FOLD = { lines: 6, chars: 480 };
 const PAGE_LINES = 200;
-
-const Traced = createContext(false);
-
-export const Revealed = createContext(false);
 
 function Marked({
 	id,
@@ -132,7 +133,7 @@ function LaneText({
 	tone: string;
 	code?: boolean;
 }) {
-	const traced = useContext(Traced);
+	const traced = useTraced();
 	const revealed = useContext(Revealed);
 	const [expanded, setExpanded] = useState(false);
 	const [page, setPage] = useState(0);
@@ -194,26 +195,6 @@ function LaneText({
 			)}
 		</div>
 	);
-}
-
-const ShownLanes = createContext<Shown | null>(null);
-
-export function LanesShown({
-	shown,
-	children,
-}: {
-	shown: Shown;
-	children: ReactNode;
-}) {
-	return (
-		<ShownLanes.Provider value={shown}>
-			<Traced.Provider value>{children}</Traced.Provider>
-		</ShownLanes.Provider>
-	);
-}
-
-export function useLanes(): Shown {
-	return useContext(ShownLanes) ?? EVERY_LANE;
 }
 
 function toolOutput(message: ChatMessage): string {
@@ -344,7 +325,7 @@ function UserMessage({ message }: { message: ChatMessage }) {
 
 export function ChatLine({ message }: { message: ChatMessage }) {
 	const shown = useLanes();
-	const traced = useContext(Traced);
+	const traced = useTraced();
 	const reasoning =
 		isUserMessage(message) || !shown.thinking ? "" : messageReasoning(message);
 	return (

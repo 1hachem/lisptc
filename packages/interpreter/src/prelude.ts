@@ -524,30 +524,6 @@ export const prelude = `
       (setq end (- end 1)))
     (substring s start end)))
 
-(defun format (template &rest args)
-  "Fill template with args and return the string: ~a inserts the next argument as (string x), ~% a newline, ~~ a tilde. Directives are case-insensitive."
-  (let ((out "")
-        (i 0)
-        (n (length template))
-        (pending args))
-    (while (< i n)
-      (let ((c (char template i)))
-        (cond ((not (equal c "~"))
-               (setq out (concat out c))
-               (setq i (+ i 1)))
-              ((<= n (+ i 1))
-               (error "format: a ~ ends the template"))
-              (t (let ((d (string-downcase (char template (+ i 1)))))
-                   (cond ((equal d "a")
-                          (when (null pending)
-                            (error "format: not enough arguments for the template"))
-                          (setq out (concat out (string (car pending))))
-                          (setq pending (cdr pending)))
-                         ((equal d "%") (setq out (concat out "\\n")))
-                         ((equal d "~") (setq out (concat out "~")))
-                         (t (error (concat "format: unknown directive ~" d))))
-                   (setq i (+ i 2)))))))
-    out))
 (defun reverse (xs)
   "Return a new list of the elements of xs in reverse order; xs is unchanged."
   (let ((out nil))
@@ -823,4 +799,12 @@ export const prelude = `
           (unless (_boundp ',name) (setq ,name ,(car rest)))
           ,@(if (cdr rest) (list \`(_set-doc ',name (symbol-name ',name) ,(cadr rest))))
           ',name))
+
+(defmacro memory (key &rest declared)
+  "A declaration in a .memories.ptc file an extension ships. Here it does nothing; an extension that files memories defines it."
+  nil)
+
+(defmacro area (name &rest declared)
+  "A declaration in a .memories.ptc file an extension ships. Here it does nothing; an extension that files memories defines it."
+  nil)
 `;

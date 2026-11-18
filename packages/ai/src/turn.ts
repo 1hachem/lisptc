@@ -14,6 +14,7 @@ import type { AgentRepl, LiveEntries } from "@repo/repl/repl";
 import type { Entry, Received } from "@repo/shared/journal";
 import type { Skipped } from "@repo/shared/lisp-forms";
 import type { StepMeta } from "@repo/shared/messages";
+import { countTokens } from "gpt-tokenizer";
 import { type AgentConfig, streamAgent } from "./agent.ts";
 import { evalMessage } from "./eval.ts";
 import {
@@ -65,6 +66,7 @@ export type TurnEvent =
 			results: readonly string[];
 	  }
 	| { type: "entry"; entry: Entry }
+	| { type: "system"; prompt: string; tokens: number }
 	| { type: "noted"; line: PostedLine }
 	| { type: "steered"; id: string; line: PostedLine }
 	| { type: "evaluated"; message: ToolMessage }
@@ -245,6 +247,7 @@ async function* openTurn(
 	const system =
 		config?.system ??
 		withInstructions(systemPromptFor(turn.repl.interp), config);
+	yield { type: "system", prompt: system, tokens: countTokens(system) };
 	const traced: AgentConfig = { ...config, trace };
 	return {
 		system,
@@ -449,6 +452,16 @@ export async function* runAgentTurn(
 	options: TurnOptions,
 ): AsyncGenerator<TurnEvent> {
 	const turn = newTurn(options, messages);
+	for await (const event of playTurn(turn, options)) {
+		if (event.type === "entry") turn.telemetry.entry(event.entry);
+		yield event;
+	}
+}
+
+async function* playTurn(
+	turn: Turn,
+	options: TurnOptions,
+): AsyncGenerator<TurnEvent> {
 	const { repl, signal } = turn;
 	const startedAt = Date.now();
 

@@ -24,6 +24,7 @@ import { z } from "zod";
 
 export interface IntentHost {
 	prompt: PromptSource;
+	memories: PromptSource;
 	clock: Clock;
 }
 
@@ -185,6 +186,7 @@ export function intentExtension(host: IntentHost): InterpExtension {
 		(interp: Interp): void => registerIntent(interp, clock),
 		{
 			prompt: host.prompt(),
+			postlude: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.turnStart.use((ctx, next) => {
 					statesOf.get(ctx.interp)?.log.set([]);

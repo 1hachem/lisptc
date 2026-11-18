@@ -108,7 +108,7 @@ break/return only ever affects the nearest enclosing loop.
 
 try evaluates its body; if it raises, the first catch whose kind
 matches runs with the handler variable bound to the error, a plist
-(:kind k :message m :value v).
+(:kind k :message m :value v) .
 (echo (try
     (car 5)
     (catch (e)
@@ -136,8 +136,8 @@ finally runs however the try exits.
 retry evaluates a form again when it raises, at most n more times.
 (setq tries 0)
 (echo (retry 3 (progn
-    (setq tries (+ tries 1))
-    (if (< tries 3) (error :flaky "not yet") tries))))
+      (setq tries (+ tries 1))
+      (if (< tries 3) (error :flaky "not yet") tries))))
 => 3
 attempt turns an error into a value, so a batch keeps every success.
 (echo (mapcar (lambda (b) (attempt (safe-div 10 b))) '(2 0 5)))
@@ -146,7 +146,7 @@ attempt turns an error into a value, so a batch keeps every success.
 => (:ok 5.0) (:error (:kind :type-error ...)) (:ok 2.0)
 with-ok chains results and stops at the first error.
 (echo (with-ok ((a (attempt (car '(4))))
-               (b (attempt (* a 2))))
+      (b (attempt (* a 2))))
     (+ a b)))
 => (:ok 12)
 break/return are loop signals, not catchable errors — try does not

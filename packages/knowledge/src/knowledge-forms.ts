@@ -41,7 +41,7 @@ export function registerKnowledge(
 				const bytes = yield* settled(store.read("knowledge", checked));
 				return bytes === undefined
 					? null
-					: yield* settled(codecFor(checked).read(checked, bytes, pdf));
+					: yield* settled(codecFor(checked).read(checked, bytes, pdf, interp));
 			});
 		},
 	);
@@ -60,7 +60,7 @@ export function registerKnowledge(
 					store.write(
 						"knowledge",
 						checked,
-						new TextEncoder().encode(codec.write(checked, value)),
+						new TextEncoder().encode(codec.write(checked, value, interp)),
 						codec.contentType,
 					),
 				);

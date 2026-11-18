@@ -11,6 +11,7 @@ import {
 	holding,
 	refusingByNote,
 	testRepl,
+	unprompted,
 } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
@@ -429,7 +430,7 @@ describe("a thread's budget", () => {
 			(m) => m.id === asked()?.additional_kwargs?.holding,
 		);
 		expect(
-			grand
+			unprompted(grand)
 				.filter((m) => m.type === "entry")
 				.map((m) => m.additional_kwargs?.value),
 		).toEqual(["approve it", "approve"]);

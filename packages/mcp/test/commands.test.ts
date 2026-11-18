@@ -1,5 +1,4 @@
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
@@ -17,7 +16,7 @@ function interpOn(host: McpHost, commands?: boolean): Interp {
 			}),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 
