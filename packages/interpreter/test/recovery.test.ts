@@ -84,15 +84,17 @@ describe("the phases around an image", () => {
 		expect(failed).toEqual([{ name: "broken", reason: "it broke" }]);
 	});
 
-	it("runs beforeSave in reverse registration order, into the image", () => {
-		const interp = freshInterp();
+	it("runs an extension's beforeSave steps last registered first, and the image keeps what they set", () => {
+		const saving = (interp: Interp): void => {
+			interp.recovery.beforeSave("first", () => {
+				runSync(interp, "(setq order (cons 'first order))");
+			});
+			interp.recovery.beforeSave("second", () => {
+				runSync(interp, "(setq order (cons 'second order))");
+			});
+		};
+		const interp = freshInterp({ extensions: [saving] });
 		ev("(setq order nil)", interp);
-		interp.recovery.beforeSave("first", () => {
-			runSync(interp, "(setq order (cons 'first order))");
-		});
-		interp.recovery.beforeSave("second", () => {
-			runSync(interp, "(setq order (cons 'second order))");
-		});
 		expect(ev("order", roundTrip(interp))).toBe("(first second)");
 	});
 

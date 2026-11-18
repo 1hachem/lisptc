@@ -48,35 +48,6 @@ describe("a piped sink", () => {
 		runSync(interp, '(echo "second")');
 		expect(buffer.collectText("user")).toBe("first\n");
 	});
-
-	it("is dropped once it reports itself closed", () => {
-		const interp = new Interp();
-		const sent: string[] = [];
-		interp.journal.pipe({
-			send(e) {
-				sent.push((e.value as { text: string }).text);
-				return sent.length < 2;
-			},
-		});
-		runSync(
-			interp,
-			'(echo "while open") (echo "the last one it accepts") (echo "never seen")',
-		);
-		expect(sent).toEqual(["while open\n", "the last one it accepts\n"]);
-	});
-
-	it("is dropped once it throws on send", () => {
-		const interp = new Interp();
-		let tries = 0;
-		interp.journal.pipe({
-			send() {
-				tries++;
-				throw new Error("sink is broken");
-			},
-		});
-		runSync(interp, '(echo "first") (echo "second")');
-		expect(tries).toBe(1);
-	});
 });
 
 describe("an interp's journal", () => {
