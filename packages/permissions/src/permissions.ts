@@ -91,7 +91,7 @@ export class SessionRules {
 	) {}
 
 	readWith(reader: ConfigReader): void {
-		this.reader ??= reader;
+		this.reader = reader;
 	}
 
 	get current(): PermissionRules {
