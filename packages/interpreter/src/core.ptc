@@ -81,16 +81,15 @@ Evaluated specially, not as function calls. Complete list:
 | setq | (setq name val ...) | Assign val to variable name, one or more pairs. Returns last value. Defines or updates a global if name isn't a local. |
 | lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
 | macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
-| quasiquote | (quasiquote x) | Template with unquote and unquote-splicing, see the syntax section. |
 | try | (try
   body
   (catch (e)
     handler...)) | Eval body; on error, bind e to the error value and run the handler. |
 
-if, when, unless, and, or,
+quasiquote, if, when, unless, and, or,
 let, let*, letrec, while, dolist, dotimes, case, defun,
 defmacro, setf, push, pop, incf, decf, block, return-from, catch and
-unwind-protect are prelude macros, not special forms; use the same way.
+unwind-protect are macros, not special forms; use the same way.
 
 Tail calls optimized: tail recursion and loop macros never overflow the stack.
 Iterate with tail-recursive helpers or loop macros.

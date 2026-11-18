@@ -7,7 +7,7 @@ import {
 	Lambda,
 	Macro,
 } from "./func.ts";
-import { soleArg, tryParts } from "./forms.ts";
+import { tryParts } from "./forms.ts";
 import {
 	Cell,
 	keySym,
@@ -23,7 +23,6 @@ import {
 	unquoteSplicingSym,
 	unquoteSym,
 } from "./objects.ts";
-import { qqExpand } from "./quasiquote.ts";
 
 export interface Compiler extends Evaluator {
 	getGlobal(sym: Sym): unknown;
@@ -53,8 +52,6 @@ function compileForm(interp: Compiler, j: unknown, depth: number): unknown {
 			return compileFunc(interp, cdrCell(j), null, Lambda.make);
 		case macroSym:
 			throw new EvalException("nested macro", j);
-		case quasiquoteSym:
-			return compileForm(interp, qqExpand(soleArg(j, "quasiquote")), depth);
 		case trySym: {
 			const { body, handler } = tryParts(j);
 			const compiled =

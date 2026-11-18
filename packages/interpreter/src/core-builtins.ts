@@ -23,6 +23,7 @@ import {
 } from "./docs.ts";
 import type { Eval } from "./drive.ts";
 import { EvalException, LoopSignal, ThrowSignal } from "./errors.ts";
+import { soleArg } from "./forms.ts";
 import { BuiltInFunc } from "./func.ts";
 import { type Journal, print } from "./journal.ts";
 import {
@@ -34,10 +35,12 @@ import {
 	type List,
 	newLispKeyword,
 	newSym,
+	quasiquoteSym,
 	Sym,
 	Unspecified,
 } from "./objects.ts";
 import { echoText, str } from "./print.ts";
+import { qqExpand } from "./quasiquote.ts";
 import { Reader } from "./reader.ts";
 import { zAny, zCell, zList, zNumeric, zString, zSym } from "./schema.ts";
 
@@ -1239,5 +1242,13 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		"Internal: call the 0-arg thunk, catching only a break/return loop signal (any other exception, including a genuine Lisp error, propagates unchanged). Returns (signalled? . value): signalled? is t iff break/return fired.",
 		z.tuple([zAny]),
 		(a) => core.runLoopBody(a),
+	);
+	interp.def(
+		"_quasiquote",
+		1,
+		"(_quasiquote args)",
+		"Internal: expand the arguments of a quasiquote form into the cons, list and append calls that build it.",
+		z.tuple([zAny]),
+		([args]) => qqExpand(soleArg(new Cell(quasiquoteSym, args), "quasiquote")),
 	);
 }

@@ -64,7 +64,7 @@ import {
 	Unspecified,
 } from "./objects.ts";
 import { str } from "./print.ts";
-import { qqExpand, qqQuote } from "./quasiquote.ts";
+import { qqQuote } from "./quasiquote.ts";
 import { Reader } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
@@ -251,11 +251,26 @@ export class Interp {
 			runLoopBody: (a) => this.runLoopBody(a),
 			importFile: (path) => this.importFile(path),
 		});
+		this.defineQuasiquote();
 
 		for (const extension of options.extensions ?? []) {
 			extension(this);
 			if (extension.prompt) this.prompts.push(extension.prompt);
 		}
+	}
+
+	private defineQuasiquote(): void {
+		const reader = new Reader();
+		reader.push("((&rest args) (_quasiquote args))");
+		this.defineGlobal(
+			quasiquoteSym,
+			this.compile(reader.read() as Cell, null, Macro.make),
+			{
+				signature: "(quasiquote x)",
+				doc: "Build `x` as a template: `,y` inserts the value of `y`, `,@ys` splices the list `ys`. `` `x `` is shorthand.",
+			},
+		);
+		this.seal(quasiquoteSym, "core");
 	}
 
 	systemPrompt(): string {
@@ -513,8 +528,6 @@ export class Interp {
 			case macroSym:
 				if (env !== null) throw new EvalException("nested macro", x);
 				return this.compile(arg, null, Macro.make);
-			case quasiquoteSym:
-				return new Tail(qqExpand(soleArg(x, "quasiquote")), env);
 			default:
 				throw new EvalException("bad keyword", fn);
 		}
