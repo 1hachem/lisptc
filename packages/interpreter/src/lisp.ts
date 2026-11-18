@@ -264,6 +264,11 @@ export class Interp {
 			runLoopBody: (a) => this.runLoopBody(a),
 			importFile: (path) => this.importFile(path),
 		});
+		this.defineGlobal(BOOTED, null, {
+			signature: BOOTED.name,
+			doc: "t once the prelude and every extension's prelude and postlude have run; nil while they run.",
+		});
+		this.seal(BOOTED, "boot");
 		this.defineGlobal(
 			newSym("*max-macro-depth*"),
 			BigInt(MACRO_EXPANSION_DEPTH),
@@ -848,8 +853,15 @@ export function runAsync(interp: Interp, text: string): Promise<Outcome> {
 	return driveAsync(runGen(interp, text));
 }
 
+export const BOOTED = newSym("*booted*");
+
 export function* bootGen(interp: Interp): Eval<void> {
 	for (const source of interp.bootSources()) yield* runGen(interp, source);
+	interp.defineGlobal(BOOTED, true);
+}
+
+export function booted(interp: Interp): boolean {
+	return interp.getGlobal(BOOTED) === true;
 }
 
 export function boot(interp: Interp): void {

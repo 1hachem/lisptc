@@ -3,8 +3,9 @@ import { z } from "zod";
 import { driveSync } from "../src/drive.ts";
 import { EvalException } from "../src/errors.ts";
 import {
+	boot,
 	type Installable,
-	type Interp,
+	Interp,
 	runAsync,
 	runSync,
 } from "../src/lisp.ts";
@@ -56,6 +57,17 @@ describe("extensions", () => {
 
 	it("carries only the language reference with no extension", () => {
 		expect(freshInterp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
+	});
+
+	it("says it has booted only once every postlude has run", () => {
+		const seen: Installable = Object.assign(() => {}, {
+			postlude: "(setq during *booted*)",
+		});
+		const interp = new Interp({ extensions: [seen] });
+		expect(ev("*booted*", interp)).toBe("nil");
+		boot(interp);
+		expect(ev("(list during *booted*)", interp)).toBe("(nil t)");
+		expect(() => ev("(setq *booted* nil)", interp)).toThrow(/owned by boot/);
 	});
 
 	it("boots every extension's prelude before any extension's postlude", () => {

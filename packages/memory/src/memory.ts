@@ -5,6 +5,7 @@ import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import type { Journal } from "@repo/interpreter/journal";
 import {
+	booted,
 	detachedState,
 	type Interp,
 	type State,
@@ -596,7 +597,17 @@ export class MemoryBank {
 			dropFrom(this.table(HEADS), head, key);
 	}
 
+	private refuseAfterBoot(declared: unknown): void {
+		if (booted(this.installed()))
+			throw new EvalException(
+				"built-ins are declared only while the interpreter boots, from the .memories.ptc an extension ships; remember yours with memory/remember",
+				declared,
+				false,
+			);
+	}
+
 	*declare(declared: unknown): Eval<void> {
+		this.refuseAfterBoot(declared);
 		const parts = listToArray(declared as List);
 		const body = parts.at(-1);
 		const built =
@@ -618,6 +629,7 @@ export class MemoryBank {
 	}
 
 	declareArea(declared: unknown): void {
+		this.refuseAfterBoot(declared);
 		const gate = areaFrom(declared);
 		const areas = this.table(AREA_TABLE);
 		if (areas.get(gate.name) !== undefined)

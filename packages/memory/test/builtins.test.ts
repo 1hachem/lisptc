@@ -216,6 +216,18 @@ describe("built-in memories", () => {
 		expect(await f.hear("deploy the app")).toEqual(["internal/deploy/notes"]);
 	});
 
+	it("are declared only while the interpreter boots", async () => {
+		const f = fixture();
+		for (const code of [
+			'(memory "internal/t/late" :when "the test asks for it" "too late")',
+			'(area "late" :when "the test asks for it")',
+		])
+			await expect(ev(f, code)).rejects.toThrow(
+				/only while the interpreter boots/,
+			);
+		expect(await drive(f.bank.lookup("internal/t/late"))).toBeUndefined();
+	});
+
 	it("fire on their own trigger, out of any store", async () => {
 		const f = fixture();
 		expect(await f.hear("deploy the app")).toEqual(["internal/deploy/notes"]);
