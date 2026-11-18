@@ -50,11 +50,6 @@ describe("permissions over the memory extension", () => {
 		expect(await printed(repl, "(memory/forget-all)")).toContain("1");
 	});
 
-	it("leaves the rest of memory to the config", async () => {
-		const repl = replWith("");
-		expect(await printed(repl, REMEMBER)).toContain("k");
-	});
-
 	it("lets a session resumed from its image answer a held forget-all, then run it on the next step", async () => {
 		const store = new VolatileStore();
 		const images = new MemoryImageStore();

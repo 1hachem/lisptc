@@ -1,3 +1,5 @@
+import { arrayToList, newSym } from "@repo/interpreter/objects";
+import { str } from "@repo/interpreter/print";
 import type { Memory } from "@repo/memory-extension/ports";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api.js";
@@ -152,14 +154,6 @@ function remembered(key: string, body: unknown): Memory {
 }
 
 describe("the convex memory store", () => {
-	it("serves a hydrated read without awaiting", async () => {
-		const { workspace, connect } = await seeded(row("triage", '"logs"'));
-		const store = new ConvexMemoryStore(workspace, connect);
-		await store.all();
-
-		expect(store.get("triage")).not.toBeInstanceOf(Promise);
-	});
-
 	it("writes through to convex, so a fresh store reads what another wrote", async () => {
 		const { workspace, connect } = await seeded();
 		const writer = new ConvexMemoryStore(workspace, connect);
@@ -175,5 +169,54 @@ describe("the convex memory store", () => {
 		expect(
 			await new ConvexMemoryStore(workspace, connect).get("triage"),
 		).toBeUndefined();
+	});
+
+	it("hands a fresh store back the prose, links and strength another wrote", async () => {
+		const { workspace, connect } = await seeded();
+		await new ConvexMemoryStore(workspace, connect).put({
+			key: "triage",
+			body: "start with the logs",
+			links: new Map([["logs", 2]]),
+			score: 1.5,
+			used: 3,
+			lastUsed: 1_700_000_000_000,
+		});
+
+		expect(
+			await new ConvexMemoryStore(workspace, connect).get("triage"),
+		).toEqual({
+			key: "triage",
+			body: "start with the logs",
+			links: new Map([["logs", 2]]),
+			score: 1.5,
+			used: 3,
+			lastUsed: 1_700_000_000_000,
+		});
+	});
+
+	it("hands a fresh store back a recipe as a form, not as prose", async () => {
+		const { workspace, connect } = await seeded();
+		await new ConvexMemoryStore(workspace, connect).put(
+			remembered(
+				"triage",
+				arrayToList([newSym("grep"), newSym("logs"), newSym("timeout")]),
+			),
+		);
+
+		const back = await new ConvexMemoryStore(workspace, connect).get("triage");
+		expect(typeof back?.body).not.toBe("string");
+		expect(str(back?.body)).toBe("(grep logs timeout)");
+	});
+
+	it("hands a fresh store back the trigger another wrote", async () => {
+		const { workspace, connect } = await seeded();
+		await new ConvexMemoryStore(workspace, connect).put({
+			...remembered("triage", "start with the logs"),
+			on: { kind: "error", pattern: "timeout" },
+		});
+
+		expect(
+			(await new ConvexMemoryStore(workspace, connect).get("triage"))?.on,
+		).toEqual({ kind: "error", pattern: "timeout" });
 	});
 });

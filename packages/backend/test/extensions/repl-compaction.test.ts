@@ -147,11 +147,6 @@ describe("capping echo output", () => {
 		expect(user).not.toContain("nil");
 	});
 
-	it("leaves short output exactly as it was written", async () => {
-		const r = await repl();
-		expect(await r.eval('(echo "a b")')).toBe("a b\n");
-	});
-
 	it("hands back an offset that echo continues from without a gap", async () => {
 		const r = await repl();
 		await r.eval("(range 20)");

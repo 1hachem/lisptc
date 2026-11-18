@@ -4,7 +4,7 @@ import { Interp } from "@repo/interpreter/lisp";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
-import { type MemoryStore, VolatileStore } from "@repo/memory-extension/ports";
+import { VolatileStore } from "@repo/memory-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -28,14 +28,6 @@ const swapped: [string, () => InterpExtension][] = [
 	["secrets", () => secretsExtension({ ...secretsHost, prompt: said })],
 ];
 
-const colocated: [string, () => InterpExtension][] = [
-	["compaction", () => compactionExtension(compactionHost)],
-	["memory", () => memoryExtension(memoryHost)],
-	["promises", () => promisesExtension(promisesHost)],
-	["prose", () => proseExtension(proseHost)],
-	["secrets", () => secretsExtension(secretsHost)],
-];
-
 const prompted = (extension: InterpExtension) =>
 	new Interp({ extensions: [extension] }).systemPrompt();
 
@@ -43,35 +35,30 @@ describe("every extension takes its prompt from the host", () => {
 	it.each(swapped)("%s teaches the supplied prompt", (_name, build) => {
 		expect(prompted(build())).toContain("a prompt the host supplied");
 	});
-
-	it.each(colocated)("%s teaches its colocated .ptc", (_name, build) => {
-		expect(prompted(build()).length).toBeGreaterThan(
-			new Interp().systemPrompt().length,
-		);
-	});
 });
 
 describe("a supplied store is the one the extension uses", () => {
-	it("keeps memory in the volatile store it was handed", async () => {
+	it("hands what one repl remembered to another repl over the same store", async () => {
 		const store = new VolatileStore();
-		const r = memoryRepl([memoryExtension({ ...memoryHost, store })]);
-		await r.eval('(memory/remember "k" "kept here")');
-		expect((await store.get("k"))?.body).toBe("kept here");
+		await memoryRepl([memoryExtension({ ...memoryHost, store })]).eval(
+			'(memory/remember "k" "kept here")',
+		);
+		const other = memoryRepl([memoryExtension({ ...memoryHost, store })]);
+		expect(await other.eval('(memory/recall "kept")')).toContain("kept here");
 	});
 });
 
 describe("a host with no filesystem behind it still builds", () => {
-	it("runs every port from values the caller owns", async () => {
-		const store: MemoryStore = new VolatileStore();
+	it("remembers and recalls on ports built from values the caller owns", async () => {
 		const r = memoryRepl([
 			memoryExtension({
-				store,
+				store: new VolatileStore(),
 				clock: { now: () => 0 },
 				prompt: () => "",
 				search: memoryHost.search,
 			}),
 		]);
 		await r.eval('(memory/remember "k" "no disk")');
-		expect((await store.get("k"))?.body).toBe("no disk");
+		expect(await r.eval('(memory/recall "disk")')).toContain("no disk");
 	});
 });

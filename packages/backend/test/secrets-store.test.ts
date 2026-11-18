@@ -7,6 +7,7 @@ import {
 	type SecretsClient,
 	type StoredSecret,
 } from "../src/secrets-store.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 function named(reference: unknown): string {
 	return getFunctionName(reference as FunctionReference<"query" | "mutation">);
@@ -14,23 +15,16 @@ function named(reference: unknown): string {
 
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 
-function spyClient(
-	rows: StoredSecret[] = [],
-	put: (secret: StoredSecret) => void = () => {},
-): { client: SecretsClient; saved: StoredSecret[] } {
-	const saved: StoredSecret[] = [];
+function spyClient(put: (secret: StoredSecret) => void): {
+	client: SecretsClient;
+} {
 	const answer = (reference: unknown, args: Record<string, unknown>) => {
 		const name = named(reference);
-		if (name === named(api.secrets.list)) return Promise.resolve(rows);
-		if (name === named(api.secrets.put)) {
-			const secret = args.secret as StoredSecret;
-			put(secret);
-			saved.push(secret);
-		}
+		if (name === named(api.secrets.list)) return Promise.resolve([]);
+		if (name === named(api.secrets.put)) put(args.secret as StoredSecret);
 		return Promise.resolve(null);
 	};
 	return {
-		saved,
 		client: { query: answer, mutation: answer } as unknown as SecretsClient,
 	};
 }
@@ -41,31 +35,41 @@ function open(client: SecretsClient): Promise<ConvexSecretsStore> {
 
 describe("the convex secrets store", () => {
 	it("serves what the workspace already held", async () => {
-		const { client } = spyClient([
-			{ key: "REPL_TOKEN", value: "hydrated", description: "from convex" },
-		]);
-		const store = await open(client);
+		const alice = await signIn(testDeployment(), "alice@example.com");
+		await alice.as.mutation(api.secrets.put, {
+			workspaceId: alice.workspace,
+			secret: { key: "REPL_TOKEN", value: "held", description: "from convex" },
+		});
+		const store = await ConvexSecretsStore.open(
+			alice.workspace,
+			() => alice.as as unknown as SecretsClient,
+		);
 
 		expect(store.get("REPL_TOKEN")).toEqual({
-			value: "hydrated",
+			value: "held",
 			description: "from convex",
 		});
 		expect(store.list()).toEqual([["REPL_TOKEN", "from convex"]]);
 	});
 
-	it("sends nothing for a key the port would drop", async () => {
-		const { client, saved } = spyClient();
-		const store = await open(client);
+	it("stores nothing for a key the port would drop", async () => {
+		const alice = await signIn(testDeployment(), "alice@example.com");
+		const store = await ConvexSecretsStore.open(
+			alice.workspace,
+			() => alice.as as unknown as SecretsClient,
+		);
 
 		store.set({ TOKEN: "unprefixed" });
 
 		await store.flush();
 		expect(store.get("TOKEN")).toBeUndefined();
-		expect(saved).toEqual([]);
+		expect(
+			await alice.as.query(api.secrets.list, { workspaceId: alice.workspace }),
+		).toEqual([]);
 	});
 
 	it("survives a write the deployment refused", async () => {
-		const { client } = spyClient([], () => {
+		const { client } = spyClient(() => {
 			throw new Error("TOO_MANY_SECRETS");
 		});
 		const store = await open(client);

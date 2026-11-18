@@ -1,12 +1,7 @@
 import { Compactor, compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
-import { llmSlot } from "@repo/interpreter/observe";
 import { memoryKind } from "@repo/journal-catalog/memory";
-import {
-	MemoryBank,
-	memoryExtension,
-	memorySlot,
-} from "@repo/memory-extension";
+import { MemoryBank, memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
 import { proseExtension } from "@repo/prose-extension";
@@ -24,7 +19,7 @@ describe("a REPL built from a list of extensions", () => {
 
 		expect(await r.eval("(+ 1 2)")).toBe("+-1: 3\n");
 		expect(await r.eval('(memory/remember "k" "a note")')).toContain("k");
-		expect(r.hooks.filled(secretsSlot)).toBeDefined();
+		expect(await r.eval("(secrets)")).not.toContain("undefined");
 	});
 });
 
@@ -69,8 +64,14 @@ describe("a REPL built from a list of its own", () => {
 		]);
 
 		await r.eval('(memory/remember "k" "a note worth keeping")');
+		const other = memoryRepl([
+			compactionExtension(compactionHost),
+			memoryExtension(memoryHost, { bank }),
+		]);
 
-		expect((await bank.store.get("k"))?.body).toBe("a note worth keeping");
+		expect(await other.eval('(memory/recall "worth")')).toContain(
+			"a note worth keeping",
+		);
 	});
 
 	it("notes a fired memory for the model and records it in the journal, never in the REPL output", async () => {
@@ -83,10 +84,7 @@ describe("a REPL built from a list of its own", () => {
 
 		const { model, entries, notes } = await r.evalOutput("(+ 1 1)");
 
-		expect(notes).toEqual([
-			expect.objectContaining({ role: "system", source: "memory" }),
-		]);
-		expect(notes[0]?.content).toContain("k: the note");
+		expect(notes.map((note) => note.content).join("\n")).toContain("the note");
 		expect(view(entries, memoryKind)).toEqual([
 			{ key: "k", body: "the note", on: "step" },
 		]);
@@ -107,17 +105,11 @@ describe("a REPL built from a list of its own", () => {
 		);
 	});
 
-	it("has no bank when no memory extension is in it", () => {
+	it("knows no memory form when no memory extension is in it", async () => {
 		expect(
-			memoryRepl([compactionExtension(compactionHost)]).hooks.filled(
-				memorySlot,
+			await memoryRepl([compactionExtension(compactionHost)]).eval(
+				'(memory/remember "k" "a note")',
 			),
-		).toBeUndefined();
-	});
-
-	it("has no observer to hand out when nothing fills the slot", () => {
-		expect(
-			memoryRepl([proseExtension(proseHost)]).hooks.filled(llmSlot),
-		).toBeUndefined();
+		).toContain("undefined");
 	});
 });

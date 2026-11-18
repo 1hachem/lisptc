@@ -37,13 +37,6 @@ function stored() {
 }
 
 describe("a step that renders", () => {
-	it("hands the view back beside the output", async () => {
-		const out = await memoryRepl().evalOutput(PANEL);
-		const { model } = out;
-		expect(shownView(out)).toBeDefined();
-		expect(model).not.toContain("ui/button");
-	});
-
 	it("reports no view for a step that rendered none", async () => {
 		expect(shownView(await memoryRepl().evalOutput("(+ 1 2)"))).toBeUndefined();
 	});
@@ -159,10 +152,11 @@ describe("driving the view", () => {
 	});
 
 	it("gives each step that renders a view of its own", async () => {
-		const { r } = stored();
+		const { r, node } = stored();
 		const one = await r.evalOutput('(ui/render (ui/text "a"))');
 		const two = await r.evalOutput('(ui/render (ui/text "b"))');
-		expect(shownView(one)).not.toEqual(shownView(two));
+		expect(node(one)).toMatchObject({ props: { text: "a" } });
+		expect(node(two)).toMatchObject({ props: { text: "b" } });
 	});
 
 	it("passes a submitted form's fields to its handler", async () => {

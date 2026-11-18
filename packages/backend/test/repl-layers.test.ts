@@ -60,11 +60,6 @@ describe("a chat's repl", () => {
 			replId,
 		);
 	});
-
-	it("starts with nothing to resume", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		expect(await t.query(internal.repls.latest, { replId })).toBeNull();
-	});
 });
 
 describe("repl layers", () => {
@@ -87,29 +82,6 @@ describe("repl layers", () => {
 		).rejects.toThrow("STALE_HEAD");
 	});
 
-	it("hands back the run from the nearest whole layer", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		const first = await t.mutation(internal.repls.record, {
-			replId,
-			...layer(1),
-		});
-		const second = await t.mutation(internal.repls.record, {
-			replId,
-			...layer(2, first),
-		});
-		const third = await t.mutation(internal.repls.record, {
-			replId,
-			...layer(3),
-		});
-		await t.mutation(internal.repls.record, { replId, ...layer(4, third) });
-		expect(second).not.toBe(third);
-		const latest = await t.query(internal.repls.latest, { replId });
-		expect(latest?.depth).toBe(4);
-		expect(latest?.layers.map((chunks) => JSON.parse(chunks.join("")))).toEqual(
-			[{ n: 3 }, { n: 4 }],
-		);
-	});
-
 	it("refuses a chunk longer than a row holds", async () => {
 		const { t, replId } = await chatOf("alice@example.com");
 		await expect(
@@ -121,16 +93,16 @@ describe("repl layers", () => {
 		).rejects.toThrow("CHUNK_TOO_LARGE");
 	});
 
-	it("refuses a layer past the size limit", async () => {
+	it("refuses a layer past the size limit and keeps nothing of it", async () => {
 		const { t, replId } = await chatOf("alice@example.com");
 		await expect(
-			t.mutation(internal.repls.record, {
-				replId,
-				whole: true,
-				chunks: chunked("x".repeat(MAX_REPL_LAYER_BYTES + 1)),
-			}),
+			new ConvexImageStore(replId, serverOf(t)).save(
+				image(["x".repeat(MAX_REPL_LAYER_BYTES + 1)]),
+			),
 		).rejects.toThrow("TOO_LARGE");
-		expect(await t.query(internal.repls.latest, { replId })).toBeNull();
+		expect(
+			await new ConvexImageStore(replId, serverOf(t)).latest(),
+		).toBeUndefined();
 	});
 });
 

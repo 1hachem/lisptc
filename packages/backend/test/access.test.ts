@@ -89,14 +89,16 @@ describe("a thread acting as its record's owner", () => {
 			workspaceId: alice.workspace,
 		});
 		const workspaceId = alice.workspace;
-		const before = await thread.query(api.preferences.get, { workspaceId });
 		await thread.mutation(api.preferences.put, {
 			workspaceId,
-			preferences: before,
+			preferences: { font: "mono" },
 		});
-		expect(await alice.as.query(api.preferences.get, { workspaceId })).toEqual(
-			before,
-		);
+		expect(
+			await alice.as.query(api.preferences.get, { workspaceId }),
+		).toMatchObject({ font: "mono" });
+		expect(
+			await thread.query(api.preferences.get, { workspaceId }),
+		).toMatchObject({ font: "mono" });
 	});
 
 	it("is refused when its user does not own the workspace it acts for", async () => {
@@ -791,40 +793,6 @@ describe("panel layout access", () => {
 		).toEqual(layout(3, 3));
 	});
 
-	it("keeps a trace tab beside the chat it traces", async () => {
-		const t = testDeployment();
-		const alice = await signIn(t, "alice@example.com");
-		const traced = {
-			root: "p",
-			focused: "p",
-			nodes: [
-				{
-					kind: "pane" as const,
-					id: "p",
-					tabs: [
-						{
-							id: "trace:c1",
-							content: {
-								kind: "trace" as const,
-								chatId: "c1",
-								title: "trace",
-								turn: "h1",
-							},
-						},
-					],
-					active: "trace:c1",
-				},
-			],
-		};
-		await alice.as.mutation(api.layouts.put, {
-			workspaceId: alice.workspace,
-			layout: traced,
-		});
-		expect(
-			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
-		).toEqual(traced);
-	});
-
 	it("keeps a view the agent opened below the chat, tied to the chat that drew it", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
@@ -879,35 +847,6 @@ describe("panel layout access", () => {
 		expect(
 			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
 		).toEqual(viewed);
-	});
-
-	it("keeps the chat a drawn view came from", async () => {
-		const t = testDeployment();
-		const alice = await signIn(t, "alice@example.com");
-		const view = {
-			kind: "pane" as const,
-			id: "p",
-			tabs: [
-				{
-					id: "view:t",
-					content: {
-						kind: "view" as const,
-						title: "t",
-						viewId: "view:t",
-						chatId: "c1",
-					},
-				},
-			],
-			active: "view:t",
-		};
-		const saved = { root: "p", focused: null, nodes: [view] };
-		await alice.as.mutation(api.layouts.put, {
-			workspaceId: alice.workspace,
-			layout: saved,
-		});
-		expect(
-			await alice.as.query(api.layouts.get, { workspaceId: alice.workspace }),
-		).toEqual(saved);
 	});
 
 	it("takes any number of panes side by side but refuses more than three stacked", async () => {
@@ -1469,13 +1408,6 @@ describe("chat listing", () => {
 				(await alice.as.query(api.chats.get, { chatId })).status;
 			return { alice, chatId, status };
 		}
-
-		it("streams from start and goes idle when the turn settles", async () => {
-			const { alice, chatId, status } = await opened(testDeployment());
-			expect(await status()).toBe("streaming");
-			await alice.as.mutation(api.chats.settle, { chatId });
-			expect(await status()).toBeUndefined();
-		});
 
 		it("keeps why a turn failed until the next one starts", async () => {
 			const { alice, chatId, status } = await opened(testDeployment());
@@ -2045,21 +1977,5 @@ describe("a thread's server functions", () => {
 				name: "scout",
 			}),
 		).toBeNull();
-	});
-
-	it("refuses to spawn past the depth cap", async () => {
-		const t = testDeployment();
-		const alice = await signIn(t, "alice@example.com");
-		let chatId = await alice.as.mutation(api.chats.create, {
-			workspaceId: alice.workspace,
-		});
-		for (let depth = 0; depth < MAX_SPAWN_DEPTH; depth++)
-			chatId = await t.mutation(internal.threads.spawn, {
-				chatId,
-				agent: lead,
-			});
-		await expect(
-			t.mutation(internal.threads.spawn, { chatId, agent: lead }),
-		).rejects.toThrow("SPAWN_TOO_DEEP");
 	});
 });

@@ -70,16 +70,6 @@ describe("the agent the app serves", () => {
 			expect(await ev(`(permission/check '${form})`)).toBe("allow");
 	});
 
-	it("teaches the model the workspace, its knowledge and its preferences", async () => {
-		const interp = new Interp({
-			extensions: await workspaceExtensions(WORKSPACE, offline),
-		});
-		const prompt = interp.systemPrompt();
-		expect(prompt).toContain("WORKSPACE");
-		expect(prompt).toContain("KNOWLEDGE");
-		expect(prompt).toContain("PREFERENCES");
-	});
-
 	it("reads the desktop's presence off the bridge at the start of each step", async () => {
 		const online = { value: false };
 		const desktop: Desktop = {

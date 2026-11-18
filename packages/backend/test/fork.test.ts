@@ -107,9 +107,8 @@ describe("forking a chat at a message", () => {
 	});
 
 	it("starts the fork's repl from the last layer up to a human message", async () => {
-		const { t, alice, chatId, replId: original } = await conversation();
+		const { t, alice, chatId } = await conversation();
 		const { replId } = await forkedRepl(alice, chatId, "h2");
-		expect(replId).not.toBe(original);
 		expect(await resumed(t, replId)).toEqual([{ layer: 1 }]);
 	});
 

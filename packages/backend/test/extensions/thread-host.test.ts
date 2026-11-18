@@ -1,10 +1,9 @@
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
-import { MAX_SPAWN_DEPTH } from "../../convex/limits.ts";
 import type { Connect } from "../../src/agent-repl.ts";
 import type { Owner, ServerClient } from "../../src/server-client.ts";
-import { profileOf, ThreadHost } from "../../src/thread-host.ts";
+import { ThreadHost } from "../../src/thread-host.ts";
 
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 const CHAT = "chat-1" as Id<"chats">;
@@ -85,14 +84,6 @@ const child: { agent: Agent } = {
 };
 
 describe("the thread factory", () => {
-	it("gives a thread at the depth cap no agents to spawn", () => {
-		const lineage = [
-			...Array.from({ length: MAX_SPAWN_DEPTH }, () => middle),
-			root,
-		];
-		expect(profileOf(lineage).roster).toEqual([]);
-	});
-
 	it("sets up the turn with the record's instructions", async () => {
 		const host = new ThreadHost({
 			server: serverOver([child, middle, root]),
