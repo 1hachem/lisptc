@@ -7,6 +7,7 @@ import {
 	type Tab,
 } from "@repo/shared/split-layout";
 import { PAGE_IDS } from "@repo/ui-catalog";
+import { shownName } from "./files.ts";
 
 export type Folder = "attachments" | "knowledge";
 
@@ -187,9 +188,9 @@ function contentOf(value: unknown): PanelContent | undefined {
 }
 
 export function tabLabel(content: PanelContent): string {
-	return content.kind === "file" || content.kind === "source"
-		? content.name
-		: content.title;
+	if (content.kind === "file") return content.name;
+	if (content.kind === "source") return shownName(content.name);
+	return content.title;
 }
 
 export const CHAT_MIN_WIDTH = 360;

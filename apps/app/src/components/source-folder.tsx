@@ -4,6 +4,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { TreeFile, TreeFolder } from "@repo/components";
 import type { AnchorMark } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
+import { shownName } from "../lib/files.ts";
 import { dragsAs, sourcePanel } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { FileMenu } from "./file-menu.tsx";
@@ -28,13 +29,13 @@ function SourceFile({
 	return (
 		<TreeFile
 			anchor={anchor}
-			name={name}
+			name={shownName(name)}
 			depth={1}
 			selected={shown(panel)}
 			onDragStart={dragsAs(panel)}
 			trailing={
 				<FileMenu
-					name={name}
+					name={shownName(name)}
 					confirm="delete it for good?"
 					onDelete={async () => {
 						requestPanelClosed(panel);

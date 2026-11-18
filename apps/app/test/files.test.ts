@@ -1,28 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
 	fileContext,
-	onboardingSource,
 	permissionRules,
+	shownName,
 	withoutRule,
 } from "../src/lib/files.ts";
 
-describe("onboardingSource", () => {
-	it("writes an onboarding as the create call that saves it", () => {
-		expect(
-			onboardingSource({
-				name: "welcome",
-				about: "first look",
-				script: '(ui/tour "welcome" (quote (:say "hi")))',
-			}),
-		).toBe(
-			'(onboarding/create "welcome"\n  \'(ui/tour "welcome" (quote (:say "hi")))\n  :about "first look")',
-		);
+describe("shownName", () => {
+	it("drops the .ptc a saved sub-agent is stored under", () => {
+		expect(shownName("researcher.ptc")).toBe("researcher");
 	});
 
-	it("leaves out an empty line", () => {
-		expect(
-			onboardingSource({ name: "tips", about: "", script: "(+ 1 2)" }),
-		).toBe('(onboarding/create "tips"\n  \'(+ 1 2))');
+	it("keeps a name without it", () => {
+		expect(shownName("notes.ptc.md")).toBe("notes.ptc.md");
 	});
 });
 

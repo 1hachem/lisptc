@@ -4,7 +4,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { definitionOf } from "../lib/agent-definition.ts";
-import type { PermissionRule } from "../lib/files.ts";
+import { type PermissionRule, shownName } from "../lib/files.ts";
 import { PageView } from "./file-view.tsx";
 import { Field, RuleCard } from "./read-only.tsx";
 
@@ -64,7 +64,7 @@ export function SourcePage({
 	folder: string;
 	name: string;
 }) {
-	const path = `${folder}/${name}`;
+	const path = `${folder}/${shownName(name)}`;
 	const { data: text, error } = useQuery(
 		convexQuery(api.sources.get, { workspaceId, folder, name }),
 	);

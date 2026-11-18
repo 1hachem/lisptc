@@ -7,7 +7,7 @@ import { useCallback, useMemo } from "react";
 import { attachingFiles } from "../lib/attached-files.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
-import type { OpenFile } from "../lib/files.ts";
+import { type OpenFile, shownName } from "../lib/files.ts";
 import { sentHistory } from "../lib/message-history.ts";
 import { useSymbols } from "../lib/symbols.ts";
 import { useUI } from "../lib/ui.tsx";
@@ -63,7 +63,7 @@ export function ChatComposer({
 			})),
 			...(agents ?? []).map((file) => ({
 				folder: "sub-agents" as const,
-				name: file.replace(/\.ptc$/, ""),
+				name: shownName(file),
 				contentType: null,
 			})),
 		],

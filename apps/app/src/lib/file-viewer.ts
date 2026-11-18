@@ -17,7 +17,6 @@ const TEXT_EXTENSIONS = new Set([
 	"tsx",
 	"py",
 	"sql",
-	"ptc",
 ]);
 
 export function extensionOf(name: string): string {
@@ -35,12 +34,13 @@ export type KnowledgeViewer =
 	| "html"
 	| "markdown"
 	| "json"
+	| "lisptc"
 	| "text"
 	| "download";
 
 export type TextViewer = Extract<
 	KnowledgeViewer,
-	"svg" | "html" | "markdown" | "json" | "text"
+	"svg" | "html" | "markdown" | "json" | "lisptc" | "text"
 >;
 
 export function readsText(
@@ -51,6 +51,7 @@ export function readsText(
 		viewer === "html" ||
 		viewer === "markdown" ||
 		viewer === "json" ||
+		viewer === "lisptc" ||
 		viewer === "text"
 	);
 }
@@ -87,6 +88,7 @@ export function knowledgeViewer(
 		extension === "json"
 	)
 		return "json";
+	if (extension === "ptc") return "lisptc";
 	if (type.startsWith("text/") || TEXT_EXTENSIONS.has(extension)) return "text";
 	return "download";
 }

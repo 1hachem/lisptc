@@ -1,6 +1,12 @@
 import type { AnchorMark } from "@repo/ui-catalog";
 import type { ReactNode } from "react";
-import { callOf, type Datum, plainText, readForm } from "../lib/form-reader.ts";
+import {
+	callOf,
+	type Datum,
+	plainText,
+	readForm,
+	readForms,
+} from "../lib/form-reader.ts";
 
 export function Field({
 	label,
@@ -91,14 +97,22 @@ function DatumView({ datum }: { datum: Datum }) {
 }
 
 export function SourceValue({ source }: { source: string }) {
-	const datum = readForm(source);
-	if (datum === undefined)
+	const forms = readForms(source);
+	const [only] = forms ?? [];
+	if (forms === undefined || only === undefined)
 		return (
 			<p className="whitespace-pre-wrap break-words leading-relaxed">
 				{source}
 			</p>
 		);
-	return <DatumView datum={datum} />;
+	if (forms.length === 1) return <DatumView datum={only} />;
+	return (
+		<div className="flex flex-col gap-3">
+			{forms.map((datum, i) => (
+				<DatumView key={`${String(i)}-${plainText(datum)}`} datum={datum} />
+			))}
+		</div>
+	);
 }
 
 const EFFECTS: Record<string, { label: string; means: string }> = {

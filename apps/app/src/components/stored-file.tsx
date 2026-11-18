@@ -20,6 +20,7 @@ import { usePageHost } from "../lib/page-host.tsx";
 import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
 import { Markdown } from "./markdown.tsx";
+import { SourceValue } from "./read-only.tsx";
 
 const StlViewer = lazy(async () => ({
 	default: (await import("@repo/components/stl-viewer.tsx")).StlViewer,
@@ -128,6 +129,7 @@ const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 			<JsonView text={text} />
 		</Suspense>
 	),
+	lisptc: (text) => <SourceValue source={text} />,
 	text: (text) => (
 		<pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>
 	),
