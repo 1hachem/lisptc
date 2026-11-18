@@ -140,7 +140,7 @@ describe("*writing-defaults* and with-writing", () => {
 			await evalStr(
 				interp,
 				`(try (with-writing (:provider :openrouter) (error "boom"))
-				      (catch (e) e))`,
+				      (catch (e) (get-in e :message)))`,
 			),
 		).toBe('"boom"');
 		expect(await evalStr(interp, "(identity *writing-defaults*)")).toBe("nil");

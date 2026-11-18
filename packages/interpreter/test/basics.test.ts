@@ -272,7 +272,7 @@ describe("non-local exits", () => {
 	it("unwind-protect runs its cleanup however the form exits", () => {
 		expect(
 			ev(
-				'(let ((log nil)) (try (unwind-protect (error "boom") (setq log "cleaned")) (catch (e) (list e log))))',
+				'(let ((log nil)) (try (unwind-protect (error "boom") (setq log "cleaned")) (catch (e) (list (get-in e :message) log))))',
 			),
 		).toBe('("boom" "cleaned")');
 		expect(

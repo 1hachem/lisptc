@@ -696,4 +696,70 @@ export const prelude = `
 (defmacro unwind-protect (form &rest cleanup)
   "Evaluate form and return its value, then run cleanup forms however form exits: normally, by an error, a throw, a return-from or a loop break."
   \`(_unwind-protect (lambda () ,form) (lambda () ,@cleanup)))
+
+(defun _error-kind (e)
+  (cadr e))
+
+(defun _try-handler (clause)
+  (let* ((head (cadr clause))
+         (kinds (cond ((keywordp head) (list head))
+                      ((and (consp head) (keywordp (car head))) head)))
+         (spec (if kinds (cddr clause) (cdr clause)))
+         (vars (car spec)))
+    (unless (and (consp vars) (null (cdr vars)))
+      (error "bad try: catch expects exactly one variable"))
+    \`(cons ',(or kinds t) (lambda ,vars ,@(cdr spec)))))
+
+(defmacro try (&rest forms)
+  "(try body... (catch [kind] (e) handler...)... [(finally cleanup...)]) Evaluate body; its first form is never a clause. On an error, run the first catch whose kind matches, e bound to (:kind k :message m :value v), and return its last value. kind is a keyword or a list of them; a catch without one matches every error. An error no catch matches propagates. finally runs however try exits."
+  (unless forms (error "bad try: body expected"))
+  (let ((body (list (car forms))) handlers cleanup)
+    (dolist (f (cdr forms))
+      (cond ((and (consp f) (eq (car f) 'catch))
+             (when cleanup (error "bad try: catch after finally"))
+             (push (_try-handler f) handlers))
+            ((and (consp f) (eq (car f) 'finally))
+             (when cleanup (error "bad try: more than one finally"))
+             (setq cleanup (cons t (cdr f))))
+            ((or handlers cleanup) (error "bad try: body form after a clause"))
+            (t (push f body))))
+    (unless (or handlers cleanup)
+      (error "bad try: catch or finally clause expected"))
+    (let ((guarded (if handlers
+                       \`(_try (lambda () ,@(reverse body)) (list ,@(reverse handlers)))
+                     \`(progn ,@(reverse body)))))
+      (if cleanup
+          \`(unwind-protect ,guarded ,@(cdr cleanup))
+        guarded))))
+
+(defun _retryable (e kinds)
+  (and (not (eq (_error-kind e) :permission-denied))
+       (or (null kinds) (memq (_error-kind e) kinds))))
+
+(defun _retry (n thunk kinds)
+  (_try thunk
+        (list (cons t (lambda (e)
+                        (if (and (> n 0) (_retryable e kinds))
+                            (_retry (- n 1) thunk kinds)
+                          (error e)))))))
+
+(defmacro retry (n form &key on)
+  "(retry n form :on kinds) Evaluate form; if it raises an error, evaluate it again, at most n more times, then raise the last error. :on, a keyword or a list of them, retries only those kinds. Never retries :permission-denied."
+  \`(_retry ,n (lambda () ,form) ',(if (keywordp on) (list on) on)))
+
+(defmacro attempt (&rest body)
+  "(attempt body...) Evaluate body and return (:ok value), or (:error e) if it raises, e the error try would bind."
+  \`(_try (lambda () (list :ok (progn ,@body)))
+         (list (cons t (lambda (e) (list :error e))))))
+
+(defmacro with-ok (bindings &rest body)
+  "(with-ok ((name result-form)...) body...) Evaluate each result-form in turn, binding name to the value inside its (:ok value). The first (:error e) is returned as is; otherwise returns (:ok value-of-body)."
+  (if (null bindings)
+      \`(list :ok (progn ,@body))
+    (let ((r (gensym)))
+      \`(let ((,r ,(cadar bindings)))
+         (if (eq (car ,r) :ok)
+             (let ((,(caar bindings) (cadr ,r)))
+               (with-ok ,(cdr bindings) ,@body))
+           ,r)))))
 `;

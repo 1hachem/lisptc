@@ -81,12 +81,8 @@ Evaluated specially, not as function calls. Complete list:
 | setq | (setq name val ...) | Assign val to variable name, one or more pairs. Returns last value. Defines or updates a global if name isn't a local. |
 | lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
 | macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
-| try | (try
-  body
-  (catch (e)
-    handler...)) | Eval body; on error, bind e to the error value and run the handler. |
 
-quasiquote, if, when, unless, and, or,
+quasiquote, try, retry, attempt, with-ok, if, when, unless, and, or,
 let, let*, letrec, while, dolist, dotimes, case, defun,
 defmacro, setf, push, pop, incf, decf, block, return-from, catch and
 unwind-protect are macros, not special forms; use the same way.
@@ -185,7 +181,7 @@ Parsing text into data
 
 Eval / control
 - (apply f args) call f with elements of list args.
-- (error value) raise catchable error carrying value, caught by try.
+- (error msg) or (error :kind msg [value]) raise catchable error, caught by try.
 - (break) exit nearest loop; (return value) exit it with value.
 
 Output — echo is the ONLY thing that prints. Nothing computed is seen until
@@ -328,17 +324,29 @@ Expansion depth max 20 nesting levels at compile time.
 
 ERRORS & CONTROL FLOW
 
-- (error value) raises; value any Lisp value, often string.
-- (try
-  expr
-  (catch (e)
-    handler...)) evaluates expr; on raise, e bound to raised value, handler
-  runs. ONLY error mechanism — no condition system.
+- (error msg) or (error :kind msg [value]) raises. Kind default :error.
+- Error is plist (:kind k :message m :value v). Read with get-in. Built-in
+  kinds: :void-variable :undefined-function :not-applicable :arity :keyword
+  :type-error :syntax :timeout :permission-denied. Others :error.
+- (try body... (catch [kind] (e) handler...)... [(finally cleanup...)])
+  evaluates body. On raise, first catch whose kind matches runs, e bound to
+  error. kind keyword or list of keywords; catch without kind matches all.
+  No match: error propagates. finally runs however try exits. (error e) in
+  handler re-raises e unchanged.
 
 (try
-  (error "boom")
-  (catch (e)
-    (concat "failed: " e)))
+  (error :not-found "no such file" "/tmp/x")
+  (catch :not-found (e)
+    (concat "failed: " (get-in e :message))))
+
+- (retry n form :on kinds) evaluates form, on raise again, at most n more
+  times, then raises last error. :on keyword or list limits retried kinds.
+  Never retries :permission-denied.
+- (attempt body...) gives (:ok value) or (:error e), never raises. Use for
+  batch: (mapcar (lambda (u) (attempt (fetch u))) urls) keeps every success
+  when some fail.
+- (with-ok ((name result-form)...) body...) binds name to value inside each
+  (:ok value) in turn. First (:error e) returned as is, else (:ok body-value).
 
 - (break) and (return value) escape nearest while, dolist or dotimes. Outside
   a loop: error.

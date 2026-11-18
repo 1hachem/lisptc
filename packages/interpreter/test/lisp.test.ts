@@ -121,10 +121,12 @@ describe("the language reference", () => {
 	});
 
 	it("shows a try whose handler runs", () => {
-		expect(LANGUAGE_REFERENCE).toContain('(try\n  (error "boom")');
-		expect(ev('(try (error "boom") (catch (e) (concat "failed: " e)))')).toBe(
-			'"failed: boom"',
-		);
+		expect(LANGUAGE_REFERENCE).toContain("(try\n  (error :not-found");
+		expect(
+			ev(
+				'(try (error "boom") (catch (e) (concat "failed: " (get-in e :message))))',
+			),
+		).toBe('"failed: boom"');
 	});
 });
 
@@ -239,11 +241,14 @@ describe("malformed special forms", () => {
 
 	it("rejects a malformed try", () => {
 		expect(() => ev("(try)")).toThrow("bad try");
-		expect(() => ev("(try 1)")).toThrow(
-			"try: exactly one catch clause expected",
+		expect(() => ev("(try 1)")).toThrow("bad try: catch or finally clause");
+		expect(() => ev("(try 1 2)")).toThrow("bad try: catch or finally clause");
+		expect(() => ev("(try 1 (catch))")).toThrow(
+			"bad try: catch expects exactly one variable",
 		);
-		expect(() => ev("(try 1 2)")).toThrow("try: catch clause expected");
-		expect(() => ev("(try 1 (catch))")).toThrow("try: catch variable expected");
+		expect(() => ev("(try 1 (finally) (catch (e) e))")).toThrow(
+			"bad try: catch after finally",
+		);
 	});
 
 	it("rejects a macro defined inside a function body", () => {

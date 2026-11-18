@@ -30,6 +30,7 @@ import {
 	UnresolvedHead,
 	VoidVariable,
 } from "./errors.ts";
+import { soleArg } from "./forms.ts";
 import {
 	Arg,
 	BuiltInFunc,
@@ -42,7 +43,6 @@ import {
 	Lambda,
 	Macro,
 } from "./func.ts";
-import { soleArg, tryParts } from "./forms.ts";
 import { Chain } from "./hooks.ts";
 import { hitch, Journal } from "./journal.ts";
 import {
@@ -60,7 +60,6 @@ import {
 	quoteSym,
 	Sym,
 	setqSym,
-	trySym,
 	Unspecified,
 } from "./objects.ts";
 import { str } from "./print.ts";
@@ -521,8 +520,6 @@ export class Interp {
 				return new Tail(yield* this.evalCond(arg, env), env);
 			case setqSym:
 				return yield* this.evalSetQ(arg, env);
-			case trySym:
-				return yield* this.evalTry(x, env);
 			case lambdaSym:
 				return this.compile(arg, env, Closure.make);
 			case macroSym:
@@ -641,23 +638,6 @@ export class Interp {
 			}
 		}
 		return null;
-	}
-
-	private *evalTry(x: Cell, env: List): Eval {
-		const { body, handler } = tryParts(x);
-		try {
-			return yield* this.evalGen(body, env);
-		} catch (ex) {
-			if (!(ex instanceof EvalException)) throw ex;
-			const closure =
-				handler instanceof Lambda
-					? Closure.makeFrom(handler, env)
-					: this.compile(handler, env, Closure.make);
-			const frame = closure.makeFrame(new Cell(null, null));
-			frame[0] = ex.value;
-			const inner = new Cell(frame, env);
-			return new Tail(yield* this.evalProgN(closure.body, inner), inner);
-		}
 	}
 
 	private *importFile(path: string): Eval<null> {

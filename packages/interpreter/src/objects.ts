@@ -98,7 +98,6 @@ export const rightParenSym = newSym(")");
 export const singleQuoteSym = newSym("'");
 
 export const appendSym = newSym("append");
-export const catchSym = newSym("catch");
 export const consSym = newSym("cons");
 export const listSym = newSym("list");
 export const quasiquoteSym = newSym("quasiquote");
@@ -113,7 +112,6 @@ export const macroSym = newKeyword("macro");
 export const prognSym = newKeyword("progn");
 export const quoteSym = newKeyword("quote");
 export const setqSym = newKeyword("setq");
-export const trySym = newKeyword("try");
 
 export const EndOfFile = { toString: () => "EOF" };
 

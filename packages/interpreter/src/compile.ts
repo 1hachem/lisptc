@@ -7,7 +7,6 @@ import {
 	Lambda,
 	Macro,
 } from "./func.ts";
-import { tryParts } from "./forms.ts";
 import {
 	Cell,
 	keySym,
@@ -19,7 +18,6 @@ import {
 	quoteSym,
 	restSym,
 	Sym,
-	trySym,
 	unquoteSplicingSym,
 	unquoteSym,
 } from "./objects.ts";
@@ -52,17 +50,6 @@ function compileForm(interp: Compiler, j: unknown, depth: number): unknown {
 			return compileFunc(interp, cdrCell(j), null, Lambda.make);
 		case macroSym:
 			throw new EvalException("nested macro", j);
-		case trySym: {
-			const { body, handler } = tryParts(j);
-			const compiled =
-				handler instanceof Cell
-					? compileFunc(interp, handler, null, Lambda.make)
-					: handler;
-			return new Cell(
-				trySym,
-				new Cell(compileForm(interp, body, depth), new Cell(compiled, null)),
-			);
-		}
 	}
 	const head = j.car instanceof Sym ? interp.getGlobal(j.car) : j.car;
 	if (head instanceof Macro && depth > 0) {

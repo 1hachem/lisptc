@@ -1,4 +1,4 @@
-import { EvalException } from "./errors.ts";
+import { TimedOut } from "./errors.ts";
 
 export function withTimeout<T>(
 	promise: Promise<T>,
@@ -11,7 +11,7 @@ export function withTimeout<T>(
 		promise.finally(() => clearTimeout(timer)),
 		new Promise<never>((_, reject) => {
 			timer = setTimeout(
-				() => reject(new EvalException(`${what} timed out`, timeoutMs, false)),
+				() => reject(new TimedOut(`${what} timed out`, timeoutMs, false)),
 				timeoutMs,
 			);
 			timer.unref?.();

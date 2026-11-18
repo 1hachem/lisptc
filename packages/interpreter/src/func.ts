@@ -107,6 +107,10 @@ export class ArityException extends EvalException {
 		super("arity not matched", func);
 		if (func.callName !== undefined) this.calledAs(func.callName);
 	}
+
+	override get kind(): string {
+		return "arity";
+	}
 }
 
 export class KeywordException extends EvalException {
@@ -118,6 +122,10 @@ export class KeywordException extends EvalException {
 		this.key = key instanceof LispKeyword ? key.name : undefined;
 		this.accepted = func.keys;
 		if (func.callName !== undefined) this.calledAs(func.callName);
+	}
+
+	override get kind(): string {
+		return "keyword";
 	}
 }
 

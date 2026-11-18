@@ -31,6 +31,10 @@ class SyntaxException extends EvalException {
 	) {
 		super("syntax error", `${reason} at ${line}`, false);
 	}
+
+	override get kind(): string {
+		return "syntax";
+	}
 }
 
 export interface SyntaxFailure {

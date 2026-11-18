@@ -106,24 +106,49 @@ break/return only ever affects the nearest enclosing loop.
 => 3 9 -- 3 outer iterations, each inner loop broken after j=0,1,2
 (echo "=== 6. try / catch / error ===")
 
-try evaluates body-form; if it signals a catchable error a built-in
-runtime error, or a user error value call, the handler variable is
-bound to the error's value and the catch body runs instead.
+try evaluates its body; if it raises, the first catch whose kind
+matches runs with the handler variable bound to the error, a plist
+(:kind k :message m :value v).
 (echo (try
     (car 5)
     (catch (e)
-      (list 'recovered e))))
-=> recovered 5 -- e is bound to car's offending argument, not a message
-error value signals with any Lisp value, not just a string — the
-handler variable is bound to that value exactly.
+      (list 'recovered (get-in e :kind) (get-in e :message)))))
+=> recovered :type-error car: list expected: 5
+error takes a message, or a kind, a message and a value. A catch names
+the kinds it handles; one without a kind handles every error.
 (defun safe-div (a b) (try
-    (if (= b 0) (error 'divide-by-zero) (/ a b))
-    (catch (e)
-      (list 'error e))))
+    (if (= b 0) (error :divide-by-zero "b is zero" a) (/ a b))
+    (catch :divide-by-zero (e)
+      (list 'error (get-in e :value)))))
 (echo (safe-div 10 2))
 => 5.0
 (echo (safe-div 10 0))
-=> error divide-by-zero
+=> error 10
+finally runs however the try exits.
+(setq closed nil)
+(echo (try
+    (car 5)
+    (catch (e)
+      'failed)
+    (finally (setq closed t))))
+(echo closed)
+=> failed, then t
+retry evaluates a form again when it raises, at most n more times.
+(setq tries 0)
+(echo (retry 3 (progn
+    (setq tries (+ tries 1))
+    (if (< tries 3) (error :flaky "not yet") tries))))
+=> 3
+attempt turns an error into a value, so a batch keeps every success.
+(echo (mapcar (lambda (b) (attempt (safe-div 10 b))) '(2 0 5)))
+=> (:ok 5.0) (:ok (error 10)) (:ok 2.0)
+(echo (mapcar (lambda (b) (attempt (/ 10 (car b)))) '((2) 0 (5))))
+=> (:ok 5.0) (:error (:kind :type-error ...)) (:ok 2.0)
+with-ok chains results and stops at the first error.
+(echo (with-ok ((a (attempt (car '(4))))
+               (b (attempt (* a 2))))
+    (+ a b)))
+=> (:ok 12)
 break/return are loop signals, not catchable errors — try does not
 intercept them, so they still reach the enclosing loop.
 (setq caught nil)
