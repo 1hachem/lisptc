@@ -65,10 +65,6 @@ export const specialFormDocs: Record<string, Doc> = {
 		signature: "(macro (arg...) body...)",
 		doc: "Create a macro (only at the top level). Prefer `defmacro`.",
 	},
-	try: {
-		signature: "(try body-form (catch (var) handler-form...))",
-		doc: "Evaluate body-form. If it signals a catchable error (a built-in runtime error or a user `(error value)` call), bind var to the error's value and evaluate the handler forms, returning the last one; with no error, returns body-form's value directly. Does not catch break/return loop signals.",
-	},
 	t: { signature: "t", doc: "The canonical true value." },
 	nil: { signature: "nil", doc: "The empty list / false value." },
 };

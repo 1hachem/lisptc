@@ -1,4 +1,11 @@
-import { Cell, type List, type Sym } from "./objects.ts";
+import {
+	arrayToList,
+	Cell,
+	LispKeyword,
+	type List,
+	newLispKeyword,
+	type Sym,
+} from "./objects.ts";
 import { str } from "./print.ts";
 
 export class EvalException extends Error {
@@ -9,6 +16,10 @@ export class EvalException extends Error {
 	constructor(msg: string, x: unknown, quoteString = true) {
 		super(`${msg}: ${str(x, quoteString)}`);
 		this.value = x;
+	}
+
+	get kind(): string {
+		return "error";
 	}
 
 	get callee(): string | undefined {
@@ -40,6 +51,10 @@ export class UnresolvedHead extends EvalException {
 	) {
 		super(why === "undefined" ? "undefined" : "not applicable", head);
 	}
+
+	override get kind(): string {
+		return this.why === "undefined" ? "undefined-function" : "not-applicable";
+	}
 }
 
 export class VoidVariable extends EvalException {
@@ -48,6 +63,10 @@ export class VoidVariable extends EvalException {
 	constructor(sym: Sym) {
 		super("void variable", sym);
 		this.variable = sym.name;
+	}
+
+	override get kind(): string {
+		return "void-variable";
 	}
 }
 
@@ -59,6 +78,70 @@ export class ArgumentException extends EvalException {
 	) {
 		super(msg, x);
 	}
+
+	override get kind(): string {
+		return "type-error";
+	}
+}
+
+export class TimedOut extends EvalException {
+	override get kind(): string {
+		return "timeout";
+	}
+}
+
+export class RaisedError extends EvalException {
+	constructor(
+		private readonly raisedKind: string,
+		text: string,
+		value: unknown,
+	) {
+		super(text, value);
+		this.message = text;
+	}
+
+	override get kind(): string {
+		return this.raisedKind;
+	}
+}
+
+const kindKey = newLispKeyword("kind");
+const messageKey = newLispKeyword("message");
+const valueKey = newLispKeyword("value");
+const raised = new WeakMap<Cell, EvalException>();
+
+export function errorValue(ex: EvalException): Cell {
+	const value = Array.isArray(ex.value) ? arrayToList(ex.value) : ex.value;
+	const plist = arrayToList([
+		kindKey,
+		newLispKeyword(ex.kind),
+		messageKey,
+		ex.callee === undefined || ex instanceof RaisedError
+			? ex.message
+			: `${ex.callee}: ${ex.message}`,
+		valueKey,
+		value,
+	]) as Cell;
+	raised.set(plist, ex);
+	return plist;
+}
+
+export function reraised(x: unknown): EvalException | undefined {
+	if (!(x instanceof Cell) || x.car !== kindKey) return undefined;
+	const original = raised.get(x);
+	if (original !== undefined) return original;
+	const fields = new Map<LispKeyword, unknown>();
+	for (
+		let j: unknown = x;
+		j instanceof Cell && j.cdr instanceof Cell;
+		j = j.cdr.cdr
+	)
+		if (j.car instanceof LispKeyword) fields.set(j.car, j.cdr.car);
+	const kind = fields.get(kindKey);
+	const message = fields.get(messageKey);
+	if (!(kind instanceof LispKeyword) || typeof message !== "string")
+		return undefined;
+	return new RaisedError(kind.name, message, fields.get(valueKey) ?? null);
 }
 
 export class LoopSignal {

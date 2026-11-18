@@ -22,8 +22,16 @@ import {
 	lookupDoc,
 } from "./docs.ts";
 import type { Eval } from "./drive.ts";
-import { EvalException, LoopSignal, ThrowSignal } from "./errors.ts";
+import {
+	EvalException,
+	errorValue,
+	LoopSignal,
+	RaisedError,
+	reraised,
+	ThrowSignal,
+} from "./errors.ts";
 import { formatText } from "./format.ts";
+import { soleArg } from "./forms.ts";
 import { BuiltInFunc } from "./func.ts";
 import { type Journal, print } from "./journal.ts";
 import {
@@ -33,12 +41,15 @@ import {
 	jsonToLisp,
 	LispKeyword,
 	type List,
+	listToArray,
 	newLispKeyword,
 	newSym,
+	quasiquoteSym,
 	Sym,
 	Unspecified,
 } from "./objects.ts";
 import { echoText, str } from "./print.ts";
+import { qqExpand } from "./quasiquote.ts";
 import { Reader } from "./reader.ts";
 import { zAny, zCell, zList, zNumeric, zString, zSym } from "./schema.ts";
 
@@ -735,6 +746,34 @@ function installNonLocalExits(interp: Definer, core: CoreOps): void {
 			}
 		},
 	);
+	interp.defGen(
+		"_try",
+		2,
+		"(_try thunk handlers)",
+		"Internal: call the 0-arg thunk. If it raises an error, call the first handler whose kinds match with the error, and return what it returns: handlers is a list of (kinds . handler), kinds t or a list of keywords. An error no handler matches propagates unchanged.",
+		z.tuple([zAny, zList]),
+		function* ([thunk, handlers]) {
+			try {
+				return yield* core.apply([thunk, null]);
+			} catch (ex) {
+				if (!(ex instanceof EvalException)) throw ex;
+				const handler = handlerFor(handlers, newLispKeyword(ex.kind));
+				if (handler === undefined) throw ex;
+				return yield* core.apply([handler, new Cell(errorValue(ex), null)]);
+			}
+		},
+	);
+}
+
+function handlerFor(handlers: List, kind: LispKeyword): unknown {
+	for (let j = handlers; j !== null; j = j.cdr as List) {
+		const clause = j.car;
+		if (!(clause instanceof Cell))
+			throw new EvalException("bad try handler", clause);
+		if (clause.car === true || listToArray(clause.car as List).includes(kind))
+			return clause.cdr;
+	}
+	return undefined;
 }
 
 export function installCore(interp: Definer, core: CoreOps): void {
@@ -1236,12 +1275,28 @@ export function installCore(interp: Definer, core: CoreOps): void {
 
 	interp.def(
 		"error",
-		1,
-		"(error value)",
-		"Signal a catchable error carrying `value`. A `(try ... (catch (e) ...))` wrapping the call binds `e` to `value` exactly (any Lisp value, not just a string).",
-		z.tuple([zAny]),
-		([value]) => {
-			throw new EvalException("error", value, true);
+		-2,
+		"(error message) or (error :kind message [value])",
+		"Raise a catchable error. try binds its handler variable to (:kind k :message m :value v): kind is :error unless given, message is the message (printed if not a string), value is the given value, or message itself when no kind is given. Given an error a handler caught, raise it again unchanged.",
+		z.tuple([zAny, zList]),
+		([first, rest]) => {
+			const again = rest === null ? reraised(first) : undefined;
+			if (again !== undefined) throw again;
+			if (first instanceof LispKeyword && rest !== null) {
+				const message = rest.car;
+				throw new RaisedError(
+					first.name,
+					typeof message === "string" ? message : str(message),
+					rest.cdr instanceof Cell ? rest.cdr.car : null,
+				);
+			}
+			if (rest !== null)
+				throw new EvalException("error: kind keyword expected", first);
+			throw new RaisedError(
+				"error",
+				typeof first === "string" ? first : str(first),
+				first,
+			);
 		},
 	);
 	interp.def(
@@ -1271,5 +1326,13 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		"Internal: call the 0-arg thunk, catching only a break/return loop signal (any other exception, including a genuine Lisp error, propagates unchanged). Returns (signalled? . value): signalled? is t iff break/return fired.",
 		z.tuple([zAny]),
 		(a) => core.runLoopBody(a),
+	);
+	interp.def(
+		"_quasiquote",
+		1,
+		"(_quasiquote args)",
+		"Internal: expand the arguments of a quasiquote form into the cons, list and append calls that build it.",
+		z.tuple([zAny]),
+		([args]) => qqExpand(soleArg(new Cell(quasiquoteSym, args), "quasiquote")),
 	);
 }

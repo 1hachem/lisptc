@@ -48,11 +48,8 @@ Test emptiness with null or not. Never rely on 0 or \"\" being false — they ar
 | setq | (setq name val ...) | Assign val to variable name, one or more pairs. Returns last value. Defines or updates a global if name isn't a local. |
 | lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
 | macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
-| quasiquote | (quasiquote x) | Template with unquote and unquote-splicing, see internal/lang/syntax. |
-| try | (try
-  body
-  (catch (e)
-    handler...)) | Eval body; on error, bind e to the error value and run the handler. |
+
+quasiquote, try, retry, attempt and with-ok are macros, not special forms; use the same way.
 
 Tail calls optimized: tail recursion and loop macros never overflow the stack.
 Iterate with tail-recursive helpers or loop macros.")
@@ -153,7 +150,7 @@ is \"3.0\"; (string (truncate x)) gives bare integer.")
 (memory "internal/lang/eval-control" :when "the agent is about to apply a function to a list of arguments, raise an error value, or leave a loop early with break or return; or such a call just failed"
   "Eval and control:
 - (apply f args) call f with elements of list args.
-- (error value) raise catchable error carrying value, caught by try.
+- (error msg) or (error :kind msg [value]) raise catchable error, caught by try.
 - (break) exit nearest loop; (return value) exit it with value.")
 
 (memory "internal/lang/output" :when "the agent wants to look at a value, print a result, narrate its reasoning or print a keyword, or a value it meant to see did not show"
@@ -326,17 +323,29 @@ Expansion depth max ~d nesting levels at compile time."
 
 (memory "internal/lang/errors" :when "the agent is about to handle a failure, catch an error, unwind on exit, or leave early with block, return-from, catch or throw; or an error escaped a handler it wrote"
   "ERRORS & CONTROL FLOW
-- (error value) raises; value any Lisp value, often string.
-- (try
-  expr
-  (catch (e)
-    handler...)) evaluates expr; on raise, e bound to raised value, handler
-  runs. ONLY error mechanism — no condition system.
+- (error msg) or (error :kind msg [value]) raises. Kind default :error.
+- Error is plist (:kind k :message m :value v). Read with get-in. Built-in
+  kinds: :void-variable :undefined-function :not-applicable :arity :keyword
+  :type-error :syntax :timeout :permission-denied. Others :error.
+- (try body... (catch [kind] (e) handler...)... [(finally cleanup...)])
+  evaluates body. On raise, first catch whose kind matches runs, e bound to
+  error. kind keyword or list of keywords; catch without kind matches all.
+  No match: error propagates. finally runs however try exits. (error e) in
+  handler re-raises e unchanged.
 
 (try
-  (error \"boom\")
-  (catch (e)
-    (concat \"failed: \" e)))
+  (error :not-found \"no such file\" \"/tmp/x\")
+  (catch :not-found (e)
+    (concat \"failed: \" (get-in e :message))))
+
+- (retry n form :on kinds) evaluates form, on raise again, at most n more
+  times, then raises last error. :on keyword or list limits retried kinds.
+  Never retries :permission-denied.
+- (attempt body...) gives (:ok value) or (:error e), never raises. Use for
+  batch: (mapcar (lambda (u) (attempt (fetch u))) urls) keeps every success
+  when some fail.
+- (with-ok ((name result-form)...) body...) binds name to value inside each
+  (:ok value) in turn. First (:error e) returned as is, else (:ok body-value).
 
 - (break) and (return value) escape nearest while, dolist or dotimes. Outside
   a loop: error.

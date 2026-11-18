@@ -6,7 +6,7 @@ This reference and lang memories authoritative: name in none does not exist.
 nil = () = empty list = ONLY false value. 0, "" and empty structures true. t
 canonical true.
 
-Special forms: quote, progn, cond, setq, lambda, macro, quasiquote, try.
-Prelude macros: if, when, unless, and, or, let, let*, letrec, while, dolist,
-dotimes, case, defun, defmacro, setf, push, pop, incf, decf, block,
-return-from, catch, unwind-protect.
+Special forms: quote, progn, cond, setq, lambda, macro.
+Macros: quasiquote, try, retry, attempt, with-ok, if, when, unless, and, or,
+let, let*, letrec, while, dolist, dotimes, case, defun, defmacro, setf, push,
+pop, incf, decf, block, return-from, catch, unwind-protect.

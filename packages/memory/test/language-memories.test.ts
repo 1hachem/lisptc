@@ -92,10 +92,12 @@ describe("the language reference", () => {
 	});
 
 	it("shows a try whose handler runs", () => {
-		expect(LANGUAGE_TEXT).toContain('(try\n  (error "boom")');
-		expect(ev('(try (error "boom") (catch (e) (concat "failed: " e)))')).toBe(
-			'"failed: boom"',
-		);
+		expect(LANGUAGE_TEXT).toContain("(try\n  (error :not-found");
+		expect(
+			ev(
+				'(try (error "boom") (catch (e) (concat "failed: " (get-in e :message))))',
+			),
+		).toBe('"failed: boom"');
 	});
 
 	it("says there is no comment syntax", () => {

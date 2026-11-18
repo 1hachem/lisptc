@@ -9,7 +9,6 @@ import {
 } from "./func.ts";
 import {
 	Cell,
-	catchSym,
 	keySym,
 	type List,
 	lambdaSym,
@@ -19,11 +18,9 @@ import {
 	quoteSym,
 	restSym,
 	Sym,
-	trySym,
 	unquoteSplicingSym,
 	unquoteSym,
 } from "./objects.ts";
-import { qqExpand } from "./quasiquote.ts";
 
 export const MACRO_EXPANSION_DEPTH = 20;
 
@@ -42,89 +39,26 @@ export function compileFunc(
 	const { hasRest, arity, keys } = makeArgTable(arg.car, table);
 	let body = cdrCell(arg);
 	body = scanForArgs(body, table) as List;
-	body = expandMacros(interp, body, MACRO_EXPANSION_DEPTH) as List;
-	body = compileInners(interp, body) as List;
+	body = compileForm(interp, body, MACRO_EXPANSION_DEPTH) as List;
 	return make(hasRest ? -arity : arity, body, env, keys);
 }
 
-function expandMacros(interp: Compiler, j: unknown, count: number): unknown {
-	if (count > 0 && j instanceof Cell) {
-		let k = j.car;
-		switch (k) {
-			case quoteSym:
-			case lambdaSym:
-			case macroSym:
-				return j;
-			case quasiquoteSym: {
-				const d = cdrCell(j);
-				if (d !== null && d.cdr === null) {
-					const z = qqExpand(d.car);
-					return expandMacros(interp, z, count);
-				}
-				throw new EvalException("bad quasiquote", j);
-			}
-			case trySym:
-				return expandTry(interp, j, count);
-			default:
-				if (k instanceof Sym) k = interp.getGlobal(k);
-				if (k instanceof Macro) {
-					const d = cdrCell(j);
-					const z = driveSync(k.expandWith(interp, d));
-					return expandMacros(interp, z, count - 1);
-				}
-				return mapcar(j, (x) => expandMacros(interp, x, count));
-		}
-	} else {
-		return j;
+function compileForm(interp: Compiler, j: unknown, depth: number): unknown {
+	if (!(j instanceof Cell)) return j;
+	switch (j.car) {
+		case quoteSym:
+			return j;
+		case lambdaSym:
+			return compileFunc(interp, cdrCell(j), null, Lambda.make);
+		case macroSym:
+			throw new EvalException("nested macro", j);
 	}
-}
-
-function expandTry(interp: Compiler, j: Cell, count: number): unknown {
-	const argPart = cdrCell(j);
-	const clauseCell = argPart === null ? null : cdrCell(argPart);
-	const clause = clauseCell === null ? null : clauseCell.car;
-	if (
-		argPart === null ||
-		clauseCell === null ||
-		clauseCell.cdr !== null ||
-		!(clause instanceof Cell) ||
-		clause.car !== catchSym
-	)
-		throw new EvalException("bad try", j);
-	const bodyForm = expandMacros(interp, argPart.car, count);
-	const catchRest = cdrCell(clause);
-	if (catchRest === null) throw new EvalException("bad try", j);
-	const params = catchRest.car;
-	const handlers = mapcar(cdrCell(catchRest), (h) =>
-		expandMacros(interp, h, count),
-	);
-	return new Cell(
-		trySym,
-		new Cell(
-			bodyForm,
-			new Cell(new Cell(catchSym, new Cell(params, handlers)), null),
-		),
-	);
-}
-
-function compileInners(interp: Compiler, j: unknown): unknown {
-	if (j instanceof Cell) {
-		const k = j.car;
-		switch (k) {
-			case quoteSym:
-				return j;
-			case lambdaSym: {
-				const d = cdrCell(j);
-				return compileFunc(interp, d, null, Lambda.make);
-			}
-			case macroSym:
-				throw new EvalException("nested macro", j);
-			default:
-				return mapcar(j, (x) => compileInners(interp, x));
-		}
-	} else {
-		return j;
+	const head = j.car instanceof Sym ? interp.getGlobal(j.car) : j.car;
+	if (head instanceof Macro && depth > 0) {
+		const expansion = driveSync(head.expandWith(interp, cdrCell(j)));
+		return compileForm(interp, expansion, depth - 1);
 	}
+	return mapcar(j, (x) => compileForm(interp, x, depth));
 }
 
 function variableOf(j: unknown): Sym {
