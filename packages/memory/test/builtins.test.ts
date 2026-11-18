@@ -438,12 +438,25 @@ describe("the when trigger", () => {
 		const { recognize } = recognizing({ [ASK]: 0.42 });
 		const f = fixture({ recognize });
 		await f.hear("open my browser");
-		expect(view(f.entries(), recognizedKind)).toEqual([
+		expect(view(f.entries(), recognizedKind)).toMatchObject([
 			{
 				message: "open my browser",
 				scores: { "internal/browser/local": 0.42 },
 			},
 		]);
+	});
+
+	it("records how long recognition took, by the extension's clock", async () => {
+		const ms = { now: 0 };
+		const f = fixture({
+			clock: { now: () => ms.now },
+			recognize: () => {
+				ms.now += 250;
+				return new Map([["internal/browser/local", 0.1]]);
+			},
+		});
+		await f.hear("open my browser");
+		expect(view(f.entries(), recognizedKind)[0]?.latencyMs).toBe(250);
 	});
 
 	it("hands each memory to the recognizer with its key, area, situation and gist", async () => {
@@ -629,7 +642,7 @@ describe("the when trigger", () => {
 			recognize: () => Promise.reject(new Error("timed out")),
 		});
 		expect(await f.hear("deploy now")).toEqual(["internal/deploy/notes"]);
-		expect(view(f.entries(), recognizedKind)).toEqual([
+		expect(view(f.entries(), recognizedKind)).toMatchObject([
 			{ message: "deploy now", scores: {}, error: "timed out" },
 		]);
 	});
@@ -650,6 +663,7 @@ describe("the when trigger", () => {
 			{
 				scores: { "internal/browser/local": 0.9 },
 				error: "recognition failed for deploy: timed out",
+				failedAreas: ["deploy"],
 			},
 		]);
 	});

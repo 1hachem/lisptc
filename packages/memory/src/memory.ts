@@ -838,12 +838,18 @@ export class MemoryBank {
 		if (cues.length === 0) return;
 		let scores: ReadonlyMap<string, number> = new Map();
 		let error: string | undefined;
+		let failedAreas: readonly string[] | undefined;
+		const startedAt = this.now();
 		try {
 			scores = yield* settled(this.recognize(situation, cues, repl.areas));
 		} catch (ex) {
-			if (ex instanceof PartialRecognition) scores = ex.scores;
+			if (ex instanceof PartialRecognition) {
+				scores = ex.scores;
+				failedAreas = ex.failed;
+			}
 			error = ex instanceof Error ? ex.message : String(ex);
 		}
+		const latencyMs = Math.max(0, this.now() - startedAt);
 		if (scores.size === 0 && error === undefined) return;
 		const before = this.step.get().surfaced.length;
 		if (scores.size > 0)
@@ -858,6 +864,8 @@ export class MemoryBank {
 			scores: Object.fromEntries(scores),
 			...(fired.length === 0 ? {} : { fired }),
 			...(error === undefined ? {} : { error }),
+			...(failedAreas === undefined ? {} : { failedAreas: [...failedAreas] }),
+			latencyMs,
 		});
 	}
 
