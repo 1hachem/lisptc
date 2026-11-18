@@ -810,7 +810,7 @@ export const LOCAL_ASKS: readonly string[] = [`${LOCAL_GATE}*`];
 export function mcpExtension(host: McpExtensionHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerMcp(interp, host), {
 		prompt: host.prompt(),
-		memories: host.memories(),
+		postlude: host.memories(),
 		session(hooks: SessionHooks): void {
 			answerAuthorization(hooks);
 			if (host.machine !== undefined) refreshMachine(hooks, host.machine);

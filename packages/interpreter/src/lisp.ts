@@ -70,7 +70,7 @@ import { qqExpand, qqQuote } from "./quasiquote.ts";
 import { Reader, readFailure, type SyntaxFailure } from "./reader.ts";
 import { Recovery } from "./recovery.ts";
 import { parseArgs } from "./schema.ts";
-import { LANGUAGE_MEMORIES, LANGUAGE_REFERENCE } from "./source.ts";
+import { LANGUAGE_REFERENCE } from "./source.ts";
 import type { ForeignValue } from "./types.ts";
 
 export type FailedForm =
@@ -130,7 +130,6 @@ export interface Contents {
 export interface Installable {
 	(interp: Interp): void;
 	readonly prompt?: string;
-	readonly memories?: string;
 	readonly prelude?: string;
 	readonly postlude?: string;
 }
@@ -197,8 +196,6 @@ export class Interp {
 	private readonly sources: Map<string, unknown> = new Map();
 
 	private readonly prompts: string[] = [];
-
-	private readonly memories: string[] = [LANGUAGE_MEMORIES];
 
 	private readonly preludes: string[] = [prelude];
 
@@ -274,7 +271,6 @@ export class Interp {
 		for (const extension of options.extensions ?? []) {
 			extension(this);
 			if (extension.prompt) this.prompts.push(extension.prompt);
-			if (extension.memories) this.memories.push(extension.memories);
 			if (extension.prelude) this.preludes.push(extension.prelude);
 			if (extension.postlude) this.postludes.push(extension.postlude);
 		}
@@ -286,10 +282,6 @@ export class Interp {
 
 	systemPrompt(): string {
 		return [LANGUAGE_REFERENCE, ...this.prompts].join("\n\n");
-	}
-
-	builtinMemories(): readonly string[] {
-		return this.memories;
 	}
 
 	read(text: string): unknown {

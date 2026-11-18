@@ -826,7 +826,7 @@ describe("the widget form table", () => {
 	});
 
 	it("ships one memory per widget, carrying its signature", () => {
-		const { memories } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		const { postlude } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
 		const { interp } = fresh();
 		runSync(
 			interp,
@@ -834,7 +834,7 @@ describe("the widget form table", () => {
 (defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
 (defmacro area (name &rest declared) nil)`,
 		);
-		runSync(interp, memories ?? "");
+		runSync(interp, postlude ?? "");
 		const bodies = new Map(
 			listToArray(interp.getGlobal(newSym("shipped")) as List).map(
 				(entry) => listToArray(entry as List) as [string, string],

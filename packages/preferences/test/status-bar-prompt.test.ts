@@ -27,7 +27,7 @@ function memoryBodies(source: string): string {
 }
 
 const prompt = memoryBodies(
-	preferencesExtension(preferencesHostFor(HOST_CHOICES)).memories ?? "",
+	preferencesExtension(preferencesHostFor(HOST_CHOICES)).postlude ?? "",
 ).replace(/\s+/g, " ");
 
 describe("the memory's bottom bar", () => {

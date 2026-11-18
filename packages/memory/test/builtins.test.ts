@@ -1,3 +1,4 @@
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval } from "@repo/interpreter/drive";
 import { bufferSink } from "@repo/interpreter/journal";
 import { boot, type Installable, runAsync } from "@repo/interpreter/lisp";
@@ -35,14 +36,14 @@ import {
 	VolatileStore,
 	WHEN_FIRES_AT,
 } from "../src/ports.ts";
-import { bareHost, MemoryInterp, written } from "./helpers.ts";
+import { bareHost, written } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
 }
 
-function carrying(memories: string): Installable {
-	return Object.assign(() => {}, { memories });
+function carrying(postlude: string): Installable {
+	return Object.assign(() => {}, { postlude });
 }
 
 const BROWSER = `
@@ -86,7 +87,7 @@ function recognizing(
 }
 
 interface Fixture {
-	interp: MemoryInterp;
+	interp: ConversationInterpreter;
 	bank: MemoryBank;
 	hear(text: string): Promise<string[]>;
 	step(code: string, result: string): Promise<string[]>;
@@ -105,7 +106,7 @@ function fixture(
 		options.recognize,
 	);
 	const extension = memoryExtension({ ...bareHost, store }, { bank });
-	const interp = new MemoryInterp({
+	const interp = new ConversationInterpreter({
 		extensions: [extension, carrying(options.memories ?? BROWSER)],
 	});
 	boot(interp);
@@ -169,9 +170,10 @@ async function ev(f: Fixture, code: string): Promise<string> {
 
 describe("built-in memories", () => {
 	it("ships the memory package's own built-ins, parsed and listed", () => {
-		const interp = new MemoryInterp({
+		const interp = new ConversationInterpreter({
 			extensions: [memoryExtension(memoryHost)],
 		});
+		boot(interp);
 		const bank = new MemoryBank(
 			new VolatileStore(),
 			memoryHost.clock,

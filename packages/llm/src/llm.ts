@@ -154,7 +154,7 @@ export function llmExtension(
 		},
 		{
 			prompt: host.prompt(),
-			memories: host.memories(),
+			postlude: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.fill(llmSlot, {
 					set observe(observer: LlmObserver | undefined) {

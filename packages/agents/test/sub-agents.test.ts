@@ -663,7 +663,7 @@ describe("the sub-agent extension", () => {
 (setq area (macro (name &rest _) (list 'setq 'areas (list 'cons name 'areas))))
 (setq memory (macro (key &rest _) (list 'setq 'keys (list 'cons key 'keys))))`,
 		);
-		runSync(interp, subAgentExtension(subAgentHost()).memories ?? "");
+		runSync(interp, subAgentExtension(subAgentHost()).postlude ?? "");
 		expect(str(interp.getGlobal(newSym("areas")))).toBe('("sub-agent")');
 		const keys = listToArray(interp.getGlobal(newSym("keys")) as List);
 		expect(keys.length).toBeGreaterThan(0);

@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { note } from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
@@ -32,7 +32,7 @@ import {
 	type MemoryWrite,
 	VolatileStore,
 } from "../src/ports.ts";
-import { bareHost, MemoryInterp, written } from "./helpers.ts";
+import { bareHost, written } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
@@ -49,7 +49,7 @@ function shown(noted: {
 }
 
 interface Fixture {
-	interp: MemoryInterp;
+	interp: ConversationInterpreter;
 	bank: MemoryBank;
 	step(code: string): Promise<string>;
 }
@@ -58,7 +58,7 @@ function fixture(
 	bank: MemoryBank = new MemoryBank(new VolatileStore()),
 	extras: InterpExtension[] = [],
 ): Fixture {
-	const interp = new MemoryInterp({
+	const interp = new ConversationInterpreter({
 		extensions: [memoryExtension(bareHost, { bank }), ...extras],
 	});
 	boot(interp);
@@ -525,7 +525,7 @@ describe("triggers", () => {
 		const f = fixture(bank);
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
 
-		const quiet = new MemoryInterp({
+		const quiet = new ConversationInterpreter({
 			extensions: [memoryExtension(bareHost, { bank })],
 		});
 		boot(quiet);

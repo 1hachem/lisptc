@@ -209,6 +209,7 @@ const DECLARED_MEMORIES = "*memories*";
 const DECLARED_AREAS = "*areas*";
 
 const DECLARED = "memory/declared";
+const DOCUMENT = "memory/_document-declarations";
 const BUILT_BODY = "memory/built-body";
 const DECLARE = `
 (setq memory
@@ -223,6 +224,13 @@ const DECLARE = `
           (list 'setq '${DECLARED_AREAS}
                 (list 'cons (list 'quote (cons name declared)) '${DECLARED_AREAS}))
           '${DECLARED})))
+`;
+
+const PRELUDE = `
+(setq ${DECLARED_MEMORIES} nil)
+(setq ${DECLARED_AREAS} nil)
+${DECLARE}
+(${DOCUMENT})
 `;
 
 function isDeclaration(form: unknown): boolean {
@@ -242,6 +250,15 @@ function withBody(interp: Interp, declared: unknown): unknown {
 	const text = interp.getGlobal(built);
 	interp.defineGlobal(built, null);
 	return arrayToList([...parts.slice(0, -1), text]);
+}
+
+function isBuiltinDeclaration(declared: unknown): boolean {
+	return !(
+		declared instanceof Cell &&
+		listToArray(declared.cdr as List).some(
+			(part) => part instanceof LispKeyword && part.name === "score",
+		)
+	);
 }
 
 function declaredIn(interp: Interp, name: string): unknown[] {
@@ -509,18 +526,15 @@ export class MemoryBank {
 		memories: ReadonlyMap<string, Memory>;
 		areas: readonly AreaGate[];
 	} {
-		interp.defineGlobal(newSym(DECLARED_MEMORIES), null);
-		interp.defineGlobal(newSym(DECLARED_AREAS), null);
-		for (const source of interp.builtinMemories()) runSync(interp, source);
 		const memories = new Map<string, Memory>();
 		const evaluated = declaredIn(interp, DECLARED_MEMORIES).map((declared) =>
-			withBody(interp, declared),
+			isBuiltinDeclaration(declared) ? withBody(interp, declared) : declared,
 		);
 		interp.defineGlobal(
 			newSym(DECLARED_MEMORIES),
 			arrayToList([...evaluated].reverse()),
 		);
-		for (const declared of evaluated) {
+		for (const declared of evaluated.filter(isBuiltinDeclaration)) {
 			const memory = builtinFrom(declared);
 			if (memories.has(memory.key))
 				throw new EvalException(
@@ -995,7 +1009,8 @@ export function memoryExtension(
 		bank,
 		asks: [FORGET_ALL],
 		prompt: host.prompt(),
-		memories: host.memories(),
+		prelude: PRELUDE,
+		postlude: `${host.languageMemories().trimEnd()}\n\n${host.memories()}`,
 		session: memorySession(bank),
 	});
 }
@@ -1073,6 +1088,19 @@ function situationOf(memory: Memory): unknown {
 		: triggerToForm(memory.on);
 }
 
+function documentDeclarations(interp: Interp): void {
+	interp.setDoc("memory", {
+		signature:
+			'(memory "key" [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links ("key"...)] "body")',
+		doc: `Declare a built-in memory, in a .memories.ptc file an extension ships. Its body holds at most ${MAX_BUILTIN_WORDS} words; split a longer one and link the parts.`,
+		wordCaps: [{ position: 1, words: MAX_BUILTIN_WORDS }],
+	});
+	interp.setDoc("area", {
+		signature: '(area "name" :when "situation")',
+		doc: "Declare the area a .memories.ptc file's memories are filed under, and the situation that opens it to recognition.",
+	});
+}
+
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.journal);
@@ -1101,17 +1129,17 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			doc: "The kinds of event an :on trigger can name.",
 		},
 	);
-	runSync(interp, DECLARE);
-	interp.setDoc("memory", {
-		signature:
-			'(memory "key" [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links ("key"...)] "body")',
-		doc: `Declare a built-in memory, in a .memories.ptc file an extension ships. Its body holds at most ${MAX_BUILTIN_WORDS} words; split a longer one and link the parts.`,
-		wordCaps: [{ position: 1, words: MAX_BUILTIN_WORDS }],
-	});
-	interp.setDoc("area", {
-		signature: '(area "name" :when "situation")',
-		doc: "Declare the area a .memories.ptc file's memories are filed under, and the situation that opens it to recognition.",
-	});
+	interp.def(
+		DOCUMENT,
+		0,
+		`(${DOCUMENT})`,
+		"Give memory and area the documentation the memory extension declares them with, over the core's placeholders.",
+		z.tuple([]),
+		() => {
+			documentDeclarations(interp);
+			return Unspecified;
+		},
+	);
 	bank.declareIn(interp);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {

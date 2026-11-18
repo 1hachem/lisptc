@@ -662,7 +662,7 @@ export function uiExtension(
 		{
 			surface,
 			prompt: host.prompt(),
-			memories: `${host.memories().trimEnd()}\n\n${widgetMemories()}\n`,
+			postlude: `${host.memories().trimEnd()}\n\n${widgetMemories()}\n`,
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();

@@ -100,6 +100,6 @@ export function diagnosticsExtension(host: DiagnosticsHost): InterpExtension {
 	};
 	return Object.assign(extension, {
 		prompt: host.prompt(),
-		memories: host.memories(),
+		postlude: host.memories(),
 	});
 }

@@ -1,3 +1,4 @@
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, driveSync, settled } from "@repo/interpreter/drive";
 import { boot, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
@@ -9,7 +10,7 @@ import {
 	type MemoryWrite,
 	VolatileStore,
 } from "../src/ports.ts";
-import { bareHost, MemoryInterp } from "./helpers.ts";
+import { bareHost } from "./helpers.ts";
 
 class PromisedStore implements MemoryStore {
 	private readonly inner = new VolatileStore();
@@ -41,8 +42,8 @@ class PromisedStore implements MemoryStore {
 	}
 }
 
-function interpWith(store: MemoryStore): MemoryInterp {
-	const interp = new MemoryInterp({
+function interpWith(store: MemoryStore): ConversationInterpreter {
+	const interp = new ConversationInterpreter({
 		extensions: [
 			memoryExtension(
 				{ ...bareHost, store, prompt: () => "" },
@@ -111,12 +112,12 @@ describe("built-ins loading on the first message, over a store that answers with
 		const store = new PromisedStore();
 		const builtin = Object.assign(() => {}, {
 			prompt: "",
-			memories:
+			postlude:
 				'(memory "internal/t/formatted" :when "the test asks for it" (format nil "~d steps" 3))',
 		});
 		const fresh = () => {
 			const bank = new MemoryBank(store);
-			const interp = new MemoryInterp({
+			const interp = new ConversationInterpreter({
 				extensions: [
 					memoryExtension({ ...bareHost, store, prompt: () => "" }, { bank }),
 					builtin,

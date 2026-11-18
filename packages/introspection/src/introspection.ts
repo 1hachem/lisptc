@@ -26,7 +26,7 @@ export function introspectionExtension(
 ): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerIntrospection(interp),
-		{ prompt: host.prompt(), memories: host.memories() },
+		{ prompt: host.prompt(), postlude: host.memories() },
 	);
 }
 

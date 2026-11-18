@@ -531,6 +531,7 @@ export interface MemoryHost {
 	store: MemoryStore;
 	clock: Clock;
 	prompt: PromptSource;
+	languageMemories: PromptSource;
 	memories: PromptSource;
 	search: SearchEngine;
 	recognize: Recognize;
