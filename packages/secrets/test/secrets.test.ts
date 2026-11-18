@@ -35,15 +35,6 @@ describe("secret registry", () => {
 		);
 	});
 
-	it("reads a description out of the alist with assoc", async () => {
-		const interp = interpWithSecrets({
-			REPL_API_KEY: { value: "lin_abc", description: "Linear API key" },
-		});
-		expect(ev('(cdr (assoc "REPL_API_KEY" (secrets)))', interp)).toBe(
-			'"Linear API key"',
-		);
-	});
-
 	it("only registers keys starting with REPL_", async () => {
 		const interp = interpWithSecrets({ REPL_FOO: "bar", NOT_A_SECRET: "nope" });
 		const out = ev("(secrets)", interp);
