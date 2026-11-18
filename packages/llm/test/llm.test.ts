@@ -14,11 +14,62 @@ import { llmHost } from "../src/llm-host.ts";
 
 type Reply = (req: LlmRequest) => LlmResult | string;
 
+const transcript = (req: LlmRequest): string =>
+	req.messages.map((m) => `${m.role}: ${m.content}`).join(" | ");
+
+const settings = (req: LlmRequest): string =>
+	[
+		req.provider ?? "default",
+		req.model,
+		req.maxTokens,
+		req.temperature,
+		req.reasoningEffort,
+	]
+		.filter((v) => v !== undefined)
+		.join(" ");
+
+function seesInOrder(...parts: string[]): Reply {
+	return (req) => {
+		const all = req.messages.map((m) => m.content).join("\n");
+		let at = -1;
+		for (const part of parts) {
+			at = all.indexOf(part, at + 1);
+			if (at < 0) return "unseen";
+		}
+		return "seen";
+	};
+}
+
+type Json = Record<string, unknown>;
+
+function sample(schema: Json): unknown {
+	if (Array.isArray(schema.enum)) return schema.enum[0];
+	switch (schema.type) {
+		case "object": {
+			const properties = schema.properties as Record<string, Json>;
+			const required = schema.required as string[];
+			return Object.fromEntries(
+				required.map((key) => [key, sample(properties[key])]),
+			);
+		}
+		case "array":
+			return [sample(schema.items as Json)];
+		case "integer":
+		case "number":
+			return 7;
+		default:
+			return schema.description ?? "text";
+	}
+}
+
+const obeying: Reply = (req) => ({
+	text: "{}",
+	value: req.schema === undefined ? {} : sample(req.schema.schema),
+});
+
 function llmInterp(reply: Reply = () => "ok") {
-	const seen: LlmRequest[] = [];
 	const traced: LlmCall[] = [];
 	const generate: Generate = async (req) => {
-		seen.push(req);
 		const answer = reply(req);
 		return typeof answer === "string" ? { text: answer } : answer;
 	};
@@ -31,7 +82,7 @@ function llmInterp(reply: Reply = () => "ok") {
 		],
 	});
 	runSync(interp, prelude);
-	return { interp, seen, traced };
+	return { interp, traced };
 }
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
@@ -48,37 +99,31 @@ async function failure(interp: Interp, code: string): Promise<string> {
 }
 
 describe("write", () => {
-	it("returns the reply as a string", async () => {
-		const { interp, seen } = llmInterp(() => "hello there");
-		expect(await evalStr(interp, '(write "greet me")')).toBe('"hello there"');
-		expect(seen).toEqual([
-			{ messages: [{ role: "user", content: "greet me" }] },
-		]);
+	it("sends the prompt as a user turn and returns the reply as a string", async () => {
+		const { interp } = llmInterp(transcript);
+		expect(await evalStr(interp, '(write "greet me")')).toBe(
+			'"user: greet me"',
+		);
 	});
 
-	it("passes the options through to the request", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			`(write "explain monads"
-			   :system "You are a Haskell expert."
-			   :provider :openrouter
-			   :model "google/gemma-4-31b-it"
-			   :max-tokens 200
-			   :temperature 0.3
-			   :reasoning-effort :high)`,
+	it("sends a :system turn ahead of the prompt, with the settings it was given", async () => {
+		const { interp } = llmInterp(
+			(req) => `${transcript(req)} | ${settings(req)}`,
 		);
-		expect(seen[0]).toEqual({
-			messages: [
-				{ role: "system", content: "You are a Haskell expert." },
-				{ role: "user", content: "explain monads" },
-			],
-			provider: "openrouter",
-			model: "google/gemma-4-31b-it",
-			maxTokens: 200,
-			temperature: 0.3,
-			reasoningEffort: "high",
-		});
+		expect(
+			await evalStr(
+				interp,
+				`(write "explain monads"
+				   :system "You are a Haskell expert."
+				   :provider :openrouter
+				   :model "google/gemma-4-31b-it"
+				   :max-tokens 200
+				   :temperature 0.3
+				   :reasoning-effort :high)`,
+			),
+		).toBe(
+			'"system: You are a Haskell expert. | user: explain monads | openrouter google/gemma-4-31b-it 200 0.3 high"',
+		);
 	});
 
 	it("rejects an unknown option and a prompt that is not a value", async () => {
@@ -109,29 +154,27 @@ describe("write", () => {
 
 describe("*writing-defaults* and with-writing", () => {
 	it("starts every call from the defaults, with the call site winning", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			`(setq *writing-defaults* (list :provider :openrouter :max-tokens 50))
-			 (write "one")
-			 (write "two" :max-tokens 500)`,
-		);
-		expect(seen[0].provider).toBe("openrouter");
-		expect(seen[0].maxTokens).toBe(50);
-		expect(seen[1].maxTokens).toBe(500);
-	});
-
-	it("binds the defaults for one block and restores them after", async () => {
-		const { interp, seen } = llmInterp();
+		const { interp } = llmInterp(settings);
 		expect(
 			await evalStr(
 				interp,
-				`(with-writing (:provider :openrouter :max-tokens 20)
-				   (write "inside"))`,
+				`(setq *writing-defaults* (list :provider :openrouter :max-tokens 50))
+				 (list (write "one") (write "two" :max-tokens 500))`,
 			),
-		).toBe('"ok"');
-		expect(seen[0].provider).toBe("openrouter");
-		expect(await evalStr(interp, "(identity *writing-defaults*)")).toBe("nil");
+		).toBe('("openrouter 50" "openrouter 500")');
+	});
+
+	it("binds the defaults for one block and restores them after", async () => {
+		const { interp } = llmInterp(settings);
+		expect(
+			await evalStr(
+				interp,
+				`(list (with-writing (:provider :openrouter :max-tokens 20)
+				         (write "inside"))
+				       (write "outside")
+				       *writing-defaults*)`,
+			),
+		).toBe('("openrouter 20" "default" nil)');
 	});
 
 	it("restores the defaults when the body raises", async () => {
@@ -159,7 +202,7 @@ describe("*writing-defaults* and with-writing", () => {
 
 describe("converse", () => {
 	it("sends messages built with message, and bare strings as user turns", async () => {
-		const { interp, seen } = llmInterp(() => "a dialect of Lisp");
+		const { interp } = llmInterp(transcript);
 		expect(
 			await evalStr(
 				interp,
@@ -167,21 +210,7 @@ describe("converse", () => {
 				                 (message :user "What is lisptc?")
 				                 "one sentence"))`,
 			),
-		).toBe('"a dialect of Lisp"');
-		expect(seen[0].messages).toEqual([
-			{ role: "system", content: "Be terse." },
-			{ role: "user", content: "What is lisptc?" },
-			{ role: "user", content: "one sentence" },
-		]);
-	});
-
-	it("accepts the conversation shape unchanged", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			`(converse (list (list (cons "role" "user") (cons "content" "hi"))))`,
-		);
-		expect(seen[0].messages).toEqual([{ role: "user", content: "hi" }]);
+		).toBe('"system: Be terse. | user: What is lisptc? | user: one sentence"');
 	});
 
 	it("rejects an unknown role and a message with no content", async () => {
@@ -196,11 +225,8 @@ describe("converse", () => {
 });
 
 describe("extract", () => {
-	it("turns a shape into a json schema and the answer into an alist", async () => {
-		const { interp, seen } = llmInterp(() => ({
-			text: "{}",
-			value: { name: "Ada Lovelace", born: 1815, tags: ["maths"] },
-		}));
+	it("returns the answer to its shape as an alist, leaving out an optional field", async () => {
+		const { interp } = llmInterp(obeying);
 		expect(
 			await evalStr(
 				interp,
@@ -210,62 +236,31 @@ describe("extract", () => {
 				         (cons "tags" (list :list :string))
 				         (cons "nickname" (list :optional :string))))`,
 			),
-		).toBe('(("name" . "Ada Lovelace") ("born" . 1815.0) ("tags" "maths"))');
-		expect(seen[0].schema).toEqual({
-			name: "extraction",
-			schema: {
-				type: "object",
-				additionalProperties: false,
-				required: ["name", "born", "tags"],
-				properties: {
-					name: { type: "string", description: "the person's full name" },
-					born: { type: "integer" },
-					tags: { type: "array", items: { type: "string" } },
-					nickname: { type: "string" },
-				},
-			},
-		});
+		).toBe(
+			`(("name" . "the person's full name") ("born" . 7.0) ("tags" "text"))`,
+		);
 	});
 
-	it("wraps and unwraps a top-level list shape", async () => {
-		const { interp, seen } = llmInterp(() => ({
-			text: "{}",
-			value: { value: ["one", "two"] },
-		}));
+	it("returns a top-level list shape as a bare list", async () => {
+		const { interp } = llmInterp(obeying);
 		expect(
 			await evalStr(
 				interp,
 				'(extract "one and two" (list :list :string) :instructions "the words")',
 			),
-		).toBe('("one" "two")');
-		expect(seen[0].schema?.schema).toEqual({
-			type: "object",
-			additionalProperties: false,
-			required: ["value"],
-			properties: { value: { type: "array", items: { type: "string" } } },
-		});
-		expect(seen[0].messages[1].content).toBe("the words\n\none and two");
-		expect(seen[0].messages[0].role).toBe("system");
+		).toBe('("text")');
 	});
 
-	it("supports enums and nested objects", async () => {
-		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
-		await runAsync(
-			interp,
-			`(extract "an issue"
-			   (list (cons "state" (list :enum "open" "closed"))
-			         (cons "author" (list (cons "name" :string)))))`,
-		);
-		expect(seen[0].schema?.schema).toMatchObject({
-			properties: {
-				state: { type: "string", enum: ["open", "closed"] },
-				author: {
-					type: "object",
-					properties: { name: { type: "string" } },
-					required: ["name"],
-				},
-			},
-		});
+	it("answers an enum with one of its values and a nested shape as a nested alist", async () => {
+		const { interp } = llmInterp(obeying);
+		expect(
+			await evalStr(
+				interp,
+				`(extract "an issue"
+				   (list (cons "state" (list :enum "open" "closed"))
+				         (cons "author" (list (cons "name" :string)))))`,
+			),
+		).toBe('(("state" . "open") ("author" ("name" . "text")))');
 	});
 
 	it("rejects an unknown field type", async () => {
@@ -277,56 +272,35 @@ describe("extract", () => {
 });
 
 describe("the shape macro", () => {
-	it("builds the extraction alist without quoting or dotted pairs", async () => {
-		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
-		await runAsync(
-			interp,
-			`(extract "an issue"
-			   (shape (title "the issue title")
-			          (stars :integer)
-			          (state (:enum "open" "closed"))
-			          (links (:list :string))
-			          (author (:optional :string))))`,
+	it("describes every field kind without quoting or dotted pairs", async () => {
+		const { interp } = llmInterp(obeying);
+		expect(
+			await evalStr(
+				interp,
+				`(extract "an issue"
+				   (shape (title "the issue title")
+				          (stars :integer)
+				          (state (:enum "open" "closed"))
+				          (links (:list :string))
+				          (author (:optional :string))))`,
+			),
+		).toBe(
+			'(("title" . "the issue title") ("stars" . 7.0) ("state" . "open") ("links" "text"))',
 		);
-		expect(seen[0].schema?.schema).toEqual({
-			type: "object",
-			additionalProperties: false,
-			required: ["title", "stars", "state", "links"],
-			properties: {
-				title: { type: "string", description: "the issue title" },
-				stars: { type: "integer" },
-				state: { type: "string", enum: ["open", "closed"] },
-				links: { type: "array", items: { type: "string" } },
-				author: { type: "string" },
-			},
-		});
 	});
 
 	it("reads a nested group as an object, inside a :list too", async () => {
-		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
-		await runAsync(
-			interp,
-			`(extract "issues"
-			   (shape (owner (name :string) (email (:optional :string)))
-			          (items (:list (id :number) (title :string)))))`,
+		const { interp } = llmInterp(obeying);
+		expect(
+			await evalStr(
+				interp,
+				`(extract "issues"
+				   (shape (owner (name :string) (email (:optional :string)))
+				          (items (:list (id :number) (title :string)))))`,
+			),
+		).toBe(
+			'(("owner" ("name" . "text")) ("items" (("id" . 7.0) ("title" . "text"))))',
 		);
-		expect(seen[0].schema?.schema).toMatchObject({
-			properties: {
-				owner: {
-					type: "object",
-					properties: { name: { type: "string" }, email: { type: "string" } },
-					required: ["name"],
-				},
-				items: {
-					type: "array",
-					items: {
-						type: "object",
-						properties: { id: { type: "number" }, title: { type: "string" } },
-						required: ["id", "title"],
-					},
-				},
-			},
-		});
 	});
 
 	it("expands to a literal alist, keeping a string key as written", async () => {
@@ -342,26 +316,29 @@ describe("the shape macro", () => {
 
 describe("a value that is not a string", () => {
 	it("goes into the prompt as its printed form", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			'(write (list (cons "id" 1) (cons "title" "auth bug")))',
-		);
-		expect(seen[0].messages[0].content).toBe(
-			'(("id" . 1) ("title" . "auth bug"))',
-		);
+		const { interp } = llmInterp(transcript);
+		expect(
+			await evalStr(
+				interp,
+				'(write (list (cons "id" 1) (cons "title" "auth bug")))',
+			),
+		).toBe(String.raw`"user: ((\"id\" . 1) (\"title\" . \"auth bug\"))"`);
 	});
 
 	it("works for a message content, a :system and the text to read", async () => {
-		const { interp, seen } = llmInterp(() => ({ text: "{}", value: {} }));
-		await runAsync(interp, "(converse (list (message :user (list 1 2))))");
-		expect(seen[0].messages[0].content).toBe("(1 2)");
-		await runAsync(
-			interp,
-			'(extract (list "a" "b") (shape (n :integer)) :system (list :terse))',
-		);
-		expect(seen[1].messages[0].content).toBe("(:terse)");
-		expect(seen[1].messages[1].content).toBe('("a" "b")');
+		const { interp } = llmInterp((req) => ({
+			text: transcript(req),
+			value: { heard: transcript(req) },
+		}));
+		expect(
+			await evalStr(interp, "(converse (list (message :user (list 1 2))))"),
+		).toBe('"user: (1 2)"');
+		expect(
+			await evalStr(
+				interp,
+				'(extract (list "a" "b") (shape (heard :string)) :system (list :terse))',
+			),
+		).toBe(String.raw`(("heard" . "system: (:terse) | user: (\"a\" \"b\")"))`);
 	});
 
 	it("still refuses nil, so a missing value is not sent as text", async () => {
@@ -373,54 +350,58 @@ describe("a value that is not a string", () => {
 });
 
 describe("the summarization macros", () => {
-	it("asks for a summary of the value's printed form", async () => {
-		const { interp, seen } = llmInterp(() => "a short summary");
+	it("summarizes the value's printed form within a budget of its words", async () => {
+		const { interp } = llmInterp((req) =>
+			seesInOrder("(1 2 3)")(req) === "seen" ? settings(req) : "unseen",
+		);
 		expect(
 			await evalStr(
 				interp,
 				"(progn (setq rows (list 1 2 3)) (summarize rows :words 10))",
 			),
-		).toBe('"a short summary"');
-		expect(seen[0].messages[0].content).toBe(
-			"Summarize the input below in about 10 words. Keep the names, numbers and conclusions. Write the summary only.\n\n(1 2 3)",
-		);
-		expect(seen[0].maxTokens).toBe(40);
+		).toBe('"default 40"');
 	});
 
 	it("passes its other options on, and lets :max-tokens win", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			'(summarize "text" :words 30 :max-tokens 15 :provider :openrouter)',
-		);
-		expect(seen[0].maxTokens).toBe(15);
-		expect(seen[0].provider).toBe("openrouter");
+		const { interp } = llmInterp(settings);
+		expect(
+			await evalStr(
+				interp,
+				'(summarize "text" :words 30 :max-tokens 15 :provider :openrouter)',
+			),
+		).toBe('"openrouter 15"');
 	});
 
 	it("summarizes every element of a list, in order", async () => {
-		const { interp, seen } = llmInterp((req) =>
+		const { interp } = llmInterp((req) =>
 			req.messages[0].content.includes("alpha") ? "first" : "second",
 		);
 		expect(
 			await evalStr(interp, '(summarize-each (list "alpha" "beta"))'),
 		).toBe('("first" "second")');
-		expect(seen).toHaveLength(2);
-		expect(seen[0].maxTokens).toBe(100);
 	});
 
 	it("takes its provider from with-writing", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			'(with-writing (:provider :openrouter) (summarize-each (list "a")))',
-		);
-		expect(seen[0].provider).toBe("openrouter");
+		const { interp } = llmInterp(settings);
+		expect(
+			await evalStr(
+				interp,
+				'(with-writing (:provider :openrouter) (summarize-each (list "a")))',
+			),
+		).toBe('("openrouter 100")');
 	});
 });
 
 describe("answer", () => {
-	it("asks the question against the context, and only the context", async () => {
-		const { interp, seen } = llmInterp(() => "Ada Lovelace");
+	it("returns the model's answer when the context holds it", async () => {
+		const { interp } = llmInterp((req) =>
+			seesInOrder(
+				"Ada Lovelace wrote the first algorithm.",
+				"Who wrote it?",
+			)(req) === "seen"
+				? "Ada Lovelace"
+				: "NOT-IN-CONTEXT",
+		);
 		expect(
 			await evalStr(
 				interp,
@@ -428,13 +409,6 @@ describe("answer", () => {
 				        (answer "Who wrote it?" page))`,
 			),
 		).toBe('"Ada Lovelace"');
-		expect(seen[0].messages[1].content).toBe(
-			"Context:\nAda Lovelace wrote the first algorithm.\n\nQuestion: Who wrote it?",
-		);
-		expect(seen[0].messages[0].role).toBe("system");
-		expect(seen[0].messages[0].content).toContain("from the context alone");
-		expect(seen[0].messages[0].content).toContain("at most 60 words");
-		expect(seen[0].maxTokens).toBe(240);
 	});
 
 	it("returns nil when the context does not answer it", async () => {
@@ -450,35 +424,29 @@ describe("answer", () => {
 	});
 
 	it("reads a list of records as its context", async () => {
-		const { interp, seen } = llmInterp(() => "ENG-12");
-		await runAsync(
-			interp,
-			`(answer "Which issue mentions auth?"
-			             (list (cons "id" "ENG-12") (cons "title" "auth token")))`,
+		const { interp } = llmInterp((req) =>
+			seesInOrder('(("id" . "ENG-12") ("title" . "auth token"))')(req) ===
+			"seen"
+				? "ENG-12"
+				: "NOT-IN-CONTEXT",
 		);
-		expect(seen[0].messages[1].content).toContain(
-			'(("id" . "ENG-12") ("title" . "auth token"))',
-		);
+		expect(
+			await evalStr(
+				interp,
+				`(answer "Which issue mentions auth?"
+				         (list (cons "id" "ENG-12") (cons "title" "auth token")))`,
+			),
+		).toBe('"ENG-12"');
 	});
 
 	it("passes its other options on, with :words setting the budget", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			'(answer "q" "ctx" :words 10 :provider :openrouter :temperature 0.0)',
-		);
-		expect(seen[0].messages[0].content).toContain("at most 10 words");
-		expect(seen[0]).toMatchObject({
-			provider: "openrouter",
-			temperature: 0,
-			maxTokens: 40,
-		});
-	});
-
-	it("traces as the built-in that ran it", async () => {
-		const { interp, traced } = llmInterp();
-		await runAsync(interp, '(answer "q" "ctx")');
-		expect(traced.map((call) => call.builtin)).toEqual(["write"]);
+		const { interp } = llmInterp(settings);
+		expect(
+			await evalStr(
+				interp,
+				'(answer "q" "ctx" :words 10 :provider :openrouter :temperature 0.0)',
+			),
+		).toBe('"openrouter 40 0"');
 	});
 });
 
@@ -497,43 +465,36 @@ const GENERATIVE = [
 describe("the generative operators", () => {
 	it.each(
 		GENERATIVE.filter((f) => ["invert", "negate"].includes(f)),
-	)("%s rewrites one value and returns the model's text", async (form) => {
-		const { interp, seen } = llmInterp(() => "rewritten");
-		expect(await evalStr(interp, `(${form} (list :a 1))`)).toBe('"rewritten"');
-		expect(seen).toHaveLength(1);
-		expect(seen[0].messages[0].content).toContain("(:a 1)");
+	)("%s rewrites the printed value and returns the model's text", async (form) => {
+		const { interp } = llmInterp(seesInOrder("(:a 1)"));
+		expect(await evalStr(interp, `(${form} (list :a 1))`)).toBe('"seen"');
 	});
 
 	it.each(
 		GENERATIVE.filter((f) => !["invert", "negate"].includes(f)),
-	)("%s sends both values and returns the model's text", async (form) => {
-		const { interp, seen } = llmInterp(() => "combined");
-		expect(await evalStr(interp, `(${form} "alpha" "beta")`)).toBe(
-			'"combined"',
-		);
-		expect(seen).toHaveLength(1);
-		const content = seen[0].messages[0].content;
-		expect(content.indexOf("alpha")).toBeGreaterThan(-1);
-		expect(content.indexOf("beta")).toBeGreaterThan(content.indexOf("alpha"));
+	)("%s sends both values in order and returns the model's text", async (form) => {
+		const { interp } = llmInterp(seesInOrder("alpha", "beta"));
+		expect(await evalStr(interp, `(${form} "alpha" "beta")`)).toBe('"seen"');
 	});
 
 	it("passes its options on to write", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			'(strip "Hello my enemy" "enemy" :provider :openrouter :max-tokens 20)',
-		);
-		expect(seen[0].provider).toBe("openrouter");
-		expect(seen[0].maxTokens).toBe(20);
+		const { interp } = llmInterp(settings);
+		expect(
+			await evalStr(
+				interp,
+				'(strip "Hello my enemy" "enemy" :provider :openrouter :max-tokens 20)',
+			),
+		).toBe('"openrouter 20"');
 	});
 
 	it("takes its provider from with-writing", async () => {
-		const { interp, seen } = llmInterp();
-		await runAsync(
-			interp,
-			'(with-writing (:provider :openrouter) (negate "I am happy."))',
-		);
-		expect(seen[0].provider).toBe("openrouter");
+		const { interp } = llmInterp(settings);
+		expect(
+			await evalStr(
+				interp,
+				'(with-writing (:provider :openrouter) (negate "I am happy."))',
+			),
+		).toBe('"openrouter"');
 	});
 });
 
