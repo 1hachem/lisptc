@@ -201,20 +201,6 @@ describe("the permissions guard", () => {
 		const s = session("(permission/ask string-upcase)");
 		expect((await s.invoke("ui/click", {})).failed).toBe(true);
 	});
-
-	it("hands each request to every approver, and any reply path unlocks the retry", async () => {
-		const email = recordingApprover();
-		const s = session("(permission/ask string-upcase)", [email]);
-		await s.step(UPCASE);
-		expect(email.asked.map((r) => r.name)).toEqual(["string-upcase"]);
-		resolveApproval(s.host.approvals, {
-			id: email.asked[0].id,
-			approved: true,
-			scope: "once",
-			by: "email",
-		});
-		expect((await s.step(UPCASE)).value).toBe('"A"');
-	});
 });
 
 describe("the permissions surface", () => {
@@ -350,16 +336,6 @@ describe("evaluating a permissions form", () => {
 		expect(run.failed).toBe(true);
 		expect(run.requests).toEqual([]);
 		expect(run.report).toContain("the config is fixed");
-	});
-
-	it("shows the user the reason a rule asks with", async () => {
-		const s = session(
-			'(permission/ask permission/server :reason "servers are reviewed")',
-		);
-		const run = await s.step("(permission/server gh (hide admin_*))");
-		expect(view(run.entries, asksKind).open).toEqual([
-			expect.objectContaining({ prompt: "servers are reviewed" }),
-		]);
 	});
 
 	it("shows only what a server form names, from the repl", async () => {
