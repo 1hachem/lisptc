@@ -75,6 +75,21 @@ describe("extensions", () => {
 		expect(freshInterp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
 	});
 
+	it("boots every extension's prelude before any extension's postlude", () => {
+		const first: Installable = Object.assign(() => {}, {
+			prelude: "(setq order nil) (defun note (x) (setq order (cons x order)))",
+			postlude: '(note "first postlude")',
+		});
+		const second: Installable = Object.assign(() => {}, {
+			prelude: '(note "second prelude")',
+			postlude: '(note "second postlude")',
+		});
+		const interp = freshInterp({ extensions: [first, second] });
+		expect(ev("(reverse order)", interp)).toBe(
+			'("second prelude" "first postlude" "second postlude")',
+		);
+	});
+
 	it("collects the built-in memories each extension carries, in order, out of the prompt", () => {
 		const first: Installable = Object.assign(() => {}, {
 			memories: '(memory "a")\nfirst',

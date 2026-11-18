@@ -1,6 +1,5 @@
 import { bufferSink, hitch } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import type { ProseHost } from "../src/ports.ts";
 import { proseExtension } from "../src/prose.ts";
@@ -12,7 +11,7 @@ function installed(host: ProseHost = proseHost): Interp {
 
 const template = installed();
 const beforePrelude = new Map(template.globalEntries());
-runSync(template, prelude);
+boot(template);
 const templateDocs = template.docs();
 
 const builtinSymByValue = new Map(
@@ -41,7 +40,7 @@ export function proseInterp(host?: ProseHost): Interp {
 
 export function freshInterp(): Interp {
 	const interp = new Interp();
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 

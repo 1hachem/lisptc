@@ -1,6 +1,5 @@
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { Cell, listToArray, newSym } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import {
 	STATUS_BAR_GAPS,
 	STATUS_BAR_ITEMS,
@@ -15,7 +14,7 @@ function memoryBodies(source: string): string {
 	const interp = new Interp({
 		extensions: [preferencesExtension(preferencesHostFor(HOST_CHOICES))],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	runSync(
 		interp,
 		`(setq bodies nil)

@@ -1,6 +1,5 @@
 import { restore, snapshot } from "@repo/interpreter/image";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import type { SecretsStore } from "../src/ports.ts";
@@ -21,7 +20,7 @@ function interpOver(store: SecretsStore): Interp {
 
 function imaged(code: string): { json: string; back: Interp } {
 	const interp = interpOver(storeWith("tok-123"));
-	runSync(interp, prelude);
+	boot(interp);
 	runSync(interp, code);
 	const json = JSON.stringify(snapshot(interp));
 	const back = interpOver(storeWith("tok-123"));

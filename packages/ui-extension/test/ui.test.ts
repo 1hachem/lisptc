@@ -1,9 +1,8 @@
 import type { Conversation } from "@repo/interpreter/conversation";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { type List, listToArray, newSym } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { viewKind } from "@repo/journal-catalog/view";
 import { TAGS, widgetOf } from "@repo/ui-catalog";
@@ -92,7 +91,7 @@ function fresh(): {
 	const views = new MemoryViewStore();
 	const host = uiHostFor({ panel, views });
 	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, surface, ui: collector(interp, views), ops };
 }
 
@@ -717,7 +716,7 @@ describe("the panel beside the chat", () => {
 		const interp = new Interp({
 			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		return { ops, ev: (code: string) => str(runSync(interp, code)) };
 	}
 
@@ -854,7 +853,7 @@ describe("the view store", () => {
 		const views = new MemoryViewStore();
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-		runSync(interp, prelude);
+		boot(interp);
 		return { surface, views, interp, ui: collector(interp, views) };
 	}
 

@@ -64,6 +64,7 @@ import {
 	trySym,
 	Unspecified,
 } from "./objects.ts";
+import { prelude } from "./prelude.ts";
 import { str } from "./print.ts";
 import { qqExpand, qqQuote } from "./quasiquote.ts";
 import { Reader, readFailure, type SyntaxFailure } from "./reader.ts";
@@ -130,6 +131,8 @@ export interface Installable {
 	(interp: Interp): void;
 	readonly prompt?: string;
 	readonly memories?: string;
+	readonly prelude?: string;
+	readonly postlude?: string;
 }
 
 export interface InterpOptions {
@@ -196,6 +199,10 @@ export class Interp {
 	private readonly prompts: string[] = [];
 
 	private readonly memories: string[] = [LANGUAGE_MEMORIES];
+
+	private readonly preludes: string[] = [prelude];
+
+	private readonly postludes: string[] = [];
 
 	globalNames(): string[] {
 		return [...this.globals.keys()].map((s) => s.name);
@@ -268,7 +275,13 @@ export class Interp {
 			extension(this);
 			if (extension.prompt) this.prompts.push(extension.prompt);
 			if (extension.memories) this.memories.push(extension.memories);
+			if (extension.prelude) this.preludes.push(extension.prelude);
+			if (extension.postlude) this.postludes.push(extension.postlude);
 		}
+	}
+
+	bootSources(): readonly string[] {
+		return [...this.preludes, ...this.postludes];
 	}
 
 	systemPrompt(): string {
@@ -836,4 +849,16 @@ export function runSync(interp: Interp, text: string): unknown {
 
 export function runAsync(interp: Interp, text: string): Promise<Outcome> {
 	return driveAsync(runGen(interp, text));
+}
+
+export function* bootGen(interp: Interp): Eval<void> {
+	for (const source of interp.bootSources()) yield* runGen(interp, source);
+}
+
+export function boot(interp: Interp): void {
+	driveSync(bootGen(interp));
+}
+
+export async function bootAsync(interp: Interp): Promise<void> {
+	await driveAsync(bootGen(interp));
 }

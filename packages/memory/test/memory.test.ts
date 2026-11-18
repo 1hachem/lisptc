@@ -5,8 +5,7 @@ import { note } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { type InterpExtension, openSession } from "@repo/interpreter/session";
 import { memoryKind } from "@repo/journal-catalog/memory";
@@ -62,7 +61,7 @@ function fixture(
 	const interp = new MemoryInterp({
 		extensions: [memoryExtension(bareHost, { bank }), ...extras],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return {
 		interp,
 		bank,
@@ -529,7 +528,7 @@ describe("triggers", () => {
 		const quiet = new MemoryInterp({
 			extensions: [memoryExtension(bareHost, { bank })],
 		});
-		runSync(quiet, prelude);
+		boot(quiet);
 
 		expect(shown(await drive(bank.endStep()))).toBe("");
 	});

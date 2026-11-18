@@ -1,8 +1,7 @@
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { Cell, newSym } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
@@ -13,7 +12,7 @@ function freshInterp(): Interp {
 	const interp = new Interp({
 		extensions: [compactionExtension(compactionHost)],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 
@@ -26,7 +25,7 @@ function interpWithLimit(limit: number): { interp: Interp; c: Compactor } {
 	const interp = new Interp({
 		extensions: [compactionExtension(compactionHost, { compactor: c })],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, c };
 }
 
@@ -289,7 +288,7 @@ describe("reporting a promise", () => {
 		const interp = new Interp({
 			extensions: [compactionExtension(compactionHost, { compactor: c })],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		interp.defineGlobal(newSym("started"), value, {
 			signature: "started",
 			doc: "A promise handed to the REPL by the host, as load-mcp would.",
@@ -333,7 +332,7 @@ describe("reporting a result", () => {
 		const interp = new Interp({
 			extensions: [compactionExtension(compactionHost, { compactor: c })],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		return { interp, c };
 	}
 
@@ -450,7 +449,7 @@ describe("the step's echo budget", () => {
 		const interp = new Interp({
 			extensions: [compactionExtension(compactionHost, { compactor: c })],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		return { interp, c };
 	}
 

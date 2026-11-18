@@ -22,7 +22,6 @@
     "./objects": "./src/objects.ts",
     "./observe": "./src/observe.ts",
     "./plist": "./src/plist.ts",
-    "./prelude": "./src/prelude.ts",
     "./print": "./src/print.ts",
     "./reader": "./src/reader.ts",
     "./recovery": "./src/recovery.ts",

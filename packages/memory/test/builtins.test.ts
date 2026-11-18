@@ -1,6 +1,6 @@
 import { driveAsync, type Eval } from "@repo/interpreter/drive";
 import { bufferSink } from "@repo/interpreter/journal";
-import { type Installable, runAsync, runSync } from "@repo/interpreter/lisp";
+import { boot, type Installable, runAsync } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -8,7 +8,6 @@ import {
 	listToArray,
 	newSym,
 } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
 import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
@@ -109,7 +108,7 @@ function fixture(
 	const interp = new MemoryInterp({
 		extensions: [extension, carrying(options.memories ?? BROWSER)],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	openSession([extension]);
 	const buffer = bufferSink();
 	interp.journal.pipe(buffer);
