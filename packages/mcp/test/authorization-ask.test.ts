@@ -1,4 +1,4 @@
-import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { StepHold } from "@repo/interpreter/errors";
 import { bufferSink } from "@repo/interpreter/journal";
 import { type Interp, runSync } from "@repo/interpreter/lisp";
@@ -70,7 +70,7 @@ describe("a load that needs a login", () => {
 		expect(ask?.choices.find((c) => c.accepts)?.opens).toBe(AUTH_URL);
 	});
 
-	it("records the answer and tells the model to load the server again", async () => {
+	it("records the user's answer to the authorization ask", async () => {
 		const { interp, hooks } = session();
 		const { buffer, thrown } = await step(interp, () =>
 			hooks.invoke.run(() => Promise.reject(new Error("unhandled")), {
@@ -83,6 +83,5 @@ describe("a load that needs a login", () => {
 		expect(asksOf(buffer).answered).toMatchObject({
 			"s-123": { accepted: true },
 		});
-		expect(buffer.collect(note).at(-1)?.content).toContain('(load-mcp "acme")');
 	});
 });

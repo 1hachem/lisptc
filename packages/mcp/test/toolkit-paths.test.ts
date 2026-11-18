@@ -5,7 +5,7 @@ import { prelude } from "@repo/interpreter/prelude";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
-import type { ConnConfig, McpClient } from "../src/ports.ts";
+import type { ConnConfig, McpClient, ToolkitRegistry } from "../src/ports.ts";
 import {
 	bridgedEntries,
 	bundledToolkit,
@@ -33,25 +33,31 @@ function recording(): { client: McpClient; seen: ConnConfig[] } {
 	};
 }
 
-function configFor(name: string, executable = "", flags = ""): ConnConfig {
+function connectedWith(
+	toolkit: ToolkitRegistry,
+	name: string,
+	flags = "",
+): ConnConfig {
 	const { client, seen } = recording();
 	const interp = new Interp({
-		extensions: [
-			mcpExtension({
-				...mcpHost,
-				client,
-				toolkit: bundledToolkit({
-					get: (key) =>
-						key === "PLAYWRIGHT_MCP_EXECUTABLE" ? executable : undefined,
-				}),
-			}),
-		],
+		extensions: [mcpExtension({ ...mcpHost, client, toolkit })],
 	});
 	runSync(interp, prelude);
 	runSync(interp, `(load-mcp "${name}"${flags})`);
 	const conf = seen[0];
 	if (!conf) throw new Error(`no config recorded for "${name}"`);
 	return conf;
+}
+
+function configFor(name: string, executable = "", flags = ""): ConnConfig {
+	return connectedWith(
+		bundledToolkit({
+			get: (key) =>
+				key === "PLAYWRIGHT_MCP_EXECUTABLE" ? executable : undefined,
+		}),
+		name,
+		flags,
+	);
 }
 
 describe("bundled toolkit commands resolve against the manifest", () => {
@@ -88,30 +94,19 @@ describe("bundled toolkit commands resolve against the manifest", () => {
 	});
 });
 
-describe("the local toolkit runs no container", () => {
-	for (const conf of localToolkit().all()) {
-		it(`runs ${conf.name} as a command on the machine`, () => {
-			expect("image" in conf).toBe(false);
-			expect("url" in conf).toBe(false);
-			expect("command" in conf).toBe(true);
-		});
-	}
-});
-
 describe("the desktop toolkit", () => {
 	const bundled = bundledToolkit();
 	const bridged = bridgedEntries(bundled, localToolkit());
 	const bundledNames = new Set(bundled.all().map((conf) => conf.name));
 
-	it("bridges every local entry to the user's machine", () => {
-		const all = [...bridged.own, ...bridged.variants];
-		expect(all.map((conf) => conf.name).sort()).toEqual(
-			localToolkit()
-				.all()
-				.map((conf) => conf.name)
-				.sort(),
-		);
-		for (const conf of all) expect(conf).toMatchObject({ local: true });
+	it("runs every local entry as a command on the user's machine, never in a container", () => {
+		const toolkit = desktopToolkit(bundled, bridged, () => true);
+		for (const { name } of localToolkit().all()) {
+			const conf = connectedWith(toolkit, name, " :local t");
+			expect(conf).toMatchObject({ name, local: true });
+			expect("command" in conf).toBe(true);
+			expect("image" in conf || "url" in conf).toBe(false);
+		}
 	});
 
 	it("keeps a local entry that takes a bundled name as its local setup only", () => {

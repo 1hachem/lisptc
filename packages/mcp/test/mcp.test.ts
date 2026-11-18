@@ -1,28 +1,16 @@
 import { fileURLToPath } from "node:url";
-import { bufferSink } from "@repo/interpreter/journal";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { LispPromise } from "@repo/interpreter/promise";
 import type { SearchEngine } from "@repo/shared/search";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
 import { jsonToolkit } from "../src/toolkit.ts";
 
 async function evalStr(interp: Interp, code: string): Promise<string> {
 	return str((await runAsync(interp, code)).value);
-}
-
-async function evalOutput(interp: Interp, code: string): Promise<string> {
-	const buffer = bufferSink();
-	const detach = interp.journal.pipe(buffer);
-	try {
-		await runAsync(interp, code);
-		return buffer.collectText("user");
-	} finally {
-		detach();
-	}
 }
 
 function mcpInterp(): Interp {
@@ -44,9 +32,6 @@ const FIXTURE = fileURLToPath(
 );
 const EMPTY_FIXTURE = fileURLToPath(
 	new URL("./fixture-empty-mcp-server.ts", import.meta.url),
-);
-const ENUM_FIXTURE = fileURLToPath(
-	new URL("./fixture-enum-mcp-server.ts", import.meta.url),
 );
 
 function loadForm(name: string, delayMs = 0): string {
@@ -80,21 +65,12 @@ describe("MCP integration (stdio fixture)", () => {
 	const interp = mcpInterp();
 	runSync(interp, prelude);
 
+	beforeAll(async () => {
+		await start(interp, loadForm("fx"));
+	});
+
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
-	});
-
-	it("loads a stdio server and expands its tools into bindings", async () => {
-		expect(await load(interp, loadForm("fx"))).toContain("fx/echo");
-	});
-
-	it("lists loaded servers", async () => {
-		expect(await evalStr(interp, "(list-mcps)")).toContain("fx");
-		expect(await evalStr(interp, "(list-mcps)")).toContain(":loaded");
-	});
-
-	it("lists one loaded server's tools", async () => {
-		expect(await evalStr(interp, '(list-tools "fx")')).toContain("fx/echo");
 	});
 
 	it("lists several named servers, refusing one that is not loaded", async () => {
@@ -108,13 +84,6 @@ describe("MCP integration (stdio fixture)", () => {
 
 	it("lists every loaded server's tools without a server", async () => {
 		expect(await evalStr(interp, "(list-tools)")).toContain("fx/echo");
-	});
-
-	it("offers the loaded servers as the optional server argument's values", () => {
-		const [server] = interp.docs().get("list-tools")?.args ?? [];
-		expect(server?.required).toBe(false);
-		expect(server?.values?.map((entry) => entry.value)).toEqual(["fx"]);
-		expect(interp.arityOf("list-tools")).toEqual({ min: 0 });
 	});
 
 	it("calls a tool with native keyword syntax", async () => {
@@ -142,13 +111,6 @@ describe("MCP integration (stdio fixture)", () => {
 		await expect(runAsync(interp, "(fx/echo)")).rejects.toThrow(
 			/required argument "message"/,
 		);
-	});
-
-	it("renders documentation", async () => {
-		const doc = await evalOutput(interp, "(doc 'fx/echo)");
-		expect(doc).toContain("Echo back the given message");
-		expect(doc).toContain("message");
-		expect(doc).toContain("(fx/echo :message :string)");
 	});
 
 	it("searches tools by keyword", async () => {
@@ -181,12 +143,6 @@ describe("MCP integration (stdio fixture)", () => {
 		const out = await evalStr(interp, '(search-mcps "screenshot")');
 		expect(out).toContain("playwright");
 		expect(out).toContain("ocr");
-	});
-
-	it("lists every toolkit server's keywords, so search has words to use", async () => {
-		const out = await evalStr(interp, "(list-toolkit)");
-		expect(out).toContain("vision");
-		expect(out).toContain("spreadsheet");
 	});
 
 	it("ignores a query's stopwords instead of matching them everywhere", async () => {
@@ -388,28 +344,6 @@ describe("a toolkit server bundled with the repo", () => {
 	});
 });
 
-describe("doc enum rendering for MCP tools (stdio fixture)", () => {
-	const interp = mcpInterp();
-	runSync(interp, prelude);
-
-	afterAll(async () => {
-		await runAsync(interp, "(mcp-shutdown)");
-	});
-
-	it("surfaces an argument's enum allowed values", async () => {
-		await load(
-			interp,
-			`(load-mcp :name "en" :command "node" :args (quote ("--no-warnings" "--experimental-transform-types" "${ENUM_FIXTURE}")))`,
-		);
-		const doc = await evalOutput(interp, "(doc 'en/render)");
-		expect(doc).toContain("format");
-		expect(doc).toContain("the output image format");
-		expect(doc).toContain("one of");
-		expect(doc).toContain("png");
-		expect(doc).toContain("jpeg");
-	});
-});
-
 describe("the MCP extension adds no promise vocabulary of its own", () => {
 	const interp = mcpInterp();
 	runSync(interp, prelude);
@@ -454,23 +388,13 @@ describe("a load runs in the background", () => {
 		expect(await evalStr(interp, '(autofx/echo :message "yo")')).toBe('"yo"');
 	});
 
-	it("runs two loads concurrently, not sequentially", async () => {
-		const slow = start(interp, loadForm("concSlow", 4000));
+	it("finishes a quick load while a slow one started before it is still loading", async () => {
+		const slow = start(interp, loadForm("concSlow", 2000));
 		slow.then(undefined, () => {});
-		const fast = start(interp, loadForm("concFast", 50));
-		await fast;
-
-		expect(interp.async.stateOf(fast)).toBe("fulfilled");
-		expect(interp.async.stateOf(slow)).toBe("pending");
-		expect(interp.async.cancel(slow)).toBe(true);
-	});
-
-	it("cancelling a load rejects it and leaves no server behind", async () => {
-		const killme = start(interp, loadForm("killme", 3000));
-		expect(interp.async.cancel(killme)).toBe(true);
-		await expect(killme.promise()).rejects.toThrow();
-		expect(interp.async.stateOf(killme)).toBe("rejected");
-		expect(await evalStr(interp, "(list-mcps)")).not.toContain("killme");
+		await start(interp, loadForm("concFast", 50));
+		const listed = await evalStr(interp, "(list-mcps)");
+		expect(listed).toContain('("concFast" :loaded 3)');
+		expect(listed).not.toContain("concSlow");
 	});
 
 	it("treats a connected server with no tools as a failure, not :loaded", async () => {

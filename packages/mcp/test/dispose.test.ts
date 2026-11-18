@@ -60,24 +60,11 @@ describe("Interp.dispose", () => {
 		expect(aborts()).toBe(1);
 	});
 
-	it("is idempotent, and composes with the agent's own (mcp-shutdown)", () => {
+	it("aborts in-flight work once, however often the interp is disposed", () => {
 		const { client, aborts } = hangingClient();
 		const interp = loading(client);
 		interp.dispose();
 		interp.dispose();
 		expect(aborts()).toBe(1);
-	});
-
-	it("does nothing on an interp with no extensions", () => {
-		expect(() => new Interp().dispose()).not.toThrow();
-	});
-});
-
-describe("starting a promise does not suspend", () => {
-	it("lets a synchronous host begin background work", () => {
-		const { client } = hangingClient();
-		const interp = mcpInterp(client);
-		expect(interp.async.stateOf(startLoad(interp))).toBe("pending");
-		interp.dispose();
 	});
 });

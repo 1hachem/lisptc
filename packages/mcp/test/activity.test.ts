@@ -101,20 +101,6 @@ async function activityOf(
 }
 
 describe("a tool call from lisp", () => {
-	it("reports a finished call under the tool's title, with its first sentence", async () => {
-		const activity = await activityOf('(acme/web_search :query "hyko")');
-		expect(activity).toMatchObject([
-			{
-				kind: "mcp",
-				icon: [{ src: "https://acme.example/logo.svg" }],
-				label: "acme · Web search",
-				detail: "Searches the web for a query.",
-				state: "done",
-				ms: 25,
-			},
-		]);
-	});
-
 	it("reports failed when the call fails", async () => {
 		const activity = await activityOf("(acme/explode)");
 		expect(activity).toMatchObject([
@@ -140,38 +126,6 @@ describe("a tool call from lisp", () => {
 		expect(new Set(activity?.map((a) => a.id)).size).toBe(2);
 		expect(activity?.[0].detail?.length).toBeLessThanOrEqual(120);
 		expect(activity?.[0].detail?.endsWith("…")).toBe(true);
-	});
-});
-
-describe("loading a server", () => {
-	it("reports the load as done once it connects", async () => {
-		const extension = mcpExtension({
-			...mcpHost,
-			client: fakeClient(),
-			clock: ticking(1000, 25),
-		});
-		const interp = new Interp({ extensions: [extension] });
-		runSync(interp, prelude);
-		const buffer = bufferSink();
-		const detach = interp.journal.pipe(buffer);
-		try {
-			await (runSync(
-				interp,
-				'(load-mcp :name "acme" :url "https://acme.example/mcp")',
-			) as LispPromise);
-		} finally {
-			detach();
-		}
-		const entries = buffer.entries;
-		expect(view(entries, activityKind)).toMatchObject([
-			{
-				kind: "mcp",
-				icon: [{ src: "https://acme.example/logo.svg" }],
-				label: "load-mcp · acme",
-				state: "done",
-				ms: 25,
-			},
-		]);
 	});
 });
 

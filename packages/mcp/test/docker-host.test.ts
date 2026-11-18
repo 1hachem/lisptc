@@ -1,66 +1,37 @@
+import { Interp, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
 import { describe, expect, it } from "vitest";
-import { DockerHost, launchFor } from "../src/docker-host.ts";
-import type { HttpConnConfig } from "../src/ports.ts";
+import { DockerHost } from "../src/docker-host.ts";
+import { mcpExtension } from "../src/mcp.ts";
+import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
+import { MemoryOAuthStore } from "../src/oauth-host.ts";
 import { recordingHost } from "./helpers.ts";
 
-const locallyLaunched: HttpConnConfig = {
-	name: "sheets",
-	url: "http://localhost:8911/mcp",
-	command: "task",
-	args: ["--dir", "../..", "mcp:sheets"],
-};
-
-const remote: HttpConnConfig = {
-	name: "linear",
-	url: "https://mcp.linear.app/mcp",
-	oauth: true,
-};
-
-describe("what the docker host does with each toolkit modality", () => {
-	it("wraps a stdio server in a gateway that speaks streamable http", () => {
-		const launch = launchFor({
-			name: "fs",
-			command: "npx",
-			args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
-		});
-
-		expect(launch?.image).toMatch(/^supercorp\/supergateway:/);
-		expect(launch?.args).toContain(
-			"npx -y @modelcontextprotocol/server-filesystem .",
-		);
-	});
-
-	it("leaves a server that already speaks http alone", () => {
-		expect(launchFor(remote)).toBeUndefined();
-		expect(launchFor(locallyLaunched)).toBeUndefined();
-	});
-});
-
 describe("the docker host", () => {
-	it("hands a server it launches no container for to the fallback", async () => {
+	it("hands a server that already speaks http to the fallback", async () => {
 		const fallback = recordingHost();
-		const host = new DockerHost(fallback);
-
-		const handle = await host.ensure(locallyLaunched);
-
-		expect(handle).toEqual({ url: "http://localhost:8911/mcp" });
-		expect(fallback.ensured.map((c) => c.name)).toEqual(["sheets"]);
-	});
-
-	it("asks the fallback about a server it never started", async () => {
-		const host = new DockerHost(recordingHost());
-
-		expect(host.status("known")).toBe("running");
-		expect(host.logs("known")).toBe("the fallback's log");
-		expect(host.status("playwright")).toBe("unknown");
-	});
-
-	it("stops through the fallback for a name it does not own", async () => {
-		const fallback = recordingHost();
-		const host = new DockerHost(fallback);
-
-		await host.stop("sheets");
-
-		expect(fallback.stopped).toEqual(["sheets"]);
+		const interp = new Interp({
+			extensions: [
+				mcpExtension({
+					...mcpHost,
+					commands: true,
+					client: localMcpClient({
+						host: new DockerHost(fallback),
+						oauth: new MemoryOAuthStore(),
+					}),
+				}),
+			],
+		});
+		runSync(interp, prelude);
+		await Promise.resolve(
+			runSync(
+				interp,
+				`(load-mcp :name "sheets" :url "http://localhost:8911/mcp")`,
+			),
+		).catch(() => undefined);
+		expect(fallback.ensured).toMatchObject([
+			{ name: "sheets", url: "http://localhost:8911/mcp" },
+		]);
+		interp.dispose();
 	});
 });

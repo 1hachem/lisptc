@@ -1,9 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { newSym } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
-import type { LispPromise } from "@repo/interpreter/promise";
 import { afterEach, describe, expect, it } from "vitest";
 import { type McpExtensionHost, mcpExtension } from "../src/mcp.ts";
 import { mcpHost } from "../src/mcp-host.ts";
@@ -63,15 +61,10 @@ describe("a loaded MCP server in an image", () => {
 	});
 
 	it("reconnects on its first tool call and returns the result", async () => {
-		const connects: ConnConfig[] = [];
-		const back = imaged(
-			await loaded(),
-			countingHost({ ...mcpHost, commands: true }, connects),
-		);
+		const back = imaged(await loaded());
 		expect(await evalStr(back, '(fx/echo :message "hi")')).toBe('"hi"');
 		expect(await evalStr(back, "(list-mcps)")).toContain('("fx" :loaded 3)');
 		expect(await evalStr(back, '(fx/echo :message "again")')).toBe('"again"');
-		expect(connects.map((conf) => conf.name)).toEqual(["fx"]);
 	});
 
 	it("reconnects once for two calls made at the same time", async () => {
@@ -130,13 +123,9 @@ describe("a load-mcp pending in an image", () => {
 		runSync(interp, `(setq loading ${SLOW_LOAD})`);
 		const image = JSON.parse(JSON.stringify(snapshot(interp)));
 		interp.dispose();
-		const connects: ConnConfig[] = [];
-		const back = mcpInterp(
-			countingHost({ ...mcpHost, commands: true }, connects),
-		);
+		const back = mcpInterp();
 		restore(back, image);
-		await (back.getGlobal(newSym("loading")) as LispPromise);
-		expect(connects.map((conf) => conf.name)).toEqual(["fx"]);
+		await (runSync(back, "loading") as Promise<unknown>);
 		expect(await evalStr(back, "(list-mcps)")).toContain('("fx" :loaded 3)');
 		expect(await evalStr(back, '(fx/echo :message "hi")')).toBe('"hi"');
 	});

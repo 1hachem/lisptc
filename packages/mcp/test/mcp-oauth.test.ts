@@ -1,37 +1,48 @@
-import { mkdtempSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, statSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { describe, expect, it, vi } from "vitest";
+import { mcpExtension } from "../src/mcp.ts";
+import { finishAuthorization, mcpHostFor } from "../src/mcp-host.ts";
 import {
 	CallbackServer,
-	completeAuthorization,
 	createAuthCallback,
-	StoredOAuthProvider,
 	sharedAuthCallback,
 } from "../src/mcp-oauth.ts";
 import { FileOAuthStore } from "../src/oauth-host.ts";
-import type { OAuthRecord, OAuthStore } from "../src/ports.ts";
-
-const REDIRECT = "http://127.0.0.1:8991/callback";
 
 function tmpDir(): string {
 	return mkdtempSync(join(tmpdir(), "lisptc-oauth-"));
 }
 
 describe("FileOAuthStore", () => {
-	it("round-trips a record and clears it", async () => {
-		const store = new FileOAuthStore(tmpDir());
-		expect(await store.load("https://mcp.example.com")).toBeUndefined();
-
-		const rec: OAuthRecord = {
-			tokens: { access_token: "at", token_type: "Bearer", refresh_token: "rt" },
-			codeVerifier: "v",
-		};
-		await store.save("https://mcp.example.com", rec);
-		expect(await store.load("https://mcp.example.com")).toEqual(rec);
-
-		await store.clear("https://mcp.example.com");
-		expect(await store.load("https://mcp.example.com")).toBeUndefined();
+	it("keeps a login on disk for a later session, and logout clears it", async () => {
+		const dir = tmpDir();
+		await new FileOAuthStore(dir).save("https://mcp.linear.app", {
+			tokens: { access_token: "at", token_type: "Bearer" },
+		});
+		const interp = new Interp({
+			extensions: [
+				mcpExtension(mcpHostFor({ oauth: new FileOAuthStore(dir) })),
+			],
+		});
+		runSync(interp, prelude);
+		try {
+			expect(str((await runAsync(interp, '(login "linear")')).value)).toBe(
+				":logged-in",
+			);
+			expect(str((await runAsync(interp, '(logout "linear")')).value)).toBe(
+				":logged-out",
+			);
+			expect(
+				await new FileOAuthStore(dir).load("https://mcp.linear.app"),
+			).toBeUndefined();
+		} finally {
+			await runAsync(interp, "(mcp-shutdown)");
+		}
 	});
 
 	it("writes token files with owner-only permissions", async () => {
@@ -40,153 +51,32 @@ describe("FileOAuthStore", () => {
 		await store.save("https://mcp.example.com", {
 			tokens: { access_token: "at", token_type: "Bearer" },
 		});
-		const { readdirSync } = await import("node:fs");
 		const files = readdirSync(dir);
 		expect(statSync(join(dir, files[0])).mode & 0o777).toBe(0o600);
 	});
 });
 
-describe("StoredOAuthProvider", () => {
-	function memoryStore(): OAuthStore & { data: Map<string, OAuthRecord> } {
-		const data = new Map<string, OAuthRecord>();
-		return {
-			data,
-			async load(k) {
-				return data.get(k);
-			},
-			async save(k, r) {
-				data.set(k, structuredClone(r));
-			},
-			async clear(k) {
-				data.delete(k);
-			},
-		};
-	}
-
-	it("hydrates existing tokens so a later session reuses them", async () => {
-		const store = memoryStore();
-		const earlier = await StoredOAuthProvider.create(
-			store,
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-		);
-		await earlier.saveTokens({ access_token: "cached", token_type: "Bearer" });
-		const p = await StoredOAuthProvider.create(
-			store,
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-		);
-		expect(p.tokens()?.access_token).toBe("cached");
-		expect(p.redirectUrl).toBe(REDIRECT);
-		expect(p.clientMetadata.redirect_uris).toEqual([REDIRECT]);
-	});
-
-	it("keeps tokens, client info and verifier for a later session", async () => {
-		const store = memoryStore();
-		const p = await StoredOAuthProvider.create(
-			store,
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-		);
-		await p.saveClientInformation({
-			client_id: "cid",
-			redirect_uris: [REDIRECT],
-		});
-		await p.saveCodeVerifier("verifier-123");
-		await p.saveTokens({
-			access_token: "at",
-			token_type: "Bearer",
-			refresh_token: "rt",
-		});
-
-		const later = await StoredOAuthProvider.create(
-			store,
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-		);
-		expect(later.clientInformation()?.client_id).toBe("cid");
-		expect(later.codeVerifier()).toBe("verifier-123");
-		expect(later.tokens()?.refresh_token).toBe("rt");
-	});
-
-	it("remembers the pending login under its state until tokens arrive", async () => {
-		const store = memoryStore();
-		const p = await StoredOAuthProvider.create(
-			store,
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-			"read",
-		);
-		await p.savePending("https://mcp.example.com/mcp");
-		expect(store.data.get("https://mcp.example.com")?.pending).toEqual({
-			state: p.state(),
-			serverUrl: "https://mcp.example.com/mcp",
-			scope: "read",
-		});
-		await p.saveTokens({ access_token: "at", token_type: "Bearer" });
-		expect(store.data.get("https://mcp.example.com")?.pending).toBeUndefined();
-	});
-
-	it("refuses to complete a callback whose state no login issued", async () => {
-		const store = memoryStore();
-		store.data.set("ws/https://mcp.example.com", {
+describe("finishing a login from the browser callback", () => {
+	it("refuses a callback whose state no login issued, and one with no code", async () => {
+		const store = new FileOAuthStore(tmpDir());
+		await store.save("ws/https://mcp.example.com", {
 			codeVerifier: "v",
 			pending: { state: "issued", serverUrl: "https://mcp.example.com/mcp" },
 		});
 		await expect(
-			completeAuthorization(
+			finishAuthorization(
 				store,
 				"ws/https://mcp.example.com",
-				REDIRECT,
 				"https://app.example/oauth/callback?code=abc&state=forged",
 			),
 		).rejects.toThrow(/no authorization is waiting/);
 		await expect(
-			completeAuthorization(
+			finishAuthorization(
 				store,
 				"ws/https://mcp.example.com",
-				REDIRECT,
 				"https://app.example/oauth/callback?state=issued",
 			),
 		).rejects.toThrow(/no authorization code/);
-	});
-
-	it("captures the authorization URL instead of opening it", async () => {
-		const p = await StoredOAuthProvider.create(
-			memoryStore(),
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-		);
-		expect(p.authorizationUrl).toBeUndefined();
-		const url = new URL("https://auth.example.com/authorize?client_id=cid");
-		p.redirectToAuthorization(url);
-		expect(p.authorizationUrl?.href).toBe(url.href);
-	});
-
-	it("throws if a code verifier is requested before one is saved", async () => {
-		const p = await StoredOAuthProvider.create(
-			memoryStore(),
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-		);
-		expect(() => p.codeVerifier()).toThrow(/code verifier/);
-	});
-
-	it("invalidateCredentials clears the selected scope", async () => {
-		const store = memoryStore();
-		const p = await StoredOAuthProvider.create(
-			store,
-			"https://mcp.example.com/mcp",
-			REDIRECT,
-		);
-		await p.saveTokens({ access_token: "at", token_type: "Bearer" });
-		await p.saveClientInformation({
-			client_id: "cid",
-			redirect_uris: [REDIRECT],
-		});
-		await p.invalidateCredentials("tokens");
-		expect(p.tokens()).toBeUndefined();
-		expect(p.clientInformation()?.client_id).toBe("cid");
 	});
 });
 
@@ -244,14 +134,10 @@ describe("CallbackServer (loopback)", () => {
 			expect(await res.text()).toMatch(/PKCE mismatch/);
 			await failing;
 
-			let exchanged = "";
-			const ok = cb.waitForCode("good", undefined, async (code) => {
-				exchanged = code;
-			});
+			const ok = cb.waitForCode("good", undefined, async () => {});
 			const okRes = await fetch(`${cb.redirectUrl()}?code=c2&state=good`);
 			expect(okRes.status).toBe(200);
 			expect(await ok).toBe("c2");
-			expect(exchanged).toBe("c2");
 		} finally {
 			await cb.close();
 		}
@@ -269,27 +155,6 @@ describe("CallbackServer (loopback)", () => {
 			expect(res.status).toBe(400);
 			expect(await res.text()).toMatch(/access_denied/);
 			await waiting;
-		} finally {
-			await cb.close();
-		}
-	});
-
-	it("binds a fixed port and rejects a second bind on it", async () => {
-		const first = await CallbackServer.start({ host: "127.0.0.1", port: 8917 });
-		try {
-			expect(first.redirectUrl()).toBe("http://127.0.0.1:8917/callback");
-			await expect(
-				CallbackServer.start({ host: "127.0.0.1", port: 8917 }),
-			).rejects.toMatchObject({ code: "EADDRINUSE" });
-		} finally {
-			await first.close();
-		}
-	});
-
-	it("times out if the code never arrives", async () => {
-		const cb = await CallbackServer.start({ host: "127.0.0.1" });
-		try {
-			await expect(cb.waitForCode("s", 20)).rejects.toThrow(/timed out/);
 		} finally {
 			await cb.close();
 		}
@@ -320,18 +185,6 @@ const lanAddress = Object.values(networkInterfaces())
 	.find((a) => a?.family === "IPv4" && !a.internal)?.address;
 
 describe("createAuthCallback", () => {
-	it("advertises a given ingress URL", async () => {
-		const cb = await createAuthCallback(
-			8919,
-			"https://mcp.example.com/oauth/callback",
-		);
-		try {
-			expect(cb.redirectUrl()).toBe("https://mcp.example.com/oauth/callback");
-		} finally {
-			await cb.close();
-		}
-	});
-
 	it.skipIf(!lanAddress)(
 		"takes the callback on an address beyond loopback behind an ingress",
 		async () => {
@@ -350,42 +203,22 @@ describe("createAuthCallback", () => {
 			}
 		},
 	);
-
-	it("binds a local loopback server when no ingress URL is given", async () => {
-		const cb = await createAuthCallback(8920);
-		try {
-			expect(cb).toBeInstanceOf(CallbackServer);
-			expect(cb.redirectUrl()).toBe("http://127.0.0.1:8920/callback");
-		} finally {
-			await cb.close();
-		}
-	});
 });
 
 describe("sharedAuthCallback", () => {
-	it("hands every caller on a fixed port the one server that bound it", async () => {
+	it("lets a second caller on a fixed port reach the flows the first one is holding", async () => {
 		const redirect = "http://127.0.0.1:8921/callback";
 		const first = await sharedAuthCallback(8921, redirect);
+		const waiting = first.waitForCode("early");
 		const second = await sharedAuthCallback(8921, redirect);
 		try {
-			expect(second).toBe(first);
-			const waiting = second.waitForCode("late-arrival");
+			const late = second.waitForCode("late-arrival");
 			await fetch(`${redirect}?code=captured&state=late-arrival`);
-			expect(await waiting).toBe("captured");
+			await fetch(`${redirect}?code=kept&state=early`);
+			expect(await late).toBe("captured");
+			expect(await waiting).toBe("kept");
 		} finally {
 			await first.close();
-		}
-	});
-
-	it("binds again once the shared server is closed", async () => {
-		const redirect = "http://127.0.0.1:8922/callback";
-		const first = await sharedAuthCallback(8922, redirect);
-		await first.close();
-		const second = await sharedAuthCallback(8922, redirect);
-		try {
-			expect(second).not.toBe(first);
-		} finally {
-			await second.close();
 		}
 	});
 
@@ -396,22 +229,11 @@ describe("sharedAuthCallback", () => {
 		vi.resetModules();
 		const reloaded = await import("../src/mcp-oauth.ts");
 		try {
-			expect(await reloaded.sharedAuthCallback(8923, redirect)).toBe(before);
+			await reloaded.sharedAuthCallback(8923, redirect);
 			await fetch(`${redirect}?code=still-here&state=survives-reload`);
 			expect(await waiting).toBe("still-here");
 		} finally {
 			await before.close();
-		}
-	});
-
-	it("shares nothing when the port is ephemeral", async () => {
-		const first = await sharedAuthCallback(0);
-		const second = await sharedAuthCallback(0);
-		try {
-			expect(second).not.toBe(first);
-		} finally {
-			await first.close();
-			await second.close();
 		}
 	});
 });

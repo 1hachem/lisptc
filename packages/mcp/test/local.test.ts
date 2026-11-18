@@ -1,7 +1,7 @@
 import { Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
 import { localMcpClient, mcpHost } from "../src/mcp-host.ts";
 import { MemoryOAuthStore } from "../src/oauth-host.ts";
@@ -39,24 +39,24 @@ describe("load-mcp :local", () => {
 		interp.dispose();
 	});
 
-	it("guards a :local load as the call local/<name>, and only a :local one", async () => {
+	it("lets a call guard refuse a :local load by the name local/<name>, and only a :local one", async () => {
 		const host = recordingHost();
 		const interp = interpOn(host);
-		const guarded: string[] = [];
 		interp.hooks.call.use((i, name, args, next) => {
-			guarded.push(name);
+			if (name.startsWith("local/")) throw new Error(`refused ${name}`);
 			return next(i, name, args);
 		});
-		await settle(
-			interp,
-			'(load-mcp :name "fx" :command "definitely-not-a-binary" :local t)',
-		);
+		expect(() =>
+			runSync(
+				interp,
+				'(load-mcp :name "fx" :command "definitely-not-a-binary" :local t)',
+			),
+		).toThrow("refused local/fx");
 		await settle(
 			interp,
 			'(load-mcp :name "gx" :command "definitely-not-a-binary")',
 		);
-		expect(guarded).toContain("local/fx");
-		expect(guarded).not.toContain("local/gx");
+		expect(host.ensured.map((conf) => conf.name)).toEqual(["gx"]);
 		interp.dispose();
 	});
 
@@ -182,22 +182,24 @@ describe("load-mcp :local", () => {
 	});
 
 	it("speaks json-rpc through the transport a handle carries", async () => {
-		const send = vi.fn(async (_message: unknown) => {
-			throw new Error("bridged");
-		});
 		const host: McpHost = {
 			...recordingHost(),
 			ensure: async () => ({
 				transport: () => ({
 					start: async () => {},
-					send,
+					send: async () => {
+						throw new Error("bridged");
+					},
 					close: async () => {},
 				}),
 			}),
 		};
 		const interp = interpOn(host);
-		await settle(interp, '(load-mcp :name "fx" :command "anything" :local t)');
-		expect(send).toHaveBeenCalled();
+		await expect(
+			Promise.resolve(
+				runSync(interp, '(load-mcp :name "fx" :command "anything" :local t)'),
+			),
+		).rejects.toThrow("bridged");
 		interp.dispose();
 	});
 });
