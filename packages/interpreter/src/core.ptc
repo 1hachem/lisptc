@@ -82,7 +82,8 @@ Evaluated specially, not as function calls. Complete list:
 | lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
 | macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
 
-quasiquote, try, retry, attempt, with-ok, if, when, unless, and, or,
+quasiquote, try, retry, attempt, with-ok, iterate, prog1, assert, ecase, defvar,
+destructuring-bind, if, when, unless, and, or,
 let, let*, letrec, while, dolist, dotimes, case, defun,
 defmacro, setf, push, pop, incf, decf, block, return-from, catch and
 unwind-protect are macros, not special forms; use the same way.
@@ -183,6 +184,16 @@ Eval / control
 - (apply f args) call f with elements of list args.
 - (error msg) or (error :kind msg [value]) raise catchable error, caught by try.
 - (break) exit nearest loop; (return value) exit it with value.
+- (iterate ((i 0) (acc nil)) body...) with (recur next-i next-acc) in tail
+  position: rebind, run body again, no stack growth.
+- (defvar *name* [value [doc]]) declares dynamic variable, sets value if
+  unbound. Then (let ((*name* v)) body...) rebinds it for every call inside
+  body, old value back on exit. defvar before the defun that binds it.
+- (prog1 a body...) value of a, after body.
+- (assert test [msg]) raises :assertion when test nil.
+- (ecase key clauses...) like case, raises :no-match when none matches.
+- (destructuring-bind (a (b c) &rest d) value body...) bind by shape;
+  missing part nil.
 
 Output — echo is the ONLY thing that prints. Nothing computed is seen until
 echoed.
@@ -321,6 +332,8 @@ defmacro defines compile-time transformer. Build expansion with quasiquote:
 
 (gensym) for temporaries you introduce, so user variables are not captured.
 Expansion depth max 20 nesting levels at compile time.
+(macroexpand-1 form) shows one expansion, (macroexpand form) expands until
+head not macro. Neither evaluates.
 
 ERRORS & CONTROL FLOW
 

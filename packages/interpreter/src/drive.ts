@@ -50,6 +50,7 @@ type Decision = { readonly granted: true } | { readonly refusal: unknown };
 export class Hold {
 	private decision: Decision | undefined;
 	private settle!: (decision: Decision) => void;
+	private readonly resumers: (() => void)[] = [];
 	readonly until: Promise<void>;
 
 	constructor(
@@ -75,8 +76,14 @@ export class Hold {
 		this.decided(false);
 	}
 
+	onResume(resumer: () => void): void {
+		this.resumers.push(resumer);
+	}
+
 	resume(): void {
-		if (this.decision !== undefined) this.settle(this.decision);
+		if (this.decision === undefined) return;
+		for (const resumer of this.resumers.splice(0)) resumer();
+		this.settle(this.decision);
 	}
 }
 

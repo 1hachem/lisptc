@@ -85,6 +85,11 @@ export interface CoreOps {
 	apply(a: [unknown, List]): Eval;
 	runLoopBody(a: [unknown]): Eval;
 	importFile(path: string): Eval<null>;
+	expandOnce(form: unknown): Eval;
+	declareSpecial(sym: Sym): void;
+	isSpecial(sym: Sym): boolean;
+	bindDynamic(bindings: List): number;
+	unbindDynamic(count: number): void;
 }
 
 let exit: (n: number) => void = () => {};
@@ -1170,6 +1175,70 @@ export function installCore(interp: Definer, core: CoreOps): void {
 		"Call `f` with the elements of the list `args` as its arguments.",
 		z.tuple([zAny, zList]),
 		(a) => core.apply(a),
+	);
+	interp.def(
+		"_declare-special",
+		1,
+		"(_declare-special 'name)",
+		"Internal: mark `name` a dynamic variable, so let rebinds it for the extent of its body.",
+		z.tuple([zSym]),
+		([sym]) => {
+			core.declareSpecial(sym);
+			return sym;
+		},
+	);
+	interp.def(
+		"_specialp",
+		1,
+		"(_specialp x)",
+		"Internal: t if `x` is a symbol marked a dynamic variable.",
+		z.tuple([zAny]),
+		([x]) => (x instanceof Sym && core.isSpecial(x) ? true : null),
+	);
+	interp.def(
+		"_boundp",
+		1,
+		"(_boundp 'name)",
+		"Internal: t if the global `name` has a value.",
+		z.tuple([zSym]),
+		([sym]) => (interp.getGlobal(sym) !== undefined ? true : null),
+	);
+	interp.defGen(
+		"_bind-dynamic",
+		2,
+		"(_bind-dynamic bindings thunk)",
+		"Internal: give each dynamic variable in `bindings`, a list of (name . value), its value, call the 0-arg thunk, and restore the previous values however it exits.",
+		z.tuple([zList, zAny]),
+		function* ([bindings, thunk]) {
+			const count = core.bindDynamic(bindings);
+			try {
+				return yield* core.apply([thunk, null]);
+			} finally {
+				core.unbindDynamic(count);
+			}
+		},
+	);
+	interp.defGen(
+		"macroexpand-1",
+		1,
+		"(macroexpand-1 form)",
+		"If `form` is a call of a macro, return its expansion once, without evaluating it; otherwise return `form`.",
+		z.tuple([zAny]),
+		([form]) => core.expandOnce(form),
+	);
+	interp.defGen(
+		"macroexpand",
+		1,
+		"(macroexpand form)",
+		"Expand `form` again and again while it is a call of a macro, and return the result without evaluating it. Forms inside it are not expanded.",
+		z.tuple([zAny]),
+		function* ([form]) {
+			for (;;) {
+				const next = yield* core.expandOnce(form);
+				if (next === form) return form;
+				form = next;
+			}
+		},
 	);
 
 	interp.def(
