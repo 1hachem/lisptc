@@ -49,6 +49,8 @@ import {
 	type PanelStore,
 	type PanelTab,
 	pageTab,
+	SIDES,
+	type Side,
 	SPLITS,
 	type Split,
 	viewTab,
@@ -72,6 +74,7 @@ export {
 	type PanelStore,
 	type PanelTab,
 	pageTab,
+	type Side,
 	viewTab,
 } from "./panel.ts";
 export {
@@ -406,6 +409,15 @@ function splitOf(opts: Map<string, unknown>): Split {
 	return split as Split;
 }
 
+function sideOf(side: unknown): Side {
+	if (typeof side !== "string" || !(SIDES as readonly string[]).includes(side))
+		throw new EvalException(
+			`unknown sidebar; expected one of ${SIDES.join(" ")}`,
+			side,
+		);
+	return side as Side;
+}
+
 function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
 }
@@ -614,6 +626,21 @@ function registerUi(
 			const args = listElements(rest) ?? [];
 			const shown = args.length === 0 || args[0] !== null;
 			return (yield* settled(panel.trace(shown))) || null;
+		},
+	);
+
+	interp.defGen(
+		"ui/sidebar",
+		-2,
+		"(ui/sidebar side [open])",
+		`Open the ${SIDES.join(" or ")} sidebar of the app, or close it with nil, as the user would with /sidebar or /right. Returns t if it is now open, nil if closed.`,
+		z.tuple([zAny, zList]),
+		function* ([name, rest]): Eval {
+			const side = sideOf(name);
+			const args = listElements(rest) ?? [];
+			const open = args.length === 0 || args[0] !== null;
+			yield* settled(panel.sidebar(side, open));
+			return open || null;
 		},
 	);
 

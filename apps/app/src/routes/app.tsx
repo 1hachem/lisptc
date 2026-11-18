@@ -12,6 +12,7 @@ import { authClient } from "../lib/auth-client.ts";
 import { dropRejectedSession } from "../lib/auth-server.ts";
 import { LeaveProvider, useLeaveState } from "../lib/leave.tsx";
 import { ModelPickerProvider } from "../lib/model-picker.tsx";
+import { useStoredSidebars } from "../lib/sidebars.ts";
 import { UIProvider } from "../lib/ui.tsx";
 import { WorkspaceProvider } from "../lib/workspace.tsx";
 
@@ -53,6 +54,10 @@ function LoadLogin() {
 	return null;
 }
 
+function StoredUIProvider({ children }: { children: React.ReactNode }) {
+	return <UIProvider sidebars={useStoredSidebars()}>{children}</UIProvider>;
+}
+
 function AuthedLayout() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	const departure = useLeaveState();
@@ -66,7 +71,7 @@ function AuthedLayout() {
 			<WorkspaceProvider>
 				<ModelPickerProvider>
 					<AppearanceProvider>
-						<UIProvider>
+						<StoredUIProvider>
 							<AppShell
 								onSignOut={() =>
 									void departure.leave(async () => {
@@ -77,7 +82,7 @@ function AuthedLayout() {
 								<Identify />
 								<Outlet />
 							</AppShell>
-						</UIProvider>
+						</StoredUIProvider>
 					</AppearanceProvider>
 				</ModelPickerProvider>
 			</WorkspaceProvider>

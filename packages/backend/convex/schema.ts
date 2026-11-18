@@ -137,6 +137,8 @@ const panelTab = v.object({
 	content: panelContent,
 });
 
+export const sidebars = v.object({ left: v.boolean(), right: v.boolean() });
+
 export const panelLayout = v.object({
 	root: v.union(v.string(), v.null()),
 	focused: v.union(v.string(), v.null()),
@@ -312,6 +314,7 @@ export default defineSchema({
 	layouts: defineTable({
 		workspaceId: v.id("workspaces"),
 		layout: panelLayout,
+		sidebars: v.optional(sidebars),
 	}).index("by_workspace", ["workspaceId"]),
 
 	views: defineTable({

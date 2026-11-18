@@ -82,6 +82,7 @@ describe("a step that opens panel tabs", () => {
 						]
 					: [],
 			trace: () => false,
+			sidebar: () => {},
 		};
 		const out = await memoryRepl(
 			modelFacing(undefined, undefined, panel),
@@ -107,6 +108,7 @@ describe("a step that opens panel tabs", () => {
 			},
 			tabs: () => [],
 			trace: () => false,
+			sidebar: () => {},
 		};
 		const out = await memoryRepl(
 			modelFacing(undefined, undefined, panel),

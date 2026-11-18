@@ -9,6 +9,10 @@ export type Split = (typeof SPLITS)[number];
 
 export const DEFAULT_SPLIT: Split = "here";
 
+export const SIDES = ["left", "right"] as const;
+
+export type Side = (typeof SIDES)[number];
+
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
 	| { kind: "view"; title: string; viewId: string }
@@ -23,6 +27,7 @@ export interface PanelStore {
 	apply(ops: readonly PanelOp[]): Awaitable<void>;
 	tabs(): Awaitable<PanelTab[]>;
 	trace(shown: boolean): Awaitable<boolean>;
+	sidebar(side: Side, open: boolean): Awaitable<void>;
 }
 
 export function fileTab(folder: Folder, name: string): string {

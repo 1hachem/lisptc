@@ -35,10 +35,16 @@ import { WIDGET_FORMS } from "../src/widgets.ts";
 function panelOf(
 	saved: PanelTab[],
 	beside = false,
-): { panel: PanelStore; ops: PanelOp[]; traces: boolean[] } {
+): {
+	panel: PanelStore;
+	ops: PanelOp[];
+	traces: boolean[];
+	sidebars: [string, boolean][];
+} {
 	let tabs = [...saved];
 	const ops: PanelOp[] = [];
 	const traces: boolean[] = [];
+	const sidebars: [string, boolean][] = [];
 	const without = (id: string) => tabs.filter((tab) => tab.id !== id);
 	const panel: PanelStore = {
 		apply(applied) {
@@ -64,8 +70,11 @@ function panelOf(
 			traces.push(shown);
 			return beside;
 		},
+		sidebar(side, open) {
+			sidebars.push([side, open]);
+		},
 	};
-	return { panel, ops, traces };
+	return { panel, ops, traces, sidebars };
 }
 
 function collector(interp: Interp, views: MemoryViewStore) {
@@ -1162,6 +1171,23 @@ describe("tours", () => {
 		});
 		boot(interp);
 		expect(str(runSync(interp, "(ui/trace)"))).toBe("nil");
+	});
+
+	it("opens and closes either sidebar", () => {
+		const { panel, sidebars } = panelOf([]);
+		const interp = new Interp({
+			extensions: [uiExtension(uiHostFor({ panel }))],
+		});
+		boot(interp);
+		expect(str(runSync(interp, '(ui/sidebar "left")'))).toBe("t");
+		expect(str(runSync(interp, '(ui/sidebar "right" nil)'))).toBe("nil");
+		expect(sidebars).toEqual([
+			["left", true],
+			["right", false],
+		]);
+		expect(() => runSync(interp, '(ui/sidebar "top")')).toThrow(
+			/unknown sidebar/,
+		);
 	});
 
 	it("opens a page of the app beside the chat", () => {

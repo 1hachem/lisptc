@@ -52,7 +52,7 @@ thing, so send once. Only handlers deliver: ui/send in your own step does nothin
 you already take a turn. Write a request, \"search the issues for auth\", not a
 note, \"user clicked search\".")
 
-(memory "internal/ui/panels" :when "a file or view must open beside the chat, a tab must be shown, moved, focused or closed, or the trace shown or hidden"
+(memory "internal/ui/panels" :when "a file or view must open beside the chat, a tab must be shown, moved, focused or closed, or the trace shown or hidden, or a sidebar opened or closed"
   (format nil "Panel beside chat: tabs in splits, any number across, up to ~d
   stacked down. Folder is one of ~{~s~^ ~}. :split is one of ~{~s~^ ~};
   ~s (default) adds tab to focused split, others open new split
@@ -68,6 +68,8 @@ note, \"user clicked search\".")
 - (ui/trace) shows this chat's trace beside it, (ui/trace nil) hides it, as
   /trace would; hide also closes trace tab of this chat. t if chat open in
   panel, nil if not.
+- (ui/sidebar \"left\") opens left sidebar, (ui/sidebar \"right\" nil) closes
+  right one, as /sidebar and /right would. t if now open, nil if closed.
 - (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:trace|:page :title
   title :shown t :focused t) . User opens, closes, moves tabs too: read it
   before closing or focusing by id from earlier step.

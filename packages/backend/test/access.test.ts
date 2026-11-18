@@ -749,6 +749,44 @@ describe("panel layout access", () => {
 		).rejects.toThrow();
 	});
 
+	it("keeps which sidebars are open across layout saves, for the owner alone", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const shown = () =>
+			bob.as.query(api.layouts.sidebarsShown, { workspaceId: bob.workspace });
+		expect(await shown()).toBeNull();
+		await bob.as.mutation(api.layouts.sidebar, {
+			workspaceId: bob.workspace,
+			side: "right",
+			open: true,
+		});
+		expect(await shown()).toEqual({ left: false, right: true });
+		await bob.as.mutation(api.layouts.put, {
+			workspaceId: bob.workspace,
+			layout: layout(2),
+		});
+		await bob.as.mutation(api.layouts.sidebar, {
+			workspaceId: bob.workspace,
+			side: "left",
+			open: true,
+		});
+		expect(await shown()).toEqual({ left: true, right: true });
+		expect(
+			await bob.as.query(api.layouts.get, { workspaceId: bob.workspace }),
+		).toEqual(layout(2));
+		await expect(
+			alice.as.query(api.layouts.sidebarsShown, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.layouts.sidebar, {
+				workspaceId: bob.workspace,
+				side: "left",
+				open: false,
+			}),
+		).rejects.toThrow();
+	});
+
 	it("applies the agent's panel ops to the stored layout, for the owner alone", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
