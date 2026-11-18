@@ -7,7 +7,7 @@ import {
 	toolActivity,
 } from "@repo/components";
 import type { ActivityEntry } from "@repo/journal-catalog/activity";
-import type { Intent } from "@repo/journal-catalog/intent";
+import type { Intent, Progress } from "@repo/journal-catalog/intent";
 import { toolFailed, toolIntent, toolQuiet } from "./chat.tsx";
 
 export interface Turn {
@@ -29,10 +29,6 @@ export function groupTurns(messages: readonly ChatMessage[]): Turn[] {
 	return turns;
 }
 
-export function turnMessages(turn: Turn): ChatMessage[] {
-	return turn.asked === undefined ? turn.steps : [turn.asked, ...turn.steps];
-}
-
 export type TurnLink =
 	| { kind: "text"; message: ChatMessage }
 	| { kind: "activity"; introduces: string[] }
@@ -42,7 +38,7 @@ export type TurnLink =
 			result: ChatMessage;
 			doing?: string;
 			introduces: string[];
-			progress: boolean;
+			progress?: Progress;
 			ran: boolean;
 	  };
 
@@ -74,6 +70,27 @@ function adopt(chain: TurnLink[], introduces: string[]): void {
 	else current.introduces.push(...introduces);
 }
 
+function callLink(
+	call: ChatMessage | undefined,
+	result: ChatMessage,
+	intent: Intent | undefined,
+	doing: string | undefined,
+	introduces: string[],
+	ran: boolean,
+): TurnLink {
+	const said = intent?.doing;
+	const progress = intent?.progress;
+	return {
+		kind: "call",
+		call,
+		result,
+		...(said !== undefined && said !== doing ? { doing: said } : {}),
+		introduces,
+		...(progress !== undefined ? { progress } : {}),
+		ran,
+	};
+}
+
 export function shapeTurn(turn: Turn): TurnShape {
 	const shape: TurnShape = {
 		activity: [],
@@ -85,7 +102,6 @@ export function shapeTurn(turn: Turn): TurnShape {
 	let call: ChatMessage | undefined;
 	let doing: string | undefined;
 	let logged = 0;
-	let progressed = false;
 	let userRun = turn.asked !== undefined && isUserMessage(turn.asked);
 	for (const message of turn.steps) {
 		if (isSystemMessage(message)) continue;
@@ -105,23 +121,11 @@ export function shapeTurn(turn: Turn): TurnShape {
 				.filter((entry) => !activity.has(entry.id))
 				.map((entry) => `activity:${entry.id}`),
 		];
-		const progress: boolean = !progressed && intent?.progress !== undefined;
 		const ran = userRun;
 		userRun = false;
 		if (ran || !toolQuiet(message)) {
-			shape.chain.push({
-				kind: "call",
-				call,
-				result: message,
-				...(intent?.doing !== undefined && intent.doing !== doing
-					? { doing: intent.doing }
-					: {}),
-				introduces,
-				progress,
-				ran,
-			});
+			shape.chain.push(callLink(call, message, intent, doing, introduces, ran));
 			logged = Math.max(logged, log.length);
-			progressed ||= progress;
 			doing = intent?.doing ?? doing;
 		} else adopt(shape.chain, introduces);
 		call = undefined;

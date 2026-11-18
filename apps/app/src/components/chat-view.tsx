@@ -4,18 +4,15 @@ import {
 	isNoteMessage,
 	isParentMessage,
 	isSystemMessage,
-	isToolMessage,
 	isUserMessage,
 	type LaneId,
 	laneOf,
 	messageText,
 	Revealed,
-	type StepMeta,
 	toolModelOutput,
 	useLanes,
 	useTraced,
 } from "@repo/components";
-import type { Progress } from "@repo/journal-catalog/intent";
 import { formsIn } from "@repo/syntax";
 import { Conversation, ConversationContent } from "@repo/ui";
 import {
@@ -59,15 +56,17 @@ import { traceOpen } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { useTraceLink } from "../lib/preferences.ts";
 import { openQuestion, questionText } from "../lib/question.ts";
-import { useSideTrace } from "../lib/side-trace.tsx";
 import {
-	groupTurns,
-	latestTodos,
-	shapeTurn,
-	type Turn,
-	turnMessages,
-} from "../lib/turn-groups.ts";
-import { placeTimeline, type TimelineEntry } from "../lib/turn-timeline.ts";
+	type Moment,
+	NOTHING_SHOWN,
+	type ShownTurn,
+	type Stats,
+	type Step,
+	seal,
+	type Transcript,
+} from "../lib/sealed-turns.ts";
+import { useSideTrace } from "../lib/side-trace.tsx";
+import { groupTurns, latestTodos, shapeTurn } from "../lib/turn-groups.ts";
 import { useUI } from "../lib/ui.tsx";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { AskCard } from "./ask-card.tsx";
@@ -465,23 +464,8 @@ function StepText({ message }: { message: ChatMessage }) {
 	);
 }
 
-function StepCall({
-	call,
-	result,
-	doing,
-	entries,
-	progress,
-	live,
-	ran,
-}: {
-	call: ChatMessage | undefined;
-	result: ChatMessage;
-	ran: boolean;
-	doing: string | undefined;
-	entries: readonly TimelineEntry[];
-	progress: Progress | undefined;
-	live: boolean;
-}) {
+function StepCall({ step }: { step: Extract<Step, { kind: "call" }> }) {
+	const { call, result, doing, entries, progress, live, ran } = step;
 	const { heads } = useStepProse(call);
 	const label = entries.some((entry) => entry.kind === "intent")
 		? undefined
@@ -518,7 +502,7 @@ function TurnFoot({
 	message: ChatMessage | undefined;
 	live: boolean;
 	failure: string | undefined;
-	stats: StepMeta | undefined;
+	stats: Stats;
 	index: number;
 	onTrace?: () => void;
 }) {
@@ -536,117 +520,94 @@ function TurnFoot({
 					{failure}
 				</span>
 			)}
-			{!live && (stats || onTrace) && (
-				<MessageMeta
-					meta={stats}
-					show={metaShown}
-					onPickModel={openModelPicker}
-					onTrace={onTrace}
-				/>
-			)}
-			{!live && message && (
-				<MessageFeedback messageId={message.id} index={index} />
-			)}
-		</div>
-	);
-}
-
-interface TurnProps {
-	turn: Turn;
-	index: number;
-	live: boolean;
-	meta: Record<string, StepMeta>;
-	error?: string;
-	onTrace?: (message: string) => void;
-}
-
-function failedAt(turn: Turn): ChatMessage | undefined {
-	return (
-		[...turn.steps].reverse().find((m) => isToolMessage(m) && toolFailed(m)) ??
-		turn.steps.at(-1) ??
-		turn.asked
-	);
-}
-
-function TurnBody({ turn, index, live, meta, error, onTrace }: TurnProps) {
-	const shape = useMemo(() => shapeTurn(turn), [turn]);
-	const placed = useMemo(() => placeTimeline(shape, live), [shape, live]);
-	const shown = useLanes();
-	const traceAt = (message: ChatMessage | undefined) => {
-		const id = message?.id;
-		return onTrace && id !== undefined ? () => onTrace(id) : undefined;
-	};
-	const items = shape.chain.map((link, at) =>
-		link.kind === "text" ? (
-			<StepText key={`text:${link.message.id ?? at}`} message={link.message} />
-		) : link.kind === "activity" ? (
-			<CallTimeline
-				key={`activity:${link.introduces[0]}`}
-				entries={placed.get(at) ?? []}
-				live={live}
-			/>
-		) : (
-			<StepCall
-				key={`call:${link.call?.id ?? link.result.id ?? at}`}
-				call={link.call}
-				result={link.result}
-				ran={link.ran}
-				doing={link.doing}
-				entries={placed.get(at) ?? []}
-				progress={link.progress ? shape.intent?.progress : undefined}
-				live={live}
-			/>
-		),
-	);
-	const stats =
-		shape.answer?.id === undefined ? undefined : meta[shape.answer.id];
-	const failure =
-		error ?? (!live && shape.failed ? "a step in this turn failed" : undefined);
-	return (
-		<div data-turn={turn.id} className="flex min-w-0 flex-col gap-3">
-			{turn.asked && (!isParentMessage(turn.asked) || shown.agents) && (
-				<div className="min-w-0 break-words text-fg">
-					{isParentMessage(turn.asked) ? (
-						<AgentMessage message={turn.asked} onTrace={traceAt(turn.asked)} />
-					) : (
-						<UserMessage message={turn.asked} />
+			{!live && (
+				<div className="flex min-w-0 max-w-full items-center gap-x-3">
+					{(stats.kind !== "none" || onTrace) && (
+						<MessageMeta
+							meta={stats.kind === "known" ? stats.meta : undefined}
+							awaited={stats.kind === "awaited"}
+							show={metaShown}
+							onPickModel={openModelPicker}
+							onTrace={onTrace}
+							className="min-w-0 truncate"
+						/>
+					)}
+					{message && (
+						<div className="flex-none">
+							<MessageFeedback messageId={message.id} index={index} />
+						</div>
 					)}
 				</div>
 			)}
-			{items}
-			<TurnFoot
-				message={shape.answer}
-				live={live}
-				failure={failure}
-				stats={stats}
-				index={index}
-				onTrace={traceAt(failure ? failedAt(turn) : shape.answer)}
-			/>
 		</div>
 	);
 }
 
-function sameTurn(before: TurnProps, after: TurnProps): boolean {
-	if (
-		before.live !== after.live ||
-		before.index !== after.index ||
-		before.error !== after.error ||
-		before.onTrace !== after.onTrace
-	)
-		return false;
-	const was = turnMessages(before.turn);
-	const is = turnMessages(after.turn);
-	return (
-		was.length === is.length &&
-		was.every(
-			(m, at) =>
-				m === is[at] &&
-				(m.id === undefined || before.meta[m.id] === after.meta[m.id]),
-		)
-	);
-}
+const StepView = memo(function StepView({ step }: { step: Step }) {
+	if (step.kind === "text") return <StepText message={step.message} />;
+	if (step.kind === "activity")
+		return <CallTimeline entries={step.entries} live={step.live} />;
+	return <StepCall step={step} />;
+});
 
-const TurnView = memo(TurnBody, sameTurn);
+const TurnView = memo(function TurnView({
+	turn,
+	onTrace,
+}: {
+	turn: ShownTurn;
+	onTrace?: (message: string) => void;
+}) {
+	const shown = useLanes();
+	const { asked, foot } = turn;
+	const traced = foot.traced?.id;
+	return (
+		<div data-turn={turn.id} className="flex min-w-0 flex-col gap-3">
+			{asked && (!isParentMessage(asked) || shown.agents) && (
+				<div className="min-w-0 break-words text-fg">
+					{isParentMessage(asked) ? (
+						<AgentMessage
+							message={asked}
+							onTrace={
+								onTrace && asked.id !== undefined
+									? () => onTrace(asked.id as string)
+									: undefined
+							}
+						/>
+					) : (
+						<UserMessage message={asked} />
+					)}
+				</div>
+			)}
+			{turn.steps.map((step) => (
+				<StepView key={step.key} step={step} />
+			))}
+			<TurnFoot
+				message={foot.answer}
+				live={foot.live}
+				failure={foot.failure}
+				stats={foot.stats}
+				index={turn.index}
+				onTrace={
+					onTrace && traced !== undefined ? () => onTrace(traced) : undefined
+				}
+			/>
+		</div>
+	);
+});
+
+function useSealedTurns(moment: Moment, chatId: string | null): Transcript {
+	const held = useRef<{ chatId: string | null; shown: Transcript }>({
+		chatId,
+		shown: NOTHING_SHOWN,
+	});
+	return useMemo(() => {
+		const before =
+			held.current.chatId === chatId ? held.current.shown : NOTHING_SHOWN;
+		const shown = seal(before, moment);
+		held.current = { chatId, shown };
+		return shown;
+	}, [moment, chatId]);
+}
 
 function StatusLine({ status }: { status: AgentStatus }) {
 	const [line] = useState(() => pickStatusLine(status));
@@ -661,16 +622,16 @@ function StatusLine({ status }: { status: AgentStatus }) {
 }
 
 export function ChatView() {
-	const { messages, meta, error, isLoading, chatId, queued } = useChatSession(
-		(state) => ({
+	const { messages, meta, error, isLoading, waiting, chatId, queued } =
+		useChatSession((state) => ({
 			messages: state.messages,
 			meta: state.meta,
 			error: state.error,
 			isLoading: state.isLoading,
+			waiting: state.waiting,
 			chatId: state.chatId,
 			queued: state.queued.length,
-		}),
-	);
+		}));
 	const { apply } = usePanels();
 	const lastSent = messages
 		.filter(
@@ -697,7 +658,11 @@ export function ChatView() {
 		},
 		[apply, chatId],
 	);
-	const last = turns.length - 1;
+	const moment = useMemo(
+		() => ({ turns, live: isLoading || waiting, meta, error }),
+		[turns, isLoading, waiting, meta, error],
+	);
+	const sealed = useSealedTurns(moment, chatId);
 	const todos = useMemo(() => latestTodos(turns), [turns]);
 	const writing = useMemo(() => {
 		const turn = turns.at(-1);
@@ -727,14 +692,10 @@ export function ChatView() {
 				scrollClassName="min-w-0"
 			>
 				<ParentSource.Provider value={parentSourceOf(briefing)}>
-					{turns.map((turn, at) => (
+					{sealed.turns.map((turn) => (
 						<TurnView
 							key={turn.id}
 							turn={turn}
-							index={at}
-							live={isLoading && at === last}
-							meta={meta}
-							error={at === last ? error : undefined}
 							onTrace={chatId === null || !traceLink ? undefined : onTrace}
 						/>
 					))}
