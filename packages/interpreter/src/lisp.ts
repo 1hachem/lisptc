@@ -856,8 +856,11 @@ export function runAsync(interp: Interp, text: string): Promise<Outcome> {
 export const BOOTED = newSym("*booted*");
 
 export function* bootGen(interp: Interp): Eval<void> {
-	for (const source of interp.bootSources()) yield* runGen(interp, source);
-	interp.defineGlobal(BOOTED, true);
+	try {
+		for (const source of interp.bootSources()) yield* runGen(interp, source);
+	} finally {
+		interp.defineGlobal(BOOTED, true);
+	}
 }
 
 export function booted(interp: Interp): boolean {

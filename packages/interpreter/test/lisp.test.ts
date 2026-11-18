@@ -70,6 +70,15 @@ describe("extensions", () => {
 		expect(() => ev("(setq *booted* nil)", interp)).toThrow(/owned by boot/);
 	});
 
+	it("counts as booted even when a postlude fails", () => {
+		const broken: Installable = Object.assign(() => {}, {
+			postlude: "(no-such-form)",
+		});
+		const interp = new Interp({ extensions: [broken] });
+		expect(() => boot(interp)).toThrow(/no-such-form/);
+		expect(ev("*booted*", interp)).toBe("t");
+	});
+
 	it("boots every extension's prelude before any extension's postlude", () => {
 		const first: Installable = Object.assign(() => {}, {
 			prelude: "(setq order nil) (defun note (x) (setq order (cons x order)))",
