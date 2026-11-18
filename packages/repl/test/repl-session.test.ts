@@ -1,7 +1,14 @@
 import { ends } from "@repo/interpreter/effects";
-import { type LlmCall, llmSlot } from "@repo/interpreter/observe";
+import type { Interp } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
+import {
+	type LlmCall,
+	llmSlot,
+	type Observed,
+} from "@repo/interpreter/observe";
+import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { describe, expect, it } from "vitest";
-import { agentRepl, answering, noting, observedExtension } from "./helpers.ts";
+import { agentRepl, answering, noting } from "./helpers.ts";
 
 describe("AgentRepl (in-process REPL binding)", () => {
 	it("hands the human what a step echoed", async () => {
@@ -60,21 +67,33 @@ describe("AgentRepl (in-process REPL binding)", () => {
 });
 
 describe("the llm observer", () => {
-	it("keeps the observer its host installed across a reset", () => {
+	it("keeps the observer its host installed across a reset", async () => {
 		const calls: LlmCall[] = [];
-		const r = agentRepl([observedExtension()]);
-		const observed = r.hooks.filled(llmSlot);
-		if (observed) observed.observe = (call) => calls.push(call);
+		const observed: Observed = {};
+		const calling: InterpExtension = Object.assign(
+			(interp: Interp): void => {
+				interp.defineGlobal(
+					newSym("call-llm"),
+					interp.makeBuiltIn("call-llm", 0, () => {
+						observed.observe?.({
+							builtin: "write",
+							messages: [],
+							structured: false,
+							latencyMs: 0,
+						});
+						return null;
+					}),
+				);
+			},
+			{ session: (hooks: SessionHooks) => hooks.fill(llmSlot, observed) },
+		);
+		const r = agentRepl([calling]);
+		const installed = r.hooks.filled(llmSlot);
+		if (installed) installed.observe = (call) => calls.push(call);
 
 		r.reset();
+		await r.evalOutput("(call-llm)");
 
-		expect(r.hooks.filled(llmSlot)).toBe(observed);
-		r.hooks.filled(llmSlot)?.observe?.({
-			builtin: "write",
-			messages: [],
-			structured: false,
-			latencyMs: 0,
-		});
 		expect(calls.map((call) => call.builtin)).toEqual(["write"]);
 	});
 });

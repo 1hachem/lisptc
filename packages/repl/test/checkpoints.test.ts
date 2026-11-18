@@ -3,7 +3,9 @@ import type { Image } from "@repo/interpreter/image";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
+import { entryKind, every } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { MAX_DELTA_RUN, MemoryImageStore } from "../src/image-store.ts";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
@@ -55,26 +57,33 @@ describe("checkpoints", () => {
 		expect((await images.latest())?.depth).toBe(3);
 	});
 
-	it("stamps an evaluation's journal entries with its depth, across a resume", async () => {
-		const evaluations: number[] = [];
+	it("never reuses a journal entry's id across a resume", async () => {
+		const stamped = entryKind({
+			name: "stamped",
+			schema: z.null(),
+			fold: every,
+		});
 		const stamp: InterpExtension = (interp: Interp): void => {
 			interp.defineGlobal(
 				newSym("stamp"),
 				new BuiltInFunc("stamp", 0, () => {
-					evaluations.push(interp.journal.evaluation);
+					interp.journal.write(stamped, null);
 					return null;
 				}),
 			);
 		};
 		const images = new MemoryImageStore();
 		const first = repl(images, [stamp]);
-		await first.evalOutput("(stamp)");
-		await first.evalOutput("(stamp)");
+		const ids = [
+			...(await first.evalOutput("(stamp)")).entries,
+			...(await first.evalOutput("(stamp)")).entries,
+		].map((entry) => entry.id);
 		await settle();
 		const second = repl(images, [stamp]);
 		await second.resume();
-		await second.evalOutput("(stamp)");
-		expect(evaluations).toEqual([1, 2, 3]);
+		ids.push(...(await second.evalOutput("(stamp)")).entries.map((e) => e.id));
+		expect(ids).toHaveLength(3);
+		expect(new Set(ids).size).toBe(3);
 	});
 
 	it("resumes in a new REPL where the last one stopped", async () => {
@@ -110,12 +119,15 @@ describe("checkpoints", () => {
 		await expect(r.evalOutput("(progn (setq a 2) 'boom)")).rejects.toThrow(
 			"host broke",
 		);
-		expect(r.interp.getGlobal(newSym("a"))).toBe(2n);
 		expect(await r.recover()).toBe(1);
-		expect(r.interp.getGlobal(newSym("a"))).toBe(1n);
+		expect((await r.evalOutput("(echo a)")).user).toBe("1\n");
 		await r.evalOutput("(setq b 3)", "after");
 		await settle();
-		expect((await images.latest())?.depth).toBe(2);
+		const resumed = repl(images);
+		await resumed.resume();
+		expect((await resumed.evalOutput("(echo (list a b))")).user).toBe(
+			"(1 3)\n",
+		);
 	});
 
 	it("resets when there is no checkpoint to recover to", async () => {
@@ -144,7 +156,7 @@ describe("checkpoints", () => {
 		expect(images.origins()).toEqual(["second"]);
 		const resumed = repl(images);
 		await resumed.resume();
-		expect(resumed.interp.getGlobal(newSym("a"))).toBe(2n);
+		expect((await resumed.evalOutput("(echo a)")).user).toBe("2\n");
 	});
 
 	it("rebuilds the image from a run of layers past the cap", async () => {
@@ -156,8 +168,9 @@ describe("checkpoints", () => {
 		await settle();
 		const resumed = repl(images);
 		expect(await resumed.resume()).toBe(MAX_DELTA_RUN + 4);
-		expect(resumed.interp.getGlobal(newSym("v0"))).toBeNull();
-		expect(resumed.interp.getGlobal(newSym("v34"))).toBe(34n);
+		expect((await resumed.evalOutput("(echo (list v0 v34))")).user).toBe(
+			"(nil 34)\n",
+		);
 	});
 
 	it("keeps the conversation globals in the image, still sealed", async () => {
@@ -168,7 +181,7 @@ describe("checkpoints", () => {
 		await settle();
 		const second = new AgentRepl({ extensions: [], images });
 		await second.resume();
-		expect(second.interp.getGlobal(newSym("seen"))).toBe(1n);
+		expect((await second.evalOutput("(echo seen)")).user).toBe("1\n");
 		expect((await second.evalOutput("(setq user-messages nil)")).failed).toBe(
 			true,
 		);

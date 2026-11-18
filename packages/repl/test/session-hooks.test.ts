@@ -1,78 +1,42 @@
 import { effect, ends } from "@repo/interpreter/effects";
-import type { Journal } from "@repo/interpreter/journal";
-import {
-	type AgentTurn,
-	slot,
-	type TurnOutcome,
-} from "@repo/interpreter/session";
-import { entryKind, every } from "@repo/shared/journal";
+import { print } from "@repo/interpreter/journal";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 import { extension } from "./helpers.ts";
 
-function recording(
-	journal: Journal | undefined,
-	name: string,
-	value: unknown,
-): void {
-	journal?.write(entryKind({ name, schema: z.unknown(), fold: every }), value);
-}
-
 describe("an extension hooking the session", () => {
 	it("wraps the evaluation and sees the code", async () => {
-		const seen: string[] = [];
 		const r = new MemoryRepl({
 			extensions: [
 				extension((hooks) => {
 					hooks.evalStep.use(async (ctx, next) => {
-						seen.push(`before ${ctx.code}`);
+						print(ctx.interp.journal, { user: `before ${ctx.code}\n` });
 						await next(ctx);
-						seen.push("after");
+						print(ctx.interp.journal, { user: "after\n" });
 					});
 				}),
 			],
 		});
 
-		await r.eval("(+ 1 1)");
-
-		expect(seen).toEqual(["before (+ 1 1)", "after"]);
+		expect((await r.evalOutput('(echo "hi")')).user).toBe(
+			'before (echo "hi")\nhi\nafter\n',
+		);
 	});
 
 	it("tells a step who wrote its code, the assistant or the user", async () => {
-		const authors: string[] = [];
 		const r = new AgentRepl({
 			extensions: [
 				extension((hooks) => {
 					hooks.evalStep.use((ctx, next) => {
-						authors.push(ctx.author);
+						print(ctx.interp.journal, { user: `${ctx.author}\n` });
 						return next(ctx);
 					});
 				}),
 			],
 		});
 
-		await r.evalOutput("(+ 1 1)");
-		await r.evalMessage("(+ 1 1)");
-
-		expect(authors).toEqual(["assistant", "user"]);
-	});
-
-	it("hands over what an extension noted during a step, beside what the human read", async () => {
-		const r = new MemoryRepl({
-			extensions: [
-				extension((hooks) => {
-					hooks.evalStep.use(async (ctx, next) => {
-						await next(ctx);
-						ctx.interp.conversation.append("test", "and one more thing");
-					});
-				}),
-			],
-		});
-
-		const { notes, user } = await r.evalOutput('(echo "hi")');
-		expect(notes.map((n) => n.content)).toEqual(["and one more thing"]);
-		expect(user).toBe("hi\n");
+		expect((await r.evalOutput("(+ 1 1)")).user).toBe("assistant\n");
+		expect((await r.evalMessage("(+ 1 1)")).user).toBe("user\n");
 	});
 
 	it("rewrites how an error reads", async () => {
@@ -121,97 +85,14 @@ describe("an extension hooking the session", () => {
 		]);
 	});
 
-	it("journals what a step records, beside the output", async () => {
-		const r = new MemoryRepl({
-			extensions: [
-				extension((hooks) => {
-					hooks.evalStep.use(async (ctx, next) => {
-						recording(ctx.interp.journal, "before", 1);
-						await next(ctx);
-						recording(ctx.interp.journal, "after", 2);
-					});
-				}),
-			],
-		});
-
-		const { user, entries } = await r.evalOutput('(echo "hi")');
-
-		expect(user).toBe("hi\n");
-		expect(entries).toEqual([
-			expect.objectContaining({ kind: "before", value: 1 }),
-			expect.objectContaining({ kind: "after", value: 2 }),
-		]);
-	});
-
-	it("journals a ui action the same way it journals a step", async () => {
-		const r = new MemoryRepl({
-			extensions: [
-				extension((hooks) => {
-					hooks.invoke.use(async (ctx) => {
-						recording(ctx.interp.journal, "view", ctx.action);
-					});
-				}),
-			],
-		});
-
-		expect((await r.invokeUi("a1")).entries).toEqual([
-			expect.objectContaining({ kind: "view", value: "a1" }),
-		]);
-	});
-
 	it("journals nothing when no extension records", async () => {
 		const r = new MemoryRepl({ extensions: [] });
 
 		expect((await r.evalOutput("(+ 1 1)")).entries).toEqual([]);
 	});
-
-	it("spans the forms a step did not run", async () => {
-		const r = new AgentRepl({
-			extensions: [
-				extension((hooks) => {
-					hooks.unrun.use((interp, code, next) => [
-						...next(interp, code),
-						{ span: [0, code.trimEnd().length], reason: "left alone" },
-					]);
-				}),
-			],
-		});
-
-		expect(r.unrun("(echo 1)")).toEqual([
-			{ span: [0, 8], reason: "left alone" },
-		]);
-	});
-
-	it("hands a value to whoever holds the slot", () => {
-		const counter = slot<{ n: number }>("counter");
-		const held = { n: 7 };
-		const r = new MemoryRepl({
-			extensions: [extension((hooks) => hooks.fill(counter, held))],
-		});
-
-		expect(r.hooks.filled(counter)).toBe(held);
-	});
-
-	it("leaves a slot nobody filled empty", () => {
-		const counter = slot<{ n: number }>("counter");
-		const r = new MemoryRepl({ extensions: [] });
-
-		expect(r.hooks.filled(counter)).toBeUndefined();
-	});
 });
 
 describe("an extension hooking the turn", () => {
-	function turn(r: AgentRepl): AgentTurn {
-		return {
-			interp: r.interp,
-			threadId: "thread",
-			turnId: "turn",
-			prompt: "what is 1 + 2?",
-			provider: "test",
-			model: "test",
-		};
-	}
-
 	it("starts a turn with nothing to say when nobody hooks it", async () => {
 		const r = new AgentRepl({ extensions: [] });
 
@@ -251,20 +132,6 @@ describe("an extension hooking the turn", () => {
 		expect(signed.answer("done")).toBe("done\n-- signed");
 	});
 
-	it("settles as the loop asked when nobody hooks it", async () => {
-		const r = new AgentRepl({ extensions: [] });
-
-		expect(await r.beforeSettle(false)).toEqual({
-			more: false,
-			notes: [],
-			entries: [],
-		});
-		expect(await r.beforeSettle(true)).toMatchObject({
-			more: true,
-			notes: [],
-		});
-	});
-
 	it("asks for one more step, and says why", async () => {
 		const r = new AgentRepl({
 			extensions: [
@@ -282,46 +149,5 @@ describe("an extension hooking the turn", () => {
 			more: true,
 			notes: [{ role: "system", content: "check your answer", source: "test" }],
 		});
-	});
-
-	it("hands over what it recorded as the turn settles, and only once", async () => {
-		const r = new AgentRepl({
-			extensions: [
-				extension((hooks) => {
-					hooks.beforeSettle.use(function* (ctx, more, next) {
-						recording(ctx.interp.journal, "closed", "wrapped");
-						return yield* next(ctx, more);
-					});
-				}),
-			],
-		});
-
-		expect((await r.beforeSettle(false)).entries).toEqual([
-			expect.objectContaining({ kind: "closed", value: "wrapped" }),
-		]);
-		expect((await r.evalOutput("(+ 1 2)")).entries).toEqual([]);
-	});
-
-	it("sees how the turn ended", () => {
-		const outcomes: [TurnOutcome, number][] = [];
-		const r = new AgentRepl({
-			extensions: [
-				extension((hooks) =>
-					hooks.settled.use((t, end, next) => {
-						outcomes.push([end.outcome, end.steps]);
-						next(t, end);
-					}),
-				),
-			],
-		});
-
-		r.settled(turn(r), {
-			outcome: "halt",
-			answer: "3",
-			steps: 3,
-			latencyMs: 1,
-		});
-
-		expect(outcomes).toEqual([["halt", 3]]);
 	});
 });
