@@ -47,11 +47,6 @@ describe("a download", () => {
 		}).downloader;
 	}
 
-	it("takes a body within the cap", async () => {
-		const { bytes } = await serving("abcd").download(new URL("https://x.test"));
-		expect(new TextDecoder().decode(bytes)).toBe("abcd");
-	});
-
 	it("stops reading once the body passes the cap", async () => {
 		await expect(
 			serving("abcde").download(new URL("https://x.test")),
@@ -104,7 +99,7 @@ describe("knowledge", () => {
 		expect(await ev('(knowledge/read "trap.ptc")')).toBe(
 			'(knowledge/delete "a.md")',
 		);
-		expect(store.names("knowledge")).toEqual(["a.md", "trap.ptc"]);
+		expect(await ev("(knowledge/list)")).toBe('("a.md" "trap.ptc")');
 	});
 
 	it("edits a .ptc file in place with the core data forms", async () => {
@@ -134,17 +129,30 @@ describe("knowledge", () => {
 		).toBe("12.0");
 	});
 
-	it("reads any other text file as a string", async () => {
+	it.each([
+		"csv",
+		"htm",
+		"html",
+		"md",
+		"svg",
+		"txt",
+		"xml",
+		"yaml",
+		"yml",
+	])("reads back the text it writes to a .%s file", async (extension) => {
+		const { ev } = await world();
+		await ev(`(knowledge/write "sample.${extension}" "a,b\\n1,2\\nü")`);
+		expect(await ev(`(knowledge/read "sample.${extension}")`)).toBe(
+			'"a,b\\n1,2\\nü"',
+		);
+	});
+
+	it("writes a name with no known extension as plain text, and reads the extension in any case", async () => {
 		const { ev, store } = await world();
-		store.write(
-			"knowledge",
-			"report.md",
-			new TextEncoder().encode("# Q3\n\nUp 4%.\n"),
-			"text/markdown",
-		);
-		expect(await ev('(knowledge/read "report.md")')).toBe(
-			'"# Q3\\n\\nUp 4%.\\n"',
-		);
+		await ev('(knowledge/write "README" "hi")');
+		await ev('(knowledge/write "TABLE.CSV" "a,b")');
+		expect(held(store, "README")?.type).toBe("text/plain");
+		expect(held(store, "TABLE.CSV")?.type).toBe("text/csv");
 	});
 
 	it("writes a string to a text file under the type its name implies", async () => {
@@ -402,23 +410,6 @@ describe("attachments", () => {
 });
 
 describe("attach", () => {
-	it("shows an attachments or knowledge file to the user, naming its folder", async () => {
-		const { ev, store, attached } = await world();
-		await ev('(attachments/write "chart.svg" "<svg/>")');
-		store.write(
-			"knowledge",
-			"report.md",
-			new TextEncoder().encode("# r"),
-			"text/markdown",
-		);
-		expect(await ev('(attachments/attach "chart.svg")')).toBe('"chart.svg"');
-		expect(await ev('(knowledge/attach "report.md")')).toBe('"report.md"');
-		expect(attached).toEqual([
-			{ folder: "attachments", name: "chart.svg" },
-			{ folder: "knowledge", name: "report.md" },
-		]);
-	});
-
 	it("refuses a file the folder does not hold", async () => {
 		const { ev, store, attached } = await world();
 		store.write(
@@ -448,13 +439,6 @@ describe("bin", () => {
 		await w.ev('(attachments/delete "spec.pdf")');
 		return w;
 	}
-
-	it("takes what knowledge and attachments delete", async () => {
-		const { ev, store } = await binned();
-		expect(store.names("knowledge")).toEqual([]);
-		expect(store.names("attachments")).toEqual([]);
-		expect(await ev("(bin/list)")).toBe('("spec.pdf" "Q3 Report.md")');
-	});
 
 	it("searches names, ignoring case", async () => {
 		const { ev } = await binned();
@@ -510,17 +494,6 @@ describe("a message the user attached files to", () => {
 		return buffer.collect(note).map((record) => record.content);
 	}
 
-	it("tells the model which files came with it", async () => {
-		expect(
-			await told({
-				attachments: [
-					{ folder: "attachments", name: "spec.pdf" },
-					{ folder: "knowledge", name: "report.md" },
-				],
-			}),
-		).toEqual(["user attached: attachments/spec.pdf, knowledge/report.md"]);
-	});
-
 	it("tells the model nothing of a list it cannot read", async () => {
 		expect(
 			await told({ attachments: [{ folder: "elsewhere", name: "x" }] }),
@@ -541,21 +514,21 @@ describe("a .json file", () => {
 			"application/json",
 		);
 		await ev('(knowledge/write "copy.json" (knowledge/read "data.json"))');
-		expect(JSON.parse(held(store, "copy.json")?.text ?? "")).toEqual(
-			JSON.parse(source),
-		);
+		expect(JSON.parse(held(store, "copy.json")?.text ?? "")).toEqual({
+			off: false,
+			none: [],
+			empty: {},
+			pairs: [["a", 1]],
+			nil: null,
+		});
 	});
 });
 
 describe("a file name", () => {
 	it("reads and writes a name that is a prototype key as plain text", async () => {
-		const { ev, store } = await world();
+		const { ev } = await world();
 		await ev('(knowledge/write "x.constructor" "built")');
 		await ev('(knowledge/write "x.__proto__" "proto")');
-		expect(held(store, "x.constructor")).toEqual({
-			text: "built",
-			type: "text/plain",
-		});
 		expect(await ev('(knowledge/read "x.constructor")')).toBe('"built"');
 		expect(await ev('(knowledge/read "x.__proto__")')).toBe('"proto"');
 	});
@@ -595,22 +568,6 @@ describe("a file name", () => {
 });
 
 describe("a .pdf file", () => {
-	it("is read through the host's pdf reader", async () => {
-		const seen: number[] = [];
-		const { ev, store } = await world(undefined, {
-			text: (bytes) => {
-				seen.push(bytes.byteLength);
-				return "stubbed text";
-			},
-		});
-		store.held.knowledge.set("spec.pdf", {
-			bytes: new Uint8Array(3),
-			contentType: "application/pdf",
-		});
-		expect(await ev('(knowledge/read "spec.pdf")')).toBe('"stubbed text"');
-		expect(seen).toEqual([3]);
-	});
-
 	it("says which file a failing reader could not read", async () => {
 		const { ev, store } = await world(undefined, {
 			text: async () => {

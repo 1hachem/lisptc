@@ -1,21 +1,18 @@
 import { MAX_FILE_NAME } from "@repo/shared/files";
 import { describe, expect, it } from "vitest";
 import { MemoryKnowledgeStore } from "../src/memory-store.ts";
+import { world } from "./helpers.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
 describe("the in-memory knowledge store, held to what the deployment does", () => {
-	it("numbers a binned name the bin already holds instead of losing the older file", () => {
-		const store = new MemoryKnowledgeStore();
-		store.write("attachments", "a.md", bytes("first"), "text/markdown");
-		store.remove("attachments", "a.md");
-		store.write("attachments", "a.md", bytes("second"), "text/markdown");
-		store.remove("attachments", "a.md");
-		expect(store.binned().map((file) => file.name)).toEqual([
-			"a (2).md",
-			"a.md",
-		]);
-		expect(store.binHeld.get("a.md")?.bytes).toEqual(bytes("first"));
+	it("numbers a binned name the bin already holds instead of losing the older file", async () => {
+		const { ev } = await world();
+		await ev('(attachments/write "a.md" "first") (attachments/delete "a.md")');
+		await ev('(attachments/write "a.md" "second") (attachments/delete "a.md")');
+		expect(await ev("(bin/list)")).toBe('("a (2).md" "a.md")');
+		await ev('(bin/restore "a.md")');
+		expect(await ev('(attachments/read "a.md")')).toBe('"first"');
 	});
 
 	it("keeps a numbered bin name under the length cap", () => {
@@ -51,17 +48,11 @@ describe("the in-memory knowledge store, held to what the deployment does", () =
 		expect(store.binned()).toEqual([{ name: "notes.md", from: "knowledge" }]);
 	});
 
-	it("lists the bin newest first", () => {
-		const store = new MemoryKnowledgeStore();
-		for (const name of ["one.md", "two.md", "three.md"]) {
-			store.write("knowledge", name, bytes(name), "text/markdown");
-			store.remove("knowledge", name);
-		}
-		expect(store.binned().map((file) => file.name)).toEqual([
-			"three.md",
-			"two.md",
-			"one.md",
-		]);
+	it("lists the bin newest first", async () => {
+		const { ev } = await world();
+		for (const name of ["one.md", "two.md", "three.md"])
+			await ev(`(knowledge/write "${name}" "x") (knowledge/delete "${name}")`);
+		expect(await ev("(bin/list)")).toBe('("three.md" "two.md" "one.md")');
 	});
 
 	it("restores under a numbered name when the folder took the old one", () => {
