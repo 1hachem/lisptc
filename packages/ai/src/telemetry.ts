@@ -132,6 +132,49 @@ export function captureReplEval(
 	});
 }
 
+export function captureRecognition(
+	ctx: TraceContext,
+	span: {
+		message: string;
+		scores: Record<string, number>;
+		fired: readonly string[];
+		error?: string;
+		failedAreas?: readonly string[];
+		latencyMs?: number;
+	},
+): void {
+	const ph = posthog();
+	if (!ph) return;
+	const { distinctId, anonymous } = identify(ctx);
+	ph.capture({
+		distinctId,
+		event: "$ai_span",
+		properties: {
+			...common(ctx),
+			...anonymous,
+			$ai_span_id: crypto.randomUUID(),
+			$ai_parent_id: ctx.turnId,
+			$ai_span_name: "memory recognition",
+			...(span.latencyMs === undefined
+				? {}
+				: { $ai_latency: span.latencyMs / 1000 }),
+			$ai_is_error: span.error !== undefined,
+			...(span.error === undefined ? {} : { $ai_error: span.error }),
+			recognition_scored: Object.keys(span.scores).length,
+			recognition_fired: span.fired,
+			...(span.failedAreas === undefined
+				? {}
+				: { recognition_failed_areas: span.failedAreas }),
+			...(PRIVACY_MODE
+				? {}
+				: {
+						$ai_input_state: span.message,
+						$ai_output_state: span.scores,
+					}),
+		},
+	});
+}
+
 export function captureTurn(
 	ctx: TraceContext,
 	turn: {

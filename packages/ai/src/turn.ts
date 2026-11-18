@@ -452,6 +452,16 @@ export async function* runAgentTurn(
 	options: TurnOptions,
 ): AsyncGenerator<TurnEvent> {
 	const turn = newTurn(options, messages);
+	for await (const event of playTurn(turn, options)) {
+		if (event.type === "entry") turn.telemetry.entry(event.entry);
+		yield event;
+	}
+}
+
+async function* playTurn(
+	turn: Turn,
+	options: TurnOptions,
+): AsyncGenerator<TurnEvent> {
 	const { repl, signal } = turn;
 	const startedAt = Date.now();
 

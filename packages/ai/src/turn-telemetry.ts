@@ -7,10 +7,12 @@ import type {
 	SessionHooks,
 	TurnContext,
 } from "@repo/interpreter/session";
-import type { Received } from "@repo/shared/journal";
+import { recognizedKind } from "@repo/journal-catalog/memory";
+import type { Entry, Received } from "@repo/shared/journal";
 import {
 	captureException,
 	captureLlmCall,
+	captureRecognition,
 	captureReplEval,
 	captureTurn,
 	type TraceContext,
@@ -29,6 +31,7 @@ export interface TurnTelemetry {
 	readonly turnStart: Middleware<[TurnContext], Eval<void>>;
 	readonly received: Middleware<[TurnContext, Received], Eval<void>>;
 	readonly stepEnd: (step: EvaluatedStep) => void;
+	readonly entry: (entry: Entry) => void;
 	readonly settled: Middleware<[AgentTurn, AgentEnd], void>;
 }
 
@@ -58,6 +61,25 @@ export function turnTelemetry(
 				error: step.error || step.failed,
 				latencyMs: step.latencyMs,
 			});
+		},
+		entry: (entry) => {
+			if (entry.kind !== recognizedKind.name) return;
+			const recognized = recognizedKind.schema.safeParse(entry.value).data;
+			if (recognized === undefined) return;
+			const { message, scores, fired, error, failedAreas, latencyMs } =
+				recognized;
+			captureRecognition(trace, {
+				message,
+				scores,
+				fired: (fired ?? []).map((memory) => memory.key),
+				...(error === undefined ? {} : { error }),
+				...(failedAreas === undefined ? {} : { failedAreas }),
+				...(latencyMs === undefined ? {} : { latencyMs }),
+			});
+			if (error !== undefined)
+				console.warn(
+					`[memory] recognition failed in thread ${trace.threadId} after ${latencyMs ?? "?"}ms: ${error}`,
+				);
 		},
 		settled: (turn, end, next) => {
 			if (end.failure && !end.failure.cancelled)

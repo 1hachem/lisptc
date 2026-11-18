@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { gunzipSync } from "node:zlib";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 interface CapturedEvent {
 	event: string;
@@ -211,5 +211,43 @@ describe("error tracking", () => {
 
 		expect(anonymous?.properties.$process_person_profile).toBe(false);
 		expect(anonymous?.properties.$ai_trace_id).toBeUndefined();
+	});
+});
+
+describe("memory recognition", () => {
+	test("nests under the turn as a span, an error when it failed, and warns in the log", async () => {
+		const { newSessionHooks } = await import("@repo/interpreter/session");
+		const { turnTelemetry } = await import("../src/turn-telemetry.ts");
+		const warned = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		turnTelemetry(newSessionHooks(), CTX).entry({
+			id: "e1",
+			kind: "recognized",
+			value: {
+				message: "open the page",
+				scores: { "internal/browser/local": 0.9 },
+				fired: [{ key: "internal/browser/local", body: "load it" }],
+				error: "recognition failed for deploy: timed out",
+				failedAreas: ["deploy"],
+				latencyMs: 2000,
+			},
+		});
+		const span = (await drain()).find(
+			(e) => e.properties.$ai_span_name === "memory recognition",
+		);
+
+		expect(span?.properties).toMatchObject({
+			$ai_trace_id: "thread-abc",
+			$ai_parent_id: "turn-1",
+			$ai_latency: 2,
+			$ai_is_error: true,
+			$ai_error: "recognition failed for deploy: timed out",
+			recognition_fired: ["internal/browser/local"],
+			recognition_failed_areas: ["deploy"],
+		});
+		expect(warned).toHaveBeenCalledWith(
+			expect.stringContaining("recognition failed for deploy: timed out"),
+		);
+		warned.mockRestore();
 	});
 });
