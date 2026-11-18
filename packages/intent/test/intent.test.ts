@@ -260,14 +260,20 @@ describe("a question", () => {
 		expect(buffer.collect(effect)).toEqual([{ type: "end" }]);
 	});
 
-	test("tells two questions apart and is single choice by default", () => {
+	test("is single choice unless :multi is given", () => {
 		const { interp } = fresh();
-		const first = step(interp, '(intent/ask "p" \'("A"))');
-		const second = step(interp, '(intent/ask "p" \'("A"))');
-		const [a] = questions(first.buffer);
-		const [b] = questions(second.buffer);
-		expect(a.id).not.toBe(b.id);
-		expect(b.multi).toBe(false);
+		const { buffer } = step(
+			interp,
+			'(intent/ask "Which board?" \'("Sales" "Support"))',
+		);
+		expect(questions(buffer)).toEqual([
+			{
+				id: "q1",
+				prompt: "Which board?",
+				choices: ["Sales", "Support"],
+				multi: false,
+			},
+		]);
 	});
 
 	test("needs a choice", () => {
