@@ -1,11 +1,12 @@
 import { themes } from "@repo/ui/themes";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import {
 	internalMutation,
 	type MutationCtx,
 	mutation,
+	type QueryCtx,
 	query,
 } from "./_generated/server.js";
 import { requireUser, requireWorkspace } from "./lib/auth.js";
@@ -16,6 +17,16 @@ import { modelChoice, workspaceIcon } from "./schema.js";
 export const MAX_WORKSPACES = 25;
 
 const PURGE_BATCH = 256;
+
+export async function ownedWorkspaces(
+	ctx: QueryCtx | MutationCtx,
+	ownerId: Id<"users">,
+): Promise<Doc<"workspaces">[]> {
+	return await ctx.db
+		.query("workspaces")
+		.withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+		.take(MAX_WORKSPACES);
+}
 
 const workspace = v.object({
 	_id: v.id("workspaces"),
@@ -50,10 +61,7 @@ export const list = query({
 	returns: v.array(workspace),
 	handler: async (ctx) => {
 		const user = await requireUser(ctx);
-		return await ctx.db
-			.query("workspaces")
-			.withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-			.take(MAX_WORKSPACES);
+		return await ownedWorkspaces(ctx, user._id);
 	},
 });
 
@@ -69,10 +77,7 @@ export const create = mutation({
 	returns: v.id("workspaces"),
 	handler: async (ctx, { name }) => {
 		const user = await requireUser(ctx);
-		const owned = await ctx.db
-			.query("workspaces")
-			.withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-			.take(MAX_WORKSPACES);
+		const owned = await ownedWorkspaces(ctx, user._id);
 		if (owned.length >= MAX_WORKSPACES) {
 			throw new ConvexError({ code: "TOO_MANY_WORKSPACES" });
 		}
@@ -140,11 +145,8 @@ export const remove = mutation({
 	handler: async (ctx, { workspaceId }) => {
 		const { user } = await requireWorkspace(ctx, workspaceId);
 		await dropWorkspace(ctx, workspaceId);
-		const left = await ctx.db
-			.query("workspaces")
-			.withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-			.first();
-		if (left !== null) return left._id;
+		const [left] = await ownedWorkspaces(ctx, user._id);
+		if (left !== undefined) return left._id;
 		const name = user.name === "" ? user.email : user.name;
 		return await ctx.db.insert("workspaces", {
 			ownerId: user._id,

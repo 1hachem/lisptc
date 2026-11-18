@@ -2,7 +2,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Doc } from "@repo/backend/dataModel";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import {
 	createContext,
 	useContext,
@@ -32,15 +32,18 @@ function remembered(): string | null {
 
 const workspacesQuery = convexQuery(api.workspaces.list, {});
 
+export function landingWorkspace(workspaces: Workspace[]): Workspace | null {
+	return workspaces[0] ?? null;
+}
+
 function picked(
 	workspaces: Workspace[],
 	inRoute: string | undefined,
 ): Workspace | null {
+	const wanted = inRoute ?? remembered();
 	return (
-		workspaces.find((candidate) => candidate._id === inRoute) ??
-		workspaces.find((candidate) => candidate._id === remembered()) ??
-		workspaces[0] ??
-		null
+		workspaces.find((candidate) => candidate._id === wanted) ??
+		landingWorkspace(workspaces)
 	);
 }
 
@@ -63,6 +66,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 	const inRoute = useParams({ strict: false }).workspaceId;
 
 	const workspace = picked(workspaces, inRoute);
+	const navigate = useNavigate();
+	const misrouted =
+		workspace !== null && workspace._id !== inRoute ? workspace._id : null;
 
 	useEffect(() => {
 		if (!workspace) return;
@@ -70,6 +76,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem(PICKED_KEY, workspace._id);
 		} catch {}
 	}, [workspace]);
+
+	useEffect(() => {
+		if (misrouted === null) return;
+		void navigate({
+			to: "/app/$workspaceId",
+			params: { workspaceId: misrouted },
+			replace: true,
+		});
+	}, [misrouted, navigate]);
 
 	return (
 		<WorkspaceContext.Provider value={{ workspaces, workspace }}>

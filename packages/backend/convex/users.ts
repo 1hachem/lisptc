@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalMutation, query } from "./_generated/server.js";
 import { requireUser } from "./lib/auth.js";
-import { dropWorkspace, MAX_WORKSPACES } from "./workspaces.js";
+import {
+	dropWorkspace,
+	MAX_WORKSPACES,
+	ownedWorkspaces,
+} from "./workspaces.js";
 
 export const me = query({
 	args: {},
@@ -26,10 +30,7 @@ export const purge = internalMutation({
 			.withIndex("by_user", (q) => q.eq("userId", userId))
 			.collect();
 		for (const desktop of desktops) await ctx.db.delete(desktop._id);
-		const workspaces = await ctx.db
-			.query("workspaces")
-			.withIndex("by_owner", (q) => q.eq("ownerId", userId))
-			.take(MAX_WORKSPACES);
+		const workspaces = await ownedWorkspaces(ctx, userId);
 		for (const workspace of workspaces) {
 			await dropWorkspace(ctx, workspace._id);
 		}
