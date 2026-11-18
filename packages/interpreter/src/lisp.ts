@@ -42,12 +42,12 @@ import {
 	Lambda,
 	Macro,
 } from "./func.ts";
+import { soleArg, tryParts } from "./forms.ts";
 import { Chain } from "./hooks.ts";
 import { hitch, Journal } from "./journal.ts";
 import {
 	assert,
 	Cell,
-	catchSym,
 	condSym,
 	Keyword,
 	type List,
@@ -494,8 +494,7 @@ export class Interp {
 		if (!this.hooks.call.isEmpty) yield* this.guard(fn.name, []);
 		switch (fn) {
 			case quoteSym:
-				if (arg !== null && arg.cdr === null) return arg.car;
-				throw new EvalException("bad quote", x);
+				return soleArg(x, "quote");
 			case prognSym:
 				return new Tail(
 					arg !== null && arg.cdr === null
@@ -507,19 +506,15 @@ export class Interp {
 				return new Tail(yield* this.evalCond(arg, env), env);
 			case setqSym:
 				return yield* this.evalSetQ(arg, env);
-			case trySym: {
-				const [nx, nenv] = yield* this.evalTry(arg, env);
-				return new Tail(nx, nenv);
-			}
+			case trySym:
+				return yield* this.evalTry(x, env);
 			case lambdaSym:
 				return this.compile(arg, env, Closure.make);
 			case macroSym:
 				if (env !== null) throw new EvalException("nested macro", x);
 				return this.compile(arg, null, Macro.make);
 			case quasiquoteSym:
-				if (arg !== null && arg.cdr === null)
-					return new Tail(qqExpand(arg.car), env);
-				throw new EvalException("bad quasiquote", x);
+				return new Tail(qqExpand(soleArg(x, "quasiquote")), env);
 			default:
 				throw new EvalException("bad keyword", fn);
 		}
@@ -635,40 +630,20 @@ export class Interp {
 		return null;
 	}
 
-	private *evalTry(arg: List, env: List): Eval<[unknown, List]> {
-		if (arg === null) throw new EvalException("bad try", arg);
-		const bodyForm = arg.car;
-		const rest = cdrCell(arg);
-		if (rest === null || rest.cdr !== null)
-			throw new EvalException("try: exactly one catch clause expected", arg);
-		const clause = rest.car;
-		if (!(clause instanceof Cell) || clause.car !== catchSym)
-			throw new EvalException("try: catch clause expected", clause);
-		const catchRest = cdrCell(clause);
-		if (catchRest === null)
-			throw new EvalException("try: catch variable expected", clause);
-		const params = catchRest.car;
-		if (!(params instanceof Cell) || params.cdr !== null)
-			throw new EvalException(
-				"try: catch expects exactly one variable",
-				params,
-			);
-		const handlerBody = cdrCell(catchRest);
-
+	private *evalTry(x: Cell, env: List): Eval {
+		const { body, handler } = tryParts(x);
 		try {
-			return [qqQuote(yield* this.evalGen(bodyForm, env)), env];
+			return yield* this.evalGen(body, env);
 		} catch (ex) {
 			if (!(ex instanceof EvalException)) throw ex;
-			const handler = this.compile(
-				new Cell(params, handlerBody),
-				env,
-				Closure.make,
-			);
-			assert(handler instanceof Closure);
-			const frame = handler.makeFrame(new Cell(null, null));
+			const closure =
+				handler instanceof Lambda
+					? Closure.makeFrom(handler, env)
+					: this.compile(handler, env, Closure.make);
+			const frame = closure.makeFrame(new Cell(null, null));
 			frame[0] = ex.value;
-			const newEnv = new Cell(frame, handler.env);
-			return [yield* this.evalProgN(handler.body, newEnv), newEnv];
+			const inner = new Cell(frame, env);
+			return new Tail(yield* this.evalProgN(closure.body, inner), inner);
 		}
 	}
 
