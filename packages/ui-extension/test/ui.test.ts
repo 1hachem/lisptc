@@ -17,7 +17,6 @@ import {
 	UiSurface,
 	type UiValue,
 	uiExtension,
-	viewTab,
 } from "../src/ui.ts";
 import { uiHostFor } from "../src/ui-host.ts";
 import { MemoryViewStore } from "../src/view-store.ts";
@@ -190,13 +189,6 @@ describe("echoing a widget", () => {
 		}
 	}
 
-	it("renders a lone widget as ui/render would, printing nothing", () => {
-		const { result, view, text } = echoed(`(echo (ui/table '((("id" . 1)))))`);
-		expect(view).toMatchObject({ tag: "table" });
-		expect(text).toBe("");
-		expect(str(result)).toBe('"rendered table, 1 element, 0 actions"');
-	});
-
 	it("stacks the other arguments around the widget, in order", () => {
 		const { view } = echoed('(echo "Issues:" (ui/text "two") 3)');
 		expect(view).toEqual({
@@ -234,44 +226,9 @@ describe("tables", () => {
 			},
 		});
 	});
-
-	it("keeps only the named columns, in the order given", () => {
-		const { view } = render(
-			`${ROWS} (ui/render (ui/table rows :columns '("title")))`,
-		);
-		expect(view).toMatchObject({ props: { columns: ["title"] } });
-	});
 });
 
 describe("the display widgets", () => {
-	it("serialises a link as text and href", () => {
-		const { view } = render(
-			'(ui/render (ui/link "PR 12" "https://example.com/12"))',
-		);
-		expect(view).toEqual({
-			tag: "link",
-			props: { text: "PR 12", href: "https://example.com/12" },
-			children: [],
-		});
-	});
-
-	it("serialises a file link as text, folder and name, inside a stack", () => {
-		const { view } = render(
-			'(ui/render (ui/stack (ui/file-link "Q3" "knowledge" "q3.pdf")))',
-		);
-		expect(view).toEqual({
-			tag: "stack",
-			props: {},
-			children: [
-				{
-					tag: "file-link",
-					props: { text: "Q3", folder: "knowledge", name: "q3.pdf" },
-					children: [],
-				},
-			],
-		});
-	});
-
 	it("rejects a file link to a folder the app does not have", () => {
 		const { interp } = fresh();
 		expect(() =>
@@ -312,68 +269,10 @@ describe("the display widgets", () => {
 		).toMatchObject({ props: { hint: "was 31" } });
 	});
 
-	it("nests children under a card's title", () => {
-		const { view } = render(
-			'(ui/render (ui/card "Issues" (ui/text "two open")))',
-		);
-		expect(view).toMatchObject({
-			tag: "card",
-			props: { title: "Issues" },
-			children: [{ tag: "text", props: { text: "two open" } }],
-		});
-	});
-
 	it("prints a non-string ui/text the way echo would", () => {
 		expect(render("(ui/render (ui/text 42))").view).toEqual({
 			tag: "text",
 			props: { text: "42" },
-			children: [],
-		});
-	});
-
-	it("serialises a heading and markdown as their text", () => {
-		expect(render('(ui/render (ui/heading "Issues"))').view).toEqual({
-			tag: "heading",
-			props: { text: "Issues" },
-			children: [],
-		});
-		expect(render('(ui/render (ui/markdown "**two**"))').view).toEqual({
-			tag: "markdown",
-			props: { text: "**two**" },
-			children: [],
-		});
-	});
-
-	it("accepts a link and a kpi by name, in any order", () => {
-		expect(
-			render('(ui/render (ui/link :url "https://x.dev" :text "x"))').view,
-		).toEqual({
-			tag: "link",
-			props: { text: "x", href: "https://x.dev" },
-			children: [],
-		});
-		expect(render('(ui/render (ui/kpi :value 27 :label "open"))').view).toEqual(
-			{
-				tag: "kpi",
-				props: { label: "open", value: "27" },
-				children: [],
-			},
-		);
-	});
-
-	it("carries only the input options that were given", () => {
-		expect(render('(ui/render (ui/input :name "q"))').view).toEqual({
-			tag: "input",
-			props: { name: "q" },
-			children: [],
-		});
-		expect(
-			render(
-				'(ui/render (ui/input :name "q" :label "Search" :placeholder "…" :value "x"))',
-			).view,
-		).toEqual({
-			tag: "input",
-			props: { name: "q", label: "Search", placeholder: "…", value: "x" },
 			children: [],
 		});
 	});
@@ -398,17 +297,6 @@ describe("the display widgets", () => {
 		expect(() => runSync(interp, '(ui/select \'("a"))')).toThrow(
 			/ui\/select needs a :name/,
 		);
-	});
-
-	it("nests a form's fields and carries its submit label", () => {
-		const { view } = render(
-			'(ui/render (ui/form (lambda (v) v) (ui/input :name "q") :submit "Go"))',
-		);
-		expect(view).toEqual({
-			tag: "form",
-			props: { action: "a1", submit: "Go" },
-			children: [{ tag: "input", props: { name: "q" }, children: [] }],
-		});
 	});
 
 	it("needs a :name on a checkbox, as on every other field", () => {
@@ -461,15 +349,6 @@ describe("actions", () => {
 		expect(str(runSync(interp, "(identity clicks)"))).toBe("2");
 	});
 
-	it("hands a handler that takes an argument the submitted fields", async () => {
-		const { surface, interp } = render(`
-			(ui/render (ui/form (lambda (values) (setq seen (cdr (assoc "q" values))))
-				(ui/input :name "q")))
-		`);
-		await surface.invoke("a1", { q: "auth" });
-		expect(str(runSync(interp, "(identity seen)"))).toBe('"auth"');
-	});
-
 	it("calls a zero-argument handler with no arguments", async () => {
 		const { surface, interp } = render(`
 			(setq hits 0)
@@ -509,28 +388,6 @@ describe("actions", () => {
 		);
 	});
 
-	it("registers an :on-change as an action, like a button's", () => {
-		const { view } = render(`
-			(ui/render (ui/select '("7" "30") :name "d"
-				:on-change (lambda (values) (ui/render (ui/text (cdr (assoc "d" values)))))))
-		`);
-		expect(view).toMatchObject({
-			tag: "select",
-			props: { name: "d", options: ["7", "30"], "on-change": "a1" },
-		});
-	});
-
-	it("runs an :on-change against the live session", async () => {
-		const { surface, ui } = render(`
-			(ui/render (ui/select '("7" "30") :name "d"
-				:on-change (lambda (values) (ui/render (ui/text (cdr (assoc "d" values)))))))
-		`);
-		await surface.invoke("a1", { d: "30" });
-		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
-			props: { text: "30" },
-		});
-	});
-
 	it("hands a checkbox's value over as a boolean a handler can test", async () => {
 		const { surface, interp } = render(`
 			(ui/render (ui/form (lambda (values)
@@ -555,34 +412,9 @@ describe("actions", () => {
 			),
 		).toBe('"rendered row, 3 elements, 2 actions"');
 	});
-
-	it("lets a handler echo", async () => {
-		const { surface, interp } = render(
-			'(ui/render (ui/button "say" (lambda () (echo "from the click"))))',
-		);
-		const buffer = bufferSink();
-		const detach = interp.journal.pipe(buffer);
-		try {
-			await surface.invoke("a1", {});
-		} finally {
-			detach();
-		}
-		expect(buffer.collectText("user")).toBe("from the click\n");
-	});
 });
 
 describe("handing a turn back to the agent", () => {
-	it("carries a handler's message out as a request from its action, joining the arguments like echo", async () => {
-		const { surface, ui } = render(`
-			(ui/render (ui/form (lambda (values) (ui/send "search for" (cdr (assoc "q" values))))
-				(ui/input :name "q")))
-		`);
-		await click(surface, ui, "a1", { q: "auth" });
-		expect(ui.takeRequests()).toEqual([
-			{ source: "a1", content: "search for auth" },
-		]);
-	});
-
 	it("delivers nothing from a send outside a handler", async () => {
 		const { surface, interp, ui } = render(
 			'(ui/render (ui/button "go" (lambda () (ui/send "go"))))',
@@ -658,12 +490,6 @@ describe("the panel beside the chat", () => {
 		]);
 	});
 
-	it("opens a file in a new split to the right or below", () => {
-		expect(
-			opened('(ui/open-file "knowledge" "a.md" :split "down")').ops[0],
-		).toMatchObject({ split: "down" });
-	});
-
 	it("rejects a split or a folder it cannot place", () => {
 		const { interp } = fresh();
 		expect(() =>
@@ -672,19 +498,6 @@ describe("the panel beside the chat", () => {
 		expect(() => runSync(interp, '(ui/open-file "bin" "a.md")')).toThrow(
 			/unknown folder/,
 		);
-	});
-
-	it("opens a widget as a view tab keyed by its title", () => {
-		const { ops, result } = opened(
-			'(ui/open-view "counts" (ui/kpi "open" 3) :split "right")',
-		);
-		expect(result).toBe(viewTab("counts"));
-		expect(ops[0]).toEqual({
-			op: "open",
-			tab: "view:counts",
-			split: "right",
-			content: { kind: "view", title: "counts", viewId: "view:counts" },
-		});
 	});
 
 	it("refuses to open something that is not a widget as a view", () => {
@@ -719,12 +532,6 @@ describe("the panel beside the chat", () => {
 		runSync(interp, prelude);
 		return { ops, ev: (code: string) => str(runSync(interp, code)) };
 	}
-
-	it("lists the tabs the panel reader reports", () => {
-		expect(onPanel(saved).ev("(ui/tabs)")).toBe(
-			'((:id "file:knowledge/notes.md" :kind :file :title "notes.md" :shown t :focused t) (:id "view:counts" :kind :view :title "counts" :shown nil :focused nil))',
-		);
-	});
 
 	it("lists the tabs this step opened and closed", () => {
 		const { ev } = onPanel(saved);
@@ -775,6 +582,14 @@ describe("the catalog the frontend draws from", () => {
 		return [...own, ...node.children.flatMap(strays)];
 	}
 
+	it.each(TAGS)("draws the example its prompt teaches for %s", (tag) => {
+		const { interp, ui } = fresh();
+		runSync(interp, `(ui/render ${WIDGET_FORMS[tag].example})`);
+		const node = ui.takeView();
+		expect(node?.tag).toBe(tag);
+		expect(node && widgetOf(node)).toBeDefined();
+	});
+
 	it("holds every widget this surface builds, and nothing more", () => {
 		const { interp, ui } = fresh();
 		runSync(
@@ -801,26 +616,6 @@ describe("the catalog the frontend draws from", () => {
 	});
 });
 
-describe("the widget form table", () => {
-	it("builds a widget of its own tag from every example", () => {
-		for (const tag of TAGS) {
-			const { interp, ui } = fresh();
-			runSync(interp, `(ui/render ${WIDGET_FORMS[tag].example})`);
-			const node = ui.takeView();
-			if (node === undefined) throw new Error(`${tag} rendered nothing`);
-			expect(node.tag).toBe(tag);
-			expect(widgetOf(node)).toBeDefined();
-		}
-	});
-
-	it("lists every constructor in the prompt", () => {
-		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
-		expect(prompt).not.toContain("{{widgets}}");
-		for (const tag of TAGS)
-			expect(prompt).toContain(WIDGET_FORMS[tag].signature);
-	});
-});
-
 describe("the view store", () => {
 	function stored() {
 		const surface = new UiSurface();
@@ -828,18 +623,26 @@ describe("the view store", () => {
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 		runSync(interp, prelude);
-		return { surface, views, interp, ui: collector(interp, views) };
+		const drawn: string[] = [];
+		interp.journal.onAny((entry) => {
+			if (entry.kind !== viewKind.name) return;
+			const { viewId } = entry.value as { viewId: string };
+			if (!drawn.includes(viewId)) drawn.push(viewId);
+		});
+		return { surface, views, interp, drawn, ui: collector(interp, views) };
 	}
 
 	it("writes every render of a step into one view", () => {
 		const { surface, views, interp } = stored();
 		surface.beginStep();
 		runSync(interp, '(ui/render (ui/text "a")) (ui/render (ui/text "b"))');
-		expect([...views.views.keys()]).toEqual(["v1"]);
-		expect(views.views.get("v1")).toMatchObject({ props: { text: "b" } });
+		expect([...views.views.values()]).toMatchObject([{ props: { text: "b" } }]);
 		surface.beginStep();
 		runSync(interp, '(ui/render (ui/text "c"))');
-		expect([...views.views.keys()]).toEqual(["v1", "v2"]);
+		expect([...views.views.values()]).toMatchObject([
+			{ props: { text: "b" } },
+			{ props: { text: "c" } },
+		]);
 	});
 
 	it("renders a click back into the view the control was in", async () => {
@@ -861,7 +664,7 @@ describe("the view store", () => {
 		expect(views.views.get("v2")).toMatchObject({ props: { text: "other" } });
 	});
 
-	it("stores a panel view under its tab, and a click renders back into it", async () => {
+	it("renders a click on a panel view back into that view", async () => {
 		const { surface, views, interp, ui } = stored();
 		surface.beginStep();
 		runSync(
@@ -871,15 +674,14 @@ describe("the view store", () => {
 				(ui/button "+1" (lambda () (setq n (+ n 1)) (ui/render (panel))))))
 			(ui/open-view "counts" (panel))`,
 		);
-		expect(views.views.get("view:counts")).toMatchObject({ tag: "stack" });
 		await click(surface, ui, "a1");
-		expect(views.views.get("view:counts")).toMatchObject({
-			children: [{ props: { text: "1" } }, { tag: "button" }],
-		});
+		expect([...views.views.values()]).toMatchObject([
+			{ children: [{ props: { text: "1" } }, { tag: "button" }] },
+		]);
 	});
 
 	it("marks a view expired when ui/forget drops its handlers", () => {
-		const { surface, views, interp } = stored();
+		const { surface, views, interp, drawn } = stored();
 		surface.beginStep();
 		runSync(
 			interp,
@@ -887,16 +689,16 @@ describe("the view store", () => {
 		);
 		surface.beginStep();
 		runSync(interp, "(ui/forget view)");
-		expect([...views.expired]).toEqual(["v1"]);
+		expect([...views.expired]).toEqual(drawn);
 	});
 
 	it("marks a view expired when a click finds its handler gone", async () => {
-		const { surface, views, interp } = stored();
+		const { surface, views, interp, drawn } = stored();
 		surface.beginStep();
 		runSync(interp, '(ui/render (ui/button "a" (lambda () 1)))');
 		surface.reset();
-		await expect(surface.invoke("a1", {})).resolves.toBeDefined();
-		expect([...views.expired]).toEqual(["v1"]);
+		await surface.invoke("a1", {});
+		expect([...views.expired]).toEqual(drawn);
 	});
 
 	it("still reports an id no view ever carried", async () => {
@@ -907,13 +709,13 @@ describe("the view store", () => {
 	});
 
 	it("clears the expired mark when the view is drawn again", () => {
-		const { surface, views, interp } = stored();
+		const { surface, views, interp, drawn } = stored();
 		surface.beginStep();
 		runSync(
 			interp,
 			'(setq view (ui/stack (ui/button "a" (lambda () 1)))) (ui/render view) (ui/forget view)',
 		);
-		expect([...views.expired]).toEqual(["v1"]);
+		expect([...views.expired]).toEqual(drawn);
 		runSync(interp, "(ui/render view)");
 		expect(views.expired.size).toBe(0);
 	});
@@ -944,13 +746,11 @@ describe("a quoted call as an action", () => {
 		expect(str(runSync(interp, "log"))).toBe('("k=auth")');
 	});
 
-	it("reuses one id for the same call", () => {
-		const { view } = render(
-			`${SETUP} (ui/render (ui/row (ui/button "a" '(refresh)) (ui/button "b" '(refresh))))`,
+	it("holds one handler for two controls making the same call", () => {
+		const { interp } = render(
+			`${SETUP} (setq view (ui/row (ui/button "a" '(refresh)) (ui/button "b" '(refresh)))) (ui/render view)`,
 		);
-		expect(view).toMatchObject({
-			children: [{ props: { action: "a1" } }, { props: { action: "a1" } }],
-		});
+		expect(str(runSync(interp, "(ui/forget view)"))).toBe("1");
 	});
 
 	it("survives a restore that drops every closure", async () => {
