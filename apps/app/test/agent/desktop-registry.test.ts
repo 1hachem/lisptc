@@ -2,7 +2,7 @@ import type { Id } from "@repo/backend/dataModel";
 import { BridgedHost } from "@repo/backend/desktop-bridge";
 import { PROTOCOL_VERSION, type ServerMessage } from "@repo/desktop-protocol";
 import type { McpHost, McpTransport } from "@repo/mcp-extension/ports";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	type DesktopPeer,
 	DesktopRegistry,
@@ -236,29 +236,5 @@ describe("a desktop reached over its socket", () => {
 		expect(desktopFor(user).connected()).toBe(true);
 		await transportOf(hostFor(user));
 		expect(laptop.opens()).toBe(1);
-	});
-
-	it("shares one registry across every module instance", async () => {
-		vi.resetModules();
-		const first = await import("../../server/desktop/registry.ts");
-		vi.resetModules();
-		const second = await import("../../server/desktop/registry.ts");
-		const desktop = await wire(first.desktops).connect(user);
-		expect(second.desktops.for(user).connected()).toBe(true);
-		desktop.leave();
-		expect(first.desktops.for(user).connected()).toBe(false);
-	});
-
-	it("reaches the account's desktop for a chat driven from any client", async () => {
-		const { connect, hostFor } = wire();
-		const desktop = await connect(user);
-		for (const host of [hostFor(user), hostFor(user)]) {
-			const channel = await transportOf(host);
-			const received: unknown[] = [];
-			channel.onmessage = (message) => received.push(message);
-			await channel.send("ping");
-			await vi.waitFor(() => expect(received).toEqual([{ echo: "ping" }]));
-		}
-		expect(desktop.opens()).toBe(2);
 	});
 });

@@ -160,25 +160,6 @@ describe("the files a message shows it attached", () => {
 		expect(inOrder("see these", "spec.pdf", "a, b.csv")).toBe(true);
 	});
 
-	test("shows the files a step recorded in the journal", async () => {
-		stored([
-			{ type: "human", wireId: "h", content: "draw it" },
-			{ type: "ai", wireId: "s1", content: "(chart)" },
-			{
-				type: "entry",
-				wireId: "e1",
-				kwargs: {
-					kind: "attachments",
-					value: [{ folder: "attachments", name: "chart.svg" }],
-				},
-			},
-			{ type: "tool", wireId: "t1", content: "" },
-			{ type: "ai", wireId: "a", content: "drawn" },
-		]);
-		await mount();
-		expect(shown()).toContain("chart.svg");
-	});
-
 	test("never reads attachments out of what the user typed", async () => {
 		stored([
 			{

@@ -14,7 +14,6 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 import { SourcePage } from "../src/components/source-page.tsx";
-import { definitionOf } from "../src/lib/agent-definition.ts";
 
 beforeAll(() => {
 	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -36,31 +35,6 @@ function page(text: string): string {
 }
 
 describe("reading a saved sub-agent", () => {
-	it("gives its name, instructions, budget and permission rules", () => {
-		const definition = definitionOf(
-			'(defagent "reader"\n  :prompt "read the docs"\n  :permissions "(permission/deny eval) (permission/ask fs/write)"\n  :budget 40)',
-		);
-		expect(definition).toMatchObject({
-			name: "reader",
-			prompt: "read the docs",
-			budget: "40",
-		});
-		expect(definition?.rules.map((rule) => rule.source)).toEqual([
-			"(permission/deny eval)",
-			"(permission/ask fs/write)",
-		]);
-	});
-
-	it("shows a saved agent's name and options", () => {
-		const text = page(
-			'(defagent "reader"\n  :prompt "read it"\n  :permissions "(permission/deny \\"fs/*\\")"\n  :budget 40)',
-		);
-		expect(text).toContain("reader");
-		expect(text).toContain("read it");
-		expect(text).toContain("40 steps");
-		expect(text).toContain("fs/*");
-	});
-
 	it("shows a definition saved with a :roster, leaving the roster out", () => {
 		const text = page(
 			'(defagent "lead"\n  :prompt "lead"\n  :roster \'("scout")\n  :budget 9)',

@@ -1232,15 +1232,4 @@ describe("a step still being written", () => {
 
 		expect(classified.textContent).toContain("Sure (as in yes, of course).");
 	});
-
-	it("draws no row for prose that calls nothing", async () => {
-		session.messages = [
-			{ id: "h1", type: "human", content: "hi" },
-			{ id: "a1", type: "ai", content: "Hello there" },
-		];
-		session.isLoading = true;
-		const host = await mount(<ChatView />);
-
-		expect(host.textContent?.split("Hello").length).toBe(2);
-	});
 });

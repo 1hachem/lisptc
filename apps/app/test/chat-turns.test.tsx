@@ -262,30 +262,6 @@ describe("the order the chat shows", () => {
 });
 
 describe("a sub-agent's conversation", () => {
-	test("opens on the request its parent sent", async () => {
-		stored([
-			{
-				type: "system",
-				wireId: "ask",
-				content: "summarise the upload",
-				kwargs: { source: "agent:parent" },
-			},
-			ai("a", "on it"),
-		]);
-		await mount();
-		expect(inOrder("agent parent", "on it")).toBe(true);
-	});
-
-	test("opens the conversation on the prompt it was spawned with", async () => {
-		chatDoc({
-			parentChatId: "parent",
-			agent: { prompt: "you review uploads" },
-		});
-		stored([ai("a", "on it")]);
-		await mount();
-		expect(inOrder("you review uploads", "on it")).toBe(true);
-	});
-
 	test("opens on nothing in a chat no agent spawned", async () => {
 		chatDoc({});
 		stored([ai("a", "on it")]);

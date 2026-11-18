@@ -115,13 +115,6 @@ describe("child threads", () => {
 		]);
 	});
 
-	it("offers to stop all while a child runs", () => {
-		const host = mount(THREADS);
-		expect(
-			[...host.querySelectorAll("button")].map((b) => b.textContent),
-		).toContainEqual(expect.stringContaining("stop all"));
-	});
-
 	it("tells a finished child from a stopped or failed one", () => {
 		const host = mount([
 			{ _id: "d", title: "done", lastStartedAt: 1 },

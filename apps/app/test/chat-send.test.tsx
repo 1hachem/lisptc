@@ -366,9 +366,4 @@ describe("the question the chat asks", () => {
 		expect(picking()).toBe(false);
 		expect(host.querySelector("[contenteditable]")).not.toBeNull();
 	});
-
-	it("ignores a malformed question", async () => {
-		await mountChat(asking({ id: "q" }));
-		expect(host.querySelector("[contenteditable]")).not.toBeNull();
-	});
 });

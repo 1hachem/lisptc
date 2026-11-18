@@ -127,14 +127,6 @@ describe("recalling sent messages", () => {
 			["third", "second", "third", "", ""],
 		);
 	});
-
-	it("stops browsing once the recalled text is edited", () => {
-		const step = recall(history, null, "", "back");
-		expect(step?.text).toBe("third");
-		expect(
-			recall(history, step?.recalled ?? null, "third!", "back"),
-		).toBeNull();
-	});
 });
 
 describe("the sent history", () => {
@@ -176,6 +168,15 @@ describe("recalling sent messages in the composer", () => {
 		type(field, "");
 		press(field, "ArrowDown");
 		expect(textOf(field)).toBe("");
+	});
+
+	it("stops walking back once the recalled message is edited", () => {
+		const field = composer(history);
+		press(field, "ArrowUp");
+		expect(textOf(field)).toBe("third");
+		type(field, "third!");
+		press(field, "ArrowUp");
+		expect(textOf(field)).toBe("third!");
 	});
 
 	it("does nothing with no history", () => {
