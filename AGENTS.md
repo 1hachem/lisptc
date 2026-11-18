@@ -354,9 +354,20 @@ chat loop, an HTTP route, a Convex function through `api`, the LSP or MCP
 protocol, with what its caller sees asserted. A test that calls a TypeScript
 function directly is neither.
 
+A test checks what a human would check, at the level they see it, so the code
+under it can change freely. The preferred shape is declarative: give the
+system configuration or Lisp source, and assert its outputs and effects. Use
+it whenever the surface allows. A test earns its place as an edge case, a
+foundational behaviour or a regression. A happy path whose output restates its
+input is too trivial to keep. Core language semantics through the interpreter,
+arithmetic included, are foundational and never trivial. A route that merely
+answers, a status or an acknowledgement, is left to end-to-end checks on the
+pull request preview.
+
 `task check:tests` puts each test case a PR adds or changes before Jev, and
-fails one that is heavily mocked, set up so it cannot fail, or pins the
-implementation. CI runs it on every pull request that touches a test.
+fails one that is heavily mocked, set up so it cannot fail, pins the
+implementation, or is too trivial. CI runs it on every pull request that
+touches a test.
 
 **A test pins behaviour, never the implementation.** It drives what a caller
 drives: Lisp through the REPL, a module through its exports, a component
@@ -367,7 +378,7 @@ behaviour leaves every test green.
 
 So a test does not assert the wording of a prompt or a message, a field or id
 the caller never reads, a raw row, a `data-*` attribute, a class name, the shape
-of the markup, or what a fake was handed and how often. It does not compare a
+of the markup, or that a mock, spy or callback was called and with what. It does not compare a
 constant with itself, or compute the expected value the way the code does. When
 a behaviour can only be seen through one of those, it lacks a public surface,
 and that is what to add. A test's title says what its body checks.
