@@ -24,6 +24,7 @@ import { AnimatedFavicon } from "./animated-favicon.tsx";
 import { BinPage } from "./bin-page.tsx";
 import { ChatSurface } from "./chat-surface.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
+import { GraphPage } from "./graph-page.tsx";
 import { MemoryPage } from "./memory-page.tsx";
 import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
@@ -157,6 +158,7 @@ const PAGE_TABS: Record<
 	memory: (workspaceId, id) => (
 		<MemoryPage workspaceId={workspaceId} memoryKey={id} />
 	),
+	graph: (workspaceId, id) => <GraphPage workspaceId={workspaceId} name={id} />,
 	permission: (workspaceId, id) => (
 		<PermissionPage workspaceId={workspaceId} rule={Number(id)} />
 	),

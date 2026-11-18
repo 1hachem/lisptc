@@ -40,6 +40,7 @@
     "@repo/intent-extension": "workspace:*",
     "@repo/interpreter": "workspace:*",
     "@repo/introspection-extension": "workspace:*",
+    "@repo/kg-extension": "workspace:*",
     "@repo/journal-catalog": "workspace:*",
     "@repo/knowledge-extension": "workspace:*",
     "@repo/language-service": "workspace:*",

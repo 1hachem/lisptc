@@ -3,6 +3,7 @@ export const SIDEBAR_FOLDERS = [
 	"memories",
 	"permissions",
 	"knowledge",
+	"graphs",
 	"attachments",
 	"bin",
 	"sub-agents",
@@ -47,6 +48,7 @@ export type SidebarSides = Readonly<
 export const RIGHT_BY_DEFAULT: readonly SidebarEntry[] = [
 	"memories",
 	"permissions",
+	"graphs",
 	"sub-agents",
 	"triggers",
 	"tasks",

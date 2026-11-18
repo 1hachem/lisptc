@@ -16,6 +16,7 @@ describe("splitting the entries between the two sidebars", () => {
 		expect(sides.right).toEqual([
 			"memories",
 			"permissions",
+			"graphs",
 			"sub-agents",
 			"triggers",
 			"tasks",

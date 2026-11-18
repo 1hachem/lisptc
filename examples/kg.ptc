@@ -1,0 +1,40 @@
+=====================================================================
+lisptc — knowledge graphs: facts with evidence, rules, conflicts
+
+Run me with the interactive REPL:
+  pnpm repl
+which wires the kg extension with a file-backed store, one .kg.ptc
+file per graph. Point it somewhere else with LISPTC_KG_DIR.
+=====================================================================
+(echo "=== 1. a graph, a predicate with a key, facts with evidence ===")
+(try
+  (kg/drop "example")
+  (catch (e)
+    nil))
+(kg/new "example" :doc "a calendar, times in minutes after midnight")
+(predicate starts (event :key) (minute :type number))
+(fact (starts dentist 540) :basis observed :from "mail.eml" :at (:line 4) :quote "at 9:00")
+(fact (travel dentist 30) :basis user)
+
+(echo "=== 2. a backward rule that computes ===")
+(<- (leave ?e ?at) (starts ?e ?t) (travel ?e ?m) (is ?at (- ?t ?m)))
+(echo (?- (leave dentist ?at)))
+
+(echo "=== 3. forward rules derive, and stay in step ===")
+(fact (parent tom bob))
+(fact (parent bob ann))
+(defrule anc (parent ?x ?y) => (anc ?x ?y))
+(defrule anc-step (anc ?x ?y) (parent ?y ?z) => (anc ?x ?z))
+(echo (?all ?d (anc tom ?d)))
+(retract (parent bob ann))
+(echo (?all ?d (anc tom ?d)))
+
+(echo "=== 4. a conflict on a key keeps both facts out ===")
+(fact (starts dentist 600) :basis user :note "said on the phone")
+(echo (?- (leave dentist ?at)))
+(echo (length (kg/conflicts)))
+(retract (starts dentist 540))
+(echo (?- (leave dentist ?at)))
+
+(echo "=== 5. why ===")
+(echo (why (leave dentist ?at)))

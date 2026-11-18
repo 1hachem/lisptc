@@ -422,7 +422,7 @@ const stepCodec: StateCodec<Step> = {
 	},
 };
 
-interface Noted {
+export interface Noted {
 	readonly memories: readonly FiredMemory[];
 	readonly withheld: string;
 }
