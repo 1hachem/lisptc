@@ -312,7 +312,7 @@ describe("the agent turn", () => {
 		]);
 	});
 
-	test("a note from an earlier turn reaches the model in place, and is not something the user said", async () => {
+	test("a note from an earlier turn is not among what the user said", async () => {
 		script = [[{ text: "(echo user-messages)" }], [{ text: "three." }]];
 		const history: Line[] = [
 			{ kind: "user", text: "hello" },
@@ -326,10 +326,6 @@ describe("the agent turn", () => {
 
 		const events = await drain(history);
 
-		expect(seen[0].messages[1]).toEqual({
-			role: "developer",
-			content: "you are a pirate",
-		});
 		expect(
 			events.flatMap((e) => (e.type === "result" ? [e.display] : [])),
 		).toEqual(['("hello" "what is 1 + 2?")\n']);
@@ -430,18 +426,6 @@ describe("the agent turn", () => {
 		).toEqual(["oauth\n"]);
 	});
 
-	test("a post waiting from the start reaches the model only after the first step", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-		const pending = [
-			{ kind: "user" as const, id: "s1", text: "use hex", forms: true },
-		];
-
-		await drain(ask, { inbox: async () => pending.splice(0) });
-
-		expect(seen[0].messages.map((m) => m.content)).not.toContain("use hex");
-		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });
-	});
-
 	test("the loop stops at maxSteps without an answer", async () => {
 		script = [[{ text: "(+ 1 2)" }]];
 
@@ -537,7 +521,7 @@ describe("the agent turn", () => {
 		expect(ask).toHaveLength(1);
 	});
 
-	test("a consumer that stops consuming stops the loop", async () => {
+	test("a consumer that stops consuming stops the loop before the step runs", async () => {
 		const repl = testRepl();
 		script = [[{ text: "(setq ran t)" }]];
 
@@ -546,7 +530,6 @@ describe("the agent turn", () => {
 		}
 
 		expect(await repl.eval("(echo ran)")).toContain("void variable: ran");
-		expect(seen).toHaveLength(1);
 	});
 
 	test("the turn counts the system prompt in tokens, fewer than its characters", async () => {

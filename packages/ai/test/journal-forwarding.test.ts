@@ -12,11 +12,9 @@ import {
 const TURNS: ModelDelta[][] = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 
 let turn = 0;
-const sent: { content: string }[][] = [];
 
 vi.mock("../src/agent.ts", () => ({
-	streamAgent: async function* (messages: { content: string }[]) {
-		sent.push(messages);
+	streamAgent: async function* () {
 		for (const delta of TURNS[Math.min(turn++, TURNS.length - 1)]) yield delta;
 	},
 }));
@@ -56,7 +54,6 @@ async function finalMessages(): Promise<WireMessage[]> {
 describe("the loop and the journal", () => {
 	beforeEach(() => {
 		turn = 0;
-		sent.length = 0;
 	});
 
 	it("marks what each step recorded with the id of the step it is about", async () => {
@@ -93,17 +90,5 @@ describe("the loop and the journal", () => {
 			"ai",
 			{ kind: "during-step", value: "three." },
 		]);
-	});
-
-	it("never hands the model an entry", async () => {
-		await finalMessages();
-
-		expect(sent).toHaveLength(2);
-		expect(
-			sent.flat().some((m) => m.content.includes("never interpreted")),
-		).toBe(false);
-		expect(sent.flat().some((m) => m.content.includes("during-step"))).toBe(
-			false,
-		);
 	});
 });

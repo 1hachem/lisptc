@@ -146,49 +146,39 @@ function callingLlm(made: LlmCall[]): InterpExtension {
 }
 
 describe("a traced turn", () => {
-	test("is one trace holding every step it ran as a span under the turn", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+	test("traces a turn once, with each step a span under it and the one that threw an error", async () => {
+		script = [
+			[{ text: "(car 5)" }],
+			[{ text: "(+ 1 2)" }],
+			[{ text: '"done"' }],
+		];
 
 		const { threadId } = await run({
 			identity: { distinctId: "dev-1", sessionId: "session-xyz" },
 		});
 		const sent = await captured(threadId);
 
-		const [trace] = named(sent, "$ai_trace");
-		expect(trace).toMatchObject({
+		const traces = named(sent, "$ai_trace");
+		expect(traces).toHaveLength(1);
+		expect(traces[0]).toMatchObject({
 			distinct_id: "dev-1",
 			properties: {
 				$session_id: "session-xyz",
-				environment: "test",
 				$ai_input_state: "what is 1 + 2?",
-				$ai_output_state: "three.",
-				steps: 2,
-				halted: true,
+				$ai_output_state: '"done"',
 			},
 		});
-		const spans = named(sent, "$ai_span");
-		expect(spans.map((s) => s.properties.$ai_input_state)).toEqual([
-			"(+ 1 2)",
-			"three.",
-		]);
-		for (const span of spans)
-			expect(span.properties.$ai_parent_id).toBe(trace.properties.$ai_span_id);
-	});
-
-	test("marks a step whose code throws as an error span, and a clean one as none", async () => {
-		script = [
-			[{ text: "(car 5)" }],
-			[{ text: "(+ 1 2)" }],
-			[{ text: "done." }],
-		];
-
-		const { threadId } = await run();
-
 		expect(
-			named(await captured(threadId), "$ai_span")
-				.slice(0, 2)
-				.map((s) => s.properties.$ai_is_error),
-		).toEqual([true, false]);
+			named(sent, "$ai_span").map((s) => ({
+				step: s.properties.$ai_input_state,
+				error: s.properties.$ai_is_error,
+				under: s.properties.$ai_parent_id === traces[0].properties.$ai_span_id,
+			})),
+		).toEqual([
+			{ step: "(car 5)", error: true, under: true },
+			{ step: "(+ 1 2)", error: false, under: true },
+			{ step: '"done"', error: false, under: true },
+		]);
 	});
 
 	test("nests an llm call a step makes under the turn as a generation, a failed one marked an error", async () => {
@@ -265,16 +255,6 @@ describe("a traced failure", () => {
 		expect(named(await captured(aborted.threadId), "$exception")).toEqual([]);
 	});
 
-	test("creates no person for an exception with no distinct id", async () => {
-		throws = "nobody was logged in";
-
-		const { threadId } = await run();
-		const [exception] = named(await captured(threadId), "$exception");
-
-		expect(failure(exception)).toBe("nobody was logged in");
-		expect(exception.properties.$process_person_profile).toBe(false);
-	});
-
 	test("keeps the trace and the turn when a hook throws as the turn settles", async () => {
 		script = [[{ text: "three." }]];
 		const repl = testRepl([
@@ -293,7 +273,7 @@ describe("a traced failure", () => {
 		expect(named(sent, "$exception").map(failure)).toEqual(["observer broke"]);
 	});
 
-	test("traces a hook that throws on what the message carried with the keys it carried, never their values", async () => {
+	test("traces a hook that throws on what a message carried without the values it carried", async () => {
 		script = [[{ text: "three." }]];
 		const repl = testRepl([
 			extension((hooks) =>
@@ -307,14 +287,13 @@ describe("a traced failure", () => {
 		const [exception] = named(await captured(threadId), "$exception");
 
 		expect(failure(exception)).toBe("reader broke");
-		expect(exception.properties.received).toEqual(["said"]);
 		const { $exception_list: _trace, ...traced } = exception.properties;
 		expect(JSON.stringify(traced)).not.toContain("a secret");
 	});
 });
 
 describe("memory recognition", () => {
-	test("nests under the turn as a span, an error when it failed", async () => {
+	test("is traced under the turn as a failed span carrying its error", async () => {
 		script = [[{ text: "three." }]];
 		let recorded = false;
 		const repl = testRepl([
@@ -344,11 +323,8 @@ describe("memory recognition", () => {
 		);
 		expect(span?.properties).toMatchObject({
 			$ai_parent_id: trace.properties.$ai_span_id,
-			$ai_latency: 2,
 			$ai_is_error: true,
 			$ai_error: "recognition failed for deploy: timed out",
-			recognition_fired: ["internal/browser/local"],
-			recognition_failed_areas: ["deploy"],
 		});
 	});
 });

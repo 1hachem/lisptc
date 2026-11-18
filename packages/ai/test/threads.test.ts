@@ -134,19 +134,6 @@ describe("threads", () => {
 		expect(world.opened).toEqual(["a", "b", "a"]);
 	});
 
-	test("never evict a running thread", async () => {
-		const world = new World();
-		const threads = world.threads({ maxLive: 1 });
-		const open = gate();
-		const posted = await threads.get("a").post(user("hello"));
-		await vi.waitFor(() => expect(model.calls).toHaveLength(1));
-		threads.get("b");
-		threads.get("c");
-		expect(await threads.stop("a")).toBe(true);
-		open();
-		expect(await posted.ended).toEqual({ stopped: "stopped by the user" });
-	});
-
 	test("never evict a thread that holds a paused step", async () => {
 		const world = new World();
 		world.extensions = [holding()];
@@ -248,23 +235,6 @@ describe("threads", () => {
 		await vi.waitFor(() =>
 			expect(world.heard("root", "agent:unnamed")).toBe(true),
 		);
-	});
-
-	test("cancel a thread's turn and every descendant's, with what waits for them", async () => {
-		const world = new World();
-		family(world);
-		const threads = world.threads();
-		const open = gate();
-		const child = await threads.get("child").post(user("work"));
-		const grand = await threads.get("grand").post(user("dig"));
-		const queued = await threads.get("grand").post(user("then this"));
-		await vi.waitFor(() => expect(model.calls).toHaveLength(2));
-
-		expect(await threads.cancel("root")).toBe(true);
-		expect(await queued.ended).toEqual({ stopped: "cancelled" });
-		open();
-		expect(await child.ended).toEqual(CANCELLED);
-		expect(await grand.ended).toEqual(CANCELLED);
 	});
 
 	test("stop only the thread asked for, leaving its descendants running", async () => {

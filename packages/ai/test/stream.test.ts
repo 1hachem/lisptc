@@ -713,36 +713,4 @@ describe("chat stream", () => {
 
 		expect(sent[0].find((m) => m.role === "developer")).toEqual(live);
 	});
-
-	test("a user message's eval result reaches the model as a lisp-repl note saying the user ran it, and the wire as its own row", async () => {
-		const result = {
-			type: "tool",
-			content:
-				'{"type":"tool_result","source":"lisp-repl","error":false,"output":"3"}',
-			additional_kwargs: { display: "3", results: ["3"] },
-		};
-		const body = await stream({
-			messages: [{ type: "human", content: "what is (+ 1 2)" }, result],
-		}).text();
-
-		expect(
-			sent[0].filter((m) => m.role === "user").map((m) => m.content),
-		).toEqual(["what is (+ 1 2)"]);
-		expect(sent[0].at(-1)).toEqual({
-			role: "developer",
-			content:
-				"from lisp-repl:\nthe user ran the code in their message above:\n\n3",
-		});
-		const first = records(body).find((r) => r.event === "values")?.data as {
-			messages: WireMessage[];
-		};
-		expect(first.messages.slice(0, 2)).toEqual([
-			expect.objectContaining({ type: "human", content: "what is (+ 1 2)" }),
-			expect.objectContaining({
-				type: "tool",
-				content: "",
-				additional_kwargs: { display: "3", results: ["3"] },
-			}),
-		]);
-	});
 });

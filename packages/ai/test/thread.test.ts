@@ -166,7 +166,7 @@ describe("a thread", () => {
 		expect(world.overlapped).toBe(false);
 	});
 
-	test("hands a post made during a turn to its next step", async () => {
+	test("takes a post made during a turn into that turn, after the step it arrived in", async () => {
 		const world = new World();
 		const thread = world.thread();
 		const watched = new Watched(thread.watch());
@@ -184,7 +184,9 @@ describe("a thread", () => {
 				statuses(seen).includes("running") && statuses(seen).at(-1) === "idle",
 		);
 		expect(statuses(text)).toEqual(["idle", "running", "idle"]);
-		expect(model.calls[1].at(-1)).toMatchObject({ content: "use hex" });
+		const said = unprompted(world.stored).map((m) => m.content);
+		expect(said.indexOf("use hex")).toBeGreaterThan(said.indexOf("(+ 1 2)"));
+		expect(said.indexOf("use hex")).toBeLessThan(said.indexOf("three."));
 	});
 
 	test("starts a new turn for a post that arrives after the last step", async () => {
@@ -243,7 +245,7 @@ describe("a thread", () => {
 		});
 	});
 
-	test("hands a user's message to the agent unless one of its forms asked to stay quiet", async () => {
+	test("answers a user's message unless one of its forms asked to stay quiet", async () => {
 		const world = new World();
 		world.extensions = [
 			extension((hooks) =>
@@ -257,10 +259,13 @@ describe("a thread", () => {
 		const thread = world.thread();
 
 		await (await thread.post(user("a", "(list 'hush)"))).ended;
-		expect(model.calls).toHaveLength(0);
+		expect(unprompted(world.stored).map((m) => m.type)).not.toContain("ai");
 
 		await (await thread.post(user("b", "(+ 1 2)"))).ended;
-		expect(model.calls).toHaveLength(1);
+		expect(unprompted(world.stored).at(-1)).toMatchObject({
+			type: "ai",
+			content: "done.",
+		});
 	});
 
 	test("lets a waiting post be withdrawn", async () => {
