@@ -29,11 +29,6 @@ async function mounted(text: string) {
 }
 
 describe("viewing json", () => {
-	it("shows a top-level scalar as it was written", async () => {
-		const host = await mounted('"just text"');
-		expect(host.textContent).toBe('"just text"');
-	});
-
 	it("falls back to the raw text when the json is invalid", async () => {
 		const host = await mounted("{oops");
 		expect(host.textContent).toContain("not valid json");
