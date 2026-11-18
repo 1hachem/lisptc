@@ -1,8 +1,8 @@
 import type { Conversation } from "@repo/interpreter/conversation";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { type List, listToArray, newSym } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { viewKind } from "@repo/journal-catalog/view";
 import { TAGS, widgetOf } from "@repo/ui-catalog";
@@ -91,7 +91,7 @@ function fresh(): {
 	const views = new MemoryViewStore();
 	const host = uiHostFor({ panel, views });
 	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, surface, ui: collector(interp, views), ops };
 }
 
@@ -716,7 +716,7 @@ describe("the panel beside the chat", () => {
 		const interp = new Interp({
 			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		return { ops, ev: (code: string) => str(runSync(interp, code)) };
 	}
 
@@ -813,11 +813,37 @@ describe("the widget form table", () => {
 		}
 	});
 
-	it("lists every constructor in the prompt", () => {
-		const { prompt } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
-		expect(prompt).not.toContain("{{widgets}}");
+	it("names every widget constructor in ui-widgets", async () => {
+		const { interp } = fresh();
+		const names = TAGS.map((tag) => `"ui/${tag}"`).join(" ");
+		const { value } = await runAsync(interp, `(equal ui-widgets '(${names}))`);
+		expect(value).toBe(true);
+	});
+
+	it("keeps ui-widgets read-only", () => {
+		const { interp } = fresh();
+		expect(() => runSync(interp, "(setq ui-widgets nil)")).toThrow();
+	});
+
+	it("ships one memory per widget, carrying its signature", () => {
+		const { postlude } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		const { interp } = fresh();
+		runSync(
+			interp,
+			`(setq shipped nil)
+(defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
+(defmacro area (name &rest declared) nil)`,
+		);
+		runSync(interp, postlude ?? "");
+		const bodies = new Map(
+			listToArray(interp.getGlobal(newSym("shipped")) as List).map(
+				(entry) => listToArray(entry as List) as [string, string],
+			),
+		);
 		for (const tag of TAGS)
-			expect(prompt).toContain(WIDGET_FORMS[tag].signature);
+			expect(bodies.get(`internal/ui/widget-${tag}`)).toContain(
+				WIDGET_FORMS[tag].signature,
+			);
 	});
 });
 
@@ -827,7 +853,7 @@ describe("the view store", () => {
 		const views = new MemoryViewStore();
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-		runSync(interp, prelude);
+		boot(interp);
 		return { surface, views, interp, ui: collector(interp, views) };
 	}
 

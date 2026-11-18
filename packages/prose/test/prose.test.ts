@@ -48,7 +48,9 @@ describe("prose around forms", () => {
 	});
 
 	it("does not read prose punctuation touching a form as sugar", () => {
-		expect(stripProse("and then,(+ 1 2)")).toBe("         (+ 1 2)");
+		expect(stripProse(freshInterp(), "and then,(+ 1 2)")).toBe(
+			"         (+ 1 2)",
+		);
 	});
 
 	it("does not end a form at a paren inside a string", () => {
@@ -65,8 +67,10 @@ describe("prose around forms", () => {
 	});
 
 	it("blanks prose in place so offsets are preserved", () => {
-		expect(stripProse("hi (+ 1 2) bye")).toBe("   (+ 1 2)    ");
-		expect(stripProse("one\n(+ 1 2)\ntwo")).toBe("   \n(+ 1 2)\n   ");
+		expect(stripProse(freshInterp(), "hi (+ 1 2) bye")).toBe("   (+ 1 2)    ");
+		expect(stripProse(freshInterp(), "one\n(+ 1 2)\ntwo")).toBe(
+			"   \n(+ 1 2)\n   ",
+		);
 	});
 });
 
@@ -271,9 +275,9 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 
 	it("judges a form only through stripProse, not the bare form scan", () => {
 		expect(formsOnly("a (b")).toBe("  (b");
-		expect(stripProse("a (b")).toBe("    ");
+		expect(stripProse(freshInterp(), "a (b")).toBe("    ");
 		expect(formsOnly("a (see `x`)")).toBe("  (see `x`)");
-		expect(stripProse("a (see `x`)")).toBe("           ");
+		expect(stripProse(freshInterp(), "a (see `x`)")).toBe("           ");
 		expect(checkSyntax("an aside (see `x`)")).toEqual([
 			{ message: 'syntax error: unexpected ")" at 1', line: 1 },
 		]);

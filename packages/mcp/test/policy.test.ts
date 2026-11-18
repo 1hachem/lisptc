@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
@@ -29,7 +28,7 @@ function interpWith(policy: McpPolicy): Interp {
 			}),
 		],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 

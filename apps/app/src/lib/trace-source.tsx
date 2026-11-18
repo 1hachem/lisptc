@@ -1,9 +1,10 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import type { ChatMessage } from "@repo/components";
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
-import { type ChatMessage, sequenced } from "./chat.tsx";
+import { sequenced } from "./chat.tsx";
 import { timelineOf } from "./timeline.ts";
 import { shownMessages, useWatch } from "./watch.ts";
 

@@ -1,5 +1,6 @@
 import type { CaseInfo, ReportRow } from "@repo/evals/report";
 import type { RunIdentity } from "@repo/evals/review";
+import { recognizedKind } from "@repo/journal-catalog/memory";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Transcript } from "@/components/transcript.tsx";
@@ -43,6 +44,20 @@ function toggled(
 	return `/r/${encodeURIComponent(file)}${search ? `?${search}` : ""}`;
 }
 
+const REFLEX = "reflex";
+
+function showsReflex(query: Query): boolean {
+	return one(query[REFLEX]) === "on";
+}
+
+function judges(rows: ReportRow[]): boolean {
+	return rows.some((row) =>
+		row.transcript.some(
+			(line) => line.role === "entry" && line.kind === recognizedKind.name,
+		),
+	);
+}
+
 function Filters({
 	file,
 	query,
@@ -56,7 +71,8 @@ function Filters({
 }) {
 	const evals = [...new Set(rows.map((row) => row.case))];
 	const models = [...new Set(rows.map(targetOf))];
-	if (evals.length < 2 && models.length < 2) return null;
+	const reflex = judges(rows);
+	if (evals.length < 2 && models.length < 2 && !reflex) return null;
 
 	const chosenEval = one(query.eval);
 	const chosenModel = one(query.model);
@@ -88,6 +104,17 @@ function Filters({
 							{target}
 						</Chip>
 					))}
+				</ChipRow>
+			) : null}
+
+			{reflex ? (
+				<ChipRow label="show">
+					<Chip
+						active={showsReflex(query)}
+						href={toggled(file, query, REFLEX, "on")}
+					>
+						{REFLEX}
+					</Chip>
 				</ChipRow>
 			) : null}
 
@@ -128,10 +155,12 @@ function Run({
 	identity,
 	row,
 	target,
+	reflex,
 }: {
 	identity: RunIdentity;
 	row: ReportRow;
 	target?: ReviewTarget;
+	reflex: boolean;
 }) {
 	const failed = row.checks.filter((check) => check.verdict === "false");
 	const score = scoreOf([row]);
@@ -197,7 +226,12 @@ function Run({
 					conversation — {row.transcript.length} turn
 					{row.transcript.length === 1 ? "" : "s"}
 				</Summary>
-				<Transcript identity={identity} row={row} target={target} />
+				<Transcript
+					identity={identity}
+					reflex={reflex}
+					row={row}
+					target={target}
+				/>
 			</details>
 		</Panel>
 	);
@@ -269,6 +303,7 @@ export default async function ReportPage({
 						<Run
 							identity={identity}
 							key={`${row.provider}-${row.model}-${row.sample}`}
+							reflex={showsReflex(query)}
 							row={row}
 							target={target}
 						/>

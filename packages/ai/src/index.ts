@@ -7,7 +7,13 @@ export {
 export { Budget, type Limits, type Usage } from "./budget.ts";
 export type { ChatMessageInput, Line, WireMessage } from "./line.ts";
 export { type Mail, type Mailbox, MemoryMailbox } from "./mailbox.ts";
+export {
+	type MemorySystem,
+	memorySystem,
+	RECOGNITION_TIMEOUT_MS,
+} from "./memory-system.ts";
 export { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
+export { LOOP_MEMORIES } from "./prompts/loop-memories.ts";
 export { evalCode, replResultContent } from "./repl.ts";
 export { type ReplSource, type Repls, replFrom } from "./repl-store.ts";
 export {
@@ -15,7 +21,6 @@ export {
 	entryMessage,
 	type TurnOutcome,
 } from "./stream.ts";
-export { renderSystemEvent, type SystemEvent } from "./system-event.ts";
 export {
 	captureException,
 	initTelemetry,

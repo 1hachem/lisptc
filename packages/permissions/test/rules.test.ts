@@ -1,7 +1,13 @@
+import { Interp } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
-import { Reader } from "@repo/interpreter/reader";
 import { describe, expect, it } from "vitest";
-import { parseRules } from "../src/rules.ts";
+import { type PermissionRules, readRules } from "../src/rules.ts";
+
+const interp = new Interp();
+
+function parseRules(source: string): PermissionRules {
+	return readRules(interp, source);
+}
 
 const CONFIG = `
 Anything outside a form is prose, so a config can explain itself.
@@ -23,9 +29,7 @@ Anything outside a form is prose, so a config can explain itself.
 `;
 
 function form(source: string): Cell {
-	const reader = new Reader();
-	reader.push(source);
-	const read = reader.read();
+	const read = interp.read(source);
 	if (!(read instanceof Cell)) throw new Error(`not a form: ${source}`);
 	return read;
 }

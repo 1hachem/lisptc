@@ -1,7 +1,6 @@
 import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
-import { Interp, runAsync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { bootAsync, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
 import { type FunctionReference, getFunctionName } from "convex/server";
@@ -29,7 +28,7 @@ async function served(): Promise<(code: string) => Promise<string>> {
 	const interp = new Interp({
 		extensions: await workspaceExtensions(WORKSPACE, offline),
 	});
-	await runAsync(interp, prelude);
+	await bootAsync(interp);
 	return async (code) => str((await runAsync(interp, code)).value, false);
 }
 
@@ -70,6 +69,40 @@ describe("the agent the app serves", () => {
 			expect(await ev(`(permission/check '${form})`)).toBe("allow");
 	});
 
+	it("ships every extension's built-in memories readable, under distinct keys, within their budget", async () => {
+		const ev = await served();
+		const keys = (
+			await ev("(mapcar (lambda (entry) (car entry)) (memory/builtins))")
+		)
+			.slice(1, -1)
+			.split(" ")
+			.map((key) => JSON.parse(key) as string);
+		expect(keys).toEqual(
+			expect.arrayContaining(["internal/mcp/local", "internal/mcp/oauth"]),
+		);
+		expect(new Set(keys).size).toBe(keys.length);
+		expect(await ev("(length (memory/areas :when))")).not.toBe("0");
+	});
+
+	it("hands back every built-in memory's body as formatted text", async () => {
+		const ev = await served();
+		const bodyOf = (key: string) =>
+			ev(
+				`(cdr (assoc "body" (car (filter (lambda (m) (equal (cdr (assoc "key" m)) ${JSON.stringify(key)})) (memory/recall ${JSON.stringify(key)})))))`,
+			);
+		expect(await bodyOf("internal/memory/fading")).toContain(
+			"strength every 7 days",
+		);
+		expect(await bodyOf("internal/preferences/metadata")).toContain(
+			":input input tokens",
+		);
+		expect(
+			await ev(
+				`(filter (lambda (form) (and (string-prefix? "internal/" (cadr form)) (not (stringp (nth 3 form))))) (memory/_every))`,
+			),
+		).toBe("nil");
+	});
+
 	it("teaches the model the workspace, its knowledge and its preferences", async () => {
 		const interp = new Interp({
 			extensions: await workspaceExtensions(WORKSPACE, offline),
@@ -97,7 +130,7 @@ describe("the agent the app serves", () => {
 			desktop,
 		});
 		const interp = new ConversationInterpreter({ extensions });
-		await runAsync(interp, prelude);
+		await bootAsync(interp);
 		const hooks = openSession(extensions);
 		const step = () =>
 			driveAsync(hooks.beginStep.run(() => settled(undefined), { interp }));

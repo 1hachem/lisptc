@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { Interp, runSync } from "@repo/interpreter";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp } from "@repo/interpreter";
 import {
 	type LanguageService,
 	languageService,
@@ -27,7 +26,7 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 const interp = new Interp({ extensions: docExtensions() });
-runSync(interp, prelude);
+boot(interp);
 const local = languageService(symbolTable(symbolsOf(interp)));
 
 const SESSION_ENTRY = fileURLToPath(new URL("./session.ts", import.meta.url));
