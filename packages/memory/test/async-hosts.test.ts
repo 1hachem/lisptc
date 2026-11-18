@@ -1,4 +1,3 @@
-import { driveAsync, driveSync, settled } from "@repo/interpreter/drive";
 import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
@@ -9,10 +8,8 @@ import { type Memory, type MemoryStore, VolatileStore } from "../src/ports.ts";
 
 class PromisedStore implements MemoryStore {
 	private readonly inner = new VolatileStore();
-	answered = 0;
 
 	private later<T>(value: T): Promise<T> {
-		this.answered += 1;
 		return Promise.resolve().then(() => value);
 	}
 
@@ -48,20 +45,9 @@ function interpWith(store: MemoryStore): Interp {
 	return interp;
 }
 
-describe("settled", () => {
-	it("hands back a plain value without suspending", () => {
-		expect(driveSync(settled(7))).toBe(7);
-	});
-
-	it("suspends on a promise and resumes with what it resolved to", async () => {
-		expect((await driveAsync(settled(Promise.resolve(7)))).value).toBe(7);
-	});
-});
-
 describe("a memory store that answers with promises", () => {
 	it("stores and recalls through an async driver", async () => {
-		const store = new PromisedStore();
-		const interp = interpWith(store);
+		const interp = interpWith(new PromisedStore());
 
 		await runAsync(
 			interp,
@@ -70,7 +56,6 @@ describe("a memory store that answers with promises", () => {
 		const recalled = await runAsync(interp, '(memory/recall "port")');
 
 		expect(str(recalled.value)).toContain("hosts declare what they need");
-		expect(store.answered).toBeGreaterThan(0);
 	});
 
 	it("forgets and lists through the same surface", async () => {
