@@ -49,7 +49,8 @@ Test emptiness with null or not. Never rely on 0 or \"\" being false — they ar
 | lambda | (lambda (args...) body...) | Anonymous function, a closure over the current scope. |
 | macro | (macro (args...) body...) | Anonymous macro. Top-level only; normally use defmacro. |
 
-quasiquote, try, retry, attempt and with-ok are macros, not special forms; use the same way.
+quasiquote, try, retry, attempt, with-ok, iterate, prog1, assert, ecase,
+defvar and destructuring-bind are macros, not special forms; use the same way.
 
 Tail calls optimized: tail recursion and loop macros never overflow the stack.
 Iterate with tail-recursive helpers or loop macros.")
@@ -151,7 +152,17 @@ is \"3.0\"; (string (truncate x)) gives bare integer.")
   "Eval and control:
 - (apply f args) call f with elements of list args.
 - (error msg) or (error :kind msg [value]) raise catchable error, caught by try.
-- (break) exit nearest loop; (return value) exit it with value.")
+- (break) exit nearest loop; (return value) exit it with value.
+- (iterate ((i 0) (acc nil)) body...) with (recur next-i next-acc) in tail
+  position: rebind, run body again, no stack growth.
+- (defvar *name* [value [doc]]) declares dynamic variable, sets value if
+  unbound. Then (let ((*name* v)) body...) rebinds it for every call inside
+  body, old value back on exit. defvar before the defun that binds it.
+- (prog1 a body...) value of a, after body.
+- (assert test [msg]) raises :assertion when test nil.
+- (ecase key clauses...) like case, raises :no-match when none matches.
+- (destructuring-bind (a (b c) &rest d) value body...) bind by shape;
+  missing part nil.")
 
 (memory "internal/lang/output" :when "the agent wants to look at a value, print a result, narrate its reasoning or print a keyword, or a value it meant to see did not show"
   "Output — echo is the ONLY thing that prints; no print, princ, terpri or view. Nothing computed is seen until echoed.
@@ -318,7 +329,9 @@ defmacro defines compile-time transformer. Build expansion with quasiquote:
     `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))
 
 (gensym) for temporaries you introduce, so user variables are not captured.
-Expansion depth max ~d nesting levels at compile time."
+Expansion depth max ~d nesting levels at compile time.
+(macroexpand-1 form) shows one expansion, (macroexpand form) expands until
+head not macro. Neither evaluates."
     *max-macro-depth*))
 
 (memory "internal/lang/errors" :when "the agent is about to handle a failure, catch an error, unwind on exit, or leave early with block, return-from, catch or throw; or an error escaped a handler it wrote"

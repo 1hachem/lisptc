@@ -87,8 +87,8 @@ export const prelude = `
   \`(cond ((not ,test) ,@body)))
 
 (defmacro let (args &rest body)
-  "Bind variables in parallel, then evaluate body. A bare name binds to nil."
-  ((lambda (vars vals)
+  "Bind variables in parallel, then evaluate body. A bare name binds to nil. A name defvar declared is rebound dynamically: every call made inside body sees the new value, and the old one comes back when body exits."
+  ((lambda (vars vals params dynamic)
      (defun vars (x)
        (cond (x (cons (if (atom (car x))
                           (car x)
@@ -99,8 +99,25 @@ export const prelude = `
                           nil
                         (cadar x))
                       (vals (cdr x))))))
-     \`((lambda ,(vars args) ,@body) ,@(vals args)))
-   nil nil))
+     (defun params (names)
+       (cond (names (cons (if (_specialp (car names)) (gensym) (car names))
+                          (params (cdr names))))))
+     (defun dynamic (names ps)
+       (cond (names (if (_specialp (car names))
+                        (cons \`(cons ',(car names) ,(car ps))
+                              (dynamic (cdr names) (cdr ps)))
+                      (dynamic (cdr names) (cdr ps))))))
+     ((lambda (names)
+        ((lambda (ps)
+           ((lambda (bound)
+              (if bound
+                  \`((lambda ,ps (_bind-dynamic (list ,@bound) (lambda () ,@body)))
+                    ,@(vals args))
+                \`((lambda ,names ,@body) ,@(vals args))))
+            (dynamic names ps)))
+         (params names)))
+      (vars args)))
+   nil nil nil nil))
 
 (defmacro letrec (args &rest body)
   "Like let, but bindings may refer to each other (e.g. for local recursive functions)."
@@ -738,6 +755,50 @@ export const prelude = `
              (let ((,(caar bindings) (cadr ,r)))
                (with-ok ,(cdr bindings) ,@body))
            ,r)))))
+
+(defmacro prog1 (first &rest body)
+  "(prog1 first body...) Evaluate first, then body, and return the value of first."
+  (let ((v (gensym)))
+    \`(let ((,v ,first)) ,@body ,v)))
+
+(defmacro assert (test &rest message)
+  "(assert test [message]) Return nil if test is true; otherwise raise an :assertion error with message, the test form as its value."
+  \`(unless ,test
+     (error :assertion ,(if message (car message) "assertion failed") ',test)))
+
+(defmacro ecase (key-expr &rest clauses)
+  "Like case, but raise a :no-match error, the key as its value, when no clause matches."
+  (let ((key (gensym)))
+    \`(let ((,key ,key-expr))
+       (case ,key ,@clauses (t (error :no-match "ecase: no clause matches" ,key))))))
+
+(defun _destructure (pattern place)
+  (cond ((null pattern) nil)
+        ((atom pattern) (list (list pattern place)))
+        ((eq (car pattern) '&rest) (list (list (cadr pattern) place)))
+        (t (append (_destructure (car pattern) \`(car ,place))
+                   (_destructure (cdr pattern) \`(cdr ,place))))))
+
+(defmacro destructuring-bind (pattern value &rest body)
+  "(destructuring-bind pattern value body...) Bind each name in pattern, a tree of names that may end with &rest name, to the part of value at the same place, then evaluate body. A missing part binds nil."
+  (let ((v (gensym)))
+    \`(let* ((,v ,value) ,@(_destructure pattern v)) ,@body)))
+
+(defmacro iterate (bindings &rest body)
+  "(iterate ((name init)...) body...) Bind each name to its init and evaluate body. Inside body, (recur value...) in tail position runs body again with the names bound to the new values, without growing the stack."
+  (let ((vars (mapcar (lambda (b) (if (atom b) b (car b))) bindings))
+        (inits (mapcar (lambda (b) (if (atom b) nil (cadr b))) bindings)))
+    \`((lambda ,vars
+        (letrec ((recur (lambda ,vars ,@body)))
+          (recur ,@vars)))
+      ,@inits)))
+
+(defmacro defvar (name &rest rest)
+  "(defvar name [value [doc]]) Declare name a dynamic variable, and give it value unless it already has one. Then a let that binds name rebinds it for every call made inside its body. Define it before the functions that bind it. Returns name."
+  \`(progn (_declare-special ',name)
+          (unless (_boundp ',name) (setq ,name ,(car rest)))
+          ,@(if (cdr rest) (list \`(_set-doc ',name (symbol-name ',name) ,(cadr rest))))
+          ',name))
 
 (defmacro memory (key &rest declared)
   "A declaration in a .memories.ptc file an extension ships. Here it does nothing; an extension that files memories defines it."

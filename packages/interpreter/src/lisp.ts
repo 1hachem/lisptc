@@ -47,6 +47,7 @@ import {
 import { Chain } from "./hooks.ts";
 import { hitch, Journal } from "./journal.ts";
 import {
+	arrayToList,
 	assert,
 	Cell,
 	condSym,
@@ -54,6 +55,7 @@ import {
 	Keyword,
 	type List,
 	lambdaSym,
+	listToArray,
 	macroSym,
 	mapcar,
 	newSym,
@@ -138,6 +140,16 @@ export interface InterpOptions {
 	extensions?: readonly Installable[];
 }
 
+interface DynamicBinding {
+	readonly sym: Sym;
+	saved: unknown;
+}
+
+const symbolList: StateCodec<readonly Sym[]> = {
+	toLisp: (syms) => arrayToList([...syms]),
+	fromLisp: (x) => listToArray(x as List).filter((y) => y instanceof Sym),
+};
+
 class Tail {
 	constructor(
 		readonly x: unknown,
@@ -178,6 +190,8 @@ export class Interp {
 	private readonly globals: Map<Sym, unknown> = new Map();
 
 	private readonly sealed: Map<Sym, string> = new Map();
+	private readonly dynamic: DynamicBinding[] = [];
+	private readonly specials: State<readonly Sym[]>;
 
 	readonly hooks: Hooks = newHooks();
 
@@ -262,7 +276,18 @@ export class Interp {
 			apply: (a) => this.applyForm(a),
 			runLoopBody: (a) => this.runLoopBody(a),
 			importFile: (path) => this.importFile(path),
+			expandOnce: (form) => this.expandOnce(form),
+			declareSpecial: (sym) => this.declareSpecial(sym),
+			isSpecial: (sym) => this.specials.get().includes(sym),
+			bindDynamic: (bindings) => this.bindDynamic(bindings),
+			unbindDynamic: (count) => this.unbindDynamic(count),
 		});
+		this.specials = this.state(
+			"special-variables",
+			symbolList,
+			[],
+			"The globals defvar declared dynamic, which let rebinds for the extent of its body.",
+		);
 		this.defineQuasiquote();
 		this.defineGlobal(BOOTED, null, {
 			signature: BOOTED.name,
@@ -509,9 +534,65 @@ export class Interp {
 	}
 
 	hold(reason: string): Hold | undefined {
-		return this.holds.parkable
-			? this.holds.park(reason, this.journal)
-			: undefined;
+		if (!this.holds.parkable) return undefined;
+		const hold = this.holds.park(reason, this.journal);
+		const parked = this.unwindDynamic();
+		hold.onResume(() => this.rewindDynamic(parked));
+		return hold;
+	}
+
+	private declareSpecial(sym: Sym): void {
+		if (sym instanceof Keyword) throw new NotVariableException(sym);
+		const specials = this.specials.get();
+		if (!specials.includes(sym)) this.specials.set([...specials, sym]);
+	}
+
+	private bindDynamic(bindings: List): number {
+		let count = 0;
+		for (let j = bindings; j !== null; j = cdrCell(j)) {
+			const binding = j.car;
+			if (!(binding instanceof Cell) || !(binding.car instanceof Sym))
+				throw new EvalException("dynamic binding expected", binding);
+			const sym = binding.car;
+			this.refuseSealed(sym);
+			this.dynamic.push({ sym, saved: this.globals.get(sym) });
+			this.globals.set(sym, binding.cdr);
+			count++;
+		}
+		return count;
+	}
+
+	private unbindDynamic(count: number): void {
+		for (let i = 0; i < count; i++) {
+			const binding = this.dynamic.pop();
+			if (binding !== undefined) this.restoreGlobal(binding.sym, binding.saved);
+		}
+	}
+
+	private unwindDynamic(): [DynamicBinding, unknown][] {
+		const parked: [DynamicBinding, unknown][] = [];
+		for (
+			let binding = this.dynamic.pop();
+			binding !== undefined;
+			binding = this.dynamic.pop()
+		) {
+			parked.unshift([binding, this.globals.get(binding.sym)]);
+			this.restoreGlobal(binding.sym, binding.saved);
+		}
+		return parked;
+	}
+
+	private rewindDynamic(parked: readonly [DynamicBinding, unknown][]): void {
+		for (const [binding, bound] of parked) {
+			binding.saved = this.globals.get(binding.sym);
+			this.restoreGlobal(binding.sym, bound);
+			this.dynamic.push(binding);
+		}
+	}
+
+	private restoreGlobal(sym: Sym, value: unknown): void {
+		if (value === undefined) this.globals.delete(sym);
+		else this.globals.set(sym, value);
 	}
 
 	makeBuiltIn(
@@ -657,6 +738,13 @@ export class Interp {
 
 	private *applyForm([f, args]: [unknown, List]): Eval {
 		return yield* this.evalGen(new Cell(f, mapcar(args, qqQuote)), null);
+	}
+
+	private *expandOnce(form: unknown): Eval {
+		if (!(form instanceof Cell) || !(form.car instanceof Sym)) return form;
+		const macro = this.globals.get(form.car);
+		if (!(macro instanceof Macro)) return form;
+		return yield* macro.expandWith(this, cdrCell(form));
 	}
 
 	private *runLoopBody([thunk]: [unknown]): Eval {
