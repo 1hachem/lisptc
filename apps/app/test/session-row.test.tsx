@@ -106,9 +106,9 @@ describe("a chat's row in the sidebar", () => {
 		roots.push(root);
 		await act(async () => root.render(<SessionRow chat={CHAT} />));
 
-		const item = [
-			...host.querySelectorAll<HTMLButtonElement>("[data-menu-item]"),
-		].find((b) => b.textContent === "open trace");
+		const item = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+			(b) => b.textContent === "open trace",
+		);
 		await act(async () => item?.click());
 
 		expect(item).toBeDefined();
@@ -143,6 +143,10 @@ describe("a chat's row in the sidebar", () => {
 		const { host, root } = mount();
 		await act(async () => root.render(<SessionRow chat={CHAT} />));
 
-		expect(host.querySelector("button[aria-expanded]")).toBeNull();
+		expect(
+			[...host.querySelectorAll("button")].some((b) =>
+				b.title.includes("sub-agent"),
+			),
+		).toBe(false);
 	});
 });

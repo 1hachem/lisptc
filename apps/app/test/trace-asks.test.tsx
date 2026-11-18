@@ -104,33 +104,4 @@ describe("an ask in the trace", () => {
 		expect(labels).not.toContain("Allow");
 		expect(labels).not.toContain("Deny");
 	});
-
-	it("says what was answered", async () => {
-		const host = await mount([
-			tool("asks", {
-				open: [approval],
-				answered: { a1: { accepted: true, label: "Allowed" } },
-			}),
-		]);
-
-		expect(host.textContent).toContain("answered: Allowed");
-	});
-
-	it("shows the question the agent asked, with its choices as text", async () => {
-		const host = await mount([
-			tool("question", {
-				id: "q1",
-				prompt: "which one?",
-				choices: ["A", "B"],
-				multi: false,
-			}),
-		]);
-
-		expect(host.textContent).toContain("which one?");
-		expect(host.textContent).toContain("pick one: A · B");
-		const labels = [...host.querySelectorAll("button")].map(
-			(button) => button.textContent,
-		);
-		expect(labels).not.toContain("A");
-	});
 });

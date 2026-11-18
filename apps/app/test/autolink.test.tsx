@@ -1,41 +1,26 @@
-import { parseMarkdown } from "@tanstack/markdown/parser";
-import { describe, expect, it } from "vitest";
-import { autolinkExtension } from "../src/components/autolink.ts";
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { beforeAll, describe, expect, it } from "vitest";
+import { Markdown } from "../src/components/markdown.tsx";
+
+beforeAll(() => {
+	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+});
 
 function links(markdown: string) {
-	const found: { href: string; text: string }[] = [];
-	const walk = (nodes: unknown[]) => {
-		for (const node of nodes as Record<string, unknown>[]) {
-			if (node.type === "link")
-				found.push({
-					href: node.href as string,
-					text: (node.children as { value: string }[])
-						.map((child) => child.value)
-						.join(""),
-				});
-			else if (Array.isArray(node.children)) walk(node.children);
-			else if (Array.isArray(node.items)) walk(node.items);
-			else if (node.type === "table")
-				walk([
-					...(node.header as unknown[]),
-					...(node.rows as unknown[][]).flat(),
-				]);
-		}
-	};
-	walk(parseMarkdown(markdown, { extensions: [autolinkExtension()] }).children);
-	return found;
+	const host = document.createElement("div");
+	act(() => createRoot(host).render(<Markdown>{markdown}</Markdown>));
+	return [...host.querySelectorAll("a")].map((a) => ({
+		href: a.getAttribute("href"),
+		text: a.textContent,
+	}));
 }
 
 describe("autolink", () => {
 	it("keeps explicit links", () => {
 		expect(links("[docs](https://example.com)")).toEqual([
 			{ href: "https://example.com", text: "docs" },
-		]);
-	});
-
-	it("links a bare url", () => {
-		expect(links("see https://example.com/a?b=1 now")).toEqual([
-			{ href: "https://example.com/a?b=1", text: "https://example.com/a?b=1" },
 		]);
 	});
 

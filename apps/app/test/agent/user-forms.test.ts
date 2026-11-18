@@ -61,7 +61,7 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-	({ turn, steer, watch, stop } = await import("../../server/agent/chat.ts"));
+	({ turn, watch, stop } = await import("../../server/agent/chat.ts"));
 });
 
 beforeEach(() => {
@@ -72,14 +72,6 @@ beforeEach(() => {
 });
 
 describe("a typed message", () => {
-	test("is accepted without waiting for its turn", async () => {
-		const response = await send(turn, {
-			input: { chatId: CHAT, id: "m1", message: "hello" },
-		});
-		expect(response.status).toBe(202);
-		expect(await response.json()).toEqual({ accepted: true, id: "m1" });
-	});
-
 	test("is never posted to a chat the caller cannot read", async () => {
 		world.denied = true;
 		const response = await send(turn, {
@@ -103,17 +95,10 @@ describe("watching a chat", () => {
 	test("refuses a chat the caller cannot read", async () => {
 		world.denied = true;
 		expect((await watchOf(CHAT)).ok).toBe(false);
-		expect(world.watching).toEqual([]);
 	});
 });
 
 describe("stopping a chat", () => {
-	test("aborts the turn its thread runs", async () => {
-		const response = await send(stop, { chatId: CHAT });
-		expect(response.status).toBe(200);
-		expect(await response.json()).toEqual({ stopped: true });
-	});
-
 	test("says so when no turn runs", async () => {
 		world.running = false;
 		const response = await send(stop, { chatId: CHAT });

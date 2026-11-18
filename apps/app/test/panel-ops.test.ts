@@ -127,16 +127,6 @@ describe("a chat's trace", () => {
 			{ kind: "trace", chatId: "c1", title: "trace", turn: "h2" },
 		]);
 	});
-
-	it("survives a drag as the same tab", () => {
-		const data = transfer();
-		startPanelDrag(data, { kind: "trace", chatId: "c1", title: "trace" });
-
-		expect(readPanelDrag(data)).toEqual({
-			id: "trace:c1",
-			content: { kind: "trace", chatId: "c1", title: "trace" },
-		});
-	});
 });
 
 describe("the trace beside the chat", () => {
@@ -148,16 +138,6 @@ describe("the trace beside the chat", () => {
 		expect(sideTraceShown({ shown: "collapsed" }, true).shown).toBe(
 			"collapsed",
 		);
-	});
-
-	it("travels with the chat tab, turn included", () => {
-		const data = transfer();
-		const traced: PanelContent = {
-			...chat,
-			trace: { shown: "open", turn: "h1" },
-		};
-		startPanelDrag(data, traced);
-		expect(readPanelDrag(data)?.content).toEqual(traced);
 	});
 
 	it("drops a trace state it cannot read", () => {

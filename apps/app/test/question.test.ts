@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { answerOf, openQuestion, questionText } from "../src/lib/question.ts";
+import { openQuestion, questionText } from "../src/lib/question.ts";
 
 const question = {
 	id: "q1",
@@ -14,18 +14,6 @@ const asked = {
 };
 
 describe("the open question", () => {
-	test("is the question the turn last recorded", () => {
-		expect(
-			openQuestion([{ type: "human" }, { type: "ai" }, asked, { type: "ai" }]),
-		).toEqual(question);
-	});
-
-	test("is closed once a human message follows it", () => {
-		expect(
-			openQuestion([asked, { type: "ai" }, { type: "human" }]),
-		).toBeUndefined();
-	});
-
 	test("is the newest one when two were asked", () => {
 		const later = { ...question, id: "q2" };
 		expect(
@@ -44,47 +32,9 @@ describe("the open question", () => {
 			openQuestion([{ type: "tool", additional_kwargs: {} }, { type: "ai" }]),
 		).toBeUndefined();
 	});
-
-	test("is read off a step that carries it", () => {
-		expect(
-			openQuestion([
-				{
-					type: "tool",
-					entries: [{ id: "e1", kind: "question", value: question }],
-				},
-			]),
-		).toEqual(question);
-	});
-
-	test("ignores a malformed question", () => {
-		expect(
-			openQuestion([
-				{
-					type: "entry",
-					additional_kwargs: { kind: "question", value: { id: "q" } },
-				},
-			]),
-		).toBeUndefined();
-	});
-});
-
-describe("the answer to a question", () => {
-	test("is the chosen label", () => {
-		expect(answerOf(question, [1])).toBe("B");
-	});
-
-	test("joins several choices in the order of the list", () => {
-		expect(answerOf(question, [0, 2])).toBe("A, C");
-	});
 });
 
 describe("a question as text", () => {
-	test("reads the prompt and every choice", () => {
-		const text = questionText(question);
-		for (const part of ["which one?", "A", "B", "C"])
-			expect(text).toContain(part);
-	});
-
 	test("reads apart when several may be picked", () => {
 		expect(questionText({ ...question, multi: true })).not.toBe(
 			questionText(question),

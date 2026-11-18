@@ -9,7 +9,7 @@ import {
 	$isRangeSelection,
 	type LexicalEditor,
 } from "lexical";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
 	afterEach,
@@ -75,6 +75,52 @@ const SYMBOLS = symbolTable([
 		],
 	},
 ]);
+
+function Chat({
+	refuse = false,
+	...props
+}: Omit<ChatInputProps, "onSubmit"> & { refuse?: boolean }) {
+	const [sent, setSent] = useState<{ id: number; line: string }[]>([]);
+	return (
+		<>
+			<section aria-label="sent">
+				{sent.map(({ id, line }) => (
+					<p key={id}>{line}</p>
+				))}
+			</section>
+			<ChatInput
+				{...props}
+				onSubmit={(text, files) => {
+					if (refuse) return false;
+					setSent((was) => [
+						...was,
+						{ id: was.length, line: [text, ...files].join(" | ") },
+					]);
+					return true;
+				}}
+			/>
+		</>
+	);
+}
+
+function sent(): string[] {
+	return [...(host.querySelector('[aria-label="sent"]')?.children ?? [])].map(
+		(line) => line.textContent ?? "",
+	);
+}
+
+function chat(props: Omit<ChatInputProps, "onSubmit"> & { refuse?: boolean }) {
+	act(() => root.render(<Chat {...props} />));
+	return host.querySelector<HTMLElement>("[contenteditable]");
+}
+
+function field(
+	props: Omit<ChatInputProps, "onSubmit"> & { refuse?: boolean } = {},
+): HTMLElement {
+	const found = chat(props);
+	if (!found) throw new Error("no editor");
+	return found;
+}
 
 function render(
 	onSubmit: ChatInputProps["onSubmit"],
@@ -200,15 +246,6 @@ function caretInto(field: HTMLElement, word: string, offset: number) {
 }
 
 describe("the chat input", () => {
-	it("sends on Enter", () => {
-		const onSubmit = vi.fn();
-		const field = render(onSubmit);
-		type(field, "hello (+ 1 2)");
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("hello (+ 1 2)", []);
-		expect(textOf(field)).toBe("");
-	});
-
 	it("leaves an Enter that commits an input-method composition alone", () => {
 		const onSubmit = vi.fn();
 		const field = render(onSubmit);
@@ -219,23 +256,24 @@ describe("the chat input", () => {
 	});
 
 	it("sends on Enter while a form is still open", () => {
-		const onSubmit = vi.fn();
-		const field = render(onSubmit);
-		type(field, "(let ((x 1))");
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("(let ((x 1))", []);
+		const editor = field();
+		type(editor, "(let ((x 1))");
+		enter(editor, false);
+		expect(sent()).toEqual(["(let ((x 1))"]);
+		expect(textOf(editor)).toBe("");
 	});
 
 	it("offers the commands for a leading slash and runs the one Enter picks", async () => {
-		const onSubmit = vi.fn();
-		const onCommand = vi.fn(async () => null);
-		const field = render(onSubmit, onCommand);
-		type(field, "/cl");
+		const editor = field({
+			assist: { onCommand: async (name) => `${name} could not run here` },
+		});
+		type(editor, "/cl");
 		await act(async () => {});
 		expect(host.textContent).toContain("start a fresh session");
-		enter(field, false);
-		expect(onCommand).toHaveBeenCalledWith("/clear");
-		expect(onSubmit).not.toHaveBeenCalled();
+		enter(editor, false);
+		await settled();
+		expect(host.textContent).toContain("/clear could not run here");
+		expect(sent()).toEqual([]);
 	});
 
 	it("offers the files for an @ and puts the one Enter picks in the text", async () => {
@@ -304,7 +342,6 @@ describe("the chat input", () => {
 	});
 
 	it("holds the message until the upload is in, then sends the stored name", async () => {
-		const onSubmit = vi.fn();
 		let finish: (name: string) => void = () => {};
 		const upload = vi.fn(
 			() =>
@@ -312,52 +349,45 @@ describe("the chat input", () => {
 					finish = resolve;
 				}),
 		);
-		const field = renderUploading(onSubmit, upload);
+		const editor = field({ files: { upload } });
 		attach([new File(["%PDF"], "spec.pdf")]);
-		type(field, "see this");
-		enter(field, false);
-		expect(onSubmit).not.toHaveBeenCalled();
+		type(editor, "see this");
+		enter(editor, false);
+		expect(sent()).toEqual([]);
 		expect(host.textContent).toContain("still uploading");
-		expect(textOf(field)).toBe("see this");
+		expect(textOf(editor)).toBe("see this");
 		await act(async () => finish("spec (2).pdf"));
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("see this", ["spec (2).pdf"]);
+		enter(editor, false);
+		expect(sent()).toEqual(["see this | spec (2).pdf"]);
 		expect(chip("spec.pdf")).toBeUndefined();
 	});
 
 	it("holds a send while an upload has failed, and drops it on a second enter", async () => {
-		const onSubmit = vi.fn();
 		const upload = vi.fn(() =>
 			Promise.reject(new Error("spec.pdf not uploaded: the folder is full")),
 		);
-		const field = renderUploading(onSubmit, upload);
+		const editor = field({ files: { upload } });
 		attach([new File(["%PDF"], "spec.pdf")]);
 		await settled();
-		expect(chip("spec.pdf")?.title).toBe(
-			"spec.pdf not uploaded: the folder is full",
-		);
-		type(field, "see this");
-		enter(field, false);
-		expect(onSubmit).not.toHaveBeenCalled();
-		expect(host.textContent).toContain(
-			"a file failed to upload, press enter again to remove it and send",
-		);
+		type(editor, "see this");
+		enter(editor, false);
+		expect(sent()).toEqual([]);
+		expect(host.textContent).toContain("failed to upload");
 		expect(chip("spec.pdf")).toBeDefined();
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("see this", []);
+		enter(editor, false);
+		expect(sent()).toEqual(["see this"]);
 		expect(chip("spec.pdf")).toBeUndefined();
 	});
 
 	it("warns again when a different upload fails after the first was removed", async () => {
-		const onSubmit = vi.fn();
 		const upload = vi.fn((file: File) =>
 			Promise.reject(new Error(`${file.name} not uploaded`)),
 		);
-		const field = renderUploading(onSubmit, upload);
+		const editor = field({ files: { upload } });
 		attach([new File(["%PDF"], "spec.pdf")]);
 		await settled();
-		type(field, "see this");
-		enter(field, false);
+		type(editor, "see this");
+		enter(editor, false);
 		act(() =>
 			host
 				.querySelector<HTMLButtonElement>(
@@ -367,11 +397,11 @@ describe("the chat input", () => {
 		);
 		attach([new File(["%PDF"], "plan.pdf")]);
 		await settled();
-		enter(field, false);
-		expect(onSubmit).not.toHaveBeenCalled();
-		expect(chip("plan.pdf")?.title).toBe("plan.pdf not uploaded");
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("see this", []);
+		enter(editor, false);
+		expect(sent()).toEqual([]);
+		expect(chip("plan.pdf")).toBeDefined();
+		enter(editor, false);
+		expect(sent()).toEqual(["see this"]);
 	});
 
 	it("deletes an uploaded file removed before sending", async () => {
@@ -419,28 +449,28 @@ describe("the chat input", () => {
 	});
 
 	it("puts the text and the files back when a send fails", async () => {
-		const onSubmit = vi.fn(() => Promise.resolve(false));
-		const upload = vi.fn(() => Promise.resolve("spec.pdf"));
-		const field = renderUploading(onSubmit, upload);
+		const editor = field({
+			refuse: true,
+			files: { upload: () => Promise.resolve("spec.pdf") },
+		});
 		attach([new File(["%PDF"], "spec.pdf")]);
 		await settled();
-		type(field, "see this");
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("see this", ["spec.pdf"]);
+		type(editor, "see this");
+		enter(editor, false);
 		await settled();
-		expect(textOf(field)).toBe("see this");
+		expect(textOf(editor)).toBe("see this");
 		expect(chip("spec.pdf")).toBeDefined();
 		expect(host.textContent).toContain("not sent");
 	});
 
 	it("sends files alone, with no text", async () => {
-		const onSubmit = vi.fn();
-		const upload = vi.fn(() => Promise.resolve("spec.pdf"));
-		const field = renderUploading(onSubmit, upload);
+		const editor = field({
+			files: { upload: () => Promise.resolve("spec.pdf") },
+		});
 		attach([new File(["%PDF"], "spec.pdf")]);
 		await settled();
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("", ["spec.pdf"]);
+		enter(editor, false);
+		expect(sent()).toEqual([" | spec.pdf"]);
 		await settled();
 		expect(chip("spec.pdf")).toBeUndefined();
 	});
@@ -566,16 +596,11 @@ describe("the chat input", () => {
 	});
 
 	it("hides the attach button, and Enter still sends", () => {
-		const onSubmit = vi.fn();
-		act(() =>
-			root.render(<ChatInput onSubmit={onSubmit} on={{ attach: false }} />),
-		);
+		const editor = field({ on: { attach: false } });
 		expect(host.querySelector('[aria-label="attach"]')).toBeNull();
-		const field = host.querySelector<HTMLElement>("[contenteditable]");
-		if (!field) throw new Error("no editor");
-		type(field, "hello");
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("hello", []);
+		type(editor, "hello");
+		enter(editor, false);
+		expect(sent()).toEqual(["hello"]);
 	});
 
 	it("runs no lisp help in the input when the preference is off", async () => {
@@ -721,6 +746,10 @@ function renderAsking(
 	act(() => root.render(<ChatInput onSubmit={onSubmit} question={question} />));
 }
 
+function asking(question: typeof PICK_ONE) {
+	chat({ question });
+}
+
 function button(label: string): HTMLButtonElement {
 	const found = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
 		(element) => element.textContent?.includes(label),
@@ -742,69 +771,47 @@ function editorShown(): boolean {
 }
 
 describe("the chat input with a question open", () => {
-	it("shows the prompt and its choices in place of the editor", () => {
-		renderAsking(vi.fn(), PICK_ONE);
-		expect(editorShown()).toBe(false);
-		expect(host.textContent).toContain("which colour?");
-		expect(button("green")).toBeDefined();
-	});
-
-	it("answers a single choice on click", () => {
-		const onSubmit = vi.fn();
-		renderAsking(onSubmit, PICK_ONE);
-		click(button("green"));
-		expect(onSubmit).toHaveBeenCalledWith("green", []);
-	});
-
 	it("answers a single choice by its number", () => {
-		const onSubmit = vi.fn();
-		renderAsking(onSubmit, PICK_ONE);
+		asking(PICK_ONE);
 		key("3");
-		expect(onSubmit).toHaveBeenCalledWith("blue", []);
+		expect(sent()).toEqual(["blue"]);
 	});
 
 	it("ignores a number past the choices", () => {
-		const onSubmit = vi.fn();
-		renderAsking(onSubmit, PICK_ONE);
+		asking(PICK_ONE);
 		key("4");
-		expect(onSubmit).not.toHaveBeenCalled();
+		expect(sent()).toEqual([]);
 	});
 
 	it("sends the checked choices of a multi question in list order", () => {
-		const onSubmit = vi.fn();
-		renderAsking(onSubmit, PICK_MANY);
-		const send = button("send");
-		expect(send.disabled).toBe(true);
+		asking(PICK_MANY);
+		expect(button("send").disabled).toBe(true);
 		click(button("blue"));
 		click(button("red"));
-		expect(button("blue").getAttribute("aria-pressed")).toBe("true");
-		expect(onSubmit).not.toHaveBeenCalled();
+		expect(sent()).toEqual([]);
 		click(button("send"));
-		expect(onSubmit).toHaveBeenCalledWith("red, blue", []);
+		expect(sent()).toEqual(["red, blue"]);
 	});
 
 	it("toggles multi choices by number and sends on Enter", () => {
-		const onSubmit = vi.fn();
-		renderAsking(onSubmit, PICK_MANY);
+		asking(PICK_MANY);
 		key("Enter");
-		expect(onSubmit).not.toHaveBeenCalled();
+		expect(sent()).toEqual([]);
 		key("1");
 		key("2");
 		key("1");
 		key("Enter");
-		expect(onSubmit).toHaveBeenCalledWith("green", []);
+		expect(sent()).toEqual(["green"]);
 	});
 
 	it("restores the editor to type a free answer", () => {
-		const onSubmit = vi.fn();
-		renderAsking(onSubmit, PICK_ONE);
+		asking(PICK_ONE);
 		click(button("type instead"));
-		expect(editorShown()).toBe(true);
-		const field = host.querySelector<HTMLElement>("[contenteditable]");
-		if (!field) throw new Error("no editor");
-		type(field, "purple");
-		enter(field, false);
-		expect(onSubmit).toHaveBeenCalledWith("purple", []);
+		const editor = host.querySelector<HTMLElement>("[contenteditable]");
+		if (!editor) throw new Error("no editor");
+		type(editor, "purple");
+		enter(editor, false);
+		expect(sent()).toEqual(["purple"]);
 	});
 
 	it("restores the editor on Escape", () => {

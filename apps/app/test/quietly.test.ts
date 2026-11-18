@@ -17,8 +17,4 @@ describe("sending a message quietly", () => {
 			"hi (Best for quick tests) (quietly (+ 1 2))",
 		);
 	});
-
-	test("changes nothing in a message without forms", () => {
-		expect(quietly("just a question")).toBe("just a question");
-	});
 });

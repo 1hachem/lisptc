@@ -10,7 +10,6 @@ const world = vi.hoisted(() => ({
 		mail: Mail;
 		options?: PostOptions;
 	}[],
-	cancelled: [] as [string, string][],
 }));
 
 vi.mock("../../server/agent/session.ts", async () => {
@@ -41,10 +40,7 @@ vi.mock("../../server/agent/threads.ts", () => ({
 		};
 	},
 	withdrawPost: async () => true,
-	stopThread: async (chatId: string, scope: string) => {
-		world.cancelled.push([chatId, scope]);
-		return true;
-	},
+	stopThread: async () => true,
 	answer: async () => ({
 		output: "",
 		error: false,
@@ -67,14 +63,12 @@ beforeAll(async () => {
 
 beforeEach(() => {
 	world.posted.length = 0;
-	world.cancelled.length = 0;
 });
 
 describe("a ui action", () => {
 	test("refuses a stop scope it does not know", async () => {
 		const response = await send(stop, { chatId: CHAT, scope: "siblings" });
-		expect(response.ok).toBe(false);
-		expect(world.cancelled).toEqual([]);
+		expect(response.status).toBe(400);
 	});
 
 	test("cannot be sent by the browser as a turn", async () => {

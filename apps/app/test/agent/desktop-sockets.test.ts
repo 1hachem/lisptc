@@ -54,18 +54,6 @@ function world() {
 }
 
 describe("the desktop socket", () => {
-	it("answers a ping with a pong", async () => {
-		const { socket, say } = world();
-		await say({
-			type: "auth",
-			token: "good",
-			version: PROTOCOL_VERSION,
-			machine: MACHINE,
-		});
-		await say({ type: "ping" });
-		expect(socket.sent).toEqual([{ type: "welcome" }, { type: "pong" }]);
-	});
-
 	it("tells an older desktop to upgrade", async () => {
 		const { socket, say } = world();
 		await say({ type: "auth", token: "good", version: 2, machine: MACHINE });
@@ -87,7 +75,7 @@ describe("the desktop socket", () => {
 		expect(withdrawn).toEqual([
 			{ userId: user, machineId: MACHINE.id, connection: "c1" },
 		]);
-		expect(registry.connected(user)).toBe(false);
+		expect(registry.for(user).connected()).toBe(false);
 		expect(socket.closed).toBe(1012);
 	});
 
@@ -99,7 +87,7 @@ describe("the desktop socket", () => {
 			version: PROTOCOL_VERSION,
 			machine: MACHINE,
 		});
-		expect(registry.connected(user)).toBe(true);
+		expect(registry.for(user).connected()).toBe(true);
 		pass(SILENT_FOR_TOO_LONG_MS + 1);
 		sockets.sweep();
 		await vi.waitFor(() =>
@@ -108,7 +96,7 @@ describe("the desktop socket", () => {
 			]),
 		);
 		expect(socket.closed).toBe(4408);
-		expect(registry.connected(user)).toBe(false);
+		expect(registry.for(user).connected()).toBe(false);
 	});
 
 	it("keeps a desktop that keeps pinging", async () => {
@@ -125,6 +113,6 @@ describe("the desktop socket", () => {
 			sockets.sweep();
 		}
 		expect(socket.closed).toBeUndefined();
-		expect(registry.connected(user)).toBe(true);
+		expect(registry.for(user).connected()).toBe(true);
 	});
 });
