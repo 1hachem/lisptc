@@ -1,8 +1,11 @@
 load('ext://restart_process', 'docker_build_with_restart')
 
 config.define_bool('prod')
+config.define_string_list('to-run', args=True)
 cfg = config.parse()
 prod = cfg.get('prod', False)
+if cfg.get('to-run', []):
+    config.set_enabled_resources(cfg['to-run'])
 
 if prod:
     trigger_mode(TRIGGER_MODE_MANUAL)
@@ -104,11 +107,22 @@ k8s_resource(
     objects=['%s:infisicalsecret' % name for name in named('InfisicalSecret')],
     labels=['infra'],
 )
+synced = [
+    ref['secretName']
+    for o in objects if o['kind'] == 'InfisicalSecret'
+    for ref in o['spec']['managedKubeSecretReferences']
+]
+local_resource(
+    'secrets-synced',
+    cmd='kubectl -n %s wait --for=create --timeout=5m %s' % (namespace, ' '.join(['secret/' + s for s in synced])),
+    resource_deps=['secrets'],
+    labels=['infra'],
+)
 k8s_resource(
     'db',
     new_name='postgres',
     objects=['%s:podmonitor' % name for name in named('PodMonitor')],
-    resource_deps=['secrets'],
+    resource_deps=['secrets-synced'],
     port_forwards=['5432:5432'],
     labels=['infra'],
 )
