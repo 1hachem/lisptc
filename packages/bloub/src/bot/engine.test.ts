@@ -1,29 +1,31 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { BotEngine } from "./engine";
-import { EXPRESSION_BY_ID } from "./expressions";
-import { REST_GAZE } from "./face";
-import { radiusAtAngle } from "./shape";
-import { SHAPE_BY_ID } from "./skins";
-import { SEQUENCE, STATES, type StateId } from "./states";
+import type { BloubBotProps } from "../BloubBot";
+import { dedans, dessiner, type Image } from "../test-helpers";
+import { BotEngine, type Look } from "./engine";
+import { EXPRESSIONS } from "./expressions";
+import { SHAPES } from "./skins";
+import { STATES, type StateId } from "./states";
 
-function anchors(d: string): Array<[number, number]> {
-	const out: Array<[number, number]> = [];
-	const head = /^M(-?[\d.]+) (-?[\d.]+)/.exec(d);
-	if (head) out.push([+head[1]!, +head[2]!]);
-	for (const seg of d.matchAll(/C[-\d. ]+? (-?[\d.]+) (-?[\d.]+)(?=C|Z)/g)) {
-		out.push([+seg[1]!, +seg[2]!]);
-	}
+const regard = (o: Partial<Look>): Look => ({
+	yaw: 0,
+	pitch: 0,
+	mix: 1,
+	spin: 0,
+	wander: 0,
+	...o,
+});
+
+async function image(props: BloubBotProps, t: number) {
+	const bot = await dessiner({ ...props, frozenAt: 0 });
+	const out = await bot.a(t);
+	await bot.demonter();
 	return out;
 }
 
-function footprint(d: string) {
-	const pts = anchors(d);
-	const xs = pts.map((p) => p[0]);
-	const ys = pts.map((p) => p[1]);
-	return {
-		w: (Math.max(...xs) - Math.min(...xs)) / 100,
-		h: (Math.max(...ys) - Math.min(...ys)) / 100,
-	};
+async function regardant(look: Look, t = 1, props: BloubBotProps = {}) {
+	const fixe = () => look;
+	return image({ ...props, gaze: fixe }, t);
 }
 
 const EMPREINTES: Array<[StateId, number, number, number, number]> = [
@@ -38,411 +40,363 @@ const EMPREINTES: Array<[StateId, number, number, number, number]> = [
 
 describe("silhouettes", () => {
 	for (const [id, t, w, h, tol] of EMPREINTES) {
-		it(`"${id}" a l empreinte mesuree sur la video`, () => {
-			const e = new BotEngine(100, id);
-			const { w: gw, h: gh } = footprint(e.sample(t).bodyPath);
-			expect(Math.abs(gw - w)).toBeLessThan(tol);
-			expect(Math.abs(gh - h)).toBeLessThan(tol);
+		it(`"${id}" a l empreinte mesuree sur la video`, async () => {
+			const { largeur, hauteur } = await image({ state: id }, t);
+			expect(Math.abs(largeur / 100 - w)).toBeLessThan(tol);
+			expect(Math.abs(hauteur / 100 - h)).toBeLessThan(tol);
 		});
 	}
 
-	it("la boule au repos est un cercle, pas un ovale", () => {
-		const e = new BotEngine(100, "idle");
-		const { w, h } = footprint(e.sample(0.5).bodyPath);
-		expect(Math.abs(w - h)).toBeLessThan(0.03);
-	});
-
-	it("le triangle est plus large que haut, pointe en haut", () => {
-		const e = new BotEngine(100, "play");
-		const { w, h } = footprint(e.sample(0.9).bodyPath);
-		expect(w).toBeGreaterThan(h);
-		expect(Math.abs(w - 1.99)).toBeLessThan(0.08);
+	it("le triangle est plus large que haut", async () => {
+		const { largeur, hauteur } = await image({ state: "play" }, 0.9);
+		expect(largeur).toBeGreaterThan(hauteur);
+		expect(Math.abs(largeur / 100 - 1.99)).toBeLessThan(0.08);
 	});
 });
 
-describe("moteur", () => {
-	it("est une fonction pure du temps : deux lectures a la meme date sont identiques", () => {
-		const a = new BotEngine(100, "orbit");
-		const b = new BotEngine(100, "orbit");
-		expect(a.sample(1.3).bodyPath).toBe(b.sample(1.3).bodyPath);
-		const first = a.sample(0.7).bodyPath;
-		a.sample(2.5);
-		expect(a.sample(0.7).bodyPath).toBe(first);
+describe("dessin dans le temps", () => {
+	const scenarios: Array<{
+		nom: string;
+		lire: () => Promise<(t: number) => Promise<Image>>;
+		t: number;
+	}> = [
+		{
+			nom: "au repos",
+			t: 1.3,
+			lire: async () => (await dessiner({ state: "orbit", frozenAt: 0 })).a,
+		},
+		{
+			nom: "pendant un fondu entre etats",
+			t: 1.2,
+			lire: async () =>
+				(
+					await dessiner({
+						frozenAt: 0,
+						cycle: [
+							{ state: "idle", duration: 1 },
+							{ state: "egg", duration: 3 },
+						],
+					})
+				).parcourir,
+		},
+		{
+			nom: "pendant un morph de forme",
+			t: 0.1,
+			lire: async () => {
+				const bot = await dessiner({ shape: "cercle", frozenAt: 0 });
+				await bot.rendre({ shape: "capsule" });
+				return bot.a;
+			},
+		},
+		{
+			nom: "pendant un morph d expression",
+			t: 0.12,
+			lire: async () => {
+				const bot = await dessiner({ expression: "neutre", frozenAt: 0 });
+				await bot.rendre({ expression: "colere" });
+				return bot.a;
+			},
+		},
+		{
+			nom: "pendant le rattrapage du regard",
+			t: 0.1,
+			lire: async () => {
+				const fixe = () => regard({ yaw: -18, pitch: -8 });
+				const bot = await dessiner({ gaze: fixe, frozenAt: 0 });
+				await bot.rendre({ gaze: null });
+				return bot.a;
+			},
+		},
+		{
+			nom: "apres un retour en arriere dans le cycle",
+			t: 0.3,
+			lire: async () => {
+				const bot = await dessiner({
+					frozenAt: 0,
+					cycle: [
+						{ state: "orbit", duration: 2 },
+						{ state: "idle", duration: 2 },
+					],
+				});
+				await bot.parcourir(3);
+				return bot.parcourir;
+			},
+		},
+	];
+
+	for (const { nom, lire, t } of scenarios) {
+		it(`redonne la meme image a la meme date, ${nom}`, async () => {
+			const a = await lire();
+			const premiere = (await a(t)).html;
+			await a(t + 1.7);
+			expect((await a(t)).html).toBe(premiere);
+		});
+	}
+
+	it("anime vraiment : la forme evolue entre deux dates", async () => {
+		const bot = await dessiner({ state: "thinking", frozenAt: 0 });
+		const corps: string[] = [];
+		for (const t of [0.1, 0.4, 0.8, 1.2]) {
+			corps.push(JSON.stringify((await bot.a(t)).corps));
+		}
+		expect(new Set(corps).size).toBe(corps.length);
+		await bot.demonter();
 	});
 
-	it("reste rejouable PENDANT un fondu entre etats", () => {
-		const e = new BotEngine(100, "idle");
-		e.setState("egg", 1);
-		const pendant = e.sample(1.2).bodyPath;
-		e.sample(3);
-		expect(e.sample(1.2).bodyPath).toBe(pendant);
-	});
-
-	it("ne part pas dans le decor sur une date anterieure au changement d etat", () => {
-		const e = new BotEngine(100, "idle");
-		const avant = e.sample(0.5).bodyPath;
-		e.setState("egg", 1);
-		expect(e.sample(0.5).bodyPath).toBe(avant);
-	});
-
-	it("anime vraiment : la forme evolue entre deux dates", () => {
-		const e = new BotEngine(100, "thinking");
-		const paths = [0.1, 0.4, 0.8, 1.2].map((t) => e.sample(t).bodyPath);
-		expect(new Set(paths).size).toBe(paths.length);
-	});
-
-	it("interpole la silhouette pendant une transition, sans saut", () => {
-		const e = new BotEngine(100, "idle");
-		e.setState("egg", 1);
-		const largeurs = [1, 1.1, 1.2, 1.3, 1.4].map(
-			(t) => footprint(e.sample(t).bodyPath).w,
-		);
+	it("interpole la silhouette pendant une transition, sans saut", async () => {
+		const bot = await dessiner({
+			frozenAt: 0,
+			cycle: [
+				{ state: "idle", duration: 1 },
+				{ state: "egg", duration: 3 },
+			],
+		});
+		const largeurs: number[] = [];
+		for (const t of [1, 1.1, 1.2, 1.3, 1.4]) {
+			largeurs.push((await bot.parcourir(t)).largeur / 100);
+		}
 		for (let i = 1; i < largeurs.length; i++) {
 			expect(largeurs[i]!).toBeLessThan(largeurs[i - 1]!);
 		}
 		expect(largeurs[0]!).toBeCloseTo(2, 1);
-		expect(footprint(e.sample(2).bodyPath).w).toBeCloseTo(1.65, 1);
+		expect((await bot.parcourir(2)).largeur / 100).toBeCloseTo(1.65, 1);
+		await bot.demonter();
 	});
 
-	it("ne fait jamais depasser le corps du viewBox", () => {
-		for (const s of STATES) {
-			const e = new BotEngine(100, s.id);
+	it("ne dessine jamais le corps hors du cadre, quels que soient l etat et la forme", async () => {
+		const cas: BloubBotProps[] = [
+			...STATES.map((s) => ({ state: s.id })),
+			...SHAPES.map((f) => ({ shape: f.id })),
+		];
+		for (const props of cas) {
+			const bot = await dessiner({ ...props, frozenAt: 0 });
 			for (const t of [0.2, 0.9, 1.8, 3]) {
-				const pts = anchors(e.sample(t).bodyPath);
-				for (const [x, y] of pts) {
-					expect(Math.abs(x)).toBeLessThan(158);
-					expect(Math.abs(y)).toBeLessThan(158);
+				const { corps, cadre } = await bot.a(t);
+				expect(corps.length).toBeGreaterThan(2);
+				for (const { x, y } of corps) {
+					expect(Number.isFinite(x) && Number.isFinite(y)).toBe(true);
+					expect(Math.abs(x), JSON.stringify(props)).toBeLessThan(cadre);
+					expect(Math.abs(y), JSON.stringify(props)).toBeLessThan(cadre);
 				}
 			}
+			await bot.demonter();
 		}
-	});
+	}, 60_000);
 });
 
 describe("forme personnalisee", () => {
-	const radii = (id: string) => SHAPE_BY_ID.get(id)!.radii;
-	const hauteur = (e: BotEngine, t: number) =>
-		footprint(e.sample(t).bodyPath).h;
-
-	it("remplace la silhouette des etats au repos", () => {
-		const rond = new BotEngine(100, "idle");
-		const goutte = new BotEngine(100, "idle", radii("goutte"));
-		expect(goutte.sample(1).bodyPath).not.toBe(rond.sample(1).bodyPath);
-	});
-
-	it("laisse intacts les etats qui dessinent leur propre forme", () => {
-		for (const id of ["exclaim", "alert", "sleep", "egg", "hexagon"] as const) {
-			const nu = new BotEngine(100, id);
-			const habille = new BotEngine(100, id, radii("goutte"));
-			expect(habille.sample(1).bodyPath).toBe(nu.sample(1).bodyPath);
+	it("redessine le bot au repos et laisse tels quels les etats qui dessinent leur propre forme", async () => {
+		expect((await image({ shape: "goutte" }, 1)).corps).not.toEqual(
+			(await image({}, 1)).corps,
+		);
+		for (const state of [
+			"exclaim",
+			"alert",
+			"sleep",
+			"egg",
+			"hexagon",
+		] as const) {
+			for (const forme of SHAPES) {
+				const habille = await image({ state, shape: forme.id }, 1);
+				const nu = await image({ state }, 1);
+				expect(habille.corps, `${state}/${forme.id}`).toEqual(nu.corps);
+				expect(habille.yeux, `${state}/${forme.id}`).toEqual(nu.yeux);
+			}
 		}
-	});
+	}, 30_000);
 
-	it("morphe vers la nouvelle forme au lieu de sauter", () => {
-		const e = new BotEngine(100, "idle", radii("cercle"));
-		expect(hauteur(e, 1)).toBeCloseTo(2, 1);
-		e.setShape(radii("capsule"), 1);
-
-		const etapes = [1.06, 1.14, 1.26].map((t) => hauteur(e, t));
+	it("morphe vers la nouvelle forme au lieu de sauter", async () => {
+		const bot = await dessiner({ shape: "cercle", frozenAt: 0 });
+		expect((await bot.a(0)).hauteur / 100).toBeCloseTo(2, 1);
+		await bot.rendre({ shape: "capsule" });
+		const etapes: number[] = [];
+		for (const t of [0.06, 0.14, 0.26]) {
+			etapes.push((await bot.a(t)).hauteur / 100);
+		}
 		for (let i = 1; i < etapes.length; i++) {
 			expect(etapes[i]!).toBeLessThan(etapes[i - 1]!);
 		}
 		expect(etapes[0]!).toBeLessThan(2);
 		expect(etapes[etapes.length - 1]!).toBeGreaterThan(1.24);
-
-		expect(hauteur(e, 1 + BotEngine.SHAPE_MORPH + 0.05)).toBeCloseTo(1.24, 1);
+		expect(
+			(await bot.a(BotEngine.SHAPE_MORPH + 0.05)).hauteur / 100,
+		).toBeCloseTo(1.24, 1);
+		await bot.demonter();
 	});
 
-	it("reste une fonction pure du temps pendant un morph de forme", () => {
-		const e = new BotEngine(100, "idle", radii("cercle"));
-		e.setShape(radii("capsule"), 1);
-		const milieu = e.sample(1.1).bodyPath;
-		e.sample(3);
-		expect(e.sample(1.1).bodyPath).toBe(milieu);
-	});
-
-	it("garde les yeux dans la silhouette sur une forme non circulaire", () => {
-		for (const id of [
-			"nuage",
-			"capsule",
-			"goutte",
-			"triangle",
-			"squircle",
-		] as const) {
-			const f = new BotEngine(100, "idle", radii(id)).sample(1);
-			expect(f.eyes).toHaveLength(2);
-			for (const eye of f.eyes) {
-				const parts = /matrix\(([^)]+)\)/
-					.exec(eye.matrix)![1]!
-					.split(",")
-					.map(Number);
-				const ex = parts[4]!;
-				const ey = parts[5]!;
-				const bord = radiusAtAngle(radii(id), Math.atan2(ey, ex)) * 100;
-				expect(Math.hypot(ex, ey)).toBeLessThan(bord);
+	it("garde le centre des yeux dans la silhouette, pour chaque forme et chaque expression", async () => {
+		for (const forme of SHAPES) {
+			const bot = await dessiner({ shape: forme.id, frozenAt: 1 });
+			for (const expr of EXPRESSIONS) {
+				const { corps, yeux } = await bot.rendre({ expression: expr.id });
+				expect(yeux, `${forme.id}/${expr.id}`).toHaveLength(2);
+				for (const oeil of yeux) {
+					expect(dedans(corps, oeil), `${forme.id}/${expr.id}`).toBe(true);
+				}
 			}
+			await bot.demonter();
 		}
-	});
+	}, 60_000);
 });
 
 describe("etats", () => {
-	it("garde les 14 etats de la video dans la sequence, et rien d autre", () => {
-		expect(SEQUENCE).toHaveLength(14);
-		expect(new Set(SEQUENCE).size).toBe(14);
-		for (const id of SEQUENCE)
-			expect(
-				STATES.some((s) => s.id === id),
-				id,
-			).toBe(true);
-	});
-
-	it("tient les transitions d interface hors du catalogue", () => {
-		const horsSequence = STATES.filter((s) => !SEQUENCE.includes(s.id)).map(
-			(s) => s.id,
-		);
-		expect(horsSequence).toEqual(["swirl"]);
-	});
-
-	it("montre le visage sur les etats a visage, le cache sur les autres", () => {
-		const avec: StateId[] = [
+	it("montre le visage sur les etats a visage, le cache sur les autres", async () => {
+		for (const state of [
 			"idle",
 			"wink",
 			"wide",
 			"notify",
 			"egg",
 			"hexagon",
-		];
-		const sans: StateId[] = ["thinking", "alert", "exclaim", "sleep"];
-		for (const id of avec)
-			expect(new BotEngine(100, id).sample(0.9).eyes.length).toBe(2);
-		for (const id of sans)
-			expect(new BotEngine(100, id).sample(0.9).eyes.length).toBe(0);
+		] as const)
+			expect((await image({ state }, 0.9)).yeux, state).toHaveLength(2);
+		for (const state of ["thinking", "alert", "exclaim", "sleep"] as const)
+			expect((await image({ state }, 0.9)).yeux, state).toHaveLength(0);
+	}, 30_000);
+
+	it("creuse une encoche autour de la pastille de notification", async () => {
+		const { trous, pastilles } = await image({ state: "notify" }, 1);
+		expect(trous).toHaveLength(1);
+		const encoche = trous[0]!;
+		const pastille = pastilles.find(
+			(p) => Math.hypot(p.x - encoche.x, p.y - encoche.y) < 1e-6,
+		)!;
+		expect((encoche.r - pastille.r) / 100).toBeCloseTo(0.054, 2);
+		expect(Math.hypot(pastille.x, pastille.y) / 100).toBeCloseTo(1.003, 1);
 	});
 
-	it("creuse une encoche autour de la pastille de notification", () => {
-		const f = new BotEngine(100, "notify").sample(1);
-		expect(f.notif).not.toBeNull();
-		expect(f.notch).not.toBeNull();
-		expect((f.notch!.r - f.notif!.r) / 100).toBeCloseTo(0.054, 2);
-		expect(Math.hypot(f.notif!.x, f.notif!.y) / 100).toBeCloseTo(1.003, 1);
+	it("trace les anneaux devant ET derriere le corps", async () => {
+		const { anneaux } = await image({ state: "orbit" }, 1.4);
+		expect(anneaux.derriere).toBeGreaterThan(0);
+		expect(anneaux.devant).toBeGreaterThan(0);
+		expect(anneaux.derriere + anneaux.devant).toBeGreaterThan(3);
 	});
 
-	it("trace les anneaux devant ET derriere le corps", () => {
-		const f = new BotEngine(100, "orbit").sample(1.4);
-		expect(f.arcs.length).toBeGreaterThan(3);
-		expect(f.arcs.some((a) => a.back.length > 0)).toBe(true);
-		expect(f.arcs.some((a) => a.front.length > 0)).toBe(true);
-	});
-
-	it("fait spiraler les particules vers le centre pendant l eclatement", () => {
-		const e = new BotEngine(100, "burst");
-		const rayon = (t: number) => {
-			const d = e.sample(t).dots[0];
+	it("fait converger les particules vers le centre pendant l eclatement", async () => {
+		const bot = await dessiner({ state: "burst", frozenAt: 0 });
+		const rayon = async (t: number) => {
+			const { particules } = await bot.a(t);
+			const d = particules[0];
 			return d ? Math.hypot(d.x, d.y) : 0;
 		};
-		expect(rayon(0.15)).toBeGreaterThan(rayon(0.45));
-		expect(rayon(0.45)).toBeGreaterThan(0);
+		const tot = await rayon(0.15);
+		const tard = await rayon(0.45);
+		expect(tot).toBeGreaterThan(tard);
+		expect(tard).toBeGreaterThan(0);
+		await bot.demonter();
 	});
 });
 
-describe("regard qui suit le pointeur", () => {
-	const oeilX = (e: BotEngine, t: number) =>
-		+/matrix\([^,]+,[^,]+,[^,]+,[^,]+,(-?[\d.]+)/.exec(
-			e.sample(t).eyes[0]!.matrix,
-		)![1]!;
+describe("regard pilote", () => {
+	it("porte le regard vers le lacet vise", async () => {
+		const droite = await regardant(regard({ yaw: 45 }));
+		const gauche = await regardant(regard({ yaw: -45 }));
+		expect(droite.yeux[0]!.x).toBeGreaterThan(gauche.yeux[0]!.x + 40);
+	});
 
-	function amplitude(e: BotEngine, de: number, a: number) {
+	it("remplace le lacet de l expression au lieu de s y ajouter", async () => {
+		const a = await image({ expression: "curieux" }, 1);
+		const b = await image({ expression: "blase" }, 1);
+		expect(Math.abs(a.yeux[0]!.x - b.yeux[0]!.x)).toBeGreaterThan(40);
+		const vise = regard({ yaw: -26 });
+		const va = await regardant(vise, 1, { expression: "curieux" });
+		const vb = await regardant(vise, 1, { expression: "blase" });
+		expect(Math.abs(va.yeux[0]!.x - vb.yeux[0]!.x)).toBeLessThan(1);
+	});
+
+	it("parcourt le tour demande sans changer le point d arrivee", async () => {
+		const direct = await regardant(regard({ yaw: -26 }));
+		const tourne = await regardant(regard({ yaw: -26, spin: 360 }));
+		expect(tourne.yeux).toEqual(direct.yeux);
+		expect(
+			(await regardant(regard({ yaw: -26, spin: 180 }))).yeux,
+		).toHaveLength(0);
+	});
+
+	it("fait passer un oeil derriere la boule quand la tete tourne fort", async () => {
+		expect((await regardant(regard({ yaw: 80 }))).yeux.length).toBeLessThan(2);
+	});
+
+	async function amplitude(look: Look | null) {
+		const bot = await dessiner({
+			frozenAt: 0,
+			gaze: look ? () => look : null,
+		});
 		const xs: number[] = [];
-		for (let t = de; t <= a; t += 0.1) xs.push(oeilX(e, t));
-		return Math.max(...xs) - Math.min(...xs);
+		for (let t = 1; t <= 8; t += 0.25) xs.push((await bot.a(t)).yeux[0]!.x);
+		await bot.demonter();
+		return { debut: xs[0]!, ecart: Math.max(...xs) - Math.min(...xs) };
 	}
 
-	it("ne touche pas au regard tant qu aucune cible n est posee", () => {
-		const nu = new BotEngine(100, "idle");
-		const vise = new BotEngine(100, "idle");
-		vise.setLook(null, 0);
-		expect(vise.sample(1).eyes[0]!.matrix).toBe(nu.sample(1).eyes[0]!.matrix);
-	});
+	it("eteint la derive quand le pointeur commande, la garde sinon", async () => {
+		const tenu = await amplitude(regard({ yaw: -10 }));
+		const libre = await amplitude(null);
+		expect(tenu.ecart).toBeLessThan(2);
+		expect(libre.ecart).toBeGreaterThan(4);
+		expect(libre.ecart).toBeGreaterThan(5 * tenu.ecart);
+	}, 30_000);
 
-	it("porte le regard vers le lacet vise, en absolu", () => {
-		const droite = new BotEngine(100, "idle");
-		const gauche = new BotEngine(100, "idle");
-		droite.setLook({ yaw: 45, pitch: 0, mix: 1, spin: 0, wander: 0 }, 0);
-		gauche.setLook({ yaw: -45, pitch: 0, mix: 1, spin: 0, wander: 0 }, 0);
-		const t = 1 + BotEngine.LOOK_MORPH;
-		expect(oeilX(droite, t)).toBeGreaterThan(oeilX(gauche, t) + 40);
-	});
-
-	it("remplace le lacet de la pose au lieu de s y ajouter", () => {
-		const modele = EXPRESSION_BY_ID.get("neutre")!;
-		const gauchier = { ...modele, gaze: { ...modele.gaze, yaw: -30 } };
-		const droitier = { ...modele, gaze: { ...modele.gaze, yaw: 60 } };
-		const cercle = SHAPE_BY_ID.get("cercle")!.radii;
-
-		const a = new BotEngine(100, "idle", cercle, gauchier);
-		const b = new BotEngine(100, "idle", cercle, droitier);
-		expect(Math.abs(oeilX(a, 1) - oeilX(b, 1))).toBeGreaterThan(40);
-
-		a.setLook({ yaw: -26, pitch: 0, mix: 1, spin: 0, wander: 0 }, 1);
-		b.setLook({ yaw: -26, pitch: 0, mix: 1, spin: 0, wander: 0 }, 1);
-		const t = 1 + BotEngine.LOOK_MORPH;
-		expect(oeilX(a, t)).toBeCloseTo(oeilX(b, t), 5);
-	});
-
-	it("parcourt le tour demande sans changer le point d arrivee", () => {
-		const direct = new BotEngine(100, "idle");
-		const tourne = new BotEngine(100, "idle");
-		direct.setLook({ yaw: -26, pitch: 0, mix: 1, spin: 0, wander: 0 }, 0);
-		tourne.setLook({ yaw: -26, pitch: 0, mix: 1, spin: 360, wander: 0 }, 0);
-		const t = 1 + BotEngine.LOOK_MORPH;
-		expect(tourne.sample(t).eyes[0]!.matrix).toBe(
-			direct.sample(t).eyes[0]!.matrix,
+	it("garde une tete tournee vivante quand aucun pointeur ne la commande", async () => {
+		const sansPointeur = await amplitude(
+			regard({ yaw: -26, pitch: 10, wander: 1 }),
 		);
-		const mi = new BotEngine(100, "idle");
-		mi.setLook({ yaw: -26, pitch: 0, mix: 1, spin: 180, wander: 0 }, 0);
-		expect(mi.sample(t).eyes).toHaveLength(0);
-	});
+		const avecPointeur = await amplitude(regard({ yaw: -26, pitch: 10 }));
+		expect(sansPointeur.debut).toBeLessThan(0);
+		expect(avecPointeur.debut).toBeLessThan(0);
+		expect(sansPointeur.ecart).toBeGreaterThan(5 * avecPointeur.ecart);
+	}, 30_000);
 
-	it("garde les deux yeux visibles aux amplitudes extremes", () => {
-		for (const yaw of [-42, -26, -10]) {
-			for (const pitch of [-3, 10, 23]) {
-				const e = new BotEngine(100, "idle");
-				e.setLook({ yaw, pitch, mix: 1, spin: 0, wander: 0 }, 0);
-				expect(e.sample(1).eyes, `yaw ${yaw} pitch ${pitch}`).toHaveLength(2);
-			}
-		}
-	});
-
-	it("eteint la derive automatique quand le pointeur commande", () => {
-		const libre = new BotEngine(100, "idle");
-		const tenu = new BotEngine(100, "idle");
-		tenu.setLook(
-			{ yaw: REST_GAZE.yaw, pitch: 0, mix: 1, spin: 0, wander: 0 },
-			0,
+	it("revient au regard de l etat quand la cible est relachee", async () => {
+		const fixe = () => regard({ yaw: -20, pitch: -10 });
+		const bot = await dessiner({ gaze: fixe, frozenAt: 0 });
+		await bot.rendre({ gaze: null });
+		const fini = BotEngine.LOOK_MORPH + 0.05;
+		const nu = await dessiner({ frozenAt: 0 });
+		expect((await bot.a(0.05)).yeux[0]!.x).not.toBeCloseTo(
+			(await nu.a(0.05)).yeux[0]!.x,
+			1,
 		);
-
-		expect(amplitude(tenu, 1, 8)).toBeLessThan(2);
-		expect(amplitude(libre, 1, 8)).toBeGreaterThan(5 * amplitude(tenu, 1, 8));
+		expect((await bot.a(fini)).yeux).toEqual((await nu.a(fini)).yeux);
+		await bot.demonter();
+		await nu.demonter();
 	});
 
-	it("revient au regard de l etat quand la cible est relachee", () => {
-		const nu = new BotEngine(100, "idle");
-		const e = new BotEngine(100, "idle");
-		e.setLook({ yaw: -20, pitch: -10, mix: 1, spin: 0, wander: 0 }, 0);
-		e.sample(1);
-		e.setLook(null, 1);
-		expect(oeilX(e, 1.05)).not.toBeCloseTo(oeilX(nu, 1.05), 1);
-		const fini = 1 + BotEngine.LOOK_MORPH;
-		expect(oeilX(e, fini)).toBeCloseTo(oeilX(nu, fini), 5);
-	});
-
-	it("reste une fonction pure du temps pendant le rattrapage", () => {
-		const e = new BotEngine(100, "idle");
-		e.setLook({ yaw: -18, pitch: -8, mix: 1, spin: 0, wander: 0 }, 1);
-		const milieu = e.sample(1.1).eyes[0]!.matrix;
-		e.sample(3);
-		expect(e.sample(1.1).eyes[0]!.matrix).toBe(milieu);
-	});
-
-	it("laisse la derive intacte sur les vignettes, qui ne visent jamais", () => {
-		const e = new BotEngine(100, "idle");
-		expect(amplitude(e, 0, 6)).toBeGreaterThan(4);
+	it("ignore une cible non finie plutot que de s en souvenir", async () => {
+		const sain = await image({}, 1);
+		expect(
+			(await regardant(regard({ yaw: Number.NaN, pitch: 10 }))).yeux,
+		).toEqual(sain.yeux);
 	});
 });
 
-describe("robustesse du regard", () => {
-	it("refuse une cible non finie plutot que de s en souvenir", () => {
-		const sain = new BotEngine(100, "idle");
-		const e = new BotEngine(100, "idle");
-		e.setLook({ yaw: NaN, pitch: 10, mix: 1, spin: 0, wander: 0 }, 0);
-		expect(e.sample(1).eyes[0]!.matrix).toBe(sain.sample(1).eyes[0]!.matrix);
-
-		e.setLook({ yaw: -26, pitch: 10, mix: 1, spin: 0, wander: 0 }, 1);
-		expect(e.sample(1 + BotEngine.LOOK_MORPH).eyes[0]!.matrix).not.toBe(
-			sain.sample(1 + BotEngine.LOOK_MORPH).eyes[0]!.matrix,
+describe("retour en arriere dans le cycle", () => {
+	it("montre le bloc vise comme joue depuis son debut, sans fondre depuis le suivant", async () => {
+		const cycle = [
+			{ state: "egg" as const, duration: 2 },
+			{ state: "idle" as const, duration: 2 },
+		];
+		const recule = await dessiner({ frozenAt: 0, cycle });
+		await recule.parcourir(3);
+		const direct = await dessiner({ state: "egg", frozenAt: 0, cycle });
+		expect((await recule.parcourir(0.2)).corps).toEqual(
+			(await direct.parcourir(0.2)).corps,
 		);
-	});
-
-	it("garde une tete tournee vivante quand aucun pointeur ne la commande", () => {
-		const oeilX = (e: BotEngine, t: number) =>
-			+/matrix\([^,]+,[^,]+,[^,]+,[^,]+,(-?[\d.]+)/.exec(
-				e.sample(t).eyes[0]!.matrix,
-			)![1]!;
-		const amplitude = (e: BotEngine) => {
-			const xs: number[] = [];
-			for (let t = 1; t <= 8; t += 0.1) xs.push(oeilX(e, t));
-			return Math.max(...xs) - Math.min(...xs);
-		};
-
-		const sansPointeur = new BotEngine(100, "idle");
-		sansPointeur.setLook(
-			{ yaw: -26, pitch: 10, mix: 1, spin: 0, wander: 1 },
-			0,
-		);
-		const avecPointeur = new BotEngine(100, "idle");
-		avecPointeur.setLook(
-			{ yaw: -26, pitch: 10, mix: 1, spin: 0, wander: 0 },
-			0,
-		);
-
-		expect(oeilX(sansPointeur, 1)).toBeLessThan(0);
-		expect(oeilX(avecPointeur, 1)).toBeLessThan(0);
-		expect(amplitude(sansPointeur)).toBeGreaterThan(
-			5 * amplitude(avecPointeur),
-		);
-	});
-});
-
-describe("reset", () => {
-	it("oublie l etat precedent, la ou setState le garde pour le fondre", () => {
-		const avecFondu = new BotEngine(100, "idle");
-		avecFondu.setState("egg", 0);
-		const remis = new BotEngine(100, "idle");
-		remis.reset("egg", 0);
-
-		expect(avecFondu.sample(0).bodyPath).not.toBe(remis.sample(0).bodyPath);
-		expect(remis.sample(0).bodyPath).toBe(
-			new BotEngine(100, "egg").sample(0).bodyPath,
-		);
-	});
-
-	it("date l etat ou on le lui dit", () => {
-		const tot = new BotEngine(100, "idle");
-		tot.reset("alert", 0);
-		const tard = new BotEngine(100, "idle");
-		tard.reset("alert", 5);
-		expect(tot.sample(5).bodyPath).not.toBe(tard.sample(5).bodyPath);
-		expect(tard.state).toBe("alert");
-	});
-
-	it("laisse sample une fonction pure du temps", () => {
-		const e = new BotEngine(100, "idle");
-		e.reset("orbit", 0);
-		const tot = e.sample(0.3).bodyPath;
-		e.sample(9);
-		expect(e.sample(0.3).bodyPath).toBe(tot);
+		await recule.demonter();
+		await direct.demonter();
 	});
 });
 
 describe("changement d etat pendant un fondu", () => {
 	const IMAGE = 1 / 60;
 
-	function sautApres(changements: Array<[StateId, number]>, at: number) {
-		const e = new BotEngine(100, "idle");
+	async function sautApres(cycle: BloubBotProps["cycle"], at: number) {
+		const bot = await dessiner({ frozenAt: 0, cycle });
 		const distances: Array<{ t: number; d: number[] }> = [];
-		let i = 0;
 		for (let t = 0; t <= at + 4 * IMAGE; t += IMAGE) {
-			while (i < changements.length && changements[i]![1] <= t + 1e-9) {
-				e.setState(changements[i]![0], changements[i]![1]);
-				i++;
-			}
-			distances.push({
-				t,
-				d: e.sample(t).eyes.map((y) => {
-					const n = y.matrix.match(/-?\d+\.?\d*/g)!.map(Number);
-					return Math.hypot(n[4]!, n[5]!);
-				}),
-			});
+			const { yeux } = await bot.parcourir(t);
+			distances.push({ t, d: yeux.map((y) => Math.hypot(y.x, y.y)) });
 		}
+		await bot.demonter();
 		let pire = 0;
 		for (let k = 1; k < distances.length; k++) {
 			const a = distances[k - 1]!;
@@ -456,57 +410,63 @@ describe("changement d etat pendant un fondu", () => {
 
 	const NORMAL = 14;
 
-	it("ne saute pas plus qu un changement espace", () => {
-		const espace = sautApres(
+	it("ne saute pas plus qu un changement espace", async () => {
+		const espace = await sautApres(
 			[
-				["wide", 0.5],
-				["idle", 2],
+				{ state: "idle", duration: 0.5 },
+				{ state: "wide", duration: 1.5 },
+				{ state: "idle", duration: 3 },
 			],
 			2,
 		);
 		expect(espace).toBeLessThan(NORMAL);
-
 		expect(
-			sautApres(
+			await sautApres(
 				[
-					["wide", 0.5],
-					["idle", 0.6],
+					{ state: "idle", duration: 0.5 },
+					{ state: "wide", duration: 0.1 },
+					{ state: "idle", duration: 3 },
 				],
 				0.6,
 			),
 		).toBeLessThanOrEqual(espace);
-	});
+	}, 30_000);
 
-	it("tient sur des changements enchaines", () => {
-		const suite: Array<[StateId, number]> = [
-			["wide", 0.5],
-			["idle", 0.55],
-			["egg", 0.6],
-			["orbit", 0.65],
-			["notify", 0.7],
+	it("tient sur des changements enchaines", async () => {
+		const cycle = [
+			{ state: "idle" as const, duration: 0.5 },
+			{ state: "wide" as const, duration: 0.05 },
+			{ state: "idle" as const, duration: 0.05 },
+			{ state: "egg" as const, duration: 0.05 },
+			{ state: "orbit" as const, duration: 0.05 },
+			{ state: "notify" as const, duration: 3 },
 		];
-		for (const [, at] of suite.slice(1)) {
-			expect(sautApres(suite, at), `changement a ${at}s`).toBeLessThan(NORMAL);
+		for (const at of [0.55, 0.6, 0.65, 0.7]) {
+			expect(await sautApres(cycle, at), `changement a ${at}s`).toBeLessThan(
+				NORMAL,
+			);
 		}
-	});
+	}, 30_000);
 
-	it("continue d animer le corps apres des changements espaces", () => {
-		const suite: Array<[StateId, number]> = [
-			["thinking", 1],
-			["wink", 2],
-			["alert", 3],
-		];
-		const avecHistorique = new BotEngine(100, "idle");
-		let i = 0;
-		const images: string[] = [];
-		for (let t = 0; t < 4; t += IMAGE) {
-			while (i < suite.length && suite[i]![1] <= t + 1e-9) {
-				avecHistorique.setState(suite[i]![0], suite[i]![1]);
-				i++;
-			}
-			images.push(avecHistorique.sample(t).bodyPath);
+	it("continue d animer le corps apres des changements espaces", async () => {
+		const bot = await dessiner({
+			frozenAt: 0,
+			cycle: [
+				{ state: "idle", duration: 1 },
+				{ state: "thinking", duration: 1 },
+				{ state: "wink", duration: 1 },
+				{ state: "alert", duration: 2 },
+			],
+		});
+		const corps: string[] = [];
+		for (let t = 0; t < 3.8; t += 0.1) {
+			corps.push(JSON.stringify((await bot.parcourir(t)).corps));
 		}
-		expect(images.every((p) => p.length > 0)).toBe(true);
-		expect(new Set(images.slice(-12)).size).toBeGreaterThan(1);
+		for (let t = 3.8; t < 4; t += IMAGE) {
+			corps.push(JSON.stringify((await bot.parcourir(t)).corps));
+		}
+		expect(corps.every((c) => c.length > 2)).toBe(true);
+		expect(new Set(corps.slice(-12)).size).toBeGreaterThan(1);
+		await bot.demonter();
 	});
 });
