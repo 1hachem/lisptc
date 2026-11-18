@@ -1,5 +1,5 @@
 import { bufferSink, hitch } from "@repo/interpreter/journal";
-import { bootAsync, Interp, runAsync } from "@repo/interpreter/lisp";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { zString } from "@repo/interpreter/schema";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { promisesHost } from "../src/promises-host.ts";
 
 function interpWithJob(): Interp {
 	const interp = new Interp({ extensions: [promisesExtension(promisesHost)] });
-	bootAsync(interp);
+	boot(interp);
 	interp.defPromise(
 		"job",
 		0,
