@@ -15,10 +15,11 @@ gotchas: instance globs, tab targeting, React inputs. `chrome-agent help
 
 ## Logging in
 
-The app on the dev stack (`task up`) is at `http://localhost:3000`. Every
-deploy of that stack seeds one account, `charts/lisptc/values-dev.yaml` under
-`dev.seed`: `test@gmail.com`, password `crptx123`. When a page needs a session,
-sign in with it at `/login`. Never sign up a new account.
+The app on the dev stack (`task up`) is at `http://localhost:3000`. Every dev
+and preview deploy seeds one account from the `lisptc-seed` secret. Read its
+`SEED_EMAIL` and `SEED_PASSWORD` with `kubectl get secret lisptc-seed -n
+lisptc-dev -o jsonpath='{.data}'`, base64-decoded, and sign in with them at
+`/login`. Never sign up a new account.
 
 ## The loop
 
