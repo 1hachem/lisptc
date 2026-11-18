@@ -674,10 +674,10 @@ export const prelude = `
   \`(_unwind-protect (lambda () ,form) (lambda () ,@cleanup)))
 
 (defmacro memory (key &rest declared)
-  "Declare a built-in memory, in a .memories.ptc file an extension ships. With no memory extension installed, a declaration does nothing."
+  "A declaration in a .memories.ptc file an extension ships. Here it does nothing; an extension that files memories defines it."
   nil)
 
 (defmacro area (name &rest declared)
-  "Declare the area a .memories.ptc file's memories are filed under. With no memory extension installed, a declaration does nothing."
+  "A declaration in a .memories.ptc file an extension ships. Here it does nothing; an extension that files memories defines it."
   nil)
 `;
