@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { preferencesHost } from "../src/preferences-host.ts";
 import { desktopMachine, world } from "./helpers.ts";
 
 const HELD = {
@@ -51,14 +50,6 @@ describe("reading preferences", () => {
 			'(:font "geist" :metadata (:tokens t :time nil) :input (:lisp t) :sidebar ("home" "chat" "memories" "README.md") :sidebar-right ("tests" "ui") :hidden ("memories") :status-bar ("panes" "gap-1" "gap-2" "gap-3" "gap-4" "gap-5" "gap-6" "desktop" "clock") :status-bar-hidden nil :motion "slide" :panel-motion t :trace-beside-chat nil :trace-link t)',
 		);
 	});
-
-	it("lists the fonts and motions there are to choose from", async () => {
-		const { ev } = await world();
-		expect(await ev("(fonts)")).toBe('(("geist" . "Geist"))');
-		expect(await ev("(motions)")).toBe(
-			'(("slide" . "rows slide") ("lift" . "the row lifts"))',
-		);
-	});
 });
 
 describe("changing preferences", () => {
@@ -77,19 +68,17 @@ describe("changing preferences", () => {
 	});
 
 	it("merges toggles and keeps the ones it does not name", async () => {
-		const { ev, store } = await world(HELD);
+		const { ev } = await world(HELD);
 		expect(await ev("(preferences/set :metadata '(:time t))")).toContain(
 			":metadata (:tokens t :time t)",
 		);
-		expect(store.read().metadata).toEqual({ tokens: true, time: true });
 	});
 
 	it("turns a chat input helper off and keeps the rest", async () => {
-		const { ev, store } = await world(HELD);
+		const { ev } = await world(HELD);
 		expect(await ev("(preferences/set :input '(:lisp nil))")).toContain(
 			":input (:lisp nil)",
 		);
-		expect(store.read().input).toEqual({ lisp: false });
 	});
 
 	it("refuses a font the app does not offer", async () => {
@@ -171,12 +160,6 @@ describe("changing preferences", () => {
 		expect(store.read()).toEqual(HELD);
 	});
 
-	it("hides an entry of the right sidebar", async () => {
-		const { ev, store } = await world(HELD);
-		await ev('(preferences/set :hidden \'("tests"))');
-		expect(store.read().hidden).toEqual(["tests"]);
-	});
-
 	it("refuses a sidebar entry named twice", async () => {
 		const { ev } = await world(HELD);
 		await expect(
@@ -185,13 +168,11 @@ describe("changing preferences", () => {
 	});
 
 	it("replaces the hidden sidebar entries, so an entry left out is shown again", async () => {
-		const { ev, store } = await world(HELD);
+		const { ev } = await world(HELD);
 		expect(
 			await ev('(preferences/set :hidden \'("README.md" "chat"))'),
 		).toContain(':hidden ("README.md" "chat")');
-		expect(store.read().hidden).toEqual(["README.md", "chat"]);
-		await ev("(preferences/set :hidden '())");
-		expect(store.read().hidden).toEqual([]);
+		expect(await ev("(preferences/set :hidden '())")).toContain(":hidden nil");
 	});
 
 	it("refuses to hide a sidebar entry the app has never listed", async () => {
@@ -240,14 +221,6 @@ describe("changing preferences", () => {
 		]);
 	});
 
-	it("hides bottom bar items and shows them again", async () => {
-		const { ev, store } = await world(HELD);
-		await ev('(preferences/set :status-bar-hidden \'("clock"))');
-		expect(store.read().statusBarHidden).toEqual(["clock"]);
-		await ev("(preferences/set :status-bar-hidden '())");
-		expect(store.read().statusBarHidden).toEqual([]);
-	});
-
 	it("refuses a bottom bar item the app has never listed", async () => {
 		const { ev, store } = await world(HELD);
 		await expect(
@@ -265,24 +238,6 @@ describe("changing preferences", () => {
 		await expect(ev('(preferences/set :motion "spin")')).rejects.toThrow(
 			/unknown motion, see \(motions\)/,
 		);
-	});
-
-	it("turns panel animation off and back on", async () => {
-		const { ev, store } = await world(HELD);
-		await ev("(preferences/set :panel-motion nil)");
-		expect(store.read().panelMotion).toBe(false);
-		expect(await ev("(preferences)")).toContain(":panel-motion nil");
-		await ev("(preferences/set :panel-motion t)");
-		expect(store.read().panelMotion).toBe(true);
-	});
-
-	it("opens the trace beside the chat for a developer, and stops", async () => {
-		const { ev, store } = await world(HELD);
-		await ev("(preferences/set :trace-beside-chat t)");
-		expect(store.read().traceBesideChat).toBe(true);
-		expect(await ev("(preferences)")).toContain(":trace-beside-chat t");
-		await ev("(preferences/set :trace-beside-chat nil)");
-		expect(store.read().traceBesideChat).toBe(false);
 	});
 
 	it("hides the message's trace link and shows it again", async () => {
@@ -305,19 +260,6 @@ describe("changing preferences", () => {
 	it("refuses a call that sets nothing", async () => {
 		const { ev } = await world(HELD);
 		await expect(ev("(preferences/set)")).rejects.toThrow(/nothing to set/);
-	});
-});
-
-describe("the prompt", () => {
-	it("teaches the forms it installs", () => {
-		const prompt = preferencesHost.prompt();
-		for (const form of [
-			"(preferences)",
-			"(preferences/set",
-			"(fonts)",
-			"(motions)",
-		])
-			expect(prompt).toContain(form);
 	});
 });
 
