@@ -1,9 +1,7 @@
 import { restore, snapshot } from "@repo/interpreter/image";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { newSym } from "@repo/interpreter/objects";
+import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
-import type { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { promisesExtension } from "../src/promises.ts";
@@ -33,9 +31,7 @@ describe("a combinator in an image", () => {
 		const image = JSON.parse(JSON.stringify(snapshot(interp)));
 		const back = interpWith(async (x) => x);
 		restore(back, image);
-		const all = back.getGlobal(newSym("all")) as LispPromise;
-		expect(all.state).toBe("pending");
-		expect(str(await all)).toBe("(1 2)");
-		expect(all.state).toBe("fulfilled");
+		expect(str(runSync(back, "(promise-state all)"))).toBe(":pending");
+		expect(str((await runAsync(back, "(await all)")).value)).toBe("(1 2)");
 	});
 });
