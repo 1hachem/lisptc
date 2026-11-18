@@ -12,7 +12,7 @@ function repl(prose = proseExtension(proseHost)) {
 		prose,
 	]);
 	const fired = async (code: string) =>
-		[(await r.evalOutput(code)).emitted].flat().join("\n");
+		(await r.evalOutput(code)).notes.map((said) => said.content).join("\n");
 	return { r, fired };
 }
 
