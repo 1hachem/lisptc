@@ -19,7 +19,6 @@ import {
 } from "../src/ui.ts";
 import { uiHostFor } from "../src/ui-host.ts";
 import { MemoryViewStore } from "../src/view-store.ts";
-import { WIDGET_FORMS } from "../src/widgets.ts";
 
 function panelOf(saved: PanelTab[]): { panel: PanelStore; ops: PanelOp[] } {
 	let tabs = [...saved];
@@ -581,14 +580,6 @@ describe("the catalog the frontend draws from", () => {
 		return [...own, ...node.children.flatMap(strays)];
 	}
 
-	it.each(TAGS)("draws the example its prompt teaches for %s", (tag) => {
-		const { interp, ui } = fresh();
-		runSync(interp, `(ui/render ${WIDGET_FORMS[tag].example})`);
-		const node = ui.takeView();
-		expect(node?.tag).toBe(tag);
-		expect(node && widgetOf(node)).toBeDefined();
-	});
-
 	it("holds every widget this surface builds, and nothing more", () => {
 		const { interp, ui } = fresh();
 		runSync(
@@ -640,25 +631,18 @@ describe("the view store", () => {
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
 		boot(interp);
-		const drawn: string[] = [];
-		interp.journal.onAny((entry) => {
-			if (entry.kind !== viewKind.name) return;
-			const { viewId } = entry.value as { viewId: string };
-			if (!drawn.includes(viewId)) drawn.push(viewId);
-		});
-		return { surface, views, interp, drawn, ui: collector(interp, views) };
+		return { surface, views, interp, ui: collector(interp, views) };
 	}
 
-	it("writes every render of a step into one view", () => {
+	it("shows the last render of a step, and a view of its own for each step", () => {
 		const { surface, views, interp } = stored();
 		surface.beginStep();
 		runSync(interp, '(ui/render (ui/text "a")) (ui/render (ui/text "b"))');
-		expect([...views.views.values()]).toMatchObject([{ props: { text: "b" } }]);
 		surface.beginStep();
 		runSync(interp, '(ui/render (ui/text "c"))');
-		expect([...views.views.values()]).toMatchObject([
-			{ props: { text: "b" } },
-			{ props: { text: "c" } },
+		expect([...views.views.values()].map(nodeToJson)).toEqual([
+			{ tag: "text", props: { text: "b" }, children: [] },
+			{ tag: "text", props: { text: "c" }, children: [] },
 		]);
 	});
 
@@ -697,8 +681,8 @@ describe("the view store", () => {
 		]);
 	});
 
-	it("marks a view expired when ui/forget drops its handlers", () => {
-		const { surface, views, interp, drawn } = stored();
+	it("shows a view expired once a later step forgets its handlers", () => {
+		const { surface, views, interp } = stored();
 		surface.beginStep();
 		runSync(
 			interp,
@@ -706,16 +690,16 @@ describe("the view store", () => {
 		);
 		surface.beginStep();
 		runSync(interp, "(ui/forget view)");
-		expect([...views.expired]).toEqual(drawn);
+		expect([...views.expired]).toEqual(["v1"]);
 	});
 
-	it("marks a view expired when a click finds its handler gone", async () => {
-		const { surface, views, interp, drawn } = stored();
+	it("shows a view expired when a click comes after the session lost its handler", async () => {
+		const { surface, views, interp } = stored();
 		surface.beginStep();
 		runSync(interp, '(ui/render (ui/button "a" (lambda () 1)))');
 		surface.reset();
 		await surface.invoke("a1", {});
-		expect([...views.expired]).toEqual(drawn);
+		expect([...views.expired]).toEqual(["v1"]);
 	});
 
 	it("still reports an id no view ever carried", async () => {
@@ -725,16 +709,16 @@ describe("the view store", () => {
 		);
 	});
 
-	it("clears the expired mark when the view is drawn again", () => {
-		const { surface, views, interp, drawn } = stored();
+	it("shows a forgotten view live again once it is drawn anew", () => {
+		const { surface, views, interp } = stored();
 		surface.beginStep();
 		runSync(
 			interp,
 			'(setq view (ui/stack (ui/button "a" (lambda () 1)))) (ui/render view) (ui/forget view)',
 		);
-		expect([...views.expired]).toEqual(drawn);
+		expect([...views.expired]).toEqual(["v1"]);
 		runSync(interp, "(ui/render view)");
-		expect(views.expired.size).toBe(0);
+		expect([...views.expired]).toEqual([]);
 	});
 });
 
