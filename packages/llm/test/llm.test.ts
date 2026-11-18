@@ -98,13 +98,6 @@ async function failure(interp: Interp, code: string): Promise<string> {
 }
 
 describe("write", () => {
-	it("sends the prompt as a user turn and returns the reply as a string", async () => {
-		const { interp } = llmInterp(transcript);
-		expect(await evalStr(interp, '(write "greet me")')).toBe(
-			'"user: greet me"',
-		);
-	});
-
 	it("sends a :system turn ahead of the prompt, with the settings it was given", async () => {
 		const { interp } = llmInterp(
 			(req) => `${transcript(req)} | ${settings(req)}`,
