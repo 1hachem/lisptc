@@ -3,7 +3,6 @@ import type { ModelDelta } from "@repo/interpreter/session";
 import { DEFAULT_PROVIDER } from "@repo/shared/providers";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Mail } from "../src/mailbox.ts";
-import { replResultContent } from "../src/repl.ts";
 import type { ChatInput } from "../src/stream.ts";
 import {
 	asking,
@@ -651,7 +650,8 @@ describe("chat stream", () => {
 	test("a user message's eval result reaches the model as a system event after it and the wire as its own row", async () => {
 		const result = {
 			type: "tool",
-			content: replResultContent("3", false),
+			content:
+				'{"type":"tool_result","source":"lisp-repl","error":false,"output":"3"}',
 			additional_kwargs: { display: "3", results: ["3"] },
 		};
 		const body = await stream({

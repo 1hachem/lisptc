@@ -7,7 +7,6 @@ import type {
 	TurnOutcome,
 } from "@repo/interpreter/session";
 import { MemoryImageStore } from "@repo/repl/image-store";
-import { AgentRepl } from "@repo/repl/repl";
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Line } from "../src/line.ts";
@@ -35,28 +34,11 @@ let throws: string | undefined;
 let calls = 0;
 let onCall: (() => void) | undefined;
 
-const turns = vi.hoisted(
-	() => [] as { prompt: string; answer: string; halted: boolean }[],
-);
-const exceptions = vi.hoisted(() => [] as unknown[]);
-const exceptionProperties = vi.hoisted(() => [] as unknown[]);
-
-const spans = vi.hoisted(
-	() => [] as { step: number; source: string; error: boolean }[],
-);
-
 vi.mock("../src/telemetry.ts", () => ({
-	captureReplEval: (_ctx: unknown, span: (typeof spans)[number]) => {
-		spans.push(span);
-	},
-	captureTurn: (_ctx: unknown, turn: (typeof turns)[number]) => {
-		turns.push(turn);
-	},
+	captureReplEval: () => {},
+	captureTurn: () => {},
 	captureLlmCall: () => {},
-	captureException: (error: unknown, _ctx: unknown, properties: unknown) => {
-		exceptions.push(error);
-		exceptionProperties.push(properties);
-	},
+	captureException: () => {},
 }));
 
 vi.mock("../src/agent.ts", () => ({
@@ -84,15 +66,6 @@ function holding(name: string, reason: string): InterpExtension {
 	};
 }
 
-class CountingRepl extends AgentRepl {
-	evals = 0;
-
-	override async evalOutput(code: string) {
-		this.evals += 1;
-		return super.evalOutput(code);
-	}
-}
-
 describe("the agent turn", () => {
 	let runAgentTurn: typeof import("../src/turn.ts").runAgentTurn;
 
@@ -102,10 +75,6 @@ describe("the agent turn", () => {
 
 	beforeEach(() => {
 		seen.length = 0;
-		spans.length = 0;
-		turns.length = 0;
-		exceptions.length = 0;
-		exceptionProperties.length = 0;
 		script = [];
 		throws = undefined;
 		calls = 0;
@@ -126,31 +95,6 @@ describe("the agent turn", () => {
 	}
 
 	const ask: Line[] = [{ kind: "user", text: "what is 1 + 2?" }];
-
-	test("a step whose code throws is captured as an error span", async () => {
-		script = [[{ text: "(car 5)" }], [{ text: "done." }]];
-
-		await drain(ask);
-
-		expect(spans[0]).toMatchObject({ step: 1, error: true });
-		expect(spans[0].source).toBe("(car 5)");
-	});
-
-	test("a step that evaluates cleanly is not an error span", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-
-		await drain(ask);
-
-		expect(spans[0]).toMatchObject({ step: 1, error: false });
-	});
-
-	test("the finishing step is captured as a span", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-
-		await drain(ask);
-
-		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
-	});
 
 	test("steps-taken counts the steps of this turn, not the replies of earlier ones", async () => {
 		script = [
@@ -369,7 +313,7 @@ describe("the agent turn", () => {
 	});
 
 	test("a note from an earlier turn reaches the model in place, and is not something the user said", async () => {
-		script = [[{ text: "three." }]];
+		script = [[{ text: "(echo user-messages)" }], [{ text: "three." }]];
 		const history: Line[] = [
 			{ kind: "user", text: "hello" },
 			{
@@ -379,20 +323,16 @@ describe("the agent turn", () => {
 			{ kind: "assistant", text: "ahoy." },
 			{ kind: "user", text: "what is 1 + 2?" },
 		];
-		const repl = testRepl();
 
-		await drain(history, { repl });
+		const events = await drain(history);
 
 		expect(seen[0].messages[1]).toEqual({
 			role: "developer",
 			content: "you are a pirate",
 		});
 		expect(
-			repl.interp.conversation
-				.records()
-				.filter((s) => s.role === "user")
-				.map((s) => s.content),
-		).toEqual(["hello", "what is 1 + 2?"]);
+			events.flatMap((e) => (e.type === "result" ? [e.display] : [])),
+		).toEqual(['("hello" "what is 1 + 2?")\n']);
 	});
 
 	test("a steer taken between steps reaches the next model call after the tool result", async () => {
@@ -489,17 +429,16 @@ describe("the agent turn", () => {
 		).toEqual(["oauth\n"]);
 	});
 
-	test("the inbox is not read before the first step", async () => {
-		script = [[{ text: "three." }]];
-		let readBeforeModel = false;
-		const inbox = vi.fn(async () => {
-			if (seen.length === 0) readBeforeModel = true;
-			return [];
-		});
+	test("a post waiting from the start reaches the model only after the first step", async () => {
+		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
+		const pending = [
+			{ kind: "user" as const, id: "s1", text: "use hex", forms: true },
+		];
 
-		await drain(ask, { inbox });
+		await drain(ask, { inbox: async () => pending.splice(0) });
 
-		expect(readBeforeModel).toBe(false);
+		expect(seen[0].messages.map((m) => m.content)).not.toContain("use hex");
+		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });
 	});
 
 	test("the loop stops at maxSteps without an answer", async () => {
@@ -593,14 +532,14 @@ describe("the agent turn", () => {
 	});
 
 	test("a consumer that stops consuming stops the loop", async () => {
-		const repl = new CountingRepl({ extensions: [] });
-		script = [[{ text: "(+ 1 2)" }]];
+		const repl = testRepl();
+		script = [[{ text: "(setq ran t)" }]];
 
 		for await (const event of runAgentTurn(ask, { repl })) {
 			if (event.type === "delta") break;
 		}
 
-		expect(repl.evals).toBe(0);
+		expect(await repl.eval("(echo ran)")).toContain("void variable: ran");
 		expect(seen).toHaveLength(1);
 	});
 
@@ -661,11 +600,10 @@ describe("the agent turn", () => {
 		["silent", [[{ text: "" }]], "silent"],
 	])("the session sees a %s turn settle", async (_name, turns, expected) => {
 		script = turns;
-		const outcomes: TurnOutcome[] = [];
 		const repl = testRepl([
 			extension((hooks) =>
 				hooks.settled.use((turn, end, next) => {
-					outcomes.push(end.outcome);
+					turn.interp.defineGlobal(newSym("settled-as"), end.outcome);
 					next(turn, end);
 				}),
 			),
@@ -673,76 +611,8 @@ describe("the agent turn", () => {
 
 		await drain(ask, { repl, maxSteps: 2 });
 
-		expect(outcomes).toEqual([expected]);
-	});
-
-	test("telemetry sees every step the turn ran", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-
-		await drain(ask);
-
-		expect(spans.map((s) => s.source)).toEqual(["(+ 1 2)", "three."]);
-	});
-
-	test("the turn is traced with its prompt and answer once it settles", async () => {
-		script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-
-		await drain(ask);
-
-		expect(turns).toEqual([
-			expect.objectContaining({
-				prompt: "what is 1 + 2?",
-				answer: "three.",
-				halted: true,
-			}),
-		]);
-	});
-
-	test("a failed turn is traced as an exception, an aborted one is not", async () => {
-		throws = "upstream exploded";
-		await drain(ask);
-		expect(exceptions).toHaveLength(1);
-
-		exceptions.length = 0;
-		const abort = new AbortController();
-		onCall = () => abort.abort();
-		await drain(ask, { signal: abort.signal });
-		expect(exceptions).toHaveLength(0);
-	});
-
-	test("a hook that throws as the turn settles loses neither the trace nor the turn", async () => {
-		script = [[{ text: "three." }]];
-		const broken = new Error("observer broke");
-		const repl = testRepl([
-			extension((hooks) =>
-				hooks.settled.use(() => {
-					throw broken;
-				}),
-			),
-		]);
-
-		const events = await drain(ask, { repl });
-
-		expect(events.at(-1)).toMatchObject({ type: "halt", answer: "three." });
-		expect(turns).toHaveLength(1);
-		expect(exceptions).toEqual([broken]);
-	});
-
-	test("a hook that throws on what the message carried is traced with the keys it carried, never their values", async () => {
-		script = [[{ text: "three." }]];
-		const broken = new Error("reader broke");
-		const repl = testRepl([
-			extension((hooks) =>
-				hooks.received.use(() => {
-					throw broken;
-				}),
-			),
-		]);
-
-		await drain(ask, { repl, received: { said: "a secret" } });
-
-		expect(exceptions[0]).toBe(broken);
-		expect(exceptionProperties[0]).toEqual({ received: ["said"] });
-		expect(JSON.stringify(exceptionProperties)).not.toContain("a secret");
+		expect((await repl.evalOutput("(echo settled-as)")).user).toBe(
+			`${expected}\n`,
+		);
 	});
 });

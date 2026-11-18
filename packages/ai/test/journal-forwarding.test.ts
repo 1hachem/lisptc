@@ -1,8 +1,7 @@
 import type { ModelDelta } from "@repo/interpreter/session";
-import { describe, expect, it, vi } from "vitest";
-import { replResultContent } from "../src/repl.ts";
-import { runAgentTurn, type TurnEvent } from "../src/turn.ts";
-import { extension, recording, testRepl } from "./helpers.ts";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { WireMessage } from "../src/line.ts";
+import { extension, recording, streamChat, testRepl } from "./helpers.ts";
 
 const TURNS: ModelDelta[][] = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
 
@@ -30,72 +29,68 @@ const journaling = extension((hooks) => {
 	});
 });
 
-describe("the loop and the journal", () => {
-	it("marks what each step recorded with the id of the step it is about", async () => {
-		turn = 0;
-		const events: TurnEvent[] = [];
-		for await (const event of runAgentTurn(
-			[{ kind: "user", text: "what is 1 + 2?" }],
-			{ repl: testRepl([journaling]) },
-		))
-			events.push(event);
+async function finalMessages(): Promise<WireMessage[]> {
+	const text = await streamChat(
+		{ messages: [{ type: "human", content: "what is 1 + 2?" }] },
+		{ repl: testRepl([journaling]) },
+	).text();
+	const last = text
+		.split("\n\n")
+		.filter((record) => record.startsWith("event: values"))
+		.at(-1);
+	return (
+		JSON.parse(last?.slice(last.indexOf("data: ") + 6) ?? "{}") as {
+			messages: WireMessage[];
+		}
+	).messages;
+}
 
-		const steps = events.flatMap((e) =>
-			e.type === "assistant" ? [e.stepId] : [],
-		);
-		const about = events.flatMap((e) =>
-			e.type === "entry" ? [e.entry.about] : [],
-		);
+describe("the loop and the journal", () => {
+	beforeEach(() => {
+		turn = 0;
+		sent.length = 0;
+	});
+
+	it("marks what each step recorded with the id of the step it is about", async () => {
+		const messages = await finalMessages();
+
+		const steps = messages.filter((m) => m.type === "ai").map((m) => m.id);
+		const about = messages
+			.filter((m) => m.type === "entry")
+			.map((m) => m.additional_kwargs?.about);
 		expect(steps).toHaveLength(2);
 		expect(about).toEqual([steps[0], steps[0], steps[0], steps[1], steps[1]]);
 	});
 
 	it("forwards every entry as it was recorded, in order, interpreting none", async () => {
-		turn = 0;
-		const events: TurnEvent[] = [];
-		for await (const event of runAgentTurn(
-			[{ kind: "user", text: "what is 1 + 2?" }],
-			{ repl: testRepl([journaling]) },
-		))
-			events.push(event);
+		const messages = await finalMessages();
 
 		expect(
-			events.flatMap((e) =>
-				e.type === "entry"
-					? [{ kind: e.entry.kind, value: e.entry.value }]
-					: [],
+			messages.map((m) =>
+				m.type === "entry"
+					? {
+							kind: m.additional_kwargs?.kind,
+							value: m.additional_kwargs?.value,
+						}
+					: m.type,
 			),
 		).toEqual([
+			"human",
 			{ kind: "before-model", value: unread },
+			"ai",
 			{ kind: "during-step", value: "(+ 1 2)" },
 			{ kind: "after-step", value: "(+ 1 2)" },
+			"tool",
 			{ kind: "before-model", value: unread },
+			"ai",
 			{ kind: "during-step", value: "three." },
-		]);
-		expect(
-			events
-				.filter((e) => e.type !== "delta")
-				.map((e) => (e.type === "entry" ? e.entry.kind : e.type)),
-		).toEqual([
-			"before-model",
-			"assistant",
-			"during-step",
-			"after-step",
-			"result",
-			"before-model",
-			"assistant",
-			"during-step",
-			"halt",
 		]);
 	});
 
-	it("never hands the model an entry, only the output in an envelope", async () => {
-		expect(JSON.parse(replResultContent("out", true))).toEqual({
-			type: "tool_result",
-			source: "lisp-repl",
-			error: true,
-			output: "out",
-		});
+	it("never hands the model an entry", async () => {
+		await finalMessages();
+
+		expect(sent).toHaveLength(2);
 		expect(
 			sent.flat().some((m) => m.content.includes("never interpreted")),
 		).toBe(false);

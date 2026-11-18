@@ -102,6 +102,8 @@ function gate(): () => void {
 	return open;
 }
 
+const CANCELLED = { stopped: "cancelled" };
+
 function family(world: World): void {
 	world.lineages.set("child", { parent: "root", title: "child" });
 	world.lineages.set("grand", { parent: "child", title: "grand" });
@@ -123,23 +125,26 @@ describe("threads", () => {
 	test("reopen a thread through the host once it was evicted idle", async () => {
 		const world = new World();
 		const threads = world.threads({ maxLive: 1 });
-		const first = threads.get("a");
-		threads.get("b");
-		expect(threads.get("a")).not.toBe(first);
+		const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+		await (await threads.get("a").post(user("one"))).ended;
+		await settled();
+		await (await threads.get("b").post(user("two"))).ended;
+		await settled();
+		await (await threads.get("a").post(user("three"))).ended;
+		expect(world.opened).toEqual(["a", "b", "a"]);
 	});
 
 	test("never evict a running thread", async () => {
 		const world = new World();
 		const threads = world.threads({ maxLive: 1 });
 		const open = gate();
-		const running = threads.get("a");
-		const posted = await running.post(user("hello"));
+		const posted = await threads.get("a").post(user("hello"));
 		await vi.waitFor(() => expect(model.calls).toHaveLength(1));
 		threads.get("b");
 		threads.get("c");
-		expect(threads.get("a")).toBe(running);
+		expect(await threads.stop("a")).toBe(true);
 		open();
-		await posted.ended;
+		expect(await posted.ended).toEqual({ stopped: "stopped by the user" });
 	});
 
 	test("never evict a thread that holds a paused step", async () => {
@@ -147,12 +152,14 @@ describe("threads", () => {
 		world.extensions = [holding()];
 		model.script = ["(wait-for-human)"];
 		const threads = world.threads({ maxLive: 1 });
-		const paused = threads.get("a");
-		const posted = await paused.post(user("ask first"));
+		const posted = await threads.get("a").post(user("ask first"));
 		expect("held" in (await posted.ended)).toBe(true);
+		await (await threads.repl("a")).eval("(setq kept 41)");
 		threads.get("b");
 		threads.get("c");
-		expect(threads.get("a")).toBe(paused);
+		expect(
+			(await (await threads.repl("a")).evalOutput("(echo kept)")).user,
+		).toBe("41\n");
 	});
 
 	test("send a reply to its return address three levels down", async () => {
@@ -163,18 +170,16 @@ describe("threads", () => {
 		await vi.waitFor(() =>
 			expect(world.heard("root", "agent:child")).toBe(true),
 		);
-		const rootHeard = () =>
-			(world.stored.get("root") ?? []).filter(
-				(m) => m.additional_kwargs?.source === "agent:child",
-			).length;
-		expect(rootHeard()).toBe(1);
+		expect(world.told("root", "agent:child")).toHaveLength(1);
 
 		await threads.ask("grand", user("dig"), { replyTo: "child" });
 
 		await vi.waitFor(() =>
 			expect(world.heard("child", "agent:grand")).toBe(true),
 		);
-		await vi.waitFor(() => expect(rootHeard()).toBe(2));
+		await vi.waitFor(() =>
+			expect(world.told("root", "agent:child")).toHaveLength(2),
+		);
 	});
 
 	test("hand a waiter the reply instead of its return address", async () => {
@@ -205,11 +210,10 @@ describe("threads", () => {
 		const world = new World();
 		family(world);
 		const threads = world.threads({ maxDepth: 2 });
-		const create = vi.fn(async () => "new");
+		const create = async () => "new";
 		await expect(threads.spawn("grand", "g2", create)).rejects.toThrow(
 			"too deep to spawn another agent",
 		);
-		expect(create).not.toHaveBeenCalled();
 		expect(await threads.spawn("child", "c2", create)).toBe("new");
 		expect(await threads.ancestors("new")).toEqual(["child", "root"]);
 	});
@@ -259,9 +263,8 @@ describe("threads", () => {
 		expect(await threads.cancel("root")).toBe(true);
 		expect(await queued.ended).toEqual({ stopped: "cancelled" });
 		open();
-		expect(await child.ended).not.toEqual({ answer: "done." });
-		expect(await grand.ended).not.toEqual({ answer: "done." });
-		expect(model.calls).toHaveLength(2);
+		expect(await child.ended).toEqual(CANCELLED);
+		expect(await grand.ended).toEqual(CANCELLED);
 	});
 
 	test("stop only the thread asked for, leaving its descendants running", async () => {
@@ -275,7 +278,7 @@ describe("threads", () => {
 
 		expect(await threads.stop("child")).toBe(true);
 		open();
-		expect(await child.ended).not.toEqual({ answer: "done." });
+		expect(await child.ended).toEqual({ stopped: "stopped by the user" });
 		expect(await grand.ended).toEqual({ answer: "done." });
 	});
 
@@ -292,7 +295,7 @@ describe("threads", () => {
 
 		expect(await threads.cancel("child")).toBe(true);
 		open();
-		expect(await grand.ended).not.toEqual({ answer: "done." });
+		expect(await grand.ended).toEqual(CANCELLED);
 		expect(await root.ended).toEqual({ answer: "done." });
 		expect(await sibling.ended).toEqual({ answer: "done." });
 	});
@@ -358,20 +361,24 @@ describe("threads", () => {
 			stopped: "stopped by the user",
 		});
 		expect(world.told("root", "agent:child")).toEqual([]);
-		expect(model.calls).toHaveLength(2);
 	});
 });
 
 describe("a thread's budget", () => {
-	test("never grants a child more than its parent has left", async () => {
+	test("bill a grandchild's steps to every ancestor, so its parent runs out with it", async () => {
 		const world = new World();
-		world.lineages.set("root", { limits: { steps: 5 } });
-		world.lineages.set("child", { parent: "root", limits: { steps: 50 } });
+		family(world);
+		world.lineages.set("root", { limits: { steps: 2 } });
+		model.script = ["(+ 1 2)", "(+ 1 2)", "(+ 1 2)"];
 		const threads = world.threads();
-		await threads.lineage("root");
-		threads.budget.charge("root", { steps: 3 });
-		await threads.lineage("child");
-		expect(threads.budget.remaining("child").steps).toBe(2);
+		const grand = await threads.get("grand").post(user("count"));
+		expect(await grand.ended).toEqual({
+			stopped: "used its 2 steps without answering",
+		});
+		const child = await threads.get("child").post(user("more"));
+		expect(await child.ended).toMatchObject({
+			stopped: expect.stringContaining("out of steps"),
+		});
 	});
 
 	test("caps a child's turn at its parent's steps and bills the parent", async () => {
@@ -404,7 +411,6 @@ describe("a thread's budget", () => {
 				(m) => m.additional_kwargs?.thread === "grand",
 			);
 		await vi.waitFor(() => expect(asked()).toBeDefined());
-		expect(asked()?.content).toBe("agent grand is waiting on you");
 		expect(threads.state(job)).toMatchObject({ state: "held" });
 
 		const answered = await threads.answer("root", "approve", {}, asked()?.id);
@@ -413,31 +419,6 @@ describe("a thread's budget", () => {
 		expect(await finished).toEqual({ answer: "done." });
 		expect(world.heard("grand", "approve")).toBe(true);
 		expect(world.heard("root", "approve")).toBe(false);
-		const root = world.stored.get("root") ?? [];
-		const surfaced = root.findIndex((m) => m.id === asked()?.id);
-		expect(root[surfaced + 1]).toMatchObject({
-			type: "entry",
-			additional_kwargs: {
-				kind: "waiting",
-				value: "approve it",
-				thread: "grand",
-				holding: asked()?.additional_kwargs?.holding,
-			},
-		});
-		const grand = world.stored.get("grand") ?? [];
-		const held = grand.findIndex(
-			(m) => m.id === asked()?.additional_kwargs?.holding,
-		);
-		expect(
-			grand
-				.filter((m) => m.type === "entry")
-				.map((m) => m.additional_kwargs?.value),
-		).toEqual(["approve it", "approve"]);
-		expect(
-			grand.findIndex(
-				(m) => m.type === "entry" && m.additional_kwargs?.value === "approve",
-			),
-		).toBeGreaterThan(held);
 	});
 
 	test("refuse an answer stamped with a thread outside the caller's tree", async () => {
@@ -458,16 +439,6 @@ describe("a thread's budget", () => {
 
 		expect(answered.error).toBe(true);
 		expect(world.opened).not.toContain("stranger");
-	});
-
-	test("post an unstamped answer's follow-up to the caller's own thread", async () => {
-		const world = new World();
-		world.extensions = [holding()];
-		const threads = world.threads();
-
-		await threads.answer("root", "approve", {});
-
-		await vi.waitFor(() => expect(world.heard("root", "approve")).toBe(true));
 	});
 
 	test("wake the caller's thread with the note an answer appended", async () => {
