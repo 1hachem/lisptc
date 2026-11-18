@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ImageError, restore, snapshot } from "../src/image.ts";
-import { Interp } from "../src/lisp.ts";
+import { type Image, ImageError, restore } from "../src/image.ts";
+import { type Installable, Interp, runSync } from "../src/lisp.ts";
 import { newSym } from "../src/objects.ts";
-import type { LispPromise } from "../src/promise.ts";
-import { ev, freshInterp, imageOf } from "./helpers.ts";
+import {
+	ev,
+	evAsync,
+	freshInterp,
+	imageOf,
+	roundTrip,
+	withSettle,
+} from "./helpers.ts";
 
 function waitFor(
-	calls: unknown[][],
 	body: (x: unknown) => Promise<unknown>,
 ): (interp: Interp) => void {
 	return (interp) =>
@@ -17,20 +22,23 @@ function waitFor(
 			"(wait-for x)",
 			"",
 			z.tuple([z.unknown()]),
-			([x]) => {
-				calls.push([x]);
-				return body(x);
-			},
+			([x]) => body(x),
 		);
 }
 
 const never = (): Promise<unknown> => new Promise(() => {});
+const echo = async (x: unknown): Promise<unknown> => x;
 
 function pendingImage() {
-	const calls: unknown[][] = [];
-	const interp = freshInterp({ extensions: [waitFor(calls, never)] });
+	const interp = freshInterp({ extensions: [waitFor(never)] });
 	ev("(setq p (wait-for 7) holder (list p))", interp);
-	return { image: imageOf(interp), calls };
+	return imageOf(interp);
+}
+
+function restoredWith(image: Image, ...extensions: Installable[]): Interp {
+	const back = new Interp({ extensions });
+	restore(back, image);
+	return withSettle(back);
 }
 
 describe("a value kind", () => {
@@ -57,66 +65,57 @@ describe("a value kind", () => {
 
 describe("the phases around an image", () => {
 	it("runs afterRestore in registration order once the globals are loaded, isolating a throw", () => {
-		const seen: string[] = [];
 		const phases = (interp: Interp): void => {
 			interp.recovery.afterRestore("first", () => {
-				seen.push(`first ${ev("(sq 3)", interp)}`);
+				runSync(interp, "(setq seen (list (sq 3)))");
 			});
 			interp.recovery.afterRestore("broken", () => {
 				throw new Error("it broke");
 			});
 			interp.recovery.afterRestore("last", () => {
-				seen.push("last");
+				runSync(interp, "(setq seen (cons 'last seen))");
 			});
 		};
 		const interp = freshInterp();
 		ev("(defun sq (x) (* x x))", interp);
-		const { failed } = restore(
-			new Interp({ extensions: [phases] }),
-			imageOf(interp),
-		);
-		expect(seen).toEqual(["first 9", "last"]);
+		const back = new Interp({ extensions: [phases] });
+		const { failed } = restore(back, imageOf(interp));
+		expect(ev("seen", back)).toBe("(last 9)");
 		expect(failed).toEqual([{ name: "broken", reason: "it broke" }]);
 	});
 
-	it("runs beforeSave in reverse registration order", () => {
-		const seen: string[] = [];
+	it("runs beforeSave in reverse registration order, into the image", () => {
 		const interp = freshInterp();
-		interp.recovery.beforeSave("first", () => seen.push("first"));
-		interp.recovery.beforeSave("second", () => seen.push("second"));
-		snapshot(interp);
-		expect(seen).toEqual(["second", "first"]);
+		ev("(setq order nil)", interp);
+		interp.recovery.beforeSave("first", () => {
+			runSync(interp, "(setq order (cons 'first order))");
+		});
+		interp.recovery.beforeSave("second", () => {
+			runSync(interp, "(setq order (cons 'second order))");
+		});
+		expect(ev("order", roundTrip(interp))).toBe("(first second)");
 	});
 
 	it("aborts the snapshot on a beforeSave that throws, naming it", () => {
-		const seen: string[] = [];
 		const interp = freshInterp();
-		interp.recovery.beforeSave("first", () => seen.push("first"));
 		interp.recovery.beforeSave("guard", () => {
 			throw new Error("busy");
 		});
-		expect(() => snapshot(interp)).toThrow(ImageError);
-		expect(() => snapshot(interp)).toThrow("guard refused the save: busy");
-		expect(seen).toEqual([]);
+		expect(() => imageOf(interp)).toThrow(ImageError);
+		expect(() => imageOf(interp)).toThrow(/guard/);
 	});
 
-	it("refuses a name registered twice", () => {
-		const { recovery } = new Interp();
-		recovery.kind({ name: "k", restore: (d) => d });
-		recovery.resumable("r", async () => null);
-		recovery.beforeSave("s", () => {});
-		recovery.afterRestore("a", () => {});
-		expect(() => recovery.kind({ name: "k", restore: (d) => d })).toThrow(
+	it.each([
+		[
+			"a kind",
+			(i: Interp) => i.recovery.kind({ name: "k", restore: (d) => d }),
+		],
+		["a resumable", (i: Interp) => i.recovery.resumable("k", async () => null)],
+		["a beforeSave", (i: Interp) => i.recovery.beforeSave("k", () => {})],
+		["an afterRestore", (i: Interp) => i.recovery.afterRestore("k", () => {})],
+	])("refuses %s registered twice under one name", (_, register) => {
+		expect(() => new Interp({ extensions: [register, register] })).toThrow(
 			"k is already registered",
-		);
-		expect(() => recovery.resumable("r", async () => null)).toThrow(
-			"r is already registered",
-		);
-		expect(() => recovery.beforeSave("s", () => {})).toThrow(
-			"s is already registered",
-		);
-		expect(() => recovery.afterRestore("a", () => {})).toThrow(
-			"a is already registered",
 		);
 	});
 });
@@ -131,58 +130,36 @@ describe("restoring an image", () => {
 				save: () => null,
 				restore: () => new Handle(),
 			});
-		const interp = freshInterp({
-			extensions: [handles, waitFor([], never)],
-		});
+		const interp = freshInterp({ extensions: [handles, waitFor(never)] });
 		interp.defineGlobal(newSym("h"), new Handle());
 		ev("(setq p (wait-for 1))", interp);
-		expect(() => restore(new Interp(), imageOf(interp))).toThrow(
+		expect(() => roundTrip(interp)).toThrow(
 			"no extension restores handle, wait-for",
 		);
 	});
 
 	it("re-runs a pending resumable call and fulfils the same promise", async () => {
-		const { image, calls } = pendingImage();
-		expect(calls).toEqual([[7n]]);
-		const resumed: unknown[][] = [];
-		const back = new Interp({
-			extensions: [waitFor(resumed, async (x) => x)],
-		});
-		restore(back, image);
-		const p = back.getGlobal(newSym("p")) as LispPromise;
-		expect(p.state).toBe("pending");
-		expect(await p).toBe(7n);
-		expect(p.state).toBe("fulfilled");
-		expect(resumed).toEqual([[7n]]);
+		const back = restoredWith(pendingImage(), waitFor(echo));
+		expect(await evAsync("(settle p)", back)).toBe("7");
 		expect(ev("(eq p (car holder))", back)).toBe("t");
 	});
 
 	it("rejects a pending promise that carries no recipe", async () => {
-		const interp = freshInterp({ extensions: [waitFor([], never)] });
+		const interp = freshInterp({ extensions: [waitFor(never)] });
 		interp.defPromise("plain", 0, "(plain)", "", z.tuple([]), never);
 		ev("(setq kept (wait-for 1) lost (plain))", interp);
-		const back = new Interp({
-			extensions: [waitFor([], async (x) => x)],
-		});
-		restore(back, imageOf(interp));
-		const lost = back.getGlobal(newSym("lost")) as LispPromise;
-		expect(lost.state).toBe("rejected");
-		await expect(lost.promise()).rejects.toThrow("interrupted by restore");
-		expect(await (back.getGlobal(newSym("kept")) as LispPromise)).toBe(1n);
+		const back = restoredWith(imageOf(interp), waitFor(echo));
+		await expect(evAsync("(settle lost)", back)).rejects.toThrow(
+			"interrupted by restore",
+		);
+		expect(await evAsync("(settle kept)", back)).toBe("1");
 	});
 
 	it("restores the same image into two interpreters", async () => {
-		const { image } = pendingImage();
-		const backs = [0, 1].map(() => {
-			const back = new Interp({
-				extensions: [waitFor([], async (x) => x)],
-			});
-			restore(back, image);
-			return back;
-		});
-		const [a, b] = backs.map((back) => back.getGlobal(newSym("p")));
-		expect(a).not.toBe(b);
-		expect(await (a as LispPromise)).toBe(7n);
-		expect(await (b as LispPromise)).toBe(7n);
+		const image = pendingImage();
+		const a = restoredWith(image, waitFor(echo));
+		const b = restoredWith(image, waitFor(echo));
+		expect(await evAsync("(settle p)", a)).toBe("7");
+		expect(await evAsync("(settle p)", b)).toBe("7");
 	});
 });

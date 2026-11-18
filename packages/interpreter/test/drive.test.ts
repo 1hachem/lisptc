@@ -1,38 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { driveAsync, driveSync, type Eval, settled } from "../src/drive.ts";
+import { z } from "zod";
+import { driveAsync, type Eval } from "../src/drive.ts";
 import { EvalException } from "../src/errors.ts";
+import { ev, freshInterp } from "./helpers.ts";
 
-describe("driveSync", () => {
-	it("returns a value that never suspends", () => {
-		expect(driveSync(settled(3))).toBe(3);
+describe("a builtin that suspends under the synchronous driver", () => {
+	function suspending() {
+		const interp = freshInterp();
+		interp.def("slow", 0, "(slow)", "", z.tuple([]), () => Promise.resolve(1n));
+		return interp;
+	}
+
+	it("raises a failure that try catches", () => {
+		expect(ev("(try (slow) (catch (e) 'caught))", suspending())).toBe("caught");
 	});
 
-	it("throws into a generator that suspends", () => {
-		function* gen(): Eval<string> {
-			try {
-				yield Promise.resolve();
-			} catch (ex) {
-				return (ex as EvalException).message;
-			}
-			return "resumed";
-		}
-		expect(driveSync(gen())).toBe(
-			"cannot suspend: this host evaluates synchronously",
-		);
-	});
-
-	it("propagates the refusal when the generator does not catch it", () => {
-		expect(() => driveSync(settled(Promise.resolve(1)))).toThrow(EvalException);
+	it("refuses the form when nothing catches it", () => {
+		expect(() => ev("(slow)", suspending())).toThrow(EvalException);
 	});
 });
 
 describe("driveAsync", () => {
-	it("resumes a suspended generator with the settled value", async () => {
-		expect(await driveAsync(settled(Promise.resolve(7)))).toEqual({
-			value: 7,
-		});
-	});
-
 	it("throws a rejection back into the generator", async () => {
 		function* gen(): Eval<string> {
 			try {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { compare, convertToString, quotient } from "../src/arith.ts";
 import { ev } from "./helpers.ts";
 
 describe("mixed float and integer arithmetic", () => {
@@ -28,20 +27,24 @@ describe("mixed float and integer arithmetic", () => {
 	});
 });
 
-describe("arith helpers", () => {
-	it("divides bigints exactly", () => {
-		expect(quotient(BigInt(7), BigInt(2))).toBe(BigInt(3));
+describe("integers past the float range", () => {
+	it("divides them exactly", () => {
+		expect(ev("(truncate 100000000000000000000000000001 2)")).toBe(
+			"50000000000000000000000000000",
+		);
 	});
 
-	it("orders bigints", () => {
-		expect(compare(BigInt(1), BigInt(2))).toBe(-1);
-		expect(compare(BigInt(2), BigInt(1))).toBe(1);
-		expect(compare(BigInt(2), BigInt(2))).toBe(0);
+	it("orders them", () => {
+		expect(ev("(< 100000000000000000001 100000000000000000002)")).toBe("t");
+		expect(ev("(< 100000000000000000002 100000000000000000001)")).toBe("nil");
+		expect(ev("(< 100000000000000000001 100000000000000000001)")).toBe("nil");
 	});
+});
 
-	it("leaves exponent notation alone", () => {
-		expect(convertToString(1e21)).toBe("1e+21");
-		expect(convertToString(1.5)).toBe("1.5");
-		expect(convertToString(BigInt(3))).toBe("3");
+describe("a float too large for plain digits", () => {
+	it("prints in exponent notation", () => {
+		expect(ev("1e21")).toBe("1e+21");
+		expect(ev("(string 1e21)")).toBe('"1e+21"');
+		expect(ev("1.5")).toBe("1.5");
 	});
 });

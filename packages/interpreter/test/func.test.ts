@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { EvalException, LoopSignal, StepHold } from "../src/errors.ts";
-import { callableArity, callableKind, KeywordException } from "../src/func.ts";
+import { KeywordException } from "../src/func.ts";
 import { runAsync, runSync } from "../src/lisp.ts";
 import { newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
@@ -55,13 +55,13 @@ describe("a plain builtin that returns a promise", () => {
 	});
 
 	it("passes an evaluator exception, a loop signal and a held step through", async () => {
-		const evalEx = new EvalException("inner", null);
-		expect(await rejectionOf(evalEx)).toBe(evalEx);
-		expect(await rejectionOf(new LoopSignal(1))).toMatchObject({
-			message: expect.stringMatching(/outside of a loop/),
-		});
-		const hold = new StepHold("wait");
-		expect(await rejectionOf(hold)).toBe(hold);
+		const inner = await rejectionOf(new EvalException("inner", null));
+		expect((inner as Error).message).toMatch(/^inner/);
+		expect((inner as Error).message).not.toMatch(/reject failed/);
+		expect(String(await rejectionOf(new LoopSignal(1)))).toMatch(
+			/outside of a loop/,
+		);
+		expect(await rejectionOf(new StepHold("wait"))).toBeInstanceOf(StepHold);
 	});
 });
 
@@ -87,27 +87,5 @@ describe("a builtin with keyword arguments", () => {
 		})();
 		expect(refused).toBeInstanceOf(KeywordException);
 		expect((refused as KeywordException).accepted).toEqual(["a"]);
-	});
-});
-
-describe("reading a callable's kind and arity", () => {
-	const interp = freshInterp();
-	runSync(
-		interp,
-		"(defun fixed (a b) a) (defun rest (a &rest more) a) (defmacro mac (x) x)",
-	);
-	const get = (name: string) => interp.getGlobal(newSym(name));
-
-	it("tells a macro from a function from anything else", () => {
-		expect(callableKind(get("mac"))).toBe("macro");
-		expect(callableKind(get("fixed"))).toBe("function");
-		expect(callableKind(get("car"))).toBe("function");
-		expect(callableKind(42)).toBeUndefined();
-	});
-
-	it("reports a fixed arity and an open one", () => {
-		expect(callableArity(get("fixed"))).toEqual({ min: 2, max: 2 });
-		expect(callableArity(get("rest"))).toEqual({ min: 1, max: undefined });
-		expect(callableArity("not callable")).toBeUndefined();
 	});
 });

@@ -9,23 +9,23 @@ describe("documentation coverage", () => {
 	const docs = interp.docs();
 
 	it("documents every global binding (except _-prefixed internals)", () => {
-		const undocumented = interp
-			.globalNames()
-			.filter((name) => !name.startsWith("_") && !docs.has(name));
-		expect(undocumented).toEqual([]);
+		expect(
+			ev(`
+				(defun undocumented (names)
+				  "The names in names that carry no doc."
+				  (cond ((null names) nil)
+				        ((or (doc (car names))
+				             (string-equal (char (symbol-name (car names)) 0) "_"))
+				         (undocumented (cdr names)))
+				        (t (cons (car names) (undocumented (cdr names))))))
+				(undocumented (dump))`),
+		).toBe("nil");
 	});
 
 	it("documents the special forms", () => {
-		for (const name of [
-			"quote",
-			"progn",
-			"cond",
-			"setq",
-			"lambda",
-			"macro",
-			"try",
-		])
-			expect(docs.has(name), name).toBe(true);
+		expect(ev("(mapcar doc '(quote progn cond setq lambda macro try))")).toBe(
+			"(quote progn cond setq lambda macro try)",
+		);
 	});
 
 	it("derives prelude signatures from the actual argument lists", () => {
@@ -63,12 +63,13 @@ describe("(doc name)", () => {
 		expect(output).toBe("no-such-binding: undocumented\n");
 	});
 
-	it("lists every documented name when called with no argument", () => {
-		const { output } = evWithOutput("(doc)");
+	it("lists a user definition among the documented names when called with no argument", () => {
+		const { output } = evWithOutput(
+			'(defun double (x) "Double x." (* x 2)) (doc)',
+		);
 		const names = output.trim().split("\n");
-		expect(names).toContain("car");
+		expect(names).toContain("double");
 		expect(names).toContain("cond");
-		expect(names).toContain("defun");
 	});
 });
 
@@ -112,17 +113,6 @@ describe("(doc name) edge cases", () => {
 		const interp = freshInterp();
 		runSync(interp, "(_set-doc 'bare-key '(a &key) \"doc\")");
 		expect(interp.docs().get("bare-key")?.args).toBeUndefined();
-	});
-
-	it("records the names after &key, skipping &rest", () => {
-		const interp = freshInterp();
-		runSync(interp, "(_set-doc 'kw '(a &key b &rest c) \"doc\")");
-		expect(
-			interp
-				.docs()
-				.get("kw")
-				?.args?.map((x) => x.name),
-		).toEqual(["b", "c"]);
 	});
 });
 

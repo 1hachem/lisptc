@@ -16,8 +16,9 @@ describe("core builtins", () => {
 		expect(() => ev('(concat "a" 1)')).toThrow("not a string");
 	});
 
-	it("dumps every global symbol", () => {
-		expect(ev("(member 'car (dump))")).not.toBe("nil");
+	it("dumps the builtins and every global bound since", () => {
+		expect(ev("(car (member 'car (dump)))")).toBe("car");
+		expect(ev("(setq fresh 1) (car (member 'fresh (dump)))")).toBe("fresh");
 	});
 
 	it("unbinds a defun with its doc and source", () => {

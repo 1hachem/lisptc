@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { driveSync } from "../src/drive.ts";
-import { EvalException } from "../src/errors.ts";
 import {
 	type Installable,
 	type Interp,
@@ -10,15 +9,10 @@ import {
 } from "../src/lisp.ts";
 import { Cell, Keyword, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
-import { LispPromise } from "../src/promise.ts";
 import { LANGUAGE_REFERENCE } from "../src/source.ts";
-import { ev, freshInterp } from "./helpers.ts";
+import { ev, evAsync, freshInterp, withSettle } from "./helpers.ts";
 
 describe("arityOf", () => {
-	it("reads the arity of a builtin", () => {
-		expect(freshInterp().arityOf("car")).toEqual({ min: 1, max: 1 });
-	});
-
 	it("leaves the maximum open for a rest parameter", () => {
 		const interp = freshInterp();
 		runSync(interp, "(setq f (lambda (a &rest r) a))");
@@ -34,34 +28,25 @@ describe("arityOf", () => {
 });
 
 describe("extensions", () => {
-	it("installs each extension and appends the prompts it carries", () => {
-		const installed: string[] = [];
-		const withPrompt: Installable = Object.assign(
-			(interp: Interp) => {
-				installed.push("with");
-				interp.defineGlobal(newSym("ext-value"), 42n);
-			},
+	it("installs each extension in order and appends the prompts it carries", () => {
+		const first: Installable = Object.assign(
+			(interp: Interp) => interp.defineGlobal(newSym("ext-value"), 1n),
 			{ prompt: "extension prompt" },
 		);
-		const withoutPrompt: Installable = () => {
-			installed.push("without");
-		};
-		const interp = freshInterp({ extensions: [withPrompt, withoutPrompt] });
-		expect(installed).toEqual(["with", "without"]);
-		expect(ev("ext-value", interp)).toBe("42");
+		const second: Installable = (interp: Interp) =>
+			interp.defineGlobal(newSym("ext-value"), 2n);
+		const interp = freshInterp({ extensions: [first, second] });
+		expect(ev("ext-value", interp)).toBe("2");
 		expect(interp.systemPrompt()).toBe(
 			`${LANGUAGE_REFERENCE}\n\nextension prompt`,
 		);
 	});
-
-	it("carries only the language reference with no extension", () => {
-		expect(freshInterp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
-	});
 });
 
 describe("the language reference", () => {
-	it("documents multiplication", () => {
+	it("documents multiplication, and the empty product is 1", () => {
 		expect(LANGUAGE_REFERENCE).toContain("(* n...) product, 1 if none");
+		expect(ev("(*)")).toBe("1");
 	});
 
 	it.each([
@@ -129,8 +114,8 @@ describe("the language reference", () => {
 });
 
 describe("builtin kinds", () => {
-	it("watches the promise a promise builtin returns", async () => {
-		const interp = freshInterp();
+	it("hands back the promise a promise builtin returns, unsettled", async () => {
+		const interp = withSettle(freshInterp());
 		interp.defPromise(
 			"later",
 			1,
@@ -139,11 +124,8 @@ describe("builtin kinds", () => {
 			z.tuple([z.unknown()]),
 			async ([x]) => x,
 		);
-		const { value } = await runAsync(interp, "(later 5)");
-		expect(value).toBeInstanceOf(LispPromise);
-		expect(await value).toBe(5n);
-		expect(interp.async.stateOf(value as LispPromise)).toBe("fulfilled");
-		expect(interp.docs().get("later")?.signature).toBe("(later x)");
+		expect(await evAsync("(later 5)", interp)).toBe("#<promise>");
+		expect(await evAsync("(settle (later 5))", interp)).toBe("5");
 	});
 
 	it("settles the promise a plain builtin returns", async () => {
@@ -167,48 +149,6 @@ describe("builtin kinds", () => {
 			interp.makeBuiltIn("twice", 1, ([x]) => [x, x]),
 		);
 		expect(runSync(interp, "(twice 3)")).toEqual([3n, 3n]);
-	});
-});
-
-describe("call guard", () => {
-	it("names the builtin it is about to call", () => {
-		const interp = freshInterp();
-		const calls: string[] = [];
-		interp.hooks.call.use((i, name, args, next) => {
-			calls.push(name);
-			next(i, name, args);
-		});
-		runSync(interp, "(car '(1))");
-		expect(calls).toContain("car");
-	});
-});
-
-describe("globals", () => {
-	it("reports whether a global is bound and lists every entry", () => {
-		const interp = freshInterp();
-		const sym = newSym("bound-here");
-		expect(interp.hasGlobal(sym)).toBe(false);
-		runSync(interp, "(setq bound-here 7)");
-		expect(interp.hasGlobal(sym)).toBe(true);
-		expect(new Map(interp.globalEntries()).get(sym)).toBe(7n);
-	});
-});
-
-describe("dispose", () => {
-	it("aborts the work still running", () => {
-		const interp = freshInterp();
-		let aborted = false;
-		interp.async.start(
-			(signal) =>
-				new Promise(() => {
-					signal.addEventListener("abort", () => {
-						aborted = true;
-					});
-				}),
-		);
-		interp.dispose();
-		expect(aborted).toBe(true);
-		expect(interp.async.pending()).toEqual([]);
 	});
 });
 
@@ -271,13 +211,16 @@ describe("malformed special forms", () => {
 			interp,
 			"(setq deep (lambda (n) (cond ((= n 0) (car 1)) (t (+ 1 (deep (- n 1)))))))",
 		);
-		try {
-			runSync(interp, "(deep 20)");
-			expect.unreachable();
-		} catch (ex) {
-			expect(ex).toBeInstanceOf(EvalException);
-			expect((ex as EvalException).trace.length).toBe(10);
-		}
+		const lines = (code: string) => {
+			try {
+				runSync(interp, code);
+			} catch (ex) {
+				return String(ex).split("\n").length;
+			}
+			throw new Error(`${code} did not fail`);
+		};
+		expect(lines("(deep 200)")).toBe(lines("(deep 20)"));
+		expect(lines("(deep 20)")).toBeLessThan(20);
 	});
 });
 

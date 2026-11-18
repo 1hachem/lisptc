@@ -119,14 +119,15 @@ describe("a hook decides what a failure reports", () => {
 		expect(hitches).toEqual([{ kind: "skipped", text: "read as prose" }]);
 	});
 
-	it("sees a failure that is not a head failure", () => {
+	it("can excuse a failure that is not a head failure", () => {
 		const interp = freshInterp();
-		const seen: string[] = [];
 		interp.hooks.failedForm.use(function* (_interp, _form, error) {
-			seen.push(error.callee ?? "?");
-			return yield* settled(undefined);
+			return yield* settled(
+				error.callee === "car" ? { skipped: "read as prose" } : undefined,
+			);
 		});
-		run(interp, "(car 1 2)");
-		expect(seen).toEqual(["car"]);
+		const { value, thrown } = run(interp, "1 (car 1 2)");
+		expect(thrown).toBeUndefined();
+		expect(str(value)).toBe("1");
 	});
 });
