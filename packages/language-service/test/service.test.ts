@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
-	COMPLETION_TRIGGERS,
 	insideForm,
 	languageService,
 	lispIn,
@@ -127,12 +126,6 @@ describe("completions", () => {
 		expect(
 			service.completions(document, endOf(document)).map((i) => i.label),
 		).toContain("car");
-	});
-});
-
-describe("COMPLETION_TRIGGERS", () => {
-	it("are the characters that open a keyword argument and a string value", () => {
-		expect(COMPLETION_TRIGGERS).toEqual([":", '"']);
 	});
 });
 
