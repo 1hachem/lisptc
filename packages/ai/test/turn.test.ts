@@ -121,7 +121,7 @@ describe("the agent turn", () => {
 			repl: testRepl(),
 			...options,
 		}))
-			events.push(event);
+			if (event.type !== "system") events.push(event);
 		return events;
 	}
 
@@ -418,10 +418,10 @@ describe("the agent turn", () => {
 			line: { kind: "user", text: "use hex" },
 		});
 		expect(seen[1].messages.at(-1)).toMatchObject({ content: "use hex" });
-		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
+		expect(seen[1].messages.at(-2)?.content).toMatch(/lisptc>$/);
 	});
 
-	test("a steer's lisp runs when the steer is taken, and the model reads its result as a system event after the steer", async () => {
+	test("a steer's lisp runs when the steer is taken, and the model reads its result as a lisp-repl note after the steer", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
 		const pending = [
 			{ kind: "user" as const, id: "s1", text: "(+ 40 2)", forms: true },
@@ -436,7 +436,7 @@ describe("the agent turn", () => {
 		});
 		expect(seen[1].messages.slice(-2).map((m) => m.content)).toEqual([
 			"(+ 40 2)",
-			'<system-event source="lisp-repl">the user ran the code in their message above:\n\n(no output)</system-event>',
+			"from lisp-repl:\nthe user ran the code in their message above:\n\n(no output)",
 		]);
 	});
 
@@ -453,10 +453,10 @@ describe("the agent turn", () => {
 
 		expect(events.map((e) => e.type)).not.toContain("evaluated");
 		expect(seen[1].messages.at(-1)).toMatchObject({ content: "(+ 40 2)" });
-		expect(seen[1].messages.at(-2)?.content).toContain('"tool_result"');
+		expect(seen[1].messages.at(-2)?.content).toMatch(/lisptc>$/);
 	});
 
-	test("an event never runs as lisp, and the model reads it as a system event", async () => {
+	test("an event never runs as lisp, and the model reads it as a developer message", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
 		const pending = [
 			{ kind: "event" as const, id: "s1", source: "agent:r", text: "(+ 40 2)" },
@@ -466,7 +466,8 @@ describe("the agent turn", () => {
 
 		expect(events.map((e) => e.type)).not.toContain("evaluated");
 		expect(seen[1].messages.at(-1)).toMatchObject({
-			content: '<system-event source="agent:r">(+ 40 2)</system-event>',
+			role: "developer",
+			content: "from agent:r:\n(+ 40 2)",
 		});
 	});
 
@@ -549,7 +550,12 @@ describe("the agent turn", () => {
 			if (event.type === "result") abort.abort();
 		}
 
-		expect(events.map((e) => e.type)).toEqual(["delta", "assistant", "result"]);
+		expect(events.map((e) => e.type)).toEqual([
+			"system",
+			"delta",
+			"assistant",
+			"result",
+		]);
 		expect(seen).toHaveLength(1);
 	});
 
@@ -604,12 +610,20 @@ describe("the agent turn", () => {
 		expect(seen).toHaveLength(1);
 	});
 
-	test("the model gets the system prompt the turn was configured with", async () => {
+	test("the turn counts the system prompt in tokens, fewer than its characters", async () => {
 		script = [[{ text: "three." }]];
+		const counted: number[] = [];
+		for (const system of ["be terse", "be terse ".repeat(50)])
+			for await (const event of runAgentTurn(ask, {
+				repl: testRepl(),
+				config: { system },
+			}))
+				if (event.type === "system") counted.push(event.tokens);
 
-		await drain(ask, { config: { system: "base" } });
-
-		expect(seen[0].system).toBe("base");
+		const [short, long] = counted;
+		expect(short).toBeGreaterThan(0);
+		expect(short).toBeLessThan("be terse".length);
+		expect(long).toBeGreaterThan(short ?? 0);
 	});
 
 	test("a steer that lands during the answering step buys one more step", async () => {

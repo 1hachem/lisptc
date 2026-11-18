@@ -81,6 +81,7 @@ export interface PermissionsHost {
 	approvers: readonly Approver[];
 	clock: Clock;
 	prompt: PromptSource;
+	memories: PromptSource;
 	asks?: readonly string[];
 	bounds?: readonly string[];
 }

@@ -1,4 +1,4 @@
-import type { Arity, Doc, DocArg } from "@repo/interpreter/docs";
+import type { Arity, Doc, DocArg, WordCap } from "@repo/interpreter/docs";
 
 export interface SymbolEntry {
 	name: string;
@@ -6,6 +6,7 @@ export interface SymbolEntry {
 	doc?: string;
 	args?: DocArg[];
 	arity?: Arity;
+	wordCaps?: readonly WordCap[];
 }
 
 export type SymbolTable = ReadonlyMap<string, SymbolEntry>;
@@ -29,6 +30,7 @@ export function symbolsOf(defined: Defined): SymbolEntry[] {
 				doc: doc?.doc,
 				args: doc?.args,
 				arity: defined.arityOf(name),
+				wordCaps: doc?.wordCaps,
 			};
 		});
 }

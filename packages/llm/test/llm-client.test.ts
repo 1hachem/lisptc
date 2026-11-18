@@ -1,5 +1,4 @@
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -74,7 +73,7 @@ afterEach(() => {
 
 function clientInterp(): Interp {
 	const interp = new Interp({ extensions: [llmExtension(llmHost)] });
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 

@@ -1,5 +1,3 @@
-import type { ActivityEntry } from "@repo/journal-catalog/activity";
-import type { Intent } from "@repo/journal-catalog/intent";
 import {
 	type ChatMessage,
 	isParentMessage,
@@ -7,10 +5,10 @@ import {
 	isToolMessage,
 	isUserMessage,
 	toolActivity,
-	toolFailed,
-	toolIntent,
-	toolQuiet,
-} from "./chat.tsx";
+} from "@repo/components";
+import type { ActivityEntry } from "@repo/journal-catalog/activity";
+import type { Intent } from "@repo/journal-catalog/intent";
+import { toolFailed, toolIntent, toolQuiet } from "./chat.tsx";
 
 export interface Turn {
 	id: string;

@@ -1,5 +1,4 @@
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
@@ -13,7 +12,7 @@ describe("logout", () => {
 	const interp = new Interp({
 		extensions: [mcpExtension(mcpHostFor({ oauth }))],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");
@@ -40,7 +39,7 @@ describe("login", () => {
 	const interp = new Interp({
 		extensions: [mcpExtension(mcpHostFor({ oauth }))],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 
 	afterAll(async () => {
 		await runAsync(interp, "(mcp-shutdown)");

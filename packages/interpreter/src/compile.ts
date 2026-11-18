@@ -22,6 +22,8 @@ import {
 	unquoteSym,
 } from "./objects.ts";
 
+export const MACRO_EXPANSION_DEPTH = 20;
+
 export interface Compiler extends Evaluator {
 	getGlobal(sym: Sym): unknown;
 }
@@ -37,7 +39,7 @@ export function compileFunc(
 	const { hasRest, arity, keys } = makeArgTable(arg.car, table);
 	let body = cdrCell(arg);
 	body = scanForArgs(body, table) as List;
-	body = compileForm(interp, body, 20) as List;
+	body = compileForm(interp, body, MACRO_EXPANSION_DEPTH) as List;
 	return make(hasRest ? -arity : arity, body, env, keys);
 }
 

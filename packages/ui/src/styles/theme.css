@@ -44,7 +44,6 @@
 	--container-dialog-lg: 560px;
 
 	--animate-blk: blk 1.06s steps(1, end) infinite;
-	--animate-orbit: orbit 2.4s linear infinite;
 	--animate-dot: dot 1.5s ease-in-out infinite both;
 	--animate-zoom-in: zoom-in 200ms ease-out both;
 	--animate-slide-in: slide-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -279,26 +278,6 @@
 	25% {
 		transform: scale(1.25);
 		opacity: 1;
-	}
-}
-
-@keyframes orbit {
-	0%,
-	100% {
-		translate: 0 0;
-		scale: 1.25;
-	}
-	25% {
-		translate: 1.5px -0.5px;
-		scale: 1;
-	}
-	50% {
-		translate: 0 -1px;
-		scale: 0.75;
-	}
-	75% {
-		translate: -1.5px -0.5px;
-		scale: 1;
 	}
 }
 

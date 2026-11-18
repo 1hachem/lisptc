@@ -30,6 +30,7 @@ import {
 	reraised,
 	ThrowSignal,
 } from "./errors.ts";
+import { formatText } from "./format.ts";
 import { soleArg } from "./forms.ts";
 import { BuiltInFunc } from "./func.ts";
 import { type Journal, print } from "./journal.ts";
@@ -210,6 +211,16 @@ const zHashTable = z.custom<LispHashTable>(
 	(x) => x instanceof LispHashTable,
 	"hash table expected",
 );
+
+function writable(table: LispHashTable): LispHashTable {
+	if (!table.writable)
+		throw new EvalException(
+			"this hash table is read-only: the extension that owns it writes it",
+			table,
+			false,
+		);
+	return table;
+}
 const zChar = z.custom<string>(
 	(x) => typeof x === "string" && [...x].length === 1,
 	"one-character string expected",
@@ -397,7 +408,7 @@ function installCollections(interp: Definer): void {
 		"Store `value` under `key` in `table`, destructively; return `value`.",
 		z.tuple([zAny, zAny, zHashTable]),
 		([key, value, table]) => {
-			table.set(key, value);
+			writable(table).set(key, value);
 			return value;
 		},
 	);
@@ -407,7 +418,7 @@ function installCollections(interp: Definer): void {
 		"(remhash key table)",
 		"Remove the entry for `key` from `table`; return t if there was one.",
 		z.tuple([zAny, zHashTable]),
-		([key, table]) => (table.delete(key) ? true : null),
+		([key, table]) => (writable(table).delete(key) ? true : null),
 	);
 	interp.def(
 		"clrhash",
@@ -416,7 +427,7 @@ function installCollections(interp: Definer): void {
 		"Remove every entry from `table`; return `table`.",
 		z.tuple([zHashTable]),
 		([table]) => {
-			table.clear();
+			writable(table).clear();
 			return table;
 		},
 	);
@@ -1099,6 +1110,27 @@ export function installCore(interp: Definer, core: CoreOps): void {
 				out += s;
 			}
 			return out;
+		},
+	);
+	interp.def(
+		"format",
+		-1,
+		"(format destination control args...)",
+		'Format `args` by the Common Lisp `control` string. `destination` nil returns the string; t prints it and returns nil; a control string in its place is read as nil. Directives: ~a as `string` prints, ~s readable, ~d an integer, ~% a newline, ~& a newline unless at line start, ~~ a tilde, ~{...~} once per element of a list argument, ~^ stops the loop when no element is left. `(format nil "~a has ~d" "x" 3)` is "x has 3"; `(format nil "~{~s~^ ~}" \'("a" "b"))` is "\\"a\\" \\"b\\"".',
+		z.tuple([zList]),
+		([rest]) => {
+			const [destination, ...given] = listItems(rest);
+			const legacy = typeof destination === "string";
+			const [control, ...items] = legacy ? [destination, ...given] : given;
+			if (typeof control !== "string")
+				throw new EvalException("format needs a control string", control);
+			const text = formatText(control, items);
+			if (legacy) return text;
+			if (destination === null) return text;
+			if (destination !== true)
+				throw new EvalException("format writes to nil or t", destination);
+			print(interp.journal, { user: text });
+			return null;
 		},
 	);
 	interp.def(

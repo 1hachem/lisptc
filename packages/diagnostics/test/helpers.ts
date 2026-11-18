@@ -1,6 +1,5 @@
 import { bufferSink, hitch } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { diagnosticsExtension } from "../src/diagnostics.ts";
 import { diagnosticsHost } from "../src/diagnostics-host.ts";
 
@@ -8,7 +7,7 @@ export function freshInterp(): Interp {
 	const interp = new Interp({
 		extensions: [diagnosticsExtension(diagnosticsHost)],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 

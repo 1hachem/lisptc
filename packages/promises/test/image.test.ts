@@ -1,7 +1,6 @@
 import { restore, snapshot } from "@repo/interpreter/image";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import type { LispPromise } from "@repo/interpreter/promise";
 import { describe, expect, it } from "vitest";
@@ -25,7 +24,7 @@ function interpWith(body: (x: unknown) => Promise<unknown>): Interp {
 describe("a combinator in an image", () => {
 	it("resumes a promise-all saved over a pending resumable child", async () => {
 		const interp = interpWith(() => new Promise(() => {}));
-		runSync(interp, prelude);
+		boot(interp);
 		runSync(
 			interp,
 			"(setq all (promise-all (list (wait-for 1) (wait-for 2))))",

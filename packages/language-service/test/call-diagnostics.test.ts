@@ -205,3 +205,28 @@ describe("callDiagnostics", () => {
 		);
 	});
 });
+
+describe("word caps", () => {
+	const capped: CallDoc = { wordCaps: [{ position: 1, words: 3 }] };
+	const table = new Map([["memory", capped]]);
+
+	it("flags a positional string past its cap, over the string itself", () => {
+		const diagnostics = callDiagnostics(
+			'(memory "k" :when "a b c d e"\n  "one two\nthree four")',
+			table,
+		);
+		expect(diagnostics.map((d) => d.message)).toEqual([
+			"memory: holds at most 3 words here, this one has 4",
+		]);
+		expect(diagnostics[0].range).toEqual({
+			start: { line: 1, character: 2 },
+			end: { line: 2, character: 11 },
+		});
+	});
+
+	it("leaves a string within its cap, and a keyword's value, alone", () => {
+		expect(
+			callDiagnostics('(memory "k" :when "a b c d e" "one two")', table),
+		).toEqual([]);
+	});
+});

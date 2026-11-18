@@ -1,6 +1,5 @@
 import { driveAsync } from "@repo/interpreter/drive";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { MemoryBank, memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
@@ -16,7 +15,7 @@ function fixture(prose = proseExtension(proseHost)): {
 	const interp = new Interp({
 		extensions: [memoryExtension(memoryHost, { bank }), prose],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, bank };
 }
 
@@ -27,7 +26,10 @@ async function step(
 ): Promise<string> {
 	const before = await driveAsync(bank.beginStep(code, interp));
 	await runAsync(interp, code);
-	return before.value + (await driveAsync(bank.endStep())).value;
+	const after = (await driveAsync(bank.endStep())).value;
+	return [...before.value.memories, ...after.memories]
+		.map((m) => `${m.key}: ${m.body}\n`)
+		.join("");
 }
 
 describe("memory and prose", () => {

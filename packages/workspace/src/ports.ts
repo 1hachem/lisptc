@@ -57,6 +57,7 @@ export interface WorkspaceHost {
 	defaultDarkTheme?: string;
 	chatId?: string;
 	prompt: PromptSource;
+	memories: PromptSource;
 }
 
 export interface HeldChat extends ChatEntry {

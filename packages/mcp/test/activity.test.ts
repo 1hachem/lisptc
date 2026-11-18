@@ -1,6 +1,5 @@
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import type { LispPromise } from "@repo/interpreter/promise";
 import { openSession } from "@repo/interpreter/session";
 import {
@@ -77,7 +76,7 @@ async function session(icons?: Icon[]) {
 		clock: ticking(1000, 25),
 	});
 	const interp = new Interp({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	await (runSync(
 		interp,
 		'(load-mcp :name "acme" :url "https://acme.example/mcp")',
@@ -165,7 +164,7 @@ describe("loading a server", () => {
 			clock: ticking(1000, 25),
 		});
 		const interp = new Interp({ extensions: [extension] });
-		runSync(interp, prelude);
+		boot(interp);
 		const buffer = bufferSink();
 		const detach = interp.journal.pipe(buffer);
 		try {

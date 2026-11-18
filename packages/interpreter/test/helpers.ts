@@ -1,11 +1,10 @@
 import { type Image, restore, snapshot } from "../src/image.ts";
 import { bufferSink } from "../src/journal.ts";
-import { Interp, type InterpOptions, runSync } from "../src/lisp.ts";
-import { prelude } from "../src/prelude.ts";
+import { boot, Interp, type InterpOptions, runSync } from "../src/lisp.ts";
 import { str } from "../src/print.ts";
 export function freshInterp(options?: InterpOptions): Interp {
 	const interp = new Interp(options);
-	runSync(interp, prelude);
+	boot(interp);
 	return interp;
 }
 

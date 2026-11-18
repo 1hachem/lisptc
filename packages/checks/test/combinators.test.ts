@@ -1,12 +1,11 @@
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runSync } from "@repo/interpreter/lisp";
 import { describe, expect, test } from "vitest";
 import { Checks } from "../src/checks.ts";
 import { Trace } from "../src/trace.ts";
 import type { CheckOutcome } from "../src/verdict.ts";
 
 const reader = new Interp();
-runSync(reader, prelude);
+boot(reader);
 
 function form(source: string): unknown {
 	return runSync(reader, `'${source}`);

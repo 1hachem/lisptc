@@ -15,6 +15,12 @@ https://{{ . }}.$(TAILNET_DOMAIN)
 {{- end }}
 {{- end }}
 
+{{- define "lisptc.seedAccount" -}}
+{{- if or .Values.preview.enabled .Values.dev.enabled -}}
+pnpm exec convex run auth:seedAccount "$(node -e 'console.log(JSON.stringify({ email: process.env.SEED_EMAIL, password: process.env.SEED_PASSWORD }))')" || echo "seed account failed, deploy goes on" >&2
+{{- end -}}
+{{- end }}
+
 {{- define "lisptc.previewEnv" -}}
 {{- $ctx := index . 0 -}}
 {{- $vars := index . 1 -}}
