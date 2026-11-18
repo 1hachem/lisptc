@@ -14,7 +14,7 @@ export interface Watched {
 
 const UNWATCHED: Watched = { snapshot: [], relayed: [], status: "idle" };
 
-export interface SseEvent {
+interface SseEvent {
 	readonly event: string;
 	readonly data: unknown;
 }

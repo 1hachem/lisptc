@@ -440,7 +440,7 @@ function useTurnSend(
 	return { submitTurn, sendAbout };
 }
 
-export interface Briefed {
+interface Briefed {
 	_id: string;
 	parentChatId?: string;
 	agent?: { prompt: string };
