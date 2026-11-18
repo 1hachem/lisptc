@@ -29,6 +29,7 @@ export function MessageFeedback({
 				})
 			}
 			onRate={(thumb) => say({ face: FACE[thumb] })}
+			onThank={(line) => say({ line })}
 		/>
 	);
 }
