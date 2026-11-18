@@ -9,14 +9,11 @@ import {
 import { workspaceExtension } from "../src/workspace.ts";
 import { workspaceHostFor } from "../src/workspace-host.ts";
 
-export const MODELS = [
-	"openrouter/google/gemma-4-31b-it",
-	"digitalocean/gemma",
-];
+const MODELS = ["openrouter/google/gemma-4-31b-it", "digitalocean/gemma"];
 
-export const ICONS = ["folder", "rocket"];
+const ICONS = ["folder", "rocket"];
 
-export const THEMES: ThemeChoice[] = [
+const THEMES: ThemeChoice[] = [
 	{
 		id: "gruvbox-dark",
 		name: "gruvbox dark",
