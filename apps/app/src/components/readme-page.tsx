@@ -2,6 +2,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
 import { MAX_README_BYTES } from "@repo/backend/limits";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { ConvexError } from "convex/values";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -63,21 +64,27 @@ export function ReadmePage({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 					? undefined
 					: { path: "README.md", source: text, language: "markdown" }
 			}
-			actions={<span className="flex-none">{state}</span>}
+			actions={
+				<span {...anchorOf("readme/saved")} className="flex-none">
+					{state}
+				</span>
+			}
 			body={
-				<MarkdownEditor
-					value={stored ?? ""}
-					onChange={(markdown) => {
-						setWritten(markdown);
-						pending.current = markdown;
-						setState("saving");
-						clearTimeout(timer.current);
-						timer.current = setTimeout(() => void flush(), SAVE_DELAY_MS);
-					}}
-					onBlur={() => void flush()}
-					label="README.md"
-					placeholder="write markdown…"
-				/>
+				<div {...anchorOf("readme/editor")}>
+					<MarkdownEditor
+						value={stored ?? ""}
+						onChange={(markdown) => {
+							setWritten(markdown);
+							pending.current = markdown;
+							setState("saving");
+							clearTimeout(timer.current);
+							timer.current = setTimeout(() => void flush(), SAVE_DELAY_MS);
+						}}
+						onBlur={() => void flush()}
+						label="README.md"
+						placeholder="write markdown…"
+					/>
+				</div>
 			}
 		/>
 	);

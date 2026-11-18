@@ -378,6 +378,55 @@ describe("chat access", () => {
 		).rejects.toThrow();
 	});
 
+	it("refuses starting, reading or moving another user's tour", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		const steps = [{ say: "hi", until: "next" as const }];
+		await expect(
+			alice.as.mutation(api.tours.start, { chatId, tourId: "t", steps }),
+		).rejects.toThrow();
+		await bob.as.mutation(api.tours.start, { chatId, tourId: "t", steps });
+		const tour = await bob.as.query(api.tours.active, {});
+		if (tour === null) throw new Error("no active tour");
+		expect(await alice.as.query(api.tours.active, {})).toBeNull();
+		await expect(
+			alice.as.mutation(api.tours.advance, { tour: tour._id, from: 0 }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.tours.skip, { tour: tour._id }),
+		).rejects.toThrow();
+	});
+
+	it("refuses pointing in another user's chat, and shows no one else's", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const chatId = await bob.as.mutation(api.chats.create, {
+			workspaceId: bob.workspace,
+		});
+		await expect(
+			alice.as.mutation(api.tours.point, {
+				chatId,
+				anchor: "composer",
+				mark: "arrow",
+				size: "medium",
+				click: false,
+			}),
+		).rejects.toThrow();
+		await bob.as.mutation(api.tours.point, {
+			chatId,
+			anchor: "composer",
+			mark: "arrow",
+			size: "medium",
+			click: false,
+		});
+		expect(await alice.as.query(api.tours.pointer, {})).toBeNull();
+	});
+
 	it("marks a view expired until it is written again", async () => {
 		const t = testDeployment();
 		const bob = await signIn(t, "bob@example.com");
@@ -700,6 +749,44 @@ describe("panel layout access", () => {
 		).rejects.toThrow();
 	});
 
+	it("keeps which sidebars are open across layout saves, for the owner alone", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		const shown = () =>
+			bob.as.query(api.layouts.sidebarsShown, { workspaceId: bob.workspace });
+		expect(await shown()).toBeNull();
+		await bob.as.mutation(api.layouts.sidebar, {
+			workspaceId: bob.workspace,
+			side: "right",
+			open: true,
+		});
+		expect(await shown()).toEqual({ left: false, right: true });
+		await bob.as.mutation(api.layouts.put, {
+			workspaceId: bob.workspace,
+			layout: layout(2),
+		});
+		await bob.as.mutation(api.layouts.sidebar, {
+			workspaceId: bob.workspace,
+			side: "left",
+			open: true,
+		});
+		expect(await shown()).toEqual({ left: true, right: true });
+		expect(
+			await bob.as.query(api.layouts.get, { workspaceId: bob.workspace }),
+		).toEqual(layout(2));
+		await expect(
+			alice.as.query(api.layouts.sidebarsShown, { workspaceId: bob.workspace }),
+		).rejects.toThrow();
+		await expect(
+			alice.as.mutation(api.layouts.sidebar, {
+				workspaceId: bob.workspace,
+				side: "left",
+				open: false,
+			}),
+		).rejects.toThrow();
+	});
+
 	it("applies the agent's panel ops to the stored layout, for the owner alone", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
@@ -743,6 +830,60 @@ describe("panel layout access", () => {
 			alice.as.mutation(api.layouts.apply, {
 				workspaceId: bob.workspace,
 				ops: [{ op: "focus", tab: "chat:c1" }],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("shows and hides a chat's trace beside it, for the owner alone", async () => {
+		const t = testDeployment();
+		const alice = await signIn(t, "alice@example.com");
+		const bob = await signIn(t, "bob@example.com");
+		await bob.as.mutation(api.layouts.apply, {
+			workspaceId: bob.workspace,
+			ops: [
+				{
+					op: "open",
+					tab: "chat:c1",
+					split: "here",
+					content: { kind: "chat", chatId: "c1", title: "chat" },
+				},
+				{
+					op: "open",
+					tab: "trace:c1",
+					split: "right",
+					content: { kind: "trace", chatId: "c1", title: "trace" },
+				},
+			],
+		});
+		const shown = async () =>
+			(
+				await bob.as.query(api.layouts.get, { workspaceId: bob.workspace })
+			)?.nodes.flatMap((node) =>
+				node.kind === "pane"
+					? node.tabs.map((tab) =>
+							tab.content.kind === "chat"
+								? [tab.id, tab.content.trace?.shown]
+								: [tab.id],
+						)
+					: [],
+			);
+		const trace = (chatId: string, on: boolean) =>
+			bob.as.mutation(api.layouts.trace, {
+				workspaceId: bob.workspace,
+				chatId,
+				shown: on,
+			});
+
+		expect(await trace("c1", true)).toBe(true);
+		expect(await shown()).toEqual([["chat:c1", "open"], ["trace:c1"]]);
+		expect(await trace("c1", false)).toBe(true);
+		expect(await shown()).toEqual([["chat:c1", "collapsed"]]);
+		expect(await trace("c2", true)).toBe(false);
+		await expect(
+			alice.as.mutation(api.layouts.trace, {
+				workspaceId: bob.workspace,
+				chatId: "c1",
+				shown: true,
 			}),
 		).rejects.toThrow();
 	});

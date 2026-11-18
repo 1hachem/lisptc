@@ -1,5 +1,6 @@
 import { FileTree, TreeFile } from "@repo/components";
 import type { AttachedFile } from "@repo/shared/files";
+import { anchorOf } from "@repo/ui-catalog";
 import { useChatSession } from "../lib/chat.tsx";
 import { knowledgeIcon } from "../lib/file-icons.ts";
 import { type PanelContent, startPanelDrag } from "../lib/panel-ops.ts";
@@ -14,6 +15,7 @@ function AttachedRow({ file }: { file: AttachedFile }) {
 	};
 	return (
 		<TreeFile
+			anchor={anchorOf("chat/attachment")}
 			name={file.name}
 			icon={knowledgeIcon(file.name, null)}
 			iconLabel={`${file.folder}/${file.name}`}

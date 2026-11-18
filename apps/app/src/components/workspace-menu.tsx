@@ -11,6 +11,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -75,6 +76,7 @@ export function WorkspaceRailMenu({ onCreate }: { onCreate: () => void }) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
+				{...anchorOf("workspace")}
 				aria-label="switch workspace"
 				title={workspace?.name ?? "workspace"}
 				className="flex size-6 cursor-pointer items-center justify-center rounded-md bg-bg2 text-fg hover:text-fg"
@@ -126,6 +128,7 @@ export function WorkspaceMenu({
 	if (editing !== null) {
 		return (
 			<form
+				{...anchorOf("workspace")}
 				className="px-1.5"
 				onSubmit={(event) => {
 					event.preventDefault();
@@ -170,7 +173,10 @@ export function WorkspaceMenu({
 		<>
 			<div className="mx-1.5 flex items-stretch gap-[3px]">
 				<DropdownMenu>
-					<DropdownMenuTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 bg-bg2 px-2.5 py-1 text-left text-[11.5px] text-dim hover:text-fg">
+					<DropdownMenuTrigger
+						{...anchorOf("workspace")}
+						className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 bg-bg2 px-2.5 py-1 text-left text-[11.5px] text-dim hover:text-fg"
+					>
 						{workspace && (
 							<HugeiconsIcon
 								className="size-icon-sm flex-none text-fg"
@@ -231,6 +237,7 @@ export function WorkspaceMenu({
 					</DropdownMenuContent>
 				</DropdownMenu>
 				<button
+					{...anchorOf("workspace/new")}
 					type="button"
 					title="new workspace"
 					onClick={() => {

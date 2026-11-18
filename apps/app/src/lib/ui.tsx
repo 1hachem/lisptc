@@ -8,6 +8,7 @@ import {
 	createContext,
 	useCallback,
 	useContext,
+	useEffect,
 	useMemo,
 	useState,
 } from "react";
@@ -19,6 +20,7 @@ import {
 	writeBoolPref,
 } from "./prefs.ts";
 import { togglesOf } from "./resolved-preferences.ts";
+import type { SidebarSide } from "./sidebar-order.ts";
 
 type MetaShown = Record<MetaField, boolean>;
 
@@ -37,27 +39,57 @@ interface UIContextValue {
 	toggleInput: (id: InputHelper) => void;
 }
 
+export interface OpenSidebars {
+	shown: Record<SidebarSide, boolean> | null | undefined;
+	put: (side: SidebarSide, open: boolean) => void;
+}
+
 const UIContext = createContext<UIContextValue | null>(null);
 
-export function UIProvider({ children }: { children: React.ReactNode }) {
+export function UIProvider({
+	children,
+	sidebars,
+}: {
+	children: React.ReactNode;
+	sidebars?: OpenSidebars;
+}) {
 	const [leftOpen, setLeft] = useState(() =>
 		readBoolPref(SIDEBAR_COOKIE, false),
 	);
 	const [rightOpen, setRight] = useState(() =>
 		readBoolPref(PREFERENCES_COOKIE, false),
 	);
-	const setLeftOpen = useCallback((open: boolean) => {
-		setLeft(open);
-		writeBoolPref(SIDEBAR_COOKIE, open);
-	}, []);
+	const shown = sidebars?.shown;
+	const put = sidebars?.put;
 
-	const setRightOpen = useCallback((open: boolean) => {
-		setRight(open);
-		writeBoolPref(PREFERENCES_COOKIE, open);
-	}, []);
+	useEffect(() => {
+		if (!shown) return;
+		setLeft(shown.left);
+		writeBoolPref(SIDEBAR_COOKIE, shown.left);
+		setRight(shown.right);
+		writeBoolPref(PREFERENCES_COOKIE, shown.right);
+	}, [shown]);
+
+	const setLeftOpen = useCallback(
+		(open: boolean) => {
+			setLeft(open);
+			writeBoolPref(SIDEBAR_COOKIE, open);
+			put?.("left", open);
+		},
+		[put],
+	);
+
+	const setRightOpen = useCallback(
+		(open: boolean) => {
+			setRight(open);
+			writeBoolPref(PREFERENCES_COOKIE, open);
+			put?.("right", open);
+		},
+		[put],
+	);
 
 	const stored = usePreferences();
-	const put = usePutPreferences();
+	const putPreferences = usePutPreferences();
 	const metaShown: MetaShown = useMemo(
 		() => togglesOf(META_FIELDS, stored?.metadata),
 		[stored?.metadata],
@@ -69,13 +101,14 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 
 	const toggleMeta = useCallback(
 		(id: MetaField) =>
-			put({ metadata: { ...metaShown, [id]: !metaShown[id] } }),
-		[metaShown, put],
+			putPreferences({ metadata: { ...metaShown, [id]: !metaShown[id] } }),
+		[metaShown, putPreferences],
 	);
 
 	const toggleInput = useCallback(
-		(id: InputHelper) => put({ input: { ...inputOn, [id]: !inputOn[id] } }),
-		[inputOn, put],
+		(id: InputHelper) =>
+			putPreferences({ input: { ...inputOn, [id]: !inputOn[id] } }),
+		[inputOn, putPreferences],
 	);
 
 	const value = useMemo<UIContextValue>(

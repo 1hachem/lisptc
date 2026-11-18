@@ -12,6 +12,7 @@ const SOURCE_FOLDERS: readonly string[] = ["sub-agents"];
 
 const KEYED = {
 	memory: "memories",
+	onboarding: "onboarding",
 	permission: "permissions",
 	bin: "bin",
 } as const satisfies Partial<Record<Page, string>>;

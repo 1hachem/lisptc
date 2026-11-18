@@ -1,3 +1,4 @@
+import { contentRegion } from "@repo/ui-catalog";
 import { type ErrorComponentProps, Link } from "@tanstack/react-router";
 import { ConvexError } from "convex/values";
 import { useEffect } from "react";
@@ -43,31 +44,35 @@ export function RouteError({ error, reset }: ErrorComponentProps) {
 
 	if (rejected) return null;
 	return (
-		<EverythingFine>
-			<div className="max-w-dialog whitespace-pre-wrap break-words text-red">
-				{error instanceof Error ? error.message : String(error)}
-			</div>
-			<button
-				type="button"
-				onClick={reset}
-				className="text-dim underline underline-offset-4 hover:text-fg"
-			>
-				try again
-			</button>
-		</EverythingFine>
+		<div {...contentRegion} className="contents">
+			<EverythingFine>
+				<div className="max-w-dialog whitespace-pre-wrap break-words text-red">
+					{error instanceof Error ? error.message : String(error)}
+				</div>
+				<button
+					type="button"
+					onClick={reset}
+					className="text-dim underline underline-offset-4 hover:text-fg"
+				>
+					try again
+				</button>
+			</EverythingFine>
+		</div>
 	);
 }
 
 export function RouteNotFound() {
 	return (
-		<EverythingFine>
-			<div>this page doesn't exist</div>
-			<Link
-				to="/"
-				className="text-dim underline underline-offset-4 hover:text-fg"
-			>
-				go home
-			</Link>
-		</EverythingFine>
+		<div {...contentRegion} className="contents">
+			<EverythingFine>
+				<div>this page doesn't exist</div>
+				<Link
+					to="/"
+					className="text-dim underline underline-offset-4 hover:text-fg"
+				>
+					go home
+				</Link>
+			</EverythingFine>
+		</div>
 	);
 }

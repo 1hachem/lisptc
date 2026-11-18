@@ -4,7 +4,7 @@ import { type PanelContent, panelTab } from "./panel-ops.ts";
 
 const listeners = new Set<(ops: readonly PanelOp<PanelContent>[]) => void>();
 
-function requestPanelOps(ops: readonly PanelOp<PanelContent>[]): void {
+export function requestPanelOps(ops: readonly PanelOp<PanelContent>[]): void {
 	for (const listen of listeners) listen(ops);
 }
 

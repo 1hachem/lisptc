@@ -10,6 +10,7 @@ import {
 	Home01Icon,
 	InformationCircleIcon,
 	PaintBoardIcon,
+	Route01Icon,
 	Settings02Icon,
 	ShieldKeyIcon,
 	StickyNote01Icon,
@@ -26,20 +27,27 @@ import {
 	TreeFile,
 	TreeFolder,
 } from "@repo/components";
+import {
+	type AnchorMark,
+	anchorOf,
+	SIDEBAR_FOLDERS,
+	type SidebarFolder,
+} from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext, useState } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useEffect,
+	useState,
+} from "react";
 import { restingIcon } from "../lib/bot-icon.ts";
 import { useNewChat } from "../lib/chats.ts";
 import { permissionRules, withoutRule } from "../lib/files.ts";
 import { dragsAs, NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanelClosed } from "../lib/panel-requests.ts";
 import { writeBoolPref } from "../lib/prefs.ts";
-import {
-	SIDEBAR_FOLDERS,
-	type SidebarEntry,
-	type SidebarFolder,
-	type SidebarSide,
-} from "../lib/sidebar-order.ts";
+import type { SidebarEntry, SidebarSide } from "../lib/sidebar-order.ts";
 import { folderCookie, folderOpen } from "../lib/sidebar-prefetch.ts";
 import { ChatFolder } from "./chat-folder.tsx";
 import {
@@ -62,6 +70,7 @@ const PLACEHOLDERS = [
 const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	chat: BubbleChatIcon,
 	memories: StickyNote01Icon,
+	onboarding: Route01Icon,
 	permissions: ShieldKeyIcon,
 	knowledge: Book02Icon,
 	attachments: Attachment01Icon,
@@ -71,6 +80,30 @@ const FOLDER_ICONS: Record<SidebarFolder, IconSvgElement> = {
 	tasks: TaskDone01Icon,
 	ui: PaintBoardIcon,
 	tests: TestTube01Icon,
+};
+
+const FOLDER_ANCHORS: Record<SidebarFolder, AnchorMark> = {
+	chat: anchorOf("chats"),
+	memories: anchorOf("memories"),
+	onboarding: anchorOf("onboarding"),
+	permissions: anchorOf("permissions"),
+	knowledge: anchorOf("knowledge"),
+	attachments: anchorOf("attachments"),
+	bin: anchorOf("bin"),
+	"sub-agents": anchorOf("sub-agents"),
+	triggers: anchorOf("triggers"),
+	tasks: anchorOf("tasks"),
+	ui: anchorOf("ui"),
+	tests: anchorOf("tests"),
+};
+
+export const ENTRY_ANCHORS: Record<SidebarEntry, AnchorMark> = {
+	...FOLDER_ANCHORS,
+	home: anchorOf("home"),
+	new_chat: anchorOf("new-chat"),
+	"README.md": anchorOf("readme"),
+	settings: anchorOf("settings"),
+	preferences: anchorOf("preferences"),
 };
 
 export const ENTRY_ICONS: Record<SidebarEntry, IconSvgElement> = {
@@ -86,6 +119,15 @@ function memoryPage(key: string): PanelContent {
 	return { kind: "page", page: "memory", id: key, title: `memories/${key}` };
 }
 
+function onboardingPage(name: string): PanelContent {
+	return {
+		kind: "page",
+		page: "onboarding",
+		id: name,
+		title: `onboarding/${name}`,
+	};
+}
+
 function permissionPage(index: number, name: string): PanelContent {
 	return {
 		kind: "page",
@@ -99,8 +141,12 @@ function isFolder(entry: SidebarEntry): entry is SidebarFolder {
 	return SIDEBAR_FOLDERS.some((folder) => folder === entry);
 }
 
-export function openFolderOnMount(entry: SidebarEntry) {
-	if (isFolder(entry)) writeBoolPref(folderCookie(entry), true);
+const folderOpeners = new Set<(folder: SidebarFolder) => void>();
+
+export function openFolder(entry: SidebarEntry) {
+	if (!isFolder(entry)) return;
+	writeBoolPref(folderCookie(entry), true);
+	for (const open of folderOpeners) open(entry);
 }
 
 type Folders = <F extends SidebarFolder>(folder: F) => FolderState<F>;
@@ -114,11 +160,20 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
 				SIDEBAR_FOLDERS.map((folder) => [folder, folderOpen(folder)]),
 			) as Record<SidebarFolder, boolean>,
 	);
+	useEffect(() => {
+		const open = (folder: SidebarFolder) =>
+			setOpened((prev) => (prev[folder] ? prev : { ...prev, [folder]: true }));
+		folderOpeners.add(open);
+		return () => {
+			folderOpeners.delete(open);
+		};
+	}, []);
 	const folders: Folders = <F extends SidebarFolder>(
 		folder: F,
 	): FolderState<F> => ({
 		name: folder,
 		icon: FOLDER_ICONS[folder],
+		toggleAnchor: FOLDER_ANCHORS[folder],
 		open: opened[folder],
 		onToggle: () => {
 			const next = !opened[folder];
@@ -150,6 +205,7 @@ function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 
 	return (
 		<TreeFile
+			anchor={FOLDER_ANCHORS.memories}
 			name={memory.key}
 			depth={1}
 			selected={shown(page)}
@@ -172,6 +228,36 @@ function MemoryFile({ memory }: { memory: Doc<"memories"> }) {
 	);
 }
 
+function OnboardingFile({ onboarding }: { onboarding: Doc<"onboardings"> }) {
+	const removeOnboarding = useConvexMutation(api.onboardings.remove);
+	const shown = useShown();
+	const page = onboardingPage(onboarding.name);
+
+	return (
+		<TreeFile
+			anchor={FOLDER_ANCHORS.onboarding}
+			name={onboarding.name}
+			depth={1}
+			selected={shown(page)}
+			onDragStart={dragsAs(page)}
+			trailing={
+				<FileMenu
+					name={onboarding.name}
+					confirm="drop this onboarding?"
+					onDelete={async () => {
+						requestPanelClosed(page);
+						await removeOnboarding({
+							workspaceId: onboarding.workspaceId,
+							name: onboarding.name,
+						});
+					}}
+				/>
+			}
+			link={linkTo(onboarding.workspaceId, page)}
+		/>
+	);
+}
+
 function PermissionFiles({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	const { data: source } = useQuery(
 		convexQuery(api.permissions.get, { workspaceId }),
@@ -188,6 +274,7 @@ function PermissionFiles({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 				const page = permissionPage(index, rule.name);
 				return (
 					<TreeFile
+						anchor={FOLDER_ANCHORS.permissions}
 						key={rule.start}
 						name={rule.name}
 						depth={1}
@@ -217,6 +304,7 @@ function PermissionFiles({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 	return (
 		<TreeFile
+			anchor={ENTRY_ANCHORS.home}
 			name="home"
 			icon={Home01Icon}
 			selected={false}
@@ -227,7 +315,7 @@ function HomeFile({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 
 const ROOT_FILES: Record<
 	"readme" | "settings" | "preferences",
-	{ name: string; title: string; icon?: IconSvgElement }
+	{ name: SidebarEntry; title: string; icon?: IconSvgElement }
 > = {
 	readme: {
 		name: "README.md",
@@ -253,6 +341,7 @@ function RootFile({
 	};
 	return (
 		<TreeFile
+			anchor={ENTRY_ANCHORS[ROOT_FILES[page].name]}
 			name={ROOT_FILES[page].name}
 			icon={ROOT_FILES[page].icon}
 			selected={shown(content)}
@@ -273,9 +362,17 @@ export function WorkspaceTree({
 	const { data: memories } = useQuery(
 		convexQuery(api.memories.list, { workspaceId }),
 	);
+	const { data: onboardings } = useQuery(
+		convexQuery(api.onboardings.list, { workspaceId }),
+	);
 
 	const placeholder = (name: (typeof PLACEHOLDERS)[number]) => () => (
-		<TreeFolder {...folder(name)} onCreate="disabled" createLabel="coming soon">
+		<TreeFolder
+			{...folder(name)}
+			onCreate="disabled"
+			createLabel="coming soon"
+			createAnchor={FOLDER_ANCHORS[name]}
+		>
 			<Empty>no {name} yet</Empty>
 		</TreeFolder>
 	);
@@ -283,7 +380,11 @@ export function WorkspaceTree({
 	const entries: Record<SidebarEntry, () => ReactNode> = {
 		home: () => <HomeFile workspaceId={workspaceId} />,
 		new_chat: () => (
-			<TreeCommand name="new_chat" onRun={() => void newChat()} />
+			<TreeCommand
+				anchor={ENTRY_ANCHORS.new_chat}
+				name="new_chat"
+				onRun={() => void newChat()}
+			/>
 		),
 		chat: () => (
 			<ChatFolder workspaceId={workspaceId} folder={folder("chat")} />
@@ -292,6 +393,15 @@ export function WorkspaceTree({
 			<TreeFolder {...folder("memories")}>
 				<Listing items={memories} empty="no memories yet">
 					{(memory) => <MemoryFile key={memory._id} memory={memory} />}
+				</Listing>
+			</TreeFolder>
+		),
+		onboarding: () => (
+			<TreeFolder {...folder("onboarding")}>
+				<Listing items={onboardings} empty="no onboarding yet">
+					{(onboarding) => (
+						<OnboardingFile key={onboarding._id} onboarding={onboarding} />
+					)}
 				</Listing>
 			</TreeFolder>
 		),

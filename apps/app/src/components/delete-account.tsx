@@ -1,4 +1,5 @@
 import { Input } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useId, useState } from "react";
 import { authClient } from "../lib/auth-client.ts";
 import { useLeave } from "../lib/leave.tsx";
@@ -17,7 +18,10 @@ export function DeleteAccount() {
 	const verified = typed.trim() === VERIFICATION;
 
 	return (
-		<section className="flex flex-col gap-3 border border-red/40 p-4 text-[12px]">
+		<section
+			{...anchorOf("account/delete")}
+			className="flex flex-col gap-3 border border-red/40 p-4 text-[12px]"
+		>
 			<div className="text-red">delete account</div>
 			<p className="m-0 text-dim">
 				This deletes your account, every workspace you own, and every session,

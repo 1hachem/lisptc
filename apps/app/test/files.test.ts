@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { fileContext, permissionRules, withoutRule } from "../src/lib/files.ts";
+import {
+	fileContext,
+	permissionRules,
+	shownName,
+	withoutRule,
+} from "../src/lib/files.ts";
+
+describe("shownName", () => {
+	it("drops the .ptc a saved sub-agent is stored under", () => {
+		expect(shownName("researcher.ptc")).toBe("researcher");
+	});
+
+	it("keeps a name without it", () => {
+		expect(shownName("notes.ptc.md")).toBe("notes.ptc.md");
+	});
+});
 
 describe("fileContext", () => {
 	it("opens with the path and the source fenced as lisp", () => {

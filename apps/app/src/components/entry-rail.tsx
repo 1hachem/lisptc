@@ -5,7 +5,7 @@ import { useNewChat } from "../lib/chats.ts";
 import { NEW_CHAT, type PanelContent } from "../lib/panel-ops.ts";
 import { requestPanel } from "../lib/panel-requests.ts";
 import type { SidebarEntry, SidebarSide } from "../lib/sidebar-order.ts";
-import { ENTRY_ICONS, openFolderOnMount } from "./workspace-tree.tsx";
+import { ENTRY_ANCHORS, ENTRY_ICONS, openFolder } from "./workspace-tree.tsx";
 
 export const TREE_ROW = "flex h-[calc(1lh+0.5rem)] items-center text-[11.5px]";
 
@@ -27,7 +27,7 @@ function useRailPick() {
 		if (entry === "new_chat") return newChat();
 		const page = PAGES[entry];
 		if (page !== undefined) return requestPanel(page);
-		openFolderOnMount(entry);
+		openFolder(entry);
 		setOpen(true);
 	};
 }
@@ -42,6 +42,7 @@ export function EntryRail({ side }: { side: SidebarSide }) {
 			{(entry) => (
 				<div className={TREE_ROW}>
 					<SidebarMenuButton
+						{...ENTRY_ANCHORS[entry]}
 						tooltip={entry}
 						className="group-data-[collapsible=icon]:size-6! group-data-[collapsible=icon]:p-1!"
 						onClick={() => pick(entry)}

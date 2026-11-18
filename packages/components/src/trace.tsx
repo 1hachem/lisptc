@@ -13,6 +13,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import type { Marker } from "./file-tree.tsx";
 import { LanesShown, Revealed, useLanes } from "./trace-context.tsx";
 import { isEntryMessage } from "./trace-entries.ts";
 import { messageMatches } from "./trace-find.ts";
@@ -49,6 +50,14 @@ export interface TraceSlots {
 
 const Slots = createContext<TraceSlots>({ line: () => null });
 
+export interface TraceAnchors {
+	find?: Marker;
+	lanes?: Marker;
+	entry?: Marker;
+}
+
+const Anchors = createContext<TraceAnchors>({});
+
 const FindQuery = createContext("");
 
 function useMatched(message: ChatMessage): boolean {
@@ -77,7 +86,10 @@ function FindBar({
 		} else if (event.key === "Escape") setQuery("");
 	};
 	return (
-		<div className="flex min-w-0 items-center gap-2 border-dim/20 border-b px-4 py-1.5 text-[11.5px]">
+		<div
+			{...useContext(Anchors).find}
+			className="flex min-w-0 items-center gap-2 border-dim/20 border-b px-4 py-1.5 text-[11.5px]"
+		>
 			<input
 				ref={input}
 				type="search"
@@ -123,7 +135,10 @@ function LaneToggles({
 	toggle: (id: keyof Shown) => void;
 }) {
 	return (
-		<div className="flex flex-wrap gap-x-3 gap-y-1 border-dim/20 border-b px-4 py-1.5 text-[11px]">
+		<div
+			{...useContext(Anchors).lanes}
+			className="flex flex-wrap gap-x-3 gap-y-1 border-dim/20 border-b px-4 py-1.5 text-[11px]"
+		>
 			{LANES.map((c) => (
 				<button
 					key={c.id}
@@ -200,6 +215,7 @@ function TraceRow({
 	return (
 		<button
 			type="button"
+			{...useContext(Anchors).entry}
 			aria-expanded={open}
 			className={`flex w-full min-w-0 gap-2 text-left text-[11.5px] text-dim hover:text-fg ${align}`}
 			{...button}
@@ -538,10 +554,12 @@ export function Trace({
 	messages,
 	turn,
 	slots,
+	anchors = {},
 }: {
 	messages: readonly ChatMessage[];
 	turn?: string;
 	slots: TraceSlots;
+	anchors?: TraceAnchors;
 }) {
 	const [shown, setShown] = useState<Shown>(EVERY_LANE);
 	const scroller = useRef<HTMLDivElement>(null);
@@ -560,26 +578,28 @@ export function Trace({
 	};
 	return (
 		<Slots.Provider value={slots}>
-			<LanesShown shown={shown}>
-				<FindQuery.Provider value={find.query}>
-					<section
-						aria-label="trace"
-						className="flex h-full min-h-0 flex-col"
-						onKeyDown={onKeyDown}
-					>
-						<FindBar {...find} />
-						<LaneToggles shown={shown} toggle={toggle} />
-						<div
-							ref={scroller}
-							className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]"
+			<Anchors.Provider value={anchors}>
+				<LanesShown shown={shown}>
+					<FindQuery.Provider value={find.query}>
+						<section
+							aria-label="trace"
+							className="flex h-full min-h-0 flex-col"
+							onKeyDown={onKeyDown}
 						>
-							<div className="mx-auto w-full max-w-[680px]">
-								<TraceEntries entries={entries} flashing={flashing} />
+							<FindBar {...find} />
+							<LaneToggles shown={shown} toggle={toggle} />
+							<div
+								ref={scroller}
+								className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-gutter:stable]"
+							>
+								<div className="mx-auto w-full max-w-[680px]">
+									<TraceEntries entries={entries} flashing={flashing} />
+								</div>
 							</div>
-						</div>
-					</section>
-				</FindQuery.Provider>
-			</LanesShown>
+						</section>
+					</FindQuery.Provider>
+				</LanesShown>
+			</Anchors.Provider>
 		</Slots.Provider>
 	);
 }

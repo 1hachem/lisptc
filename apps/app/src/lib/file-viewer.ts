@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-const TEXT_EXTENSIONS = new Set([
+const TEXT_EXTENSIONS = [
 	"txt",
 	"log",
 	"csv",
@@ -17,8 +17,7 @@ const TEXT_EXTENSIONS = new Set([
 	"tsx",
 	"py",
 	"sql",
-	"ptc",
-]);
+];
 
 export function extensionOf(name: string): string {
 	const dot = name.lastIndexOf(".");
@@ -35,12 +34,13 @@ export type KnowledgeViewer =
 	| "html"
 	| "markdown"
 	| "json"
+	| "lisptc"
 	| "text"
 	| "download";
 
 export type TextViewer = Extract<
 	KnowledgeViewer,
-	"svg" | "html" | "markdown" | "json" | "text"
+	"svg" | "html" | "markdown" | "json" | "lisptc" | "text"
 >;
 
 export function readsText(
@@ -51,6 +51,7 @@ export function readsText(
 		viewer === "html" ||
 		viewer === "markdown" ||
 		viewer === "json" ||
+		viewer === "lisptc" ||
 		viewer === "text"
 	);
 }
@@ -60,35 +61,78 @@ export interface StoredText {
 	failure?: string;
 }
 
+interface ViewerRule {
+	viewer: KnowledgeViewer;
+	extensions: readonly string[];
+	type: (type: string) => boolean;
+}
+
+const VIEWER_RULES: readonly ViewerRule[] = [
+	{
+		viewer: "download",
+		extensions: ["dwg"],
+		type: (type) => type === "image/vnd.dwg",
+	},
+	{
+		viewer: "svg",
+		extensions: ["svg"],
+		type: (type) => type === "image/svg+xml",
+	},
+	{
+		viewer: "image",
+		extensions: [],
+		type: (type) => type.startsWith("image/"),
+	},
+	{
+		viewer: "html",
+		extensions: ["html", "htm"],
+		type: (type) => type === "text/html",
+	},
+	{
+		viewer: "pdf",
+		extensions: ["pdf"],
+		type: (type) => type === "application/pdf",
+	},
+	{
+		viewer: "video",
+		extensions: [],
+		type: (type) => type.startsWith("video/"),
+	},
+	{
+		viewer: "audio",
+		extensions: [],
+		type: (type) => type.startsWith("audio/"),
+	},
+	{ viewer: "stl", extensions: ["stl"], type: (type) => type === "model/stl" },
+	{
+		viewer: "markdown",
+		extensions: ["md", "markdown"],
+		type: (type) => type === "text/markdown",
+	},
+	{
+		viewer: "json",
+		extensions: ["json"],
+		type: (type) => type === "application/json" || type.endsWith("+json"),
+	},
+	{ viewer: "lisptc", extensions: ["ptc"], type: () => false },
+	{
+		viewer: "text",
+		extensions: TEXT_EXTENSIONS,
+		type: (type) => type.startsWith("text/"),
+	},
+];
+
 export function knowledgeViewer(
 	name: string,
 	contentType: string | null,
 ): KnowledgeViewer {
 	const extension = extensionOf(name);
 	const type = contentType ?? "";
-	if (extension === "dwg" || type === "image/vnd.dwg") return "download";
-	if (extension === "svg" || type === "image/svg+xml") return "svg";
-	if (type.startsWith("image/")) return "image";
-	if (type === "text/html" || extension === "html" || extension === "htm")
-		return "html";
-	if (type === "application/pdf" || extension === "pdf") return "pdf";
-	if (type.startsWith("video/")) return "video";
-	if (type.startsWith("audio/")) return "audio";
-	if (type === "model/stl" || extension === "stl") return "stl";
-	if (
-		type === "text/markdown" ||
-		extension === "md" ||
-		extension === "markdown"
-	)
-		return "markdown";
-	if (
-		type === "application/json" ||
-		type.endsWith("+json") ||
-		extension === "json"
-	)
-		return "json";
-	if (type.startsWith("text/") || TEXT_EXTENSIONS.has(extension)) return "text";
-	return "download";
+	const rule = VIEWER_RULES.find(
+		(candidate) =>
+			candidate.extensions.includes(extension) || candidate.type(type),
+	);
+	return rule?.viewer ?? "download";
 }
 
 async function fetchText(url: string): Promise<string> {

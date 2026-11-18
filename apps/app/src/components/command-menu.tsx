@@ -4,6 +4,7 @@ import {
 	type MenuTextMatch,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { useIsMobile } from "@repo/ui";
+import { COMMANDS, type Command } from "@repo/ui-catalog";
 import { $getRoot } from "lexical";
 import {
 	type RefObject,
@@ -12,7 +13,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { type Command, commands, matchesCommand } from "../lib/commands.ts";
+import { matchesCommand } from "../lib/commands.ts";
 import { TypeaheadMenu } from "./typeahead-menu.tsx";
 
 const COMMAND_QUERY = /^\/(\S*)$/;
@@ -41,8 +42,7 @@ export function CommandMenuPlugin({
 
 	const options = useMemo(
 		() =>
-			commands
-				.filter((c) => !(isMobile && c.desktopOnly))
+			COMMANDS.filter((c) => !(isMobile && c.desktopOnly))
 				.filter((c) => matchesCommand(c, query ?? ""))
 				.map((c) => new CommandOption(c)),
 		[query, isMobile],

@@ -122,6 +122,7 @@ named only at a composition root:
 - `packages/llm` (`@repo/llm-extension`) — the language-model extension.
 - `packages/mcp` (`@repo/mcp-extension`) — the MCP extension.
 - `packages/memory` (`@repo/memory-extension`) — the memory extension.
+- `packages/onboarding` (`@repo/onboarding-extension`) — the onboarding scripts a workspace keeps, and whether its user has been through each.
 - `packages/permissions` (`@repo/permissions-extension`) — what a session may call: allowed, denied, or waiting on a human.
 - `packages/promises` (`@repo/promises-extension`) — asynchrony.
 - `packages/preferences` (`@repo/preferences-extension`) — the user's preferences: theme, font, what the chat shows.

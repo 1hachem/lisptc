@@ -1,6 +1,7 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { PageView } from "./file-view.tsx";
 import { Chips, Field, SourceValue } from "./read-only.tsx";
@@ -35,18 +36,18 @@ export function MemoryPage({
 					<h1 className="break-words font-medium text-[15px] text-fg">
 						{memory.key}
 					</h1>
-					<Field label="remembers">
+					<Field label="remembers" anchor={anchorOf("memory/remembers")}>
 						<SourceValue source={memory.body} />
 					</Field>
 					{memory.on !== undefined && (
-						<Field label="comes back when">
+						<Field label="comes back when" anchor={anchorOf("memory/when")}>
 							<SourceValue source={memory.on} />
 						</Field>
 					)}
-					<Field label="linked memories">
+					<Field label="linked memories" anchor={anchorOf("memory/links")}>
 						<Chips items={memory.links.map((link) => link.key)} />
 					</Field>
-					<Field label="use">
+					<Field label="use" anchor={anchorOf("memory/use")}>
 						<span className="text-dim">
 							{usedText(memory.used, memory.lastUsed)}
 						</span>

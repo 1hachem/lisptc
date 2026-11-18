@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { MessageFeedback } from "./message-feedback.tsx";
 
 beforeAll(() => {
@@ -10,16 +10,27 @@ beforeAll(() => {
 	).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
+const mounts: { root: Root; host: HTMLElement }[] = [];
+
+afterEach(async () => {
+	for (const { root, host } of mounts.splice(0)) {
+		await act(async () => root.unmount());
+		host.remove();
+	}
+});
+
 async function mounted() {
 	const capture = vi.fn();
 	const onRate = vi.fn();
+	const onThank = vi.fn();
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
+	mounts.push({ root, host });
 	await act(async () => {
 		root.render(
 			<StrictMode>
-				<MessageFeedback capture={capture} onRate={onRate} />
+				<MessageFeedback capture={capture} onRate={onRate} onThank={onThank} />
 			</StrictMode>,
 		);
 	});
@@ -27,7 +38,9 @@ async function mounted() {
 	return {
 		capture,
 		onRate,
-		field: () => host.querySelector<HTMLInputElement>("input"),
+		onThank,
+		field: () =>
+			document.querySelector<HTMLInputElement>("[role=dialog] input"),
 		async vote(title: string) {
 			await act(async () => {
 				host
@@ -36,7 +49,7 @@ async function mounted() {
 			});
 		},
 		async explain(text: string) {
-			const input = host.querySelector("input");
+			const input = document.querySelector("[role=dialog] input");
 			if (!input) throw new Error("no follow-up input");
 			await act(async () => {
 				Object.getOwnPropertyDescriptor(
@@ -82,6 +95,7 @@ describe("voting on an agent message", () => {
 		});
 		expect(second.$survey_submission_id).toBe(first.$survey_submission_id);
 		expect(ui.field()).toBeNull();
+		expect(ui.onThank).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps an empty sentence from sending a second event", async () => {
@@ -91,5 +105,6 @@ describe("voting on an agent message", () => {
 
 		expect(ui.capture).toHaveBeenCalledTimes(1);
 		expect(ui.field()).not.toBeNull();
+		expect(ui.onThank).not.toHaveBeenCalled();
 	});
 });

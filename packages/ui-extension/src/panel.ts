@@ -1,5 +1,5 @@
 import type { Awaitable } from "@repo/shared/host";
-import type { FOLDERS } from "@repo/ui-catalog";
+import type { FOLDERS, PageId } from "@repo/ui-catalog";
 
 export type Folder = (typeof FOLDERS)[number];
 
@@ -9,9 +9,14 @@ export type Split = (typeof SPLITS)[number];
 
 export const DEFAULT_SPLIT: Split = "here";
 
+export const SIDES = ["left", "right"] as const;
+
+export type Side = (typeof SIDES)[number];
+
 export type PanelContent =
 	| { kind: "file"; folder: Folder; name: string }
-	| { kind: "view"; title: string; viewId: string };
+	| { kind: "view"; title: string; viewId: string }
+	| { kind: "page"; page: PageId; title: string };
 
 export type PanelOp =
 	| { op: "open"; tab: string; split: Split; content: PanelContent }
@@ -21,6 +26,8 @@ export type PanelOp =
 export interface PanelStore {
 	apply(ops: readonly PanelOp[]): Awaitable<void>;
 	tabs(): Awaitable<PanelTab[]>;
+	trace(shown: boolean): Awaitable<boolean>;
+	sidebar(side: Side, open: boolean): Awaitable<void>;
 }
 
 export function fileTab(folder: Folder, name: string): string {
@@ -37,4 +44,8 @@ export interface PanelTab {
 	title: string;
 	shown: boolean;
 	focused: boolean;
+}
+
+export function pageTab(page: PageId): string {
+	return `page:${page}`;
 }

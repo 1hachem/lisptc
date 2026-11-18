@@ -6,6 +6,10 @@ export interface OpenFile {
 	language?: "lisp" | "markdown";
 }
 
+export function shownName(name: string): string {
+	return name.replace(/\.ptc$/, "");
+}
+
 export function fileContext(file: OpenFile, text: string): string {
 	const fence = "```";
 	return `about \`${file.path}\`:\n${fence}${file.language ?? "lisp"}\n${file.source}\n${fence}\n\n${text}`;

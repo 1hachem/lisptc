@@ -1,12 +1,13 @@
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "@repo/backend/api";
 import type { Question } from "@repo/journal-catalog/intent";
+import { anchorOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { attachingFiles } from "../lib/attached-files.ts";
 import { useChatSession } from "../lib/chat.tsx";
 import { useCommandRunner } from "../lib/commands.ts";
-import type { OpenFile } from "../lib/files.ts";
+import { type OpenFile, shownName } from "../lib/files.ts";
 import { sentHistory } from "../lib/message-history.ts";
 import { useSymbols } from "../lib/symbols.ts";
 import { useUI } from "../lib/ui.tsx";
@@ -62,7 +63,7 @@ export function ChatComposer({
 			})),
 			...(agents ?? []).map((file) => ({
 				folder: "sub-agents" as const,
-				name: file.replace(/\.ptc$/, ""),
+				name: shownName(file),
 				contentType: null,
 			})),
 		],
@@ -80,15 +81,17 @@ export function ChatComposer({
 	const symbols = useSymbols(chatId ?? draftChatId, isLoading);
 
 	return (
-		<ChatInput
-			placeholder={about ? `ask about ${about.path}` : "type a message"}
-			onSubmit={submit}
-			blocked={blocked}
-			files={{ upload: toAttachments.upload, discard: toAttachments.discard }}
-			assist={{ mentions, history, onCommand: runCommand, symbols }}
-			streaming={{ active: isLoading, onStop: stop }}
-			on={inputOn}
-			question={question}
-		/>
+		<div {...anchorOf("composer")}>
+			<ChatInput
+				placeholder={about ? `ask about ${about.path}` : "type a message"}
+				onSubmit={submit}
+				blocked={blocked}
+				files={{ upload: toAttachments.upload, discard: toAttachments.discard }}
+				assist={{ mentions, history, onCommand: runCommand, symbols }}
+				streaming={{ active: isLoading, onStop: stop }}
+				on={inputOn}
+				question={question}
+			/>
+		</div>
 	);
 }

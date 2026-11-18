@@ -80,11 +80,7 @@ function recognizedOf(message: ChatMessage): Recognized | undefined {
 function Feedback({ capture }: { capture?: Capture }) {
 	if (capture === undefined) return null;
 	return (
-		<MessageFeedback
-			capture={capture}
-			className="absolute top-1 right-3"
-			reveal="always"
-		/>
+		<MessageFeedback capture={capture} className="absolute top-1 right-3" />
 	);
 }
 

@@ -1,4 +1,4 @@
-import type { PanelOp, PanelStore, PanelTab } from "@repo/ui-extension";
+import type { PanelOp, PanelStore, PanelTab, Side } from "@repo/ui-extension";
 import type { ConvexHttpClient } from "convex/browser";
 import type { FunctionArgs } from "convex/server";
 import { api } from "../convex/_generated/api.js";
@@ -39,6 +39,23 @@ export class ConvexLayoutStore implements PanelStore {
 					}))
 				: [],
 		);
+	}
+
+	async trace(shown: boolean): Promise<boolean> {
+		if (this.chatId === undefined) return false;
+		return await this.connect().mutation(api.layouts.trace, {
+			workspaceId: this.workspaceId,
+			chatId: this.chatId,
+			shown,
+		});
+	}
+
+	async sidebar(side: Side, open: boolean): Promise<void> {
+		await this.connect().mutation(api.layouts.sidebar, {
+			workspaceId: this.workspaceId,
+			side,
+			open,
+		});
 	}
 
 	private placed(op: PanelOp): StoredOp {

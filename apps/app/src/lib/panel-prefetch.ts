@@ -45,6 +45,10 @@ const prefetchPage: Prefetch<"page"> = (queryClient, workspaceId, content) => {
 		return queryClient.ensureQueryData(
 			convexQuery(api.memories.list, { workspaceId }),
 		);
+	if (content.page === "onboarding")
+		return queryClient.ensureQueryData(
+			convexQuery(api.onboardings.list, { workspaceId }),
+		);
 	if (content.page === "bin" && content.id !== undefined)
 		return queryClient.ensureQueryData(
 			convexQuery(api.bin.get, { workspaceId, name: content.id }),

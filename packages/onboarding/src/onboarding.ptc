@@ -1,0 +1,12 @@
+ONBOARDING
+
+Onboarding = named script saved in workspace, usually a ui/tour walking user
+through app. Each user has own status per onboarding: new, started or done,
+across chats.
+
+onboardings onboarding/read onboarding/create onboarding/update onboarding/run onboarding/done onboarding/done?
+
+Question about app itself, where thing is or how to do it: ALWAYS show it in
+app, same turn. NEVER answer in words alone, NEVER guess where thing is.
+Onboarding covers it: run that, do not improvise new tour. User asks to save
+walkthrough: create onboarding, not memory.

@@ -1,3 +1,4 @@
+import { type AnchorMark, contentRegion } from "@repo/ui-catalog";
 import type { ReactNode } from "react";
 import type { OpenFile } from "../lib/files.ts";
 import { LispSource } from "./lisp-text.tsx";
@@ -44,6 +45,7 @@ export function PageView({
 	const layout = fill ? LAYOUT.fill : LAYOUT.scroll;
 	return (
 		<div
+			{...contentRegion}
 			className={`min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] px-8 pt-6 pb-7 ${layout.outer}`}
 		>
 			<div
@@ -65,16 +67,19 @@ export function FileView({
 	actions,
 	body,
 	fill = false,
+	anchor,
 }: {
 	file: OpenFile | undefined;
 	missing?: string;
 	actions?: ReactNode;
 	body?: ReactNode;
 	fill?: boolean;
+	anchor?: AnchorMark;
 }) {
+	const shown = <FileBody file={file} missing={missing} body={body} />;
 	return (
 		<PageView title={file?.path ?? ""} actions={actions} fill={fill}>
-			<FileBody file={file} missing={missing} body={body} />
+			{anchor === undefined ? shown : <div {...anchor}>{shown}</div>}
 		</PageView>
 	);
 }

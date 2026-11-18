@@ -8,6 +8,7 @@ import {
 	TreeFolder,
 	TreePending,
 } from "@repo/components";
+import { type AnchorMark, anchorOf } from "@repo/ui-catalog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useRef, useState } from "react";
 import { restoreFailure } from "../lib/bin.ts";
@@ -70,6 +71,8 @@ function FileRow<T extends StoredFile>({
 	const page = panelOf(folder, file.name);
 	return (
 		<TreeFile
+			anchor={anchorOf("files/item")}
+			checkAnchor={anchorOf("files/select")}
 			name={file.name}
 			icon={knowledgeIcon(file.name, file.contentType)}
 			depth={1}
@@ -78,6 +81,7 @@ function FileRow<T extends StoredFile>({
 			check={check}
 			trailing={
 				<FileMenu
+					anchor={anchorOf("files/menu")}
 					name={file.name}
 					confirm={confirm}
 					restoreLabel={restore?.label(file)}
@@ -123,7 +127,13 @@ function FolderListing<T>({
 			</Listing>
 		);
 	return (
-		<DatedListing items={items} at={at} empty={empty} check={check}>
+		<DatedListing
+			items={items}
+			at={at}
+			empty={empty}
+			check={check}
+			checkAnchor={anchorOf("files/select")}
+		>
 			{children}
 		</DatedListing>
 	);
@@ -143,6 +153,7 @@ function FileFolder<T extends StoredFile>({
 	restore,
 	onCreate,
 	createLabel,
+	createAnchor,
 	children,
 }: {
 	workspaceId: Id<"workspaces">;
@@ -161,6 +172,7 @@ function FileFolder<T extends StoredFile>({
 	};
 	onCreate?: () => void;
 	createLabel?: string;
+	createAnchor?: AnchorMark;
 	children?: ReactNode;
 }) {
 	const shownPanel = useShown();
@@ -184,9 +196,15 @@ function FileFolder<T extends StoredFile>({
 	);
 
 	return (
-		<TreeFolder {...folder} onCreate={onCreate} createLabel={createLabel}>
+		<TreeFolder
+			{...folder}
+			onCreate={onCreate}
+			createLabel={createLabel}
+			createAnchor={createAnchor}
+		>
 			{files !== undefined && files.length > 0 && (
 				<TreeFilter
+					anchor={anchorOf("files/search")}
 					value={query}
 					onChange={setQuery}
 					label={search}
@@ -256,6 +274,7 @@ export function KnowledgeFolder({
 	return (
 		<>
 			<input
+				{...anchorOf("knowledge/upload")}
 				ref={picker}
 				type="file"
 				multiple
@@ -277,6 +296,7 @@ export function KnowledgeFolder({
 				confirm={{ one: "move it to the bin?", all: "move them to the bin?" }}
 				onCreate={() => picker.current?.click()}
 				createLabel="upload to knowledge/"
+				createAnchor={anchorOf("knowledge/upload")}
 			>
 				{uploading.map((name) => (
 					<TreePending key={name} name={name} label="uploading" depth={1} />

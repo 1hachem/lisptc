@@ -1,4 +1,4 @@
-(area "ui" :when "the agent is about to show the user something: a table, form, buttons, chart, view or panel, or a view the user clicked just came back")
+(area "ui" :when "the agent is about to show the user something: a table, form, buttons, chart, view or panel, or a view the user clicked just came back, or the user asks about the app itself: what a part of it is, where something is, how to do something in it, or to open one of its pages")
 
 (memory "internal/ui/reactive" :when "a view needs a dropdown, toggle or filter that updates it at once, without asking the agent again"
   "Reactive controls: :on-change on ui/select or ui/checkbox. One-argument
@@ -52,7 +52,7 @@ thing, so send once. Only handlers deliver: ui/send in your own step does nothin
 you already take a turn. Write a request, \"search the issues for auth\", not a
 note, \"user clicked search\".")
 
-(memory "internal/ui/panels" :when "a file or view must open beside the chat, or a tab must be shown, moved, focused or closed"
+(memory "internal/ui/panels" :when "a file or view must open beside the chat, a tab must be shown, moved, focused or closed, or the trace shown or hidden, or a sidebar opened or closed"
   (format nil "Panel beside chat: tabs in splits, any number across, up to ~d
   stacked down. Folder is one of ~{~s~^ ~}. :split is one of ~{~s~^ ~};
   ~s (default) adds tab to focused split, others open new split
@@ -65,7 +65,12 @@ note, \"user clicked search\".")
   tab id.
 - (ui/close tab) · (ui/focus tab) by id open returned. ui/close gives t if tab
   was open, nil if not.
-- (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:page :title
+- (ui/trace) shows this chat's trace beside it, (ui/trace nil) hides it, as
+  /trace would; hide also closes trace tab of this chat. t if chat open in
+  panel, nil if not.
+- (ui/sidebar \"left\") opens left sidebar, (ui/sidebar \"right\" nil) closes
+  right one, as /sidebar and /right would. t if now open, nil if closed.
+- (ui/tabs) lists panel tabs: (:id id :kind :file|:view|:chat|:trace|:page :title
   title :shown t :focused t) . User opens, closes, moves tabs too: read it
   before closing or focusing by id from earlier step.
 - (ui/file-link text folder name) widget; click opens file in tab. List
@@ -125,3 +130,119 @@ render or call a tool.
 Unrendered widget shows nothing. Put what user should read inside a widget,
 never in an echo. End with short prose: point at what you rendered, do not
 repeat it, e.g. \"the 27 open issues are in the table above\".")
+
+(memory "internal/ui/pages" :when "a page of the app itself must open beside the chat, such as its settings, or the user asks to see one"
+  (format nil "(ui/open page [:split ~s ]) opens app page in tab beside chat, as user
+would from sidebar. Pages, nothing else exists:
+~{- ~a: ~a~%~}Open page already focused, no second tab. Returns tab id, as in \"page:~a\" .
+
+User asks to open page: never bare ui/open. ui/point its anchor with :open
+first, so user learns where it lives, then sees it. Recall memory
+internal/ui/point for how."
+    (car (cdr *ui-splits*)) (apply append *ui-pages*) (car (car *ui-pages*))))
+
+(memory "internal/ui/point" :when "the user asks where something is in the app or how to reach it, such as where to upload a file, start a chat or change a setting, asks to open one of its pages, or should be shown a slash command"
+  (format nil "Point at part of app itself, not a widget.
+(ui/point anchor [:open page] [:fill text] [:mark ~s ] [:size ~s ] [:click t])
+puts pointer on anchor few seconds, no overlay, no text. Say what it is in
+your reply. Returns anchor.
+- anchor is an id from memory internal/ui/anchors-SECTION , SECTION one of
+  ~{~a~^ ~}. Nothing else exists. Section not loaded: recall the one you need.
+- :mark one of ~{~a~^ ~}. ~a (default) points at it; oval circles it.
+- :size one of ~{~a~^ ~}, ~a default: pointer size, or how loose oval sits.
+- :click t shows pointer clicking anchor.
+- :open page: pointer clicks anchor, then page opens beside chat, as if user
+  clicked it. Pages: ~{~a~^ ~}.
+- Anchor inside trace: (ui/trace) first, hidden till then.
+- :fill only on ~s: text lands in message box after pointer, user sends it.
+  Show power user a slash command by filling it, never by running it:
+(ui/point ~s :fill \"/trace\")
+
+User asks where thing is, or asks to open page: ui/point its anchor with :open
+first, never bare ui/open. User learns where it lives, then sees it. Reply
+\"Account settings live here, gear at bottom of sidebar.\" with
+(ui/point \"account\" :open \"account\")
+
+Every part of app has anchor. NEVER tell user you do not know where it is,
+NEVER guess in words: point at it.
+Point when user asks where thing is; tour when user asks how to do something
+in app, recall memory internal/ui/tour . Neither for chat content."
+    (car (cdr *ui-marks*)) (car *ui-mark-sizes*) *ui-anchor-sections*
+    *ui-marks* *ui-default-mark* *ui-mark-sizes* *ui-default-mark-size*
+    (mapcar car *ui-pages*) *ui-fill-anchor* *ui-fill-anchor*))
+
+(memory "internal/ui/tour" :when "the user asks how to do something in the app, such as upload or attach a file, start or find a chat, or change a setting, or should be walked through part of it step by step"
+  (format nil "(ui/tour id step... [:next \"next\" :done \"done\" :skip \"skip\"]) walks user
+through app, one step at a time, at most ~d steps. Step is plist
+(:anchor anchor :page page :say text :until ~{~a~^|~}) .
+- :say is text of callout. No :anchor: callout in middle.
+- :anchor is id from memory internal/ui/anchors-SECTION , SECTION one of
+  ~{~a~^ ~}. Section not loaded: recall the one you need. Anchor in closed folder or page: app reveals it first.
+- :page opens that page beside chat as step starts, so anchor inside it is on
+  screen. Pages: ~{~a~^ ~}.
+- :until ~a (default) waits for next button; ~a pulses circle on anchor and
+  also advances on click of it, needs :anchor. Next button always there.
+- :next :done :skip name buttons. One-step tour shows only :done, \"got it\"
+  unless named; :skip only when given.
+
+(ui/tour \"upload-files\"
+  '(:anchor \"knowledge/upload\" :say \"Drop PDF here\" :until click)
+  '(:say \"Now ask me about it\"))
+
+New tour replaces one on screen. User may skip. Finish or skip sends you
+message, \"I finished the upload-files tour.\", so you take next turn. New user
+message pauses tour; tours expire on their own.
+
+(ui/tour-done? id) t if user finished tour before, any chat. Check before
+offering, do not replay finished tour unasked."
+    *ui-tour-max-steps* *ui-tour-untils* *ui-anchor-sections*
+    (mapcar car *ui-pages*) (car *ui-tour-untils*) (car (cdr *ui-tour-untils*))))
+
+(memory "internal/ui/app" :when "the user asks what a part of the app is or how the app is laid out: sidebars, folders, panel, tabs, bottom bar, workspaces or pages"
+  (format nil "App user sees, around this chat:
+- Left sidebar: workspace name top left switches workspace, + beside it makes
+  new one. Then home, new chat, folders: ~{~a~^ ~}. Entries README.md,
+  settings, preferences open pages. Gear at bottom: account. User drags
+  entries, also across to right sidebar; hides them in preferences.
+- Right sidebar: closed by default, opened from right edge. Holds whatever
+  entries user moved there.
+- Panel, middle: tabs in splits. Chat is a tab too. Files, views, pages, a
+  chat's trace open as tabs. Tab x closes. Pane menu splits right or down,
+  flips split, maximizes, closes pane. Handles between panes resize.
+- Bottom bar: one button per pane to jump to it, zoom buttons and desktop app
+  status on desktop. Slots user rearranges in preferences.
+- Pages: ~{~a~^ ~}. Recall memory internal/ui/pages for what each holds.
+Chat itself: recall memory internal/ui/chat . Slash commands:
+internal/ui/commands . Pointing at any of it: internal/ui/point ."
+    *ui-sidebar-folders* (mapcar car *ui-pages*)))
+
+(memory "internal/ui/chat" :when "the user asks how the chat works: the message box, sending, stopping, queueing, attaching, the details under an answer, feedback, the todo, sub-agent threads or the trace"
+  "Message box at bottom of chat:
+- Enter sends, shift+enter new line. While you work, send turns to stop;
+  text typed then queues as next message, shown above box, x removes it.
+  Files wait until your reply ends.
+- Attach button adds files; chips show above box, x removes one.
+- / alone in box opens command menu, recall memory internal/ui/commands .
+  @ anywhere mentions a file from knowledge or attachments, or a sub-agent.
+- When you ask with fixed choices, choices replace box. Keys 1-9 pick;
+  type instead goes back to box.
+Under each answer:
+- Line of details: time, duration, steps, input, cached and output tokens,
+  model, provider, show in trace. Which show is a preference.
+- Helpful and not helpful buttons, then optional text. Long message folds
+  behind read more.
+- Todo card when you keep one; click on header folds it to a count.
+Sub-agent threads: strip at bottom left of chat; their steps also show
+inside trace.
+Trace: every step of a turn, your prose and code, results, ui, memories
+recalled, asks, thinking. Opens beside chat on click of agent message, show
+in trace, or /trace. Find box, and toggles for what it shows. Tell user to
+read it when they ask why you did something. You open it with (ui/trace) ,
+close with (ui/trace nil) .")
+
+(memory "internal/ui/commands" :when "the user asks what slash commands exist, how to do something a command does, or the agent would point the user at one"
+  (format nil "User types / in message box for commands. They run in app, not in this
+REPL: you cannot run one, only show it with
+(ui/point ~s :fill \"/name\") .
+~{~{- ~a: ~a~{, alias ~a~}~}~%~}Desktop screen only: ~{~a~^ ~}."
+    *ui-fill-anchor* *ui-commands* *ui-desktop-commands*))

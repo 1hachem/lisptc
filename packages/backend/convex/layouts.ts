@@ -10,7 +10,7 @@ import {
 } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
 import { MAX_LAYOUT_BYTES, MAX_SPLITS } from "./limits.js";
-import { panelContent, panelLayout } from "./schema.js";
+import { panelContent, panelLayout, sidebars } from "./schema.js";
 
 const encoder = new TextEncoder();
 
@@ -62,7 +62,7 @@ async function write(
 ): Promise<null> {
 	const existing = await stored(ctx, workspaceId);
 	if (existing !== null) {
-		await ctx.db.replace(existing._id, { workspaceId, layout });
+		await ctx.db.patch(existing._id, { layout });
 		return null;
 	}
 	await ctx.db.insert("layouts", { workspaceId, layout });
@@ -103,6 +103,103 @@ export const apply = mutation({
 				: unflatten<PanelContent>(row.layout);
 		const next = flatten(applyPanelOps(current, ops));
 		return await write(ctx, workspaceId, checked(next));
+	},
+});
+
+export const trace = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+		shown: v.boolean(),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, { workspaceId, chatId, shown }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const row = await stored(ctx, workspaceId);
+		if (row === null) return false;
+		const tabs = row.layout.nodes.flatMap((node) =>
+			node.kind === "pane" ? node.tabs : [],
+		);
+		const beside = tabs.some(
+			(tab) => tab.content.kind === "chat" && tab.content.chatId === chatId,
+		);
+		const alone = tabs
+			.filter(
+				(tab) => tab.content.kind === "trace" && tab.content.chatId === chatId,
+			)
+			.map((tab) => tab.id);
+		const toggled: PanelLayout = {
+			...row.layout,
+			nodes: row.layout.nodes.map((node) =>
+				node.kind === "pane"
+					? {
+							...node,
+							tabs: node.tabs.map((tab) =>
+								tab.content.kind === "chat" && tab.content.chatId === chatId
+									? {
+											...tab,
+											content: {
+												...tab.content,
+												trace: {
+													...tab.content.trace,
+													shown: shown ? "open" : "collapsed",
+												},
+											},
+										}
+									: tab,
+							),
+						}
+					: node,
+			),
+		};
+		const next = shown
+			? toggled
+			: flatten(
+					applyPanelOps(
+						unflatten<PanelContent>(toggled),
+						alone.map((tab) => ({ op: "close" as const, tab })),
+					),
+				);
+		await write(ctx, workspaceId, checked(next));
+		return beside;
+	},
+});
+
+const side = v.union(v.literal("left"), v.literal("right"));
+
+export const sidebarsShown = query({
+	args: { workspaceId: v.id("workspaces") },
+	returns: v.union(sidebars, v.null()),
+	handler: async (ctx, { workspaceId }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const row = await ctx.db
+			.query("layouts")
+			.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+			.unique();
+		return row?.sidebars ?? null;
+	},
+});
+
+export const sidebar = mutation({
+	args: { workspaceId: v.id("workspaces"), side, open: v.boolean() },
+	returns: v.null(),
+	handler: async (ctx, { workspaceId, side, open }) => {
+		await requireWorkspace(ctx, workspaceId);
+		const row = await stored(ctx, workspaceId);
+		const shown = {
+			...(row?.sidebars ?? { left: false, right: false }),
+			[side]: open,
+		};
+		if (row !== null) {
+			await ctx.db.patch(row._id, { sidebars: shown });
+			return null;
+		}
+		await ctx.db.insert("layouts", {
+			workspaceId,
+			layout: flatten(emptyLayout<PanelContent>()),
+			sidebars: shown,
+		});
+		return null;
 	},
 });
 

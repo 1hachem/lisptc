@@ -5,6 +5,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import type { RefObject } from "react";
 import type { Attachment } from "../lib/attachments.ts";
 import { knowledgeIcon } from "../lib/file-icons.ts";
@@ -18,6 +19,7 @@ export function AttachAction({
 }) {
 	return (
 		<button
+			{...anchorOf("composer/attach")}
 			type="button"
 			aria-label="attach"
 			title="attach files"
@@ -70,6 +72,7 @@ export function AttachmentChips({
 		<div className="flex flex-wrap gap-1.5 border-b border-bg2 bg-bg1 px-3 py-1">
 			{items.map((item) => (
 				<span
+					{...anchorOf("composer/attachment")}
 					key={item.id}
 					data-upload={item.upload.state}
 					title={
@@ -107,6 +110,7 @@ export function FilePicker({
 }) {
 	return (
 		<input
+			{...anchorOf("composer/attach")}
 			ref={picker}
 			type="file"
 			multiple

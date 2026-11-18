@@ -23,7 +23,16 @@ import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { viewKind } from "@repo/journal-catalog/view";
 import type { PromptSource } from "@repo/shared/host";
 import { MAX_SPLITS } from "@repo/shared/split-layout";
-import { ACTION_PROPS, FOLDERS, TAGS, type Tag } from "@repo/ui-catalog";
+import {
+	ACTION_PROPS,
+	COMMANDS,
+	FOLDERS,
+	PAGE_IDS,
+	pages,
+	SIDEBAR_FOLDERS,
+	TAGS,
+	type Tag,
+} from "@repo/ui-catalog";
 import { z } from "zod";
 import {
 	element,
@@ -39,10 +48,15 @@ import {
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
+	pageTab,
+	SIDES,
+	type Side,
 	SPLITS,
 	type Split,
 	viewTab,
 } from "./panel.ts";
+import { anchorMemories, pageOf, registerTours } from "./tour.ts";
+import type { TourStore } from "./tour-store.ts";
 import type { UiNode } from "./view.ts";
 import type { ViewStore } from "./view-store.ts";
 import {
@@ -59,8 +73,15 @@ export {
 	type PanelOp,
 	type PanelStore,
 	type PanelTab,
+	pageTab,
+	type Side,
 	viewTab,
 } from "./panel.ts";
+export {
+	MemoryTourStore,
+	type StartedTour,
+	type TourStore,
+} from "./tour-store.ts";
 export type { UiNode, UiValue } from "./view.ts";
 export {
 	MemoryViewStore,
@@ -388,6 +409,15 @@ function splitOf(opts: Map<string, unknown>): Split {
 	return split as Split;
 }
 
+function sideOf(side: unknown): Side {
+	if (typeof side !== "string" || !(SIDES as readonly string[]).includes(side))
+		throw new EvalException(
+			`unknown sidebar; expected one of ${SIDES.join(" ")}`,
+			side,
+		);
+	return side as Side;
+}
+
 function elementOf(node: UiNode): UiElement {
 	return new UiElement(node.tag, node.props, node.children.map(elementOf));
 }
@@ -437,6 +467,7 @@ function registerUi(
 	surface: UiSurface,
 	panel: PanelStore,
 	views: ViewStore,
+	tours: TourStore,
 ): void {
 	surface.bind(interp, views);
 	surface.reset();
@@ -460,6 +491,34 @@ function registerUi(
 		signature: "*ui-default-split*",
 		doc: "Where a panel opens when given no :split.",
 	});
+	interp.defineGlobal(
+		newSym("*ui-sidebar-folders*"),
+		arrayToList([...SIDEBAR_FOLDERS]),
+		{
+			signature: "*ui-sidebar-folders*",
+			doc: "The folders the sidebars hold, top first by default.",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*ui-commands*"),
+		arrayToList(
+			COMMANDS.map((c) =>
+				arrayToList([c.name, c.desc, arrayToList([...(c.aliases ?? [])])]),
+			),
+		),
+		{
+			signature: "*ui-commands*",
+			doc: "The slash commands the user types in the message box, each as (name what-it-does aliases).",
+		},
+	);
+	interp.defineGlobal(
+		newSym("*ui-desktop-commands*"),
+		arrayToList(COMMANDS.filter((c) => c.desktopOnly).map((c) => c.name)),
+		{
+			signature: "*ui-desktop-commands*",
+			doc: "The slash commands offered on a desktop screen only.",
+		},
+	);
 	const widgets = newSym("ui-widgets");
 	interp.defineGlobal(widgets, arrayToList([...WIDGET_NAMES]), {
 		signature: "ui-widgets",
@@ -474,6 +533,10 @@ function registerUi(
 	});
 
 	for (const tag of TAGS) defineWidget(interp, surface, tag);
+	registerTours(interp, tours, {
+		action: (form) => surface.action(form),
+		send: (text) => surface.send(text),
+	});
 
 	function* emit(op: PanelOp): Eval<void> {
 		yield* settled(panel.apply([op]));
@@ -521,6 +584,25 @@ function registerUi(
 	);
 
 	interp.defGen(
+		"ui/open",
+		-2,
+		'(ui/open page [:split "right"])',
+		`Open a page of the app in a tab of the panel beside the chat. \`page\` is one of ${PAGE_IDS.join(" ")}. A page already open is focused instead. \`:split\` is as for \`ui/open-file\`. Returns the tab id.`,
+		z.tuple([zAny, zList]),
+		function* ([name, rest]): Eval {
+			const page = pageOf(name);
+			const tab = pageTab(page);
+			yield* emit({
+				op: "open",
+				tab,
+				split: splitOf(plistOptions(rest, ["split"])),
+				content: { kind: "page", page, title: pages[page].title },
+			});
+			return tab;
+		},
+	);
+
+	interp.defGen(
 		"ui/close",
 		1,
 		"(ui/close tab)",
@@ -531,6 +613,34 @@ function registerUi(
 			if (!tabs.some((open) => open.id === tab)) return null;
 			yield* emit({ op: "close", tab });
 			return true;
+		},
+	);
+
+	interp.defGen(
+		"ui/trace",
+		-1,
+		"(ui/trace [shown])",
+		"Show this chat's trace beside it, or hide it with nil, as the user would with /trace. Hiding also closes a tab that holds this chat's trace. Returns t if this chat is open in the panel to show it beside, nil if it is not.",
+		z.tuple([zList]),
+		function* ([rest]): Eval {
+			const args = listElements(rest) ?? [];
+			const shown = args.length === 0 || args[0] !== null;
+			return (yield* settled(panel.trace(shown))) || null;
+		},
+	);
+
+	interp.defGen(
+		"ui/sidebar",
+		-2,
+		"(ui/sidebar side [open])",
+		`Open the ${SIDES.join(" or ")} sidebar of the app, or close it with nil, as the user would with /sidebar or /right. Returns t if it is now open, nil if closed.`,
+		z.tuple([zAny, zList]),
+		function* ([name, rest]): Eval {
+			const side = sideOf(name);
+			const args = listElements(rest) ?? [];
+			const open = args.length === 0 || args[0] !== null;
+			yield* settled(panel.sidebar(side, open));
+			return open || null;
 		},
 	);
 
@@ -550,7 +660,7 @@ function registerUi(
 		"ui/tabs",
 		0,
 		"(ui/tabs)",
-		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
+		"Return the tabs open in the panel beside the chat, as a list of (:id id :kind kind :title title :shown t-or-nil :focused t-or-nil). :kind is :file, :view, :chat, :trace or :page. The user opens, closes and moves tabs too, so read this before closing or focusing a tab by an id from an earlier step.",
 		z.tuple([]),
 		function* (): Eval {
 			const tabs = yield* settled(panel.tabs());
@@ -643,6 +753,7 @@ export interface UiHost {
 	memories: PromptSource;
 	panel: PanelStore;
 	views: ViewStore;
+	tours: TourStore;
 }
 
 export interface UiOptions {
@@ -658,11 +769,13 @@ export function uiExtension(
 	const surface = options.surface ?? new UiSurface();
 	return Object.assign(
 		(interp: Interp): void =>
-			registerUi(interp, surface, host.panel, host.views),
+			registerUi(interp, surface, host.panel, host.views, host.tours),
 		{
 			surface,
 			prompt: host.prompt(),
-			postlude: `${host.memories().trimEnd()}\n\n${widgetMemories()}\n`,
+			postlude: [host.memories().trimEnd(), widgetMemories(), anchorMemories()]
+				.join("\n\n")
+				.concat("\n"),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use(async (ctx, next) => {
 					surface.beginStep();

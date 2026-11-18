@@ -2,6 +2,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/dataModel";
+import { anchorOf, contentRegion } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import { useAttempt } from "../lib/attempt.ts";
@@ -19,6 +20,7 @@ import { usePageHost } from "../lib/page-host.tsx";
 import { AudioPlayer } from "./audio-player.tsx";
 import { FileView } from "./file-view.tsx";
 import { Markdown } from "./markdown.tsx";
+import { SourceValue } from "./read-only.tsx";
 
 const StlViewer = lazy(async () => ({
 	default: (await import("@repo/components/stl-viewer.tsx")).StlViewer,
@@ -127,6 +129,7 @@ const TEXT: Record<TextViewer, (text: string) => ReactNode> = {
 			<JsonView text={text} />
 		</Suspense>
 	),
+	lisptc: (text) => <SourceValue source={text} />,
 	text: (text) => (
 		<pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>
 	),
@@ -171,6 +174,7 @@ export function DownloadButton({ name, url }: { name: string; url: string }) {
 	return (
 		<button
 			type="button"
+			{...anchorOf("file/download")}
 			onClick={() => attempt(() => saveAs(name, url))}
 			title={failure ?? undefined}
 			className={failure ? "text-red" : "text-dim hover:text-fg"}
@@ -217,6 +221,7 @@ function KeepAction({
 			{failure && <span className="text-red">{failure}</span>}
 			<button
 				type="button"
+				{...anchorOf("file/keep")}
 				className="text-dim hover:text-fg"
 				onClick={async () => {
 					const refused = await keep({ workspaceId, name });
@@ -255,7 +260,7 @@ export function FilePreview({
 			</div>
 		);
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div {...contentRegion} className="flex h-full min-h-0 flex-col">
 			<div className="flex h-row flex-none items-center justify-between gap-2 px-3 text-dim">
 				<span className="truncate">
 					{folder}/{name}

@@ -21,6 +21,8 @@ import { mcpHostFor } from "@repo/mcp-extension/mcp-host";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHostFor } from "@repo/memory-extension/host";
 import { jev } from "@repo/models/providers";
+import { onboardingExtension } from "@repo/onboarding-extension";
+import { onboardingHostFor } from "@repo/onboarding-extension/host";
 import { permissionsExtension } from "@repo/permissions-extension";
 import { permissionsHostFor } from "@repo/permissions-extension/host";
 import { preferencesExtension } from "@repo/preferences-extension";
@@ -57,10 +59,12 @@ import { ConvexKnowledgeStore } from "./knowledge-store.ts";
 import { ConvexLayoutStore } from "./layout-store.ts";
 import { ConvexMemoryStore } from "./memory-store.ts";
 import { workspaceOAuthStore } from "./oauth-callback.ts";
+import { ConvexOnboardingStore } from "./onboarding-store.ts";
 import { ConvexPermissionsStore } from "./permissions-store.ts";
 import { ConvexPreferencesStore } from "./preferences-store.ts";
 import { ConvexSecretsStore } from "./secrets-store.ts";
 import { ConvexSourceFolder } from "./source-folder.ts";
+import { ConvexTourStore } from "./tour-store.ts";
 import { ConvexViewStore } from "./view-store.ts";
 import { ConvexWorkspaceStore, OFFERED_MODELS } from "./workspace-store.ts";
 
@@ -174,12 +178,18 @@ export async function workspaceExtensions(
 			panel: new ConvexLayoutStore(workspaceId, connect, chatId),
 			...(chatId === undefined
 				? {}
-				: { views: new ConvexViewStore(chatId, connect) }),
+				: {
+						views: new ConvexViewStore(chatId, connect),
+						tours: new ConvexTourStore(chatId, connect),
+					}),
 		}),
+	);
+	const onboarding = onboardingExtension(
+		onboardingHostFor(new ConvexOnboardingStore(workspaceId, connect)),
 	);
 	const exports = subAgentExtension(subAgentHost());
 	const rootOnly: InterpExtension[] = subAgent
-		? [agents, workspace, preferences, ui]
+		? [agents, workspace, preferences, ui, onboarding]
 		: [exports];
 	return [
 		loopMemories(),
@@ -214,6 +224,7 @@ export async function workspaceExtensions(
 		preferences,
 		proseExtension(proseHost),
 		ui,
+		onboarding,
 		intentExtension(intentHost),
 		diagnosticsExtension(diagnosticsHost),
 	].filter((extension) => !rootOnly.includes(extension));

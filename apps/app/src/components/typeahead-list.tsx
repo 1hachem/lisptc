@@ -3,6 +3,7 @@ import type {
 	MenuRenderFn,
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import { cn } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import type { ReactNode, ReactPortal, RefObject } from "react";
 import { createPortal } from "react-dom";
 
@@ -19,7 +20,10 @@ export function typeaheadList<O extends MenuOption>(
 ): ReactPortal | null {
 	if (!host.current || options.length === 0) return null;
 	return createPortal(
-		<div className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]">
+		<div
+			{...anchorOf("composer/menu")}
+			className="flex w-full flex-col gap-px border-b border-bg2 bg-bg1 py-1 font-mono text-[13px]"
+		>
 			{options.map((option, i) => (
 				<button
 					type="button"

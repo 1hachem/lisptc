@@ -1,6 +1,7 @@
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@repo/ui";
+import { anchorOf } from "@repo/ui-catalog";
 import { useId } from "react";
 import { useNewChat } from "../lib/chats.ts";
 
@@ -65,6 +66,7 @@ export function IdleWorkspace() {
 				<div className="text-fg">do something..</div>
 				<div className="mt-3">drag anything in here</div>
 				<Button
+					{...anchorOf("panel/new-chat")}
 					variant="outline"
 					size="sm"
 					className="mt-3 self-start"

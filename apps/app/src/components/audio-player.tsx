@@ -1,5 +1,6 @@
 import { PauseIcon, PlayIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { anchorOf } from "@repo/ui-catalog";
 import { useRef, useState } from "react";
 
 export function clock(seconds: number): string {
@@ -21,7 +22,10 @@ export function AudioPlayer({ name, url }: { name: string; url: string }) {
 	};
 
 	return (
-		<div className="flex items-center gap-2.5 border border-bg2 bg-bg1 px-3 py-1.5 font-mono text-[11.5px]">
+		<div
+			{...anchorOf("file/audio")}
+			className="flex items-center gap-2.5 border border-bg2 bg-bg1 px-3 py-1.5 font-mono text-[11.5px]"
+		>
 			{
 				// biome-ignore lint/a11y/useMediaCaption: an uploaded file carries no captions to offer
 				<audio

@@ -14,6 +14,7 @@ import {
 import { checkAttachments } from "./lib/attached.js";
 import { requireChat, requireWorkspace } from "./lib/auth.js";
 import { clamp } from "./lib/clamp.js";
+import { pauseChatTours } from "./lib/pauseTours.js";
 import { waitsOnUser } from "./lib/waiting.js";
 import { collect, layerFor } from "./repls.js";
 import { messageType } from "./schema.js";
@@ -171,6 +172,8 @@ export async function appendTo(
 		seq += 1;
 	}
 	await ctx.db.patch(chatId, { lastMessageAt: Date.now() });
+	if (messages.some((entry) => entry.type === "human"))
+		await pauseChatTours(ctx, chatId);
 	return ids;
 }
 

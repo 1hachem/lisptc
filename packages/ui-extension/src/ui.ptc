@@ -4,4 +4,7 @@ Chat body shows user only your prose and what ui/render draws. To show data, ui/
 
 Widget constructors: names in ui-widgets. Each has own memory ui/widget-NAME; (doc 'ui/table) prints one.
 
-ui/render, ui/send, ui/open-file, ui/open-view, ui/close, ui/focus, ui/tabs, ui/file-link, ui/forget
+ui/render, ui/send, ui/open-file, ui/open-view, ui/close, ui/focus, ui/tabs, ui/file-link, ui/forget, ui/open, ui/trace, ui/sidebar
+
+Show user around app itself, not a widget: ui/point marks one part, ui/tour walks through steps. ui/tour-done?
+User asks about app, where thing is or how to do it: ALWAYS answer with ui/point (where) or ui/tour (how) , plus one short line. Every part of app has anchor. NEVER answer in words alone, NEVER guess.

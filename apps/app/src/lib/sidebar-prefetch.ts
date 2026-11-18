@@ -23,6 +23,9 @@ export async function prefetchSidebar(
 			convexQuery(api.memories.list, { workspaceId }),
 		),
 		queryClient.ensureQueryData(
+			convexQuery(api.onboardings.list, { workspaceId }),
+		),
+		queryClient.ensureQueryData(
 			convexQuery(api.permissions.get, { workspaceId }),
 		),
 		queryClient.ensureQueryData(

@@ -7,6 +7,7 @@ import {
 	type TraceSlots,
 	TraceSteps,
 } from "@repo/components";
+import { anchorOf, contentRegion } from "@repo/ui-catalog";
 import { attachedTo } from "../lib/attached-files.ts";
 import { useTrace } from "../lib/trace-source.tsx";
 import { AttachedFiles } from "./attached-files.tsx";
@@ -31,6 +32,12 @@ function ChildTrace({ child }: { child: TraceChild }) {
 		</div>
 	);
 }
+
+const ANCHORS = {
+	find: anchorOf("trace/find"),
+	lanes: anchorOf("trace/lanes"),
+	entry: anchorOf("trace/entry"),
+};
 
 const APP_SLOTS: TraceSlots = {
 	line: (message) =>
@@ -59,7 +66,16 @@ export function TraceLines({
 	messages: readonly ChatMessage[];
 	turn?: string;
 }) {
-	return <Trace messages={messages} turn={turn} slots={APP_SLOTS} />;
+	return (
+		<div {...contentRegion} className="h-full min-h-0">
+			<Trace
+				messages={messages}
+				turn={turn}
+				slots={APP_SLOTS}
+				anchors={ANCHORS}
+			/>
+		</div>
+	);
 }
 
 export function TraceView({ chatId, turn }: { chatId: string; turn?: string }) {

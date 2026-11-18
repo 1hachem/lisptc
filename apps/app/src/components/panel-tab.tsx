@@ -25,6 +25,7 @@ import { BinPage } from "./bin-page.tsx";
 import { ChatSurface } from "./chat-surface.tsx";
 import { GenerativeUI } from "./generative-ui.tsx";
 import { MemoryPage } from "./memory-page.tsx";
+import { OnboardingPage } from "./onboarding-page.tsx";
 import { PermissionPage } from "./permission-page.tsx";
 import { PreferencesPage } from "./preferences-page.tsx";
 import { SettingsPage } from "./settings-page.tsx";
@@ -156,6 +157,9 @@ const PAGE_TABS: Record<
 > = {
 	memory: (workspaceId, id) => (
 		<MemoryPage workspaceId={workspaceId} memoryKey={id} />
+	),
+	onboarding: (workspaceId, id) => (
+		<OnboardingPage workspaceId={workspaceId} name={id} />
 	),
 	permission: (workspaceId, id) => (
 		<PermissionPage workspaceId={workspaceId} rule={Number(id)} />
