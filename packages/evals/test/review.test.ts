@@ -82,10 +82,17 @@ describe("the review payload", () => {
 		line("assistant", '(await (load-mcp "linear"))'),
 	]);
 
-	test("names the run so every vote on it joins", () => {
-		expect(runId(IDENTITY, subject)).toBe(
-			"2026-09-12T10-00-00.json#connect-and-query/openrouter/kimi-k2/1",
+	test("names the same run alike and every other run apart", () => {
+		expect(runId(IDENTITY, { ...subject })).toBe(runId(IDENTITY, subject));
+		expect(runId(IDENTITY, { ...subject, sample: 2 })).not.toBe(
+			runId(IDENTITY, subject),
 		);
+		expect(runId(IDENTITY, { ...subject, model: "glm-5" })).not.toBe(
+			runId(IDENTITY, subject),
+		);
+		expect(
+			runId({ ...IDENTITY, file: "2026-09-13T10-00-00.json" }, subject),
+		).not.toBe(runId(IDENTITY, subject));
 	});
 
 	test("carries the run, the checks and the voted turn", () => {
