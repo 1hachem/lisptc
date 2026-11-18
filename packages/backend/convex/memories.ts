@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
+import type { Doc } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import { requireWorkspace } from "./lib/auth.js";
 import { MAX_MEMORIES, MAX_MEMORY_BYTES, MAX_WHEN_MEMORIES } from "./limits.js";
@@ -70,11 +71,14 @@ export const put = mutation({
 				q.eq("workspaceId", workspaceId).eq("key", memory.key),
 			)
 			.unique();
-		const owned = async () =>
-			await ctx.db
+		let rows: Doc<"memories">[] | undefined;
+		const owned = async () => {
+			rows ??= await ctx.db
 				.query("memories")
 				.withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
 				.take(MAX_MEMORIES);
+			return rows;
+		};
 		if (onSituation(memory.on) && !onSituation(existing?.on)) {
 			const situational = (await owned()).filter((m) => onSituation(m.on));
 			if (situational.length >= MAX_WHEN_MEMORIES) {
