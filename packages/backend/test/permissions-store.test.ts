@@ -1,53 +1,19 @@
-import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
-import { api } from "../convex/_generated/api.js";
-import type { Id } from "../convex/_generated/dataModel.js";
 import {
 	ConvexPermissionsStore,
 	type PermissionsClient,
 } from "../src/permissions-store.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
-function named(reference: unknown): string {
-	return getFunctionName(reference as FunctionReference<"query" | "mutation">);
-}
-
-const WORKSPACE = "workspace-1" as Id<"workspaces">;
-
-function spyClient(held: string | null): {
-	client: PermissionsClient;
-	saved: string[];
-} {
-	const saved: string[] = [];
-	const answer = (reference: unknown, args: Record<string, unknown>) => {
-		const name = named(reference);
-		if (name === named(api.permissions.get)) return Promise.resolve(held);
-		if (name === named(api.permissions.put)) saved.push(args.source as string);
-		return Promise.resolve(null);
-	};
-	return {
-		saved,
-		client: { query: answer, mutation: answer } as unknown as PermissionsClient,
-	};
+async function workspace() {
+	const alice = await signIn(testDeployment(), "alice@example.com");
+	const connect = () => alice.as as unknown as PermissionsClient;
+	return () => ConvexPermissionsStore.open(alice.workspace, connect);
 }
 
 describe("the convex permissions store", () => {
-	it("serves the config the workspace already held", async () => {
-		const { client } = spyClient("(permission/deny eval)");
-		const store = await ConvexPermissionsStore.open(WORKSPACE, () => client);
-		expect(store.source()).toBe("(permission/deny eval)");
-	});
-
 	it("serves an empty config to a workspace that never saved one", async () => {
-		const { client } = spyClient(null);
-		const store = await ConvexPermissionsStore.open(WORKSPACE, () => client);
-		expect(store.source()).toBe("");
-	});
-
-	it("writes a config through, and serves it after", async () => {
-		const { client, saved } = spyClient(null);
-		const store = await ConvexPermissionsStore.open(WORKSPACE, () => client);
-		await store.save("(permission/ask eval)");
-		expect(saved).toEqual(["(permission/ask eval)"]);
-		expect(store.source()).toBe("(permission/ask eval)");
+		const open = await workspace();
+		expect((await open()).source()).toBe("");
 	});
 });

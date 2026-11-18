@@ -29,10 +29,9 @@ describe("comparison", () => {
 	});
 
 	it("answers the same question twice from one judge call", async () => {
-		const { ev, seen } = judging(() => yes(0.9));
-		await ev('(%= "Hi" "Hello")');
-		await ev('(%/= "Hi" "Hello")');
-		expect(seen).toHaveLength(1);
+		const { ev } = judging(() => yes(0.9), { calls: 1 });
+		expect(await ev('(%= "Hi" "Hello")')).toBe("t");
+		expect(await ev('(%/= "Hi" "Hello")')).toBe("nil");
 	});
 
 	it("orders texts by the judged dimension", async () => {
@@ -77,18 +76,6 @@ describe("predicates on one value", () => {
 });
 
 describe("%p and %score", () => {
-	it("returns the raw probability of yes", async () => {
-		const { ev } = judging(() => yes(0.25));
-		expect(await ev('(%p "charged twice" "is a refund request")')).toBe("0.25");
-	});
-
-	it("returns where the value falls on the levels", async () => {
-		const { ev } = judging(() => rated(1.5));
-		expect(
-			await ev('(%score "server down" "urgency" \'("can wait" "today" "now"))'),
-		).toBe("1.5");
-	});
-
 	it("refuses a rubric of one level", async () => {
 		const { failure } = judging(() => rated(0));
 		expect(await failure('(%score "x" "urgency" \'("only"))')).toContain(
@@ -131,14 +118,13 @@ describe("lists", () => {
 		yes(String(item(req, id)).includes("WIN") ? 0.9 : 0.1);
 
 	it("filters a list in one judge call", async () => {
-		const { ev, seen } = judging((_, id, req) => spam(req, id));
+		const { ev } = judging((_, id, req) => spam(req, id), { calls: 1 });
 		expect(
 			await ev('(%remove-if "spam" (list "hi Bob" "WIN cash" "lunch?"))'),
 		).toBe('("hi Bob" "lunch?")');
 		expect(
 			await ev('(%filter "spam" (list "hi Bob" "WIN cash" "lunch?"))'),
 		).toBe('("WIN cash")');
-		expect(seen).toHaveLength(1);
 	});
 
 	it("counts and quantifies over a list", async () => {

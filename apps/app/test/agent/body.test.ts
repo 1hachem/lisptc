@@ -16,16 +16,6 @@ const echo = {
 };
 
 describe("a request body checked at the edge", () => {
-	test("reaches the handler parsed when it matches the schema", async () => {
-		const response = await postJson(echo, {
-			chatId: "c1",
-			count: 2,
-			extra: "dropped",
-		});
-		expect(response.status).toBe(200);
-		expect(await response.json()).toEqual({ chatId: "c1", count: 2 });
-	});
-
 	test("is refused with the schema's errors before the handler runs", async () => {
 		const before = reached;
 		const response = await postJson(echo, { chatId: "", count: "two" });

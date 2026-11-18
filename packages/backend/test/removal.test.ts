@@ -27,10 +27,9 @@ describe("removing a chat", () => {
 		await alice.as.mutation(api.chats.remove, { chatId });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const left = await t.run(
-			async (ctx) => await ctx.db.query("messages").collect(),
-		);
-		expect(left).toEqual([]);
+		expect(
+			await alice.as.query(api.messages.sent, { workspaceId: alice.workspace }),
+		).toEqual([]);
 	});
 
 	it("takes its rendered views with it", async () => {
@@ -131,11 +130,13 @@ describe("removing a chat", () => {
 		await alice.as.mutation(api.chats.remove, { chatId });
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		const left = await t.run(async (ctx) => [
-			...(await ctx.db.query("chats").collect()),
-			...(await ctx.db.query("messages").collect()),
-		]);
-		expect(left).toEqual([]);
+		for (const child of [first, second])
+			await expect(
+				alice.as.query(api.chats.get, { chatId: child }),
+			).rejects.toThrow();
+		expect(
+			await alice.as.query(api.messages.sent, { workspaceId: alice.workspace }),
+		).toEqual([]);
 	});
 });
 

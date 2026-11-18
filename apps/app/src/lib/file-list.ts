@@ -10,7 +10,7 @@ export function searched<T extends { name: string }>(
 		: files?.filter((file) => file.name.toLowerCase().includes(needle));
 }
 
-export function checkedAfter(
+function checkedAfter(
 	order: readonly string[],
 	picked: ReadonlySet<string>,
 	anchor: string | null,
@@ -33,7 +33,7 @@ export function checkedAfter(
 	return next;
 }
 
-export function toggledAll(
+function toggledAll(
 	picked: ReadonlySet<string>,
 	names: readonly string[],
 ): Set<string> {

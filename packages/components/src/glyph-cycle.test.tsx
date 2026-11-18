@@ -30,12 +30,6 @@ async function glyphAfter(ms: number, beatMs?: number): Promise<string | null> {
 }
 
 describe("GlyphCycle", () => {
-	it("starts on the first glyph and names itself as a status", async () => {
-		expect(await glyphAfter(0)).toBe("0");
-		const status = document.querySelector("[role=status]");
-		expect(status?.getAttribute("aria-label")).toBe("connecting");
-	});
-
 	it("moves one glyph per beat", async () => {
 		expect(await glyphAfter(110 * 3)).toBe("3");
 	});

@@ -1,5 +1,5 @@
 import { ConversationInterpreter } from "@repo/interpreter/conversation";
-import { driveAsync, driveSync, settled } from "@repo/interpreter/drive";
+import { driveAsync } from "@repo/interpreter/drive";
 import { boot, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
@@ -14,10 +14,8 @@ import { bareHost } from "./helpers.ts";
 
 class PromisedStore implements MemoryStore {
 	private readonly inner = new VolatileStore();
-	answered = 0;
 
 	private later<T>(value: T): Promise<T> {
-		this.answered += 1;
 		return Promise.resolve().then(() => value);
 	}
 
@@ -57,20 +55,9 @@ function interpWith(store: MemoryStore): ConversationInterpreter {
 	return interp;
 }
 
-describe("settled", () => {
-	it("hands back a plain value without suspending", () => {
-		expect(driveSync(settled(7))).toBe(7);
-	});
-
-	it("suspends on a promise and resumes with what it resolved to", async () => {
-		expect((await driveAsync(settled(Promise.resolve(7)))).value).toBe(7);
-	});
-});
-
 describe("a memory store that answers with promises", () => {
 	it("stores and recalls through an async driver", async () => {
-		const store = new PromisedStore();
-		const interp = interpWith(store);
+		const interp = interpWith(new PromisedStore());
 
 		await runAsync(
 			interp,
@@ -79,7 +66,6 @@ describe("a memory store that answers with promises", () => {
 		const recalled = await runAsync(interp, '(memory/recall "port")');
 
 		expect(str(recalled.value)).toContain("hosts declare what they need");
-		expect(store.answered).toBeGreaterThan(0);
 	});
 
 	it("forgets and lists through the same surface", async () => {
@@ -135,8 +121,11 @@ describe("built-ins loading on the first message, over a store that answers with
 
 		await driveAsync(bank.hear(interp));
 
-		const { value } = await driveAsync(bank.lookup("internal/t/formatted"));
-		expect(value?.body).toBe("3 steps");
+		const recalled = await runAsync(
+			interp,
+			'(cdr (assoc "body" (car (memory/recall "internal/t/formatted"))))',
+		);
+		expect(str(recalled.value)).toBe('"3 steps"');
 	});
 });
 

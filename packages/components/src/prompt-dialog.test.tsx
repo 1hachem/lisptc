@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { PromptDialog } from "./prompt-dialog.tsx";
 
 beforeAll(() => {
@@ -24,23 +24,20 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
-async function mounted(prompts: string[]) {
-	const onSelect = vi.fn();
-	const onOpenChange = vi.fn();
-	const host = document.createElement("div");
-	document.body.append(host);
-	root = createRoot(host);
-	await act(async () => {
-		root?.render(
+function Composer({ prompts }: { prompts: string[] }) {
+	const [open, setOpen] = useState(true);
+	const [draft, setDraft] = useState("");
+	return (
+		<>
+			<textarea aria-label="draft" value={draft} readOnly />
 			<PromptDialog
-				onOpenChange={onOpenChange}
-				onSelect={onSelect}
-				open
+				onOpenChange={setOpen}
+				onSelect={setDraft}
+				open={open}
 				prompts={prompts}
-			/>,
-		);
-	});
-	return { onSelect, onOpenChange };
+			/>
+		</>
+	);
 }
 
 function items() {
@@ -48,18 +45,21 @@ function items() {
 }
 
 describe("searching previous prompts", () => {
-	it("lists the prompts in the order given, each on one line", async () => {
-		await mounted(["newest", "two\nlines"]);
-		expect(items().map((item) => item.textContent)).toEqual([
-			"newest",
-			"two lines",
-		]);
-	});
-
-	it("hands back the whole prompt and closes", async () => {
-		const ui = await mounted(["newest", "two\nlines"]);
-		await act(async () => items()[1]?.click());
-		expect(ui.onSelect).toHaveBeenCalledWith("two\nlines");
-		expect(ui.onOpenChange).toHaveBeenCalledWith(false);
+	it("puts the whole prompt back in the draft, not its one-line preview, and closes", async () => {
+		const host = document.createElement("div");
+		document.body.append(host);
+		root = createRoot(host);
+		await act(async () => {
+			root?.render(<Composer prompts={["newest", "two\nlines"]} />);
+		});
+		await act(async () =>
+			items()
+				.find((item) => item.textContent === "two lines")
+				?.click(),
+		);
+		expect(
+			host.querySelector<HTMLTextAreaElement>('[aria-label="draft"]')?.value,
+		).toBe("two\nlines");
+		expect(document.body.textContent).not.toContain("newest");
 	});
 });

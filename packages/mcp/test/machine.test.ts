@@ -90,10 +90,8 @@ describe("the user's machine", () => {
 		expect(listed()).not.toMatch(/local-git/);
 		online.value = true;
 		await step();
-		expect(listed()).toMatch(
-			/"local-git" "git on the machine" nil :unloaded :local\)/,
-		);
-		expect(listed()).toMatch(/"remote" "" nil :unloaded\)/);
+		expect(listed()).toMatch(/"local-git"[^)]*:local\)/);
+		expect(listed()).not.toMatch(/"remote"[^)]*:local\)/);
 	});
 
 	it("tells the session nothing when the desktop connects or disconnects", async () => {

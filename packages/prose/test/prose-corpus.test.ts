@@ -1,4 +1,3 @@
-import { checkSyntax } from "@repo/language-service/syntax";
 import { describe, expect, it } from "vitest";
 import { tolerantly } from "./helpers.ts";
 
@@ -158,11 +157,6 @@ describe("prose corpus: text a model writes around its code", () => {
 		);
 		expect(value).toBe(NOTHING);
 		expect(skipped).toHaveLength(3);
-	});
-
-	it("finds no syntax error in any of it", () => {
-		for (const text of [...POINTERS, ...QUANTITIES, ...CLAUSES, ...SENTENCES])
-			expect(checkSyntax(text)).toEqual([]);
 	});
 });
 

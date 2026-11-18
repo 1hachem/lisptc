@@ -37,7 +37,10 @@ describe("closerAt", () => {
 	});
 
 	it("closes nothing outside a form", () => {
-		expect(closer("hello|")).toBeUndefined();
+		const document = TextDocument.create("inmemory://t", "lisptc", 0, "hello");
+		expect(
+			languageService(new Map()).closer(document, { line: 0, character: 5 }),
+		).toBeNull();
 	});
 
 	it("answers through the service an editor reads", () => {

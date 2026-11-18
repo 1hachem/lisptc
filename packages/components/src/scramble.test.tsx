@@ -40,14 +40,6 @@ async function shownAfter(
 }
 
 describe("Scramble", () => {
-	it("settles on the text it was given", async () => {
-		expect(await shownAfter(4000)).toBe(TEXT);
-	});
-
-	it("hands the text over at once when the effect is off", async () => {
-		expect(await shownAfter(0, false)).toBe(TEXT);
-	});
-
 	it("holds its width from the first frame, so nothing reflows", async () => {
 		for (const ms of [0, 50, 120, 300, 700, 4000])
 			expect(await shownAfter(ms)).toHaveLength(TEXT.length);

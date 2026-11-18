@@ -122,7 +122,7 @@ async function pdfText(
 
 const PLAIN = text("text/plain");
 
-export const CODECS: ReadonlyMap<string, Codec> = new Map<string, Codec>([
+const CODECS: ReadonlyMap<string, Codec> = new Map<string, Codec>([
 	["csv", text("text/csv")],
 	["htm", text("text/html")],
 	["html", text("text/html")],

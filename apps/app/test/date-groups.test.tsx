@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { byDate, dateGroupOf } from "../src/lib/date-groups.ts";
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { DatedListing } from "../src/components/tree-listing.tsx";
+import { dateGroupOf } from "../src/lib/date-groups.ts";
+
+beforeAll(() => {
+	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+});
 
 const now = new Date(2026, 9, 20, 9, 30).getTime();
 const daysAgo = (days: number, hour = 12) =>
@@ -22,23 +30,33 @@ describe("dateGroupOf", () => {
 	});
 });
 
-describe("byDate", () => {
+describe("a dated listing", () => {
 	it("groups newest first and leaves out the empty groups", () => {
+		vi.setSystemTime(now);
 		const files = [
 			{ name: "old.md", at: daysAgo(40) },
 			{ name: "a.md", at: daysAgo(0, 8) },
 			{ name: "b.md", at: daysAgo(0, 9) },
 			{ name: "c.md", at: daysAgo(3) },
 		];
-		expect(
-			byDate(files, (file) => file.at, now).map(({ group, items }) => [
-				group,
-				items.map((file) => file.name),
-			]),
-		).toEqual([
-			["today", ["b.md", "a.md"]],
-			["last week", ["c.md"]],
-			["older", ["old.md"]],
-		]);
+		const host = document.createElement("div");
+		act(() =>
+			createRoot(host).render(
+				<DatedListing
+					items={files}
+					at={(file) => file.at}
+					empty={null}
+					check={() => ({
+						checked: false,
+						selecting: false,
+						onCheck: () => {},
+					})}
+				>
+					{(file) => <p key={file.name}>{file.name}</p>}
+				</DatedListing>,
+			),
+		);
+		vi.useRealTimers();
+		expect(host.textContent).toBe("todayb.mda.mdlast weekc.mdolderold.md");
 	});
 });

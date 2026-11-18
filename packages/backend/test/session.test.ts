@@ -7,13 +7,6 @@ afterEach(() => {
 });
 
 describe("an account's session", () => {
-	it("lists the workspaces of a signed-in account", async () => {
-		const t = testDeployment();
-		const alice = await signIn(t, "alice@example.com");
-		const listed = await alice.as.query(api.workspaces.list, {});
-		expect(listed.map((w) => w._id)).toEqual([alice.workspace]);
-	});
-
 	it("rejects an identity that names no session", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");

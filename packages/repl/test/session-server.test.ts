@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	connectOrSpawn,
 	PROTOCOL_VERSION,
-	SessionClient,
+	type SessionClient,
 	serve,
 } from "../src/session-server.ts";
 
@@ -63,19 +63,6 @@ async function killClient(client: SessionClient): Promise<void> {
 	}
 }
 
-describe("serve", () => {
-	it("answers a version request with the current protocol version", async () => {
-		const path = tempPath();
-		const server = await serve(path, []);
-		cleanups.push(() => {
-			server.close();
-		});
-		const client = await SessionClient.connect(path);
-		cleanups.push(() => client.destroy());
-		expect(await client.version()).toBe(PROTOCOL_VERSION);
-	});
-});
-
 describe("connectOrSpawn", () => {
 	it("returns a client straight through when the server already speaks the current protocol", async () => {
 		const path = tempPath();
@@ -91,12 +78,8 @@ describe("connectOrSpawn", () => {
 
 	it("replaces a stale server that supports shutdown but predates the version op", async () => {
 		const path = tempPath();
-		let shutdownCalls = 0;
 		const stale = await fakeServer(path, {
-			shutdown: () => {
-				shutdownCalls++;
-				return "";
-			},
+			shutdown: () => "",
 			eval: () => "stale-eval-result\n",
 		});
 		cleanups.push(() => {
@@ -106,8 +89,8 @@ describe("connectOrSpawn", () => {
 		const client = await connectOrSpawn(path, ENTRY);
 		cleanups.push(() => killClient(client));
 
-		expect(shutdownCalls).toBe(1);
 		expect(await client.version()).toBe(PROTOCOL_VERSION);
+		expect(await client.eval("(+ 1 2)")).not.toBe("stale-eval-result\n");
 	}, 30_000);
 
 	it("falls back to the stale server when it can't be shut down (predates shutdown too)", async () => {

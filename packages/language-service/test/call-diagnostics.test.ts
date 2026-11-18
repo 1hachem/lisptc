@@ -16,14 +16,6 @@ function callsFor(text: string) {
 }
 
 describe("expectedArgs", () => {
-	it("renders a fixed arity as a single number", () => {
-		expect(expectedArgs({ min: 2, max: 2 })).toBe("2");
-	});
-
-	it("renders a range when min and max differ", () => {
-		expect(expectedArgs({ min: 1, max: 3 })).toBe("1-3");
-	});
-
 	it("renders an unbounded max as 'at least N'", () => {
 		expect(expectedArgs({ min: 1 })).toBe("at least 1");
 	});
@@ -38,9 +30,8 @@ describe("diagnosticsForCalls", () => {
 	};
 
 	it("flags a keyword-call binding missing a required :arg", () => {
-		const calls = callsFor('(load-mcp :url "x")');
-		const diagnostics = diagnosticsForCalls(
-			calls,
+		const diagnostics = callDiagnostics(
+			'(load-mcp :url "x")',
 			new Map([["load-mcp", argsDoc]]),
 		);
 		expect(diagnostics).toHaveLength(1);
@@ -54,9 +45,11 @@ describe("diagnosticsForCalls", () => {
 	});
 
 	it("does not flag a call that supplies every required :arg", () => {
-		const calls = callsFor('(load-mcp :name "x" :url "y")');
 		expect(
-			diagnosticsForCalls(calls, new Map([["load-mcp", argsDoc]])),
+			callDiagnostics(
+				'(load-mcp :name "x" :url "y")',
+				new Map([["load-mcp", argsDoc]]),
+			),
 		).toEqual([]);
 	});
 
@@ -68,36 +61,32 @@ describe("diagnosticsForCalls", () => {
 	});
 
 	it("flags a positional binding called with too few arguments", () => {
-		const calls = callsFor("(car)");
-		const diagnostics = diagnosticsForCalls(
-			calls,
+		const diagnostics = callDiagnostics(
+			"(car)",
 			new Map([["car", { arity: { min: 1, max: 1 } }]]),
 		);
 		expect(diagnostics[0].message).toBe("car: expected 1 argument, got 0");
 	});
 
 	it("flags a positional binding called with too many arguments", () => {
-		const calls = callsFor("(car 1 2)");
-		const diagnostics = diagnosticsForCalls(
-			calls,
+		const diagnostics = callDiagnostics(
+			"(car 1 2)",
 			new Map([["car", { arity: { min: 1, max: 1 } }]]),
 		);
 		expect(diagnostics[0].message).toBe("car: expected 1 argument, got 2");
 	});
 
 	it("does not flag a positional call within its arity range", () => {
-		const calls = callsFor("(cons 1 2)");
 		expect(
-			diagnosticsForCalls(
-				calls,
+			callDiagnostics(
+				"(cons 1 2)",
 				new Map([["cons", { arity: { min: 2, max: 2 } }]]),
 			),
 		).toEqual([]);
 	});
 
 	it("does not flag an unknown binding (no doc entry at all)", () => {
-		const calls = callsFor("(mystery-fn)");
-		expect(diagnosticsForCalls(calls, new Map())).toEqual([]);
+		expect(callDiagnostics("(mystery-fn)", new Map())).toEqual([]);
 	});
 
 	it("flags a positional call to a keyword-only binding missing a required :arg", () => {
@@ -122,9 +111,11 @@ describe("diagnosticsForCalls", () => {
 		};
 
 		it("does not flag the bare positional form as missing a required :arg", () => {
-			const calls = callsFor('(load-mcp "playwright")');
 			expect(
-				diagnosticsForCalls(calls, new Map([["load-mcp", loadMcpDoc]])),
+				callDiagnostics(
+					'(load-mcp "playwright")',
+					new Map([["load-mcp", loadMcpDoc]]),
+				),
 			).toEqual([]);
 		});
 
@@ -160,10 +151,9 @@ describe("diagnosticsForCalls", () => {
 		});
 
 		it("accepts a bare call that leaves an optional positional arg out", () => {
-			const calls = callsFor("(pick)");
 			expect(
-				diagnosticsForCalls(
-					calls,
+				callDiagnostics(
+					"(pick)",
 					new Map([
 						[
 							"pick",

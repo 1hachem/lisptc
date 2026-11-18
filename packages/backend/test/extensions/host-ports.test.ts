@@ -1,9 +1,10 @@
 import { compactionExtension } from "@repo/compaction-extension";
 import { compactionHost } from "@repo/compaction-extension/host";
+import { Interp } from "@repo/interpreter/lisp";
 import type { InterpExtension } from "@repo/interpreter/session";
 import { memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
-import { type MemoryStore, VolatileStore } from "@repo/memory-extension/ports";
+import { VolatileStore } from "@repo/memory-extension/ports";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import { proseExtension } from "@repo/prose-extension";
@@ -12,6 +13,7 @@ import { secretsExtension } from "@repo/secrets-extension";
 import { secretsHost } from "@repo/secrets-extension/host";
 import type { PromptSource } from "@repo/shared/host";
 import { describe, expect, it } from "vitest";
+import { memoryRepl } from "./helpers.ts";
 
 const said: PromptSource = () => "a prompt the host supplied";
 
@@ -26,58 +28,41 @@ const swapped: [string, () => InterpExtension][] = [
 	["secrets", () => secretsExtension({ ...secretsHost, prompt: said })],
 ];
 
-const colocated: [string, () => InterpExtension][] = [
-	["compaction", () => compactionExtension(compactionHost)],
-	["memory", () => memoryExtension(memoryHost)],
-	["promises", () => promisesExtension(promisesHost)],
-	["prose", () => proseExtension(proseHost)],
-	["secrets", () => secretsExtension(secretsHost)],
-];
+const prompted = (extension: InterpExtension) =>
+	new Interp({ extensions: [extension] }).systemPrompt();
 
 describe("every extension takes its prompt from the host", () => {
-	it.each(swapped)("%s reads the supplied prompt", (_name, build) => {
-		expect(build().prompt).toBe("a prompt the host supplied");
-	});
-
-	it.each(colocated)("%s reads its colocated .ptc", (_name, build) => {
-		expect(build().prompt).toBeTruthy();
+	it.each(swapped)("%s teaches the supplied prompt", (_name, build) => {
+		expect(prompted(build())).toContain("a prompt the host supplied");
 	});
 });
 
 describe("a supplied store is the one the extension uses", () => {
-	it("keeps memory off the filesystem when handed a volatile store", () => {
+	it("hands what one repl remembered to another repl over the same store", async () => {
 		const store = new VolatileStore();
-		expect(memoryExtension({ ...memoryHost, store }).bank.store).toBe(store);
-	});
-
-	it("keeps secrets in the store it was handed", () => {
-		const store = {
-			get: () => ({ value: "v", description: "" }),
-			list: (): Array<[string, string]> => [["REPL_K", ""]],
-			set: () => {},
-		};
-		expect(secretsExtension({ ...secretsHost, store }).store).toBe(store);
-	});
-
-	it("reads the clock it was handed rather than the wall clock", () => {
-		const clock = { now: () => 1_700_000_000_000 };
-		const bank = memoryExtension({ ...memoryHost, clock }).bank;
-		expect(bank.clock.now()).toBe(1_700_000_000_000);
+		await memoryRepl([memoryExtension({ ...memoryHost, store })]).eval(
+			'(memory/remember "k" "kept here" :when "the test asks for it")',
+		);
+		const other = memoryRepl([memoryExtension({ ...memoryHost, store })]);
+		expect(await other.eval('(memory/recall "kept")')).toContain("kept here");
 	});
 });
 
 describe("a host with no filesystem behind it still builds", () => {
-	it("runs every port from values the caller owns", () => {
-		const store: MemoryStore = new VolatileStore();
-		const extension = memoryExtension({
-			store,
-			clock: { now: () => 0 },
-			prompt: () => "",
-			memories: memoryHost.memories,
-			search: memoryHost.search,
-			recognize: () => new Map(),
-		});
-		expect(extension.bank.store).toBe(store);
-		expect(extension.prompt).toBe("");
+	it("remembers and recalls on ports built from values the caller owns", async () => {
+		const r = memoryRepl([
+			memoryExtension({
+				store: new VolatileStore(),
+				clock: { now: () => 0 },
+				prompt: () => "",
+				memories: memoryHost.memories,
+				search: memoryHost.search,
+				recognize: () => new Map(),
+			}),
+		]);
+		await r.eval(
+			'(memory/remember "k" "no disk" :when "the test asks for it")',
+		);
+		expect(await r.eval('(memory/recall "disk")')).toContain("no disk");
 	});
 });

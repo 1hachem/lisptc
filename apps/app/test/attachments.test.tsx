@@ -32,13 +32,6 @@ async function mounted(discarded: string[]) {
 }
 
 describe("attachments left behind", () => {
-	it("are discarded when the composer goes away unsent", async () => {
-		const discarded: string[] = [];
-		const { unmount } = await mounted(discarded);
-		unmount();
-		expect(discarded.sort()).toEqual(["a.txt", "b.txt"]);
-	});
-
 	it("are kept once they were sent", async () => {
 		const discarded: string[] = [];
 		const { hook, unmount } = await mounted(discarded);

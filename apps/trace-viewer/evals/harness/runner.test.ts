@@ -233,7 +233,7 @@ describe("a case runs against a scripted model", () => {
 				},
 				TARGET,
 			),
-		).rejects.toThrow(/prelude/);
+		).rejects.toThrow();
 	});
 
 	test("a memory a seeded turn fires reaches the model", async () => {

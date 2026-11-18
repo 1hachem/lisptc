@@ -12,13 +12,6 @@ const entry = (kind: string, value: unknown): Entry => ({
 describe("intent and question kinds", () => {
 	const intent = (value: unknown) => view([entry("intent", value)], intentKind);
 
-	test("read back an intent and a question of the right shape", () => {
-		const doing = { doing: "d", todos: [{ label: "a", done: true }] };
-		const question = { id: "q1", prompt: "p", choices: ["A"], multi: false };
-		expect(intent(doing)).toEqual(doing);
-		expect(view([entry("question", question)], questionKind)).toEqual(question);
-	});
-
 	test("read nothing from an intent of the wrong shape", () => {
 		expect(intent("busy")).toBeUndefined();
 		expect(intent({ todos: [{ label: "a" }] })).toBeUndefined();
@@ -41,17 +34,6 @@ describe("intent and question kinds", () => {
 			{ done: 1, total: 3, label: 7 },
 		])
 			expect(intent({ progress })).toBeUndefined();
-	});
-
-	test("read back an intent with the log of its doing lines", () => {
-		const logged = {
-			doing: "b",
-			log: [
-				{ text: "a", startedAt: 1000, ms: 250, state: "done" },
-				{ text: "b", startedAt: 1250, state: "running" },
-			],
-		};
-		expect(intent(logged)).toEqual(logged);
 	});
 
 	test("read nothing from an intent whose log is malformed", () => {

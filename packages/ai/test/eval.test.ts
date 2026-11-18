@@ -1,4 +1,3 @@
-import { effect } from "@repo/interpreter/effects";
 import type { Interp } from "@repo/interpreter/lisp";
 import type { SessionHooks } from "@repo/interpreter/session";
 import { type FormSpan, formsOnly } from "@repo/shared/lisp-forms";
@@ -115,28 +114,6 @@ describe("a user message", () => {
 				threadId: crypto.randomUUID(),
 			}),
 		).toBeUndefined();
-	});
-
-	test("is handed to the agent unless a form asked to stay quiet", async () => {
-		const quiet = testRepls([
-			extension((hooks) =>
-				hooks.evalStep.use((ctx, next) => {
-					if (ctx.code.includes("hush"))
-						ctx.interp.journal.write(effect, { type: "quiet" });
-					return next(ctx);
-				}),
-			),
-		]);
-		const threadId = crypto.randomUUID();
-		const loud = await evalUserMessage("(+ 1 2)", { repls: quiet, threadId });
-		const hushed = await evalUserMessage("(list 'hush)", {
-			repls: quiet,
-			threadId,
-		});
-		expect(loud?.quiet).toBe(false);
-		expect(hushed?.quiet).toBe(true);
-		expect(loud?.message.additional_kwargs?.quiet).toBeUndefined();
-		expect(hushed?.message.additional_kwargs?.quiet).toBe(true);
 	});
 });
 

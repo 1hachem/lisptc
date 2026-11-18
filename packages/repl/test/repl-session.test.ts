@@ -1,7 +1,6 @@
 import { ends } from "@repo/interpreter/effects";
-import { type LlmCall, llmSlot } from "@repo/interpreter/observe";
 import { describe, expect, it } from "vitest";
-import { agentRepl, answering, noting, observedExtension } from "./helpers.ts";
+import { agentRepl, answering, noting } from "./helpers.ts";
 
 describe("AgentRepl (in-process REPL binding)", () => {
 	it("hands the human what a step echoed", async () => {
@@ -56,25 +55,5 @@ describe("AgentRepl (in-process REPL binding)", () => {
 			const r = agentRepl();
 			expect(ends((await r.evalOutput("   ")).effects)).toBe(false);
 		});
-	});
-});
-
-describe("the llm observer", () => {
-	it("keeps the observer its host installed across a reset", () => {
-		const calls: LlmCall[] = [];
-		const r = agentRepl([observedExtension()]);
-		const observed = r.hooks.filled(llmSlot);
-		if (observed) observed.observe = (call) => calls.push(call);
-
-		r.reset();
-
-		expect(r.hooks.filled(llmSlot)).toBe(observed);
-		r.hooks.filled(llmSlot)?.observe?.({
-			builtin: "write",
-			messages: [],
-			structured: false,
-			latencyMs: 0,
-		});
-		expect(calls.map((call) => call.builtin)).toEqual(["write"]);
 	});
 });

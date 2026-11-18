@@ -87,3 +87,35 @@ export async function signIn(
 		>,
 	};
 }
+
+export async function renewSession(
+	t: TestConvex<typeof schema>,
+	who: Signed,
+): Promise<Signed> {
+	const now = Date.now();
+	const sessionId = await t.run(async (ctx) => {
+		const created = await ctx.runMutation(
+			components.betterAuth.adapter.create,
+			{
+				input: {
+					model: "session",
+					data: {
+						userId: who.authId,
+						token: `token-${who.authId}-${now}`,
+						expiresAt: now + HOUR,
+						createdAt: now,
+						updatedAt: now,
+					},
+				},
+			},
+		);
+		return (created as { _id: string })._id;
+	});
+	return {
+		...who,
+		sessionId,
+		as: t.withIdentity({ subject: who.authId, sessionId }) as TestConvex<
+			typeof schema
+		>,
+	};
+}

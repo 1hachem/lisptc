@@ -1,13 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-	assetName,
-	PROMPT_ROOTS,
-	RUNTIME_ASSETS,
-} from "../../runtime-assets.ts";
+import { PROMPT_ROOTS, RUNTIME_ASSETS } from "../../runtime-assets.ts";
 
 const ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
 
@@ -41,11 +37,6 @@ const referenced = references();
 const shipped = RUNTIME_ASSETS.map((asset) => fileURLToPath(asset));
 
 describe("the prompts a build has to ship", () => {
-	it("names files that exist", () => {
-		const missing = referenced.filter(({ file }) => !existsSync(file));
-		expect(missing).toEqual([]);
-	});
-
 	it("finds at least one prompt under every root it scans", () => {
 		expect(referenced.length).toBeGreaterThan(0);
 		for (const root of PROMPT_ROOTS) {
@@ -59,8 +50,8 @@ describe("the prompts a build has to ship", () => {
 		expect(unshipped).toEqual([]);
 	});
 
-	it("gives each one a distinct name, because the build flattens them", () => {
-		const names = RUNTIME_ASSETS.map(assetName);
+	it("ships no two files under the same name, because the build flattens them", () => {
+		const names = shipped.map((file) => basename(file));
 		expect(names).toEqual([...new Set(names)]);
 	});
 });

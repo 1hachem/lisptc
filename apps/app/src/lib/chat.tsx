@@ -406,13 +406,13 @@ function useTurnSend(
 	return { submitTurn, sendAbout };
 }
 
-export interface Briefed {
+interface Briefed {
 	_id: string;
 	parentChatId?: string;
 	agent?: { prompt: string };
 }
 
-export function briefingOf(chat: Briefed | undefined): ChatMessage[] {
+function briefingOf(chat: Briefed | undefined): ChatMessage[] {
 	if (chat?.agent === undefined || chat.parentChatId === undefined) return [];
 	return [
 		{

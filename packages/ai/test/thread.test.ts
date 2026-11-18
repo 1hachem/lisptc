@@ -1,3 +1,5 @@
+import { effect } from "@repo/interpreter/effects";
+import type { InterpExtension } from "@repo/interpreter/session";
 import type { ChatMessage } from "@repo/shared/messages";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentDelta } from "../src/agent.ts";
@@ -9,7 +11,7 @@ import {
 	type TurnEnding,
 	type TurnSetup,
 } from "../src/thread.ts";
-import { testRepl, unprompted } from "./helpers.ts";
+import { extension, testRepl, unprompted } from "./helpers.ts";
 
 const model = vi.hoisted(() => ({
 	script: [] as string[],
@@ -54,6 +56,7 @@ class World implements TranscriptStore {
 	broken = false;
 	opening: Promise<void> | undefined;
 	setup: TurnSetup = { runsForms: true };
+	extensions: InterpExtension[] = [];
 
 	async read(): Promise<ChatMessageInput[]> {
 		return this.stored.map((m) => ({ ...m }));
@@ -70,7 +73,7 @@ class World implements TranscriptStore {
 			repl: async () => {
 				await this.opening;
 				if (this.broken) throw new Error("no repl here");
-				return testRepl();
+				return testRepl(this.extensions);
 			},
 			transcript: this,
 			status: {
@@ -163,9 +166,10 @@ describe("a thread", () => {
 		expect(world.overlapped).toBe(false);
 	});
 
-	test("hands a post made during a turn to its next step", async () => {
+	test("takes a post made during a turn into that turn, after the step it arrived in", async () => {
 		const world = new World();
 		const thread = world.thread();
+		const watched = new Watched(thread.watch());
 		model.script = ["(+ 1 2)", "three."];
 		const gate = gated();
 		const first = await thread.post(user("a", "what is 1 + 2?"));
@@ -175,13 +179,20 @@ describe("a thread", () => {
 
 		expect(await first.ended).toEqual({ answer: "three." });
 		expect(await second.ended).toEqual({ answer: "three." });
-		expect(world.turns).toEqual(["start", "settle"]);
-		expect(model.calls[1].at(-1)).toMatchObject({ content: "use hex" });
+		const text = await watched.until(
+			(seen) =>
+				statuses(seen).includes("running") && statuses(seen).at(-1) === "idle",
+		);
+		expect(statuses(text)).toEqual(["idle", "running", "idle"]);
+		const said = unprompted(world.stored).map((m) => m.content);
+		expect(said.indexOf("use hex")).toBeGreaterThan(said.indexOf("(+ 1 2)"));
+		expect(said.indexOf("use hex")).toBeLessThan(said.indexOf("three."));
 	});
 
 	test("starts a new turn for a post that arrives after the last step", async () => {
 		const world = new World();
 		const thread = world.thread();
+		const watched = new Watched(thread.watch());
 		let late: Promise<{ ended: Promise<unknown> }> | undefined;
 		world.onAppend = (messages) => {
 			if (late === undefined && messages.some((m) => m.type === "ai"))
@@ -190,10 +201,20 @@ describe("a thread", () => {
 		const first = await thread.post(user("a", "hello"));
 		expect(await first.ended).toEqual({ answer: "done." });
 		expect(late).toBeDefined();
-		await (await late)?.ended;
+		expect(await (await late)?.ended).toEqual({ answer: "done." });
 
-		expect(world.turns).toEqual(["start", "settle", "start", "settle"]);
-		expect(model.calls).toHaveLength(2);
+		const text = await watched.until(
+			(seen) =>
+				statuses(seen).filter((status) => status === "running").length === 2 &&
+				statuses(seen).at(-1) === "idle",
+		);
+		expect(statuses(text)).toEqual([
+			"idle",
+			"running",
+			"idle",
+			"running",
+			"idle",
+		]);
 	});
 
 	test("never runs an event as lisp", async () => {
@@ -221,6 +242,29 @@ describe("a thread", () => {
 		expect(world.stored[1]).toMatchObject({
 			type: "tool",
 			additional_kwargs: { results: ["42"] },
+		});
+	});
+
+	test("answers a user's message unless one of its forms asked to stay quiet", async () => {
+		const world = new World();
+		world.extensions = [
+			extension((hooks) =>
+				hooks.evalStep.use((ctx, next) => {
+					if (ctx.code.includes("hush"))
+						ctx.interp.journal.write(effect, { type: "quiet" });
+					return next(ctx);
+				}),
+			),
+		];
+		const thread = world.thread();
+
+		await (await thread.post(user("a", "(list 'hush)"))).ended;
+		expect(unprompted(world.stored).map((m) => m.type)).not.toContain("ai");
+
+		await (await thread.post(user("b", "(+ 1 2)"))).ended;
+		expect(unprompted(world.stored).at(-1)).toMatchObject({
+			type: "ai",
+			content: "done.",
 		});
 	});
 

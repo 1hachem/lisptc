@@ -1,14 +1,36 @@
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
+import { type Method, postJson as send } from "../helpers.ts";
 
-const envelope = {
-	input: { chatId: "j57dbngz9ch0dbd3vbc12sygs58ejt2q", message: "hello" },
-	context: undefined,
-	command: undefined,
-};
+const CHAT = "j57dbngz9ch0dbd3vbc12sygs58ejt2q";
 
-let chatRequestSchema: typeof import("../../server/agent/chat.ts").chatRequestSchema;
-let steerRequestSchema: typeof import("../../server/agent/chat.ts").steerRequestSchema;
-let chatOnlySchema: typeof import("../../server/agent/chat.ts").chatOnlySchema;
+vi.mock("../../server/agent/session.ts", async () => {
+	const { createMiddleware } = await import("@tanstack/react-start");
+	const { edge } = await import("../../server/agent/edge.ts");
+	const session = createMiddleware({ type: "request" }).server(({ next }) =>
+		next({ context: { session: { token: "u1", subject: "u1" } } }),
+	);
+	return {
+		authed: [...edge, session],
+	};
+});
+
+vi.mock("../../server/agent/convex.ts", () => ({
+	convexAs: () => ({
+		query: async () => ({}),
+		mutation: async () => {},
+	}),
+}));
+
+vi.mock("../../server/agent/threads.ts", () => ({
+	threads: {},
+	post: async () => ({ ended: Promise.resolve({ answer: "done." }) }),
+	watchThread: () => new Response(""),
+	stopThread: () => true,
+	withdrawPost: async () => true,
+}));
+
+let turn: Method;
+let steer: Method;
 
 beforeAll(async () => {
 	process.env.VITE_CONVEX_URL = "http://127.0.0.1:3210";
@@ -17,74 +39,28 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-	process.env.CONVEX_SELF_HOSTED_ADMIN_KEY = "test-admin-key";
-	({ chatRequestSchema, steerRequestSchema, chatOnlySchema } = await import(
-		"../../server/agent/chat.ts"
-	));
+	({ turn, steer } = await import("../../server/agent/chat.ts"));
 });
 
-describe("the chat request contract", () => {
-	test("accepts the envelope the streaming transport posts", () => {
-		const parsed = chatRequestSchema.safeParse(envelope);
-		expect(parsed.success).toBe(true);
-		expect(parsed.success && parsed.data.input).toEqual(envelope.input);
+describe("a posted turn", () => {
+	test("is refused when a message sends an envelope field the model would read", async () => {
+		const response = await send(turn, {
+			input: { chatId: CHAT, message: "hello", received: { noted: true } },
+		});
+		expect(response.status).toBe(400);
 	});
 
-	test("refuses a turn the browser opens with a system event", () => {
-		const input = { chatId: envelope.input.chatId, event: { token: "t1" } };
-		expect(chatRequestSchema.safeParse({ input }).success).toBe(false);
-	});
-
-	test("carries what a message holds beside its text", () => {
-		const input = {
-			...envelope.input,
-			received: { attachments: [{ folder: "attachments", name: "a.pdf" }] },
-		};
-		const parsed = chatRequestSchema.safeParse({ input });
-		expect(parsed.success && parsed.data.input).toEqual(input);
-	});
-
-	test("refuses a message that sends an envelope field the model would read", () => {
-		const input = { ...envelope.input, received: { noted: true } };
-		expect(chatRequestSchema.safeParse({ input }).success).toBe(false);
-	});
-
-	test("carries the id the browser shows the message under", () => {
-		const input = { ...envelope.input, id: "m1" };
-		const parsed = chatRequestSchema.safeParse({ input });
-		expect(parsed.success && parsed.data.input.id).toBe("m1");
-	});
-
-	test("refuses a turn posted without the envelope", () => {
-		expect(chatRequestSchema.safeParse(envelope.input).success).toBe(false);
+	test("is refused when posted without the envelope", async () => {
+		const response = await send(turn, { chatId: CHAT, message: "hello" });
+		expect(response.status).toBe(400);
 	});
 });
 
-describe("the steer request contract", () => {
-	const steer = { chatId: envelope.input.chatId, id: "s1", message: "use hex" };
+describe("a posted steer", () => {
+	const valid = { chatId: CHAT, id: "s1", message: "use hex" };
 
-	test("accepts a steer naming its chat and its own id", () => {
-		expect(steerRequestSchema.safeParse(steer).success).toBe(true);
-	});
-
-	test("refuses a blank steer or one without an id", () => {
-		expect(
-			steerRequestSchema.safeParse({ ...steer, message: "  " }).success,
-		).toBe(false);
-		expect(steerRequestSchema.safeParse({ ...steer, id: "" }).success).toBe(
-			false,
-		);
-	});
-});
-
-describe("the watch and stop contract", () => {
-	const chatId = envelope.input.chatId;
-
-	test("names the chat to watch or stop", () => {
-		expect(chatOnlySchema.safeParse({ chatId }).success).toBe(true);
-	});
-
-	test("refuses a request that names no chat", () => {
-		expect(chatOnlySchema.safeParse({}).success).toBe(false);
+	test("is refused when blank or without an id", async () => {
+		expect((await send(steer, { ...valid, message: "  " })).status).toBe(400);
+		expect((await send(steer, { ...valid, id: "" })).status).toBe(400);
 	});
 });

@@ -1,9 +1,24 @@
+import { newSym } from "@repo/interpreter/objects";
 import { describe, expect, it } from "vitest";
 import { nameSearchEngine } from "../src/name-search.ts";
 import { nearest } from "../src/ports.ts";
+import { freshInterp, reportOf } from "./helpers.ts";
 
 function near(name: string, candidates: readonly string[]): string | undefined {
 	return nearest(nameSearchEngine, name, candidates);
+}
+
+function suggested(
+	typed: string,
+	names: readonly string[],
+): string | undefined {
+	const interp = freshInterp();
+	for (const name of names)
+		interp.defineGlobal(
+			newSym(name),
+			interp.makeBuiltIn(name, -1, () => null),
+		);
+	return /did you mean (\S+)/.exec(reportOf(`(${typed})`, interp))?.[1];
 }
 
 const PLAYWRIGHT = [
@@ -15,13 +30,13 @@ const PLAYWRIGHT = [
 
 describe("the nearest name under the same qualifier", () => {
 	it("finds the longer name a short one is contained in", () => {
-		expect(near("playwright/navigate", PLAYWRIGHT)).toBe(
+		expect(suggested("playwright/navigate", PLAYWRIGHT)).toBe(
 			"playwright/browser_navigate",
 		);
 	});
 
 	it("finds a name a letter swap away", () => {
-		expect(near("playwright/browser_cilck", PLAYWRIGHT)).toBe(
+		expect(suggested("playwright/browser_cilck", PLAYWRIGHT)).toBe(
 			"playwright/browser_click",
 		);
 	});
@@ -39,7 +54,7 @@ describe("the nearest name under the same qualifier", () => {
 	});
 
 	it("prefers the shortest of several containing names", () => {
-		expect(near("x/get", ["x/get_one", "x/get_one_thing", "x/put"])).toBe(
+		expect(suggested("x/get", ["x/get_one", "x/get_one_thing", "x/put"])).toBe(
 			"x/get_one",
 		);
 	});
@@ -53,20 +68,26 @@ describe("the nearest name under the same qualifier", () => {
 	});
 
 	it("matches a name the candidate was prefixed onto, not one buried in it", () => {
-		expect(near("report-the-thing", ["or", "the", "re"])).toBeUndefined();
-		expect(near("click", ["browser_click", "snapshot"])).toBe("browser_click");
+		expect(suggested("report-the-thing", ["the", "re"])).toBeUndefined();
+		expect(suggested("click", ["browser_click", "snapshot"])).toBe(
+			"browser_click",
+		);
 	});
 
 	it("matches unqualified names against unqualified candidates", () => {
-		expect(near("lenght", ["length", "last", "list"])).toBe("length");
+		expect(suggested("lenght", [])).toBe("length");
 	});
 
 	it("reaches into a loaded server for a miss that names none", () => {
-		expect(near("navigate", PLAYWRIGHT)).toBe("playwright/browser_navigate");
+		expect(suggested("navigate", PLAYWRIGHT)).toBe(
+			"playwright/browser_navigate",
+		);
 	});
 
 	it("takes the closest name whatever qualifier carries it", () => {
-		expect(near("click", ["click_here", ...PLAYWRIGHT])).toBe("click_here");
+		expect(suggested("click", ["click_here", ...PLAYWRIGHT])).toBe(
+			"click_here",
+		);
 	});
 
 	it("offers nothing from a server when nothing there is close", () => {
@@ -74,10 +95,10 @@ describe("the nearest name under the same qualifier", () => {
 	});
 
 	it("finds a name whose segment the typed one begins", () => {
-		expect(near("playwright/nav", PLAYWRIGHT)).toBe(
+		expect(suggested("playwright/nav", PLAYWRIGHT)).toBe(
 			"playwright/browser_navigate",
 		);
-		expect(near("playwright/snap", PLAYWRIGHT)).toBe(
+		expect(suggested("playwright/snap", PLAYWRIGHT)).toBe(
 			"playwright/browser_snapshot",
 		);
 	});
@@ -89,6 +110,6 @@ describe("the nearest name under the same qualifier", () => {
 	});
 
 	it("does not take a fragment buried inside a segment", () => {
-		expect(near("playwright/ser", PLAYWRIGHT)).toBeUndefined();
+		expect(suggested("playwright/ser", PLAYWRIGHT)).toBeUndefined();
 	});
 });

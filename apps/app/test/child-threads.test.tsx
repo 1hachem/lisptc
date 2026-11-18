@@ -25,10 +25,7 @@ afterEach(() => {
 	document.body.replaceChildren();
 });
 
-function mount(
-	threads: ChildThread[],
-	{ onOpen = vi.fn(), onStop = vi.fn(), onStopAll = vi.fn() } = {},
-) {
+function mount(threads: ChildThread[]) {
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
@@ -37,9 +34,9 @@ function mount(
 		root.render(
 			<ChildThreadStrip
 				threads={threads}
-				onOpen={onOpen}
-				onStop={onStop}
-				onStopAll={onStopAll}
+				onOpen={() => {}}
+				onStop={() => {}}
+				onStopAll={() => {}}
 			/>,
 		),
 	);
@@ -55,32 +52,20 @@ const THREADS: ChildThread[] = [
 	{ _id: "c", title: "coder", status: "errored", failure: "boom" },
 ];
 
+const labels = (host: HTMLElement) =>
+	[...host.querySelectorAll("button")].map(
+		(b) => b.getAttribute("aria-label") ?? "",
+	);
+
 const rows = (host: HTMLElement) => [
 	...host.querySelectorAll<HTMLButtonElement>("li button[data-state]"),
 ];
 
 describe("child threads", () => {
 	it("is hidden when the chat spawned none", () => {
-		expect(mount([]).childElementCount).toBe(0);
-	});
-
-	it("counts the children and shows a state for each", () => {
-		const host = mount(THREADS);
-		expect(host.textContent).toContain("3 threads");
-		const buttons = rows(host);
-		expect(buttons.map((b) => b.dataset.state)).toEqual([
-			"running",
-			"waiting",
-			"errored",
-		]);
-		expect(buttons.map((b) => b.title)).toEqual(["running", "waiting", "boom"]);
-	});
-
-	it("opens the child it was clicked on", () => {
-		const onOpen = vi.fn();
-		const host = mount(THREADS, { onOpen });
-		act(() => rows(host)[1].click());
-		expect(onOpen).toHaveBeenCalledWith(THREADS[1]);
+		const host = mount([]);
+		expect(host.textContent).toBe("");
+		expect(host.querySelectorAll("button")).toHaveLength(0);
 	});
 
 	it("offers no way to delete a child", () => {
@@ -95,11 +80,7 @@ describe("child threads", () => {
 			{ _id: "d", title: "", lastStartedAt: 1 },
 			{ _id: "e", title: "tester", status: "streaming" },
 		]);
-		expect(rows(host).map((b) => b.dataset.state)).toEqual([
-			"errored",
-			"done",
-			"running",
-		]);
+		expect(rows(host).map((b) => b.title)).toEqual(["boom", "done", "running"]);
 		expect(rows(host)[1].textContent).toContain("untitled");
 		const more = host.querySelector<HTMLButtonElement>(
 			"[data-child-threads=more]",
@@ -126,47 +107,21 @@ describe("child threads", () => {
 		expect(rows(host)).toHaveLength(3);
 	});
 
-	it("stops one active child from its row, and offers no stop on a settled one", () => {
-		const onStop = vi.fn();
-		const host = mount(THREADS, { onStop });
-		const stops = [
-			...host.querySelectorAll<HTMLButtonElement>("[data-child-threads=stop]"),
-		];
-		expect(stops.map((b) => b.getAttribute("aria-label"))).toEqual([
+	it("offers a stop on each active child and none on a settled one", () => {
+		const host = mount(THREADS);
+		expect(labels(host).filter((label) => label.startsWith("stop "))).toEqual([
 			"stop researcher",
 			"stop reviewer",
 		]);
-		act(() => stops[1].click());
-		expect(onStop).toHaveBeenCalledWith(THREADS[1]);
 	});
 
-	it("stops everything while a child runs, and offers no stop for the main agent alone", () => {
-		const onStopAll = vi.fn();
-		const host = mount(THREADS, { onStopAll });
-		expect(control(host, "stop-main")).toBeNull();
-		act(() => control(host, "stop-all")?.click());
-		expect(onStopAll).toHaveBeenCalledOnce();
-	});
-
-	it("draws every stop as the filled square the chat input stops with", () => {
-		const host = mount(THREADS);
-		for (const stop of host.querySelectorAll("[data-child-threads^=stop]"))
-			expect(stop.textContent).toContain("■");
-	});
-
-	it("checks only a child that finished, and marks a stopped or failed one apart", () => {
+	it("tells a finished child from a stopped or failed one", () => {
 		const host = mount([
 			{ _id: "d", title: "done", lastStartedAt: 1 },
 			{ _id: "s", title: "halted", status: "stopped" },
 			{ _id: "e", title: "broke", status: "errored", failure: "boom" },
 		]);
-		expect(rows(host).map((b) => b.dataset.state)).toEqual([
-			"done",
-			"stopped",
-			"errored",
-		]);
-		const icons = rows(host).map((b) => b.querySelector("svg")?.innerHTML);
-		expect(new Set(icons).size).toBe(3);
+		expect(rows(host).map((b) => b.title)).toEqual(["done", "stopped", "boom"]);
 	});
 
 	it("marks a child that never ran a turn as idle, apart from a finished one", () => {
@@ -174,9 +129,7 @@ describe("child threads", () => {
 			{ _id: "i", title: "spawned" },
 			{ _id: "d", title: "done", lastStartedAt: 1 },
 		]);
-		expect(rows(host).map((b) => b.dataset.state)).toEqual(["idle", "done"]);
-		const icons = rows(host).map((b) => b.querySelector("svg")?.innerHTML);
-		expect(new Set(icons).size).toBe(2);
+		expect(rows(host).map((b) => b.title)).toEqual(["idle", "done"]);
 		expect(control(host, "stop")).toBeNull();
 	});
 

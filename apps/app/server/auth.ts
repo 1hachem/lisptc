@@ -25,7 +25,7 @@ export const { handler: authHandler, getToken: authToken } =
 
 const AUTH_COOKIES = ["convex_jwt", "session_token", "session_data"];
 
-export function fromDesktop(userAgent: string | undefined): boolean {
+function fromDesktop(userAgent: string | undefined): boolean {
 	return userAgent?.includes(`${DESKTOP_USER_AGENT}/`) ?? false;
 }
 
@@ -33,7 +33,7 @@ export function requestFromDesktop(): boolean {
 	return fromDesktop(getRequestHeader("user-agent"));
 }
 
-export function carriesAuthCookie(cookies: string | undefined): boolean {
+function carriesAuthCookie(cookies: string | undefined): boolean {
 	return AUTH_COOKIES.some((name) => cookies?.includes(`better-auth.${name}=`));
 }
 

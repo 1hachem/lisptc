@@ -73,7 +73,7 @@ const target: CataloguedChoice = {
 };
 
 describe("entries land where they were recorded", () => {
-	test("each entry is a line of its own, in the order it arrived", async () => {
+	test("the printed run shows each entry on a line of its own, in the order it arrived", async () => {
 		const run = await runCase(
 			runtimeFor([
 				{ type: "entry", entry: RECOGNIZED },
@@ -88,25 +88,17 @@ describe("entries land where they were recorded", () => {
 			target,
 		);
 
-		expect(run.transcript.map((line) => line.role)).toEqual([
-			"entry",
-			"entry",
-			"assistant",
-			"entry",
-			"tool",
-			"assistant",
+		const printed = formatRun("case", { ...run, case: "case", sample: 1 })
+			.split("\n")
+			.filter((line) => line.includes(" │ "));
+		expect(printed).toEqual([
+			"recognized │ the user wants the headline → 0.90",
+			"memory     │ navigate: browser_navigate, not navigate",
+			'agent      │ (load-mcp "playwright")',
+			"memory     │ navigate: browser_navigate, not navigate",
+			"repl       │ loaded",
+			"agent      │ the headline is shown",
 		]);
-		expect(run.transcript[0]).toMatchObject({
-			kind: "recognized",
-			value: RECOGNIZED.value,
-			content: "the user wants the headline → 0.90",
-		});
-		expect(run.transcript[1]).toMatchObject({
-			kind: "memory",
-			value: FIRED.value,
-			content: "navigate: browser_navigate, not navigate",
-		});
-		expect(run.transcript[3]).toMatchObject({ kind: "memory" });
 	});
 
 	test("a failed recognition shows its error in the printed run", async () => {
@@ -120,34 +112,8 @@ describe("entries land where they were recorded", () => {
 			target,
 		);
 
-		expect(run.transcript[0]).toMatchObject({
-			role: "entry",
-			kind: "recognized",
-			content: "failed: timed out",
-		});
 		expect(formatRun("case", { ...run, case: "case", sample: 1 })).toContain(
 			"recognized │ failed: timed out",
-		);
-	});
-
-	test("a recorded memory shows under its kind in the printed run", async () => {
-		const run = await runCase(
-			runtimeFor([
-				{ type: "entry", entry: FIRED },
-				{ type: "assistant", code: "done", meta: {} },
-				{ type: "halt", answer: "done" },
-			]),
-			spec,
-			target,
-		);
-
-		expect(run.transcript[0]).toMatchObject({
-			role: "entry",
-			kind: "memory",
-			content: "navigate: browser_navigate, not navigate",
-		});
-		expect(formatRun("case", { ...run, case: "case", sample: 1 })).toContain(
-			"memory │ navigate: browser_navigate, not navigate",
 		);
 	});
 });

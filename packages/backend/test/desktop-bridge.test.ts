@@ -5,27 +5,22 @@ import type {
 	ServerState,
 } from "@repo/mcp-extension/ports";
 import { describe, expect, it } from "vitest";
-import {
-	BridgedHost,
-	type Desktop,
-	type LocalServer,
-} from "../src/desktop-bridge.ts";
+import { BridgedHost, type Desktop } from "../src/desktop-bridge.ts";
 
-function fallback(): McpHost & { ensured: string[]; stopped: string[] } {
-	const ensured: string[] = [];
-	const stopped: string[] = [];
+function fallback(): McpHost {
+	const running = new Set<string>();
 	return {
-		ensured,
-		stopped,
 		ensure: async (conf: ConnConfig) => {
-			ensured.push(conf.name);
-			return undefined;
+			running.add(conf.name);
+			return { url: `http://docker.test/${conf.name}` };
 		},
 		stop: async (name) => {
-			stopped.push(name);
+			running.delete(name);
 		},
-		stopAll: async () => {},
-		status: (): ServerState => "unknown",
+		stopAll: async () => {
+			running.clear();
+		},
+		status: (name): ServerState => (running.has(name) ? "running" : "unknown"),
 		logs: () => "docker log",
 	};
 }
@@ -36,48 +31,23 @@ const channel: McpTransport = {
 	close: async () => {},
 };
 
-function bridge(): Desktop & {
-	opened: LocalServer[];
-	closed: string[];
-} {
-	const opened: LocalServer[] = [];
-	const closed: string[] = [];
+function bridge(): Desktop {
+	const running = new Set<string>();
 	return {
-		opened,
-		closed,
 		open: async (server) => {
-			opened.push(server);
+			running.add(server.name);
 			return channel;
 		},
 		close: async (name) => {
-			closed.push(name);
+			running.delete(name);
 		},
 		connected: () => true,
-		running: () => true,
+		running: (name) => running.has(name),
 		settings: async () => undefined,
 	};
 }
 
 describe("BridgedHost", () => {
-	it("opens a :local command server on the owner's desktop", async () => {
-		const desktop = bridge();
-		const docker = fallback();
-		const host = new BridgedHost(desktop, docker);
-		const handle = await host.ensure({
-			name: "fs",
-			command: "npx",
-			args: ["fs-mcp"],
-			local: true,
-		});
-		expect(desktop.opened).toEqual([
-			{ name: "fs", command: "npx", args: ["fs-mcp"], env: {} },
-		]);
-		expect(docker.ensured).toEqual([]);
-		expect(handle).not.toHaveProperty("url");
-		expect(handle && "transport" in handle && handle.transport()).toBe(channel);
-		expect(host.status("fs")).toBe("running");
-	});
-
 	it("reports a bridged server stopped once the desktop no longer runs it", async () => {
 		const desktop = bridge();
 		const alive = { value: true };
@@ -91,24 +61,27 @@ describe("BridgedHost", () => {
 
 	it("leaves every other server to the fallback host", async () => {
 		const desktop = bridge();
-		const docker = fallback();
-		const host = new BridgedHost(desktop, docker);
-		await host.ensure({ name: "plain", command: "npx" });
-		await host.ensure({ name: "remote", url: "https://example.test/mcp" });
-		expect(docker.ensured).toEqual(["plain", "remote"]);
-		expect(desktop.opened).toEqual([]);
+		const host = new BridgedHost(desktop, fallback());
+		expect(await host.ensure({ name: "plain", command: "npx" })).toEqual({
+			url: "http://docker.test/plain",
+		});
+		expect(
+			await host.ensure({ name: "remote", url: "https://example.test/mcp" }),
+		).toEqual({ url: "http://docker.test/remote" });
+		expect(desktop.running("plain")).toBe(false);
 	});
 
 	it("closes a bridged server on the desktop and stops the rest on the fallback", async () => {
 		const desktop = bridge();
-		const docker = fallback();
-		const host = new BridgedHost(desktop, docker);
+		const host = new BridgedHost(desktop, fallback());
 		await host.ensure({ name: "fs", command: "npx", local: true });
+		await host.ensure({ name: "other", command: "npx" });
+		expect(host.status("other")).toBe("running");
 		await host.stop("fs");
 		await host.stop("other");
-		expect(desktop.closed).toEqual(["fs"]);
-		expect(docker.stopped).toEqual(["other"]);
+		expect(desktop.running("fs")).toBe(false);
 		expect(host.status("fs")).toBe("unknown");
+		expect(host.status("other")).toBe("unknown");
 	});
 
 	it("passes the bridge's refusal through when no desktop is connected", async () => {
@@ -133,6 +106,6 @@ describe("BridgedHost", () => {
 				local: true,
 			}),
 		).rejects.toThrow("no desktop connected for this user");
-		expect(docker.ensured).toEqual([]);
+		expect(docker.status("fs")).toBe("unknown");
 	});
 });

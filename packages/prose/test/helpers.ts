@@ -1,6 +1,10 @@
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
+import { effect, ends } from "@repo/interpreter/effects";
 import { bufferSink, hitch } from "@repo/interpreter/journal";
-import { boot, Interp, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
+import { openSession } from "@repo/interpreter/session";
+import type { FormSpan } from "@repo/shared/lisp-forms";
 import type { ProseHost } from "../src/ports.ts";
 import { proseExtension } from "../src/prose.ts";
 import { proseHost } from "../src/prose-host.ts";
@@ -92,4 +96,31 @@ export function tolerantly(
 	} finally {
 		detach();
 	}
+}
+
+export function unrunSpans(text: string): FormSpan[] {
+	const hooks = openSession([proseExtension(proseHost)]);
+	return hooks.unrun
+		.run(() => [], proseInterp(), text)
+		.map((skipped) => skipped.span);
+}
+
+export async function endsTurn(reply: string): Promise<boolean> {
+	const extension = proseExtension(proseHost);
+	const interp = new ConversationInterpreter({ extensions: [extension] });
+	boot(interp);
+	const hooks = openSession([extension]);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
+	try {
+		await hooks.evalStep.run(
+			async () => {
+				await runAsync(interp, reply);
+			},
+			{ interp, code: reply, author: "assistant" },
+		);
+	} finally {
+		detach();
+	}
+	return ends(buffer.collect(effect));
 }

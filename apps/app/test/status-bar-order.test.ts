@@ -5,20 +5,10 @@ import { barOrder, placeOf, shownItems } from "../src/lib/status-bar-order.ts";
 describe("barOrder", () => {
 	it("puts the pane indicator first and the desktop status beside the clock last, gaps between, when nothing is stored", () => {
 		const order = barOrder(undefined);
-		expect(order).toEqual([
-			"panes",
-			"gap-1",
-			"gap-2",
-			"gap-3",
-			"gap-4",
-			"gap-5",
-			"gap-6",
-			"desktop",
-			"clock",
-		]);
-		expect(order.map((slot) => placeOf(order, slot))).toEqual([
-			1, 2, 3, 4, 5, 6, 7, 8, 9,
-		]);
+		expect(shownItems(order, [])).toEqual(["panes", "desktop", "clock"]);
+		expect(placeOf(order, "panes")).toBe(1);
+		expect(placeOf(order, "desktop")).toBe(STATUS_BAR_SLOT_COUNT - 1);
+		expect(placeOf(order, "clock")).toBe(STATUS_BAR_SLOT_COUNT);
 	});
 
 	it("always has nine slots", () => {

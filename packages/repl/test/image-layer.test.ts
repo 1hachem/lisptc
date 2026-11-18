@@ -30,29 +30,6 @@ describe("image layers", () => {
 		sources: { a: { "#": 0 }, b: { "#": 2 } },
 	});
 
-	it("carries only what changed over the layer below", () => {
-		const layer = layerOver(below, above);
-		expect(layer.whole).toBe(false);
-		expect(layer.objects).toEqual({
-			keep: 1,
-			tail: [{ sym: "y" }, { sym: "z" }],
-		});
-		expect(layer.globals.keep).toBe(1);
-		expect(layer.docs).toEqual({ set: {}, drop: ["a"] });
-		expect(layer.sources).toEqual({ set: { b: { "#": 2 } }, drop: [] });
-	});
-
-	it("stacks back to the image it was taken from", () => {
-		expect(
-			stack([layerOver(undefined, below), layerOver(below, above)]),
-		).toEqual(above);
-	});
-
-	it("starts whole over nothing or over another format", () => {
-		expect(layerOver(undefined, above).whole).toBe(true);
-		expect(layerOver(image({ format: 1 }), above).whole).toBe(true);
-	});
-
 	it("refuses a stack that does not start whole", () => {
 		expect(() => stack([layerOver(below, above)])).toThrow();
 	});

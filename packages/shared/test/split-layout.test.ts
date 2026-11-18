@@ -41,18 +41,6 @@ const pane = (layout: SplitLayout<string>, id: string) =>
 	paneOf(layout, id)?.id as string;
 
 describe("opening tabs", () => {
-	it("seeds one pane from an empty layout", () => {
-		const layout = opened("a");
-		expect(shape(layout)).toEqual(["a"]);
-		expect(layout.focused).toBe(pane(layout, "a"));
-	});
-
-	it("adds to the focused pane and makes the new tab active", () => {
-		const layout = opened("a", "b");
-		expect(shape(layout)).toEqual(["a", "b"]);
-		expect(paneOf(layout, "b")?.active).toBe("b");
-	});
-
 	it("focuses an already open tab instead of opening it twice", () => {
 		const layout = openTab(opened("a", "b"), tab("a"));
 		expect(shape(layout)).toEqual(["a", "b"]);

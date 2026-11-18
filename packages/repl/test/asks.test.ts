@@ -40,24 +40,17 @@ const ASK: Ask = {
 	],
 };
 
-interface Gate {
-	extension: InterpExtension;
-	ran(): number;
-}
-
-function gate(): Gate {
+function gate(ask: Ask = ASK): InterpExtension {
 	let granted = false;
-	let ran = 0;
 	const install = (interp: Interp): void => {
 		interp.defineGlobal(
 			newSym("guarded"),
 			interp.makeBuiltIn("guarded", 1, (frame) => {
 				if (!granted) {
-					interp.journal.write(asksKind, { open: [ASK] });
+					interp.journal.write(asksKind, { open: [ask] });
 					throw new StepHold("guarded waits for approval");
 				}
 				granted = false;
-				ran += 1;
 				return frame[0];
 			}),
 		);
@@ -68,7 +61,7 @@ function gate(): Gate {
 			granted = ctx.values.approved === true;
 		});
 	};
-	return { extension: Object.assign(install, { session }), ran: () => ran };
+	return Object.assign(install, { session });
 }
 
 describe("a y/N reply", () => {
@@ -86,8 +79,7 @@ describe("a y/N reply", () => {
 
 describe("asking around a step", () => {
 	it("reruns the step once the ask is approved", async () => {
-		const g = gate();
-		const r = memoryRepl([g.extension]);
+		const r = memoryRepl([gate()]);
 		const outputs: string[] = [];
 		const refused = await runAsking({
 			run: async () => {
@@ -101,45 +93,50 @@ describe("asking around a step", () => {
 			},
 		});
 		expect(refused).toEqual([]);
-		expect(g.ran()).toBe(1);
-		expect(outputs.at(-1)).toContain("42");
+		expect(outputs.at(-1)).toBe("42\n");
 	});
 
 	it("stops without running the call when the ask is denied", async () => {
-		const g = gate();
-		const r = memoryRepl([g.extension]);
+		const r = memoryRepl([gate()]);
+		const outputs: string[] = [];
 		const refused = await runAsking({
-			run: async () => openAsks((await r.evalOutput("(guarded 1)")).entries),
+			run: async () => {
+				const out = await r.evalOutput('(echo (guarded "41"))');
+				outputs.push(out.user);
+				return openAsks(out.entries);
+			},
 			reply: async () => null,
 			answer: async (c) => {
 				await r.invokeUi(c.answer.action, c.answer.values);
 			},
 		});
 		expect(refused).toEqual(["guarded: Denied"]);
-		expect(g.ran()).toBe(0);
+		expect(outputs.join("")).not.toContain("41");
 	});
 
 	it("does not run the step again when the answer applied the call", async () => {
-		const applied: Ask = { ...ASK, answerApplies: true };
-		let runs = 0;
+		const r = memoryRepl([gate({ ...ASK, answerApplies: true })]);
+		await r.evalOutput("(setq runs 0)");
 		const told = await runAsking({
-			run: async () => {
-				runs += 1;
-				return [applied];
-			},
+			run: async () =>
+				openAsks(
+					(await r.evalOutput("(progn (setq runs (+ runs 1)) (guarded 1))"))
+						.entries,
+				),
 			reply: async () => "y",
-			answer: async () => {},
+			answer: async (c) => {
+				await r.invokeUi(c.answer.action, c.answer.values);
+			},
 		});
-		expect(runs).toBe(1);
 		expect(told).toEqual(["guarded: Allowed"]);
+		expect((await r.evalOutput("(echo runs)")).user).toBe("1\n");
 	});
 });
 
 describe("a session client", () => {
 	it("is handed the open asks with the step and can answer them", async () => {
-		const g = gate();
 		const path = join(tmpdir(), `lisptc-test-${randomUUID()}.sock`);
-		const server = await serve(path, [g.extension]);
+		const server = await serve(path, [gate()]);
 		const client = await SessionClient.connect(path);
 		try {
 			const held = await client.step('(echo (guarded "7"))');
@@ -148,7 +145,6 @@ describe("a session client", () => {
 			const done = await client.step('(echo (guarded "7"))');
 			expect(done.asks).toEqual([]);
 			expect(done.output).toContain("7");
-			expect(g.ran()).toBe(1);
 		} finally {
 			client.destroy();
 			server.close();

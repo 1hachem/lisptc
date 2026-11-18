@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
 	type ModelChoice,
 	type ProviderOption,
@@ -38,23 +38,26 @@ const providers: ProviderOption[] = [
 	},
 ];
 
+function Workspace({ initial }: { initial: ModelChoice }) {
+	const [value, setValue] = useState(initial);
+	return (
+		<WorkspaceModelSelector
+			onSelect={setValue}
+			providers={providers}
+			value={value}
+			workspace="lab"
+		/>
+	);
+}
+
 async function mounted(value: ModelChoice) {
-	const onSelect = vi.fn();
 	const host = document.createElement("div");
 	document.body.append(host);
 	await act(async () => {
-		createRoot(host).render(
-			<WorkspaceModelSelector
-				onSelect={onSelect}
-				providers={providers}
-				value={value}
-				workspace="lab"
-			/>,
-		);
+		createRoot(host).render(<Workspace initial={value} />);
 	});
 	const trigger = () => host.querySelector<HTMLButtonElement>("button");
 	return {
-		onSelect,
 		trigger,
 		async open() {
 			await act(async () => {
@@ -64,8 +67,6 @@ async function mounted(value: ModelChoice) {
 				trigger()?.click();
 			});
 		},
-		item: (value: string) =>
-			document.querySelector<HTMLElement>(`[data-value="${value}"]`),
 		async pick(value: string) {
 			await act(async () => {
 				document.querySelector<HTMLElement>(`[data-value="${value}"]`)?.click();
@@ -75,14 +76,6 @@ async function mounted(value: ModelChoice) {
 }
 
 describe("choosing the model a workspace runs on", () => {
-	it("names the current model on the trigger", async () => {
-		const ui = await mounted({
-			provider: "openrouter",
-			model: "google/gemma-4-31b-it",
-		});
-		expect(ui.trigger()?.textContent).toContain("Gemma 4 31B");
-	});
-
 	it("falls back to the raw id when the model is not offered", async () => {
 		const ui = await mounted({ provider: "openrouter", model: "retired/x" });
 		expect(ui.trigger()?.textContent).toContain("retired/x");
@@ -93,58 +86,55 @@ describe("choosing the model a workspace runs on", () => {
 			provider: "openrouter",
 			model: "google/gemma-4-31b-it",
 		});
+		expect(
+			ui.trigger()?.querySelector('img[alt="openrouter logo"]'),
+		).not.toBeNull();
 		await ui.open();
 		await ui.pick("digitalocean/gemma-4-31b-it");
-		expect(ui.onSelect).toHaveBeenCalledWith({
-			provider: "digitalocean",
-			model: "gemma-4-31b-it",
-		});
-	});
-
-	it("marks the current choice and does not resend it", async () => {
-		const ui = await mounted({
-			provider: "openrouter",
-			model: "google/gemma-4-31b-it",
-		});
-		await ui.open();
-		expect(ui.item("openrouter/google/gemma-4-31b-it")?.dataset.chosen).toBe(
-			"true",
-		);
-		await ui.pick("openrouter/google/gemma-4-31b-it");
-		expect(ui.onSelect).not.toHaveBeenCalled();
+		expect(ui.trigger()?.textContent).toContain("Gemma 4 31B");
+		expect(
+			ui.trigger()?.querySelector('img[alt="openrouter logo"]'),
+		).toBeNull();
 	});
 });
 
+function Elsewhere() {
+	const [open, setOpen] = useState(true);
+	const [value, setValue] = useState<ModelChoice>({
+		provider: "openrouter",
+		model: "google/gemma-4-31b-it",
+	});
+	return (
+		<>
+			<output>{value.model}</output>
+			<WorkspaceModelDialog
+				onOpenChange={setOpen}
+				onSelect={setValue}
+				open={open}
+				providers={providers}
+				value={value}
+				workspace="lab"
+			/>
+		</>
+	);
+}
+
 describe("choosing a model from a dialog opened elsewhere", () => {
 	it("opens with no trigger of its own and closes on a pick", async () => {
-		const onSelect = vi.fn();
-		const onOpenChange = vi.fn();
 		const host = document.createElement("div");
 		document.body.append(host);
 		await act(async () => {
-			createRoot(host).render(
-				<WorkspaceModelDialog
-					onOpenChange={onOpenChange}
-					onSelect={onSelect}
-					open
-					providers={providers}
-					value={{ provider: "openrouter", model: "google/gemma-4-31b-it" }}
-					workspace="lab"
-				/>,
-			);
+			createRoot(host).render(<Elsewhere />);
 		});
 		expect(host.querySelector("button")).toBeNull();
 		await act(async () => {
-			document
-				.querySelector<HTMLElement>(
-					'[data-value="openrouter/moonshotai/kimi-k3"]',
-				)
+			[...document.querySelectorAll<HTMLElement>("[cmdk-item]")]
+				.find((item) => item.textContent?.includes("Kimi K3"))
 				?.click();
 		});
-		expect(onOpenChange).toHaveBeenCalledWith(false);
-		expect(onSelect).toHaveBeenCalledWith({
-			provider: "openrouter",
-			model: "moonshotai/kimi-k3",
-		});
+		expect(host.querySelector("output")?.textContent).toBe(
+			"moonshotai/kimi-k3",
+		);
+		expect(document.querySelector("[cmdk-item]")).toBeNull();
 	});
 });

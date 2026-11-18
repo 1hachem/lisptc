@@ -1,24 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	type InterpExtension,
-	newSessionHooks,
 	openSession,
 	type SessionHooks,
-	slot,
 } from "../src/session.ts";
-
-describe("a session's slots", () => {
-	it("holds nothing until a slot is filled", () => {
-		const hooks = newSessionHooks();
-		expect(hooks.filled(slot<number>("count"))).toBeUndefined();
-	});
-
-	it("hands back what was filled under the slot's name", () => {
-		const hooks = newSessionHooks();
-		hooks.fill(slot<number>("count"), 3);
-		expect(hooks.filled(slot<number>("count"))).toBe(3);
-	});
-});
 
 describe("openSession", () => {
 	it("starts every chain empty", () => {

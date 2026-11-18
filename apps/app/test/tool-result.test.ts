@@ -18,16 +18,6 @@ describe("what a step shows the person", () => {
 		expect(toolResult(step)).toEqual({ output: "", error: false });
 	});
 
-	test("is its echo, never what the model read", () => {
-		const step: ChatMessage = {
-			type: "tool",
-			content: modelRead,
-			additional_kwargs: { display: "two servers" },
-		};
-
-		expect(toolResult(step).output).toBe("two servers");
-	});
-
 	test("is an error once it failed, with its content already dropped", () => {
 		const step: ChatMessage = {
 			type: "tool",

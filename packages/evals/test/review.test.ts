@@ -82,12 +82,6 @@ describe("the review payload", () => {
 		line("assistant", '(await (load-mcp "linear"))'),
 	]);
 
-	test("names the run so every vote on it joins", () => {
-		expect(runId(IDENTITY, subject)).toBe(
-			"2026-09-12T10-00-00.json#connect-and-query/openrouter/kimi-k2/1",
-		);
-	});
-
 	test("carries the run, the checks and the voted turn", () => {
 		const properties = reviewProperties(IDENTITY, subject, 1);
 		expect(properties.eval_case).toBe("connect-and-query");

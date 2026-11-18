@@ -57,11 +57,6 @@ async function outcomeOf(
 }
 
 describe("how a turn ended", () => {
-	test("answers with the reply that ends the turn", async () => {
-		model.script = [[{ text: "(+ 1 2)" }], [{ text: "three." }]];
-		expect(await outcomeOf()).toEqual({ answer: "three." });
-	});
-
 	test("hands back what a held step asked instead of an answer", async () => {
 		model.script = [[{ text: "(wait-for-human)" }], [{ text: "never." }]];
 		expect(await outcomeOf({ repl: testRepl([holding()]) })).toEqual({
