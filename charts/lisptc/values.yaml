@@ -35,6 +35,10 @@ preview:
   progressDeadlineSeconds: 120
   tailnetSecret: lisptc-tailnet
 
+seed:
+  email: test@gmail.com
+  password: crptx123
+
 dev:
   enabled: false
   node: ""

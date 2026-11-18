@@ -15,6 +15,12 @@ https://{{ . }}.$(TAILNET_DOMAIN)
 {{- end }}
 {{- end }}
 
+{{- define "lisptc.seedAccount" -}}
+{{- if or .Values.preview.enabled .Values.dev.enabled -}}
+pnpm exec convex run auth:seedAccount {{ .Values.seed | toJson | squote }}
+{{- end -}}
+{{- end }}
+
 {{- define "lisptc.previewEnv" -}}
 {{- $ctx := index . 0 -}}
 {{- $vars := index . 1 -}}
