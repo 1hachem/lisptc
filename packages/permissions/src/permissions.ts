@@ -356,7 +356,12 @@ export function permissionsExtension(
 		name: string,
 		args: readonly unknown[],
 	): Promise<void> | undefined {
-		if (armed === 0 || name.startsWith(OWN_FORMS)) return undefined;
+		if (
+			armed === 0 ||
+			name.startsWith(OWN_FORMS) ||
+			interp.ownerOf(newSym(name)) !== undefined
+		)
+			return undefined;
 		const { verdict, reason } = rules.decide(name);
 		if (verdict === "allow") return undefined;
 		if (verdict === "deny")

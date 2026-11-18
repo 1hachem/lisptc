@@ -2,6 +2,7 @@ import type { Hold } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { hitch } from "@repo/interpreter/journal";
 import { Interp } from "@repo/interpreter/lisp";
+import { newSym } from "@repo/interpreter/objects";
 import { asksKind } from "@repo/journal-catalog/asks";
 import { view } from "@repo/shared/journal";
 import { describe, expect, it, vi } from "vitest";
@@ -48,6 +49,15 @@ describe("the permissions guard", () => {
 	it("leaves what it allows alone", async () => {
 		const s = session("(permission/deny string-upcase)");
 		expect((await s.step('(string-downcase "A")')).value).toBe('"a"');
+	});
+
+	it("leaves a form an extension sealed as its own to that extension", async () => {
+		const s = session(
+			"(permission/deny string-upcase) (permission/deny string-downcase)",
+		);
+		s.interp.seal(newSym("string-upcase"), "ext");
+		expect((await s.step(UPCASE)).failed).toBe(false);
+		expect((await s.step('(string-downcase "A")')).failed).toBe(true);
 	});
 
 	it("stays out of the way outside a step, so the prelude still loads", () => {
