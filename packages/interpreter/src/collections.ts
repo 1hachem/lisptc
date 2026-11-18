@@ -24,14 +24,26 @@ function structuralKey(x: unknown): string {
 	return typeof key === "string" ? JSON.stringify(key) : "#<object>";
 }
 
+function copyTree(x: unknown): unknown {
+	return x instanceof Cell ? new Cell(copyTree(x.car), copyTree(x.cdr)) : x;
+}
+
 export class LispHashTable {
 	constructor(
 		private readonly entries = new Map<unknown, [unknown, unknown]>(),
 		readonly writable = true,
 	) {}
 
+	private view: LispHashTable | undefined;
+
 	readOnly(): LispHashTable {
-		return this.writable ? new LispHashTable(this.entries, false) : this;
+		if (!this.writable) return this;
+		this.view ??= new LispHashTable(this.entries, false);
+		return this.view;
+	}
+
+	private handed(value: unknown): unknown {
+		return this.writable ? value : copyTree(value);
 	}
 
 	get size(): number {
@@ -39,7 +51,10 @@ export class LispHashTable {
 	}
 
 	get(key: unknown): [unknown, unknown] | undefined {
-		return this.entries.get(hashKey(key));
+		const hit = this.entries.get(hashKey(key));
+		return hit === undefined
+			? undefined
+			: [this.handed(hit[0]), this.handed(hit[1])];
 	}
 
 	set(key: unknown, value: unknown): void {
@@ -55,6 +70,9 @@ export class LispHashTable {
 	}
 
 	pairs(): [unknown, unknown][] {
-		return [...this.entries.values()];
+		return [...this.entries.values()].map(([key, value]) => [
+			this.handed(key),
+			this.handed(value),
+		]);
 	}
 }

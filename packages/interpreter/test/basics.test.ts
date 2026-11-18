@@ -207,6 +207,19 @@ describe("hash tables", () => {
 		table.set("b", 2n);
 		expect(ev("(hash-table-count owned)", interp)).toBe("2");
 	});
+
+	it("hand out copies from a sealed one, so editing what is read changes nothing", () => {
+		const interp = freshInterp();
+		const table = new LispHashTable();
+		interp.defineGlobal(newSym("owned"), table);
+		interp.seal(newSym("owned"), "ext");
+		ev("(setq kept (list 1 2))", interp);
+		table.set("a", interp.getGlobal(newSym("kept")));
+		ev('(rplaca (gethash "a" owned) 9)', interp);
+		ev("(rplaca (cdar (hash-table-alist owned)) 9)", interp);
+		expect(ev('(gethash "a" owned)', interp)).toBe("(1 2)");
+		expect(ev("(eq owned owned)", interp)).toBe("t");
+	});
 });
 
 describe("vectors", () => {
