@@ -72,7 +72,7 @@ describe("formes du personnalisateur", () => {
 		expect(fautifs).toEqual([]);
 	}, 600_000);
 
-	it("l'echelle des yeux tient jusqu'au plafond documente", async () => {
+	it("des yeux grossis a 1.3 restent dans le carre, quel que soit le regard", async () => {
 		const fautifs: string[] = [];
 		for (const expr of EXPRESSIONS) {
 			for (const look of ENVELOPPE) {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
-import { dessiner } from "../test-helpers";
+import { describe, expect, it, vi } from "vitest";
+import { animer, dessiner } from "../test-helpers";
 import { SEQUENCE, STATE_BY_ID } from "./states";
 
 describe("cycle par defaut", () => {
@@ -45,10 +45,12 @@ describe("lecture", () => {
 		await bot.demonter();
 	});
 
-	it("ne casse pas sur un cycle vide", async () => {
-		const bot = await dessiner({ frozenAt: 0, cycle: [] });
-		const avant = bot.image().html;
-		expect((await bot.parcourir(3)).html).toBe(avant);
+	it("joue un cycle vide en gardant le bot entier a l ecran", async () => {
+		const bot = await animer({ cycle: [], playing: true });
+		const image = await bot.avancer(3);
+		expect(image.yeux).toHaveLength(2);
+		expect(image.corps.length).toBeGreaterThan(0);
 		await bot.demonter();
+		vi.unstubAllGlobals();
 	});
 });
