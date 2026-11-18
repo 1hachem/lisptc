@@ -35,7 +35,6 @@ import {
 import { askText } from "../lib/asks.ts";
 import { attachedTo } from "../lib/attached-files.ts";
 import {
-	messageClassified,
 	messageProse,
 	messageReasoning,
 	parentSourceOf,
@@ -430,10 +429,9 @@ function useStepProse(message: ChatMessage | undefined) {
 			message === undefined ? [] : messageProse(message).map((s) => s.span),
 		[message],
 	);
-	const classified = message !== undefined && messageClassified(message);
 	const { prose, heads } = useMemo(
-		() => formsIn(text, spans, classified),
-		[text, spans, classified],
+		() => formsIn(text, spans, false),
+		[text, spans],
 	);
 	return { text, spans, prose, heads };
 }

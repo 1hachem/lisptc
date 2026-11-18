@@ -709,10 +709,6 @@ export function messageReasoning(message: ChatMessage): string {
 	return envelopeOf(message.additional_kwargs).reasoning_content ?? "";
 }
 
-export function messageClassified(message: ChatMessage): boolean {
-	return envelopeOf(message.additional_kwargs).prose !== undefined;
-}
-
 export function messageProse(message: ChatMessage): Skipped[] {
 	return [...(envelopeOf(message.additional_kwargs).prose ?? [])];
 }

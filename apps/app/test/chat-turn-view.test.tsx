@@ -227,6 +227,32 @@ describe("a chat drawn by turn", () => {
 		expect(text).not.toContain("MODEL-SAW");
 	});
 
+	it("draws a form the server ran as a call, even one a guess would take for prose", async () => {
+		const said = "Your files (see below).";
+		const reply = `${said}\n(echo (knowledge/list))`;
+		session.messages = [
+			{ id: "h1", type: "human", content: "list my files" },
+			{
+				id: "a1",
+				type: "ai",
+				content: reply,
+				additional_kwargs: {
+					prose: [{ span: [0, said.length], reason: "prose" }],
+				},
+			},
+			{
+				id: "t1",
+				type: "tool",
+				content: '{"source":"lisp-repl","output":""}',
+			},
+		];
+		const host = await mount(<ChatView />);
+		const text = host.textContent ?? "";
+
+		expect(text).toContain(said);
+		expect(text).not.toContain("(knowledge/list)");
+	});
+
 	it("keeps what the call said it was doing once settled, and adds no summary", async () => {
 		session.messages = MESSAGES;
 		const host = await mount(<ChatView />);
