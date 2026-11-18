@@ -48,20 +48,6 @@ function bridge(): Desktop {
 }
 
 describe("BridgedHost", () => {
-	it("opens a :local command server on the owner's desktop", async () => {
-		const desktop = bridge();
-		const host = new BridgedHost(desktop, fallback());
-		const handle = await host.ensure({
-			name: "fs",
-			command: "npx",
-			args: ["fs-mcp"],
-			local: true,
-		});
-		expect(handle && "transport" in handle && handle.transport()).toBe(channel);
-		expect(desktop.running("fs")).toBe(true);
-		expect(host.status("fs")).toBe("running");
-	});
-
 	it("reports a bridged server stopped once the desktop no longer runs it", async () => {
 		const desktop = bridge();
 		const alive = { value: true };

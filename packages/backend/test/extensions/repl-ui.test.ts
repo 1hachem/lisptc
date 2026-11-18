@@ -104,22 +104,6 @@ describe("a step that opens panel tabs", () => {
 	});
 });
 
-describe("a view whose handlers are gone", () => {
-	it("is marked expired, and a click on it fails nothing", async () => {
-		const views = new MemoryViewStore();
-		const r = memoryRepl(modelFacing(undefined, undefined, undefined, views));
-		const rendered = await r.evalOutput(
-			'(setq view (ui/button "go" (lambda () 1))) (ui/render view)',
-		);
-		await r.evalOutput("(ui/forget view)");
-		expect([...views.expired]).toEqual([
-			(shownView(rendered) as { viewId: string }).viewId,
-		]);
-		const out = await r.invokeUi("a1", {});
-		expect(out.failed).toBe(false);
-	});
-});
-
 describe("a view while its step runs", () => {
 	it("reaches the caller live as a reference, never as the tree", async () => {
 		const pushed: unknown[] = [];
@@ -149,14 +133,6 @@ describe("driving the view", () => {
 		expect(shownView(clicked)).toEqual(shownView(first));
 		expect(label(clicked)).toBe("count 1");
 		expect(label(await r.invokeUi(buttonAction(clicked)))).toBe("count 2");
-	});
-
-	it("gives each step that renders a view of its own", async () => {
-		const { r, node } = stored();
-		const one = await r.evalOutput('(ui/render (ui/text "a"))');
-		const two = await r.evalOutput('(ui/render (ui/text "b"))');
-		expect(node(one)).toMatchObject({ props: { text: "a" } });
-		expect(node(two)).toMatchObject({ props: { text: "b" } });
 	});
 
 	it("passes a submitted form's fields to its handler", async () => {

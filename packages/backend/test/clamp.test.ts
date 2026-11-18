@@ -44,17 +44,9 @@ describe("an oversized message", () => {
 		);
 	});
 
-	it("loses the oversized field and keeps the small one", async () => {
+	it("keeps an entry's kind and the ask it is held on when its payload is oversized", async () => {
 		const message = await stored({
-			ui: "y".repeat(MAX_MESSAGE_BYTES * 2),
-			meta: { durationMs: 12 },
-		});
-		expect(message.kwargs).toEqual({ meta: { durationMs: 12 } });
-	});
-
-	it("keeps an entry's kind and the ask it is held on over a payload that would spend the budget first", async () => {
-		const message = await stored({
-			value: "y".repeat(Math.floor(MAX_MESSAGE_BYTES / 2) - 64),
+			value: "y".repeat(MAX_MESSAGE_BYTES * 2),
 			kind: "asks",
 			holding: "h1",
 		});

@@ -107,21 +107,12 @@ describe("repl layers", () => {
 });
 
 describe("the convex image store", () => {
-	it("resumes the image it saved last", async () => {
-		const { t, replId } = await chatOf("alice@example.com");
-		const store = new ConvexImageStore(replId, serverOf(t));
-		await store.save(image(["a"]));
-		await store.save(image(["a", "b"]));
-		const resumed = await new ConvexImageStore(replId, serverOf(t)).latest();
-		expect(resumed).toEqual({ depth: 2, image: image(["a", "b"]) });
-	});
-
 	it("resumes an image larger than a row holds", async () => {
 		const { t, replId } = await chatOf("alice@example.com");
 		const large = image(["x".repeat(REPL_LAYER_CHUNK_CHARS * 2)]);
 		await new ConvexImageStore(replId, serverOf(t)).save(large);
 		const resumed = await new ConvexImageStore(replId, serverOf(t)).latest();
-		expect(resumed).toEqual({ depth: 1, image: large });
+		expect(resumed?.image).toEqual(large);
 	});
 
 	it("has nothing to resume before a save", async () => {

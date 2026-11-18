@@ -253,6 +253,7 @@ describe("attachments", () => {
 				name: "old.txt",
 				storageId: await uploaded(t, `copy ${copy}`, "text/plain"),
 			});
+		const before = (await alice.as.query(api.bin.list, { workspaceId })).length;
 		earlier(ATTACHMENT_TTL_MS + 1);
 		await alice.as.mutation(api.files.add, {
 			folder: "attachments",
@@ -271,7 +272,7 @@ describe("attachments", () => {
 		const binned = (await alice.as.query(api.bin.list, { workspaceId })).map(
 			(f) => f.name,
 		);
-		expect(binned).toHaveLength(101);
-		expect(new Set(binned).size).toBe(101);
+		expect(binned).toHaveLength(before + 1);
+		expect(new Set(binned).size).toBe(binned.length);
 	});
 });

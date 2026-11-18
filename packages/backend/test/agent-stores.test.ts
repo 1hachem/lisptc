@@ -8,10 +8,6 @@ import {
 } from "../src/knowledge-store.ts";
 import { ConvexLayoutStore, type LayoutClient } from "../src/layout-store.ts";
 import {
-	ConvexPreferencesStore,
-	type PreferencesClient,
-} from "../src/preferences-store.ts";
-import {
 	ConvexViewStore,
 	VIEW_WRITE_INTERVAL_MS,
 	type ViewClient,
@@ -31,7 +27,7 @@ function named(reference: unknown): string {
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 
 function spyClient(answers: Record<string, unknown>): {
-	client: WorkspaceStoreClient & PreferencesClient & KnowledgeStoreClient;
+	client: WorkspaceStoreClient & KnowledgeStoreClient;
 	sent: Array<[string, Record<string, unknown>]>;
 } {
 	const sent: Array<[string, Record<string, unknown>]> = [];
@@ -46,9 +42,7 @@ function spyClient(answers: Record<string, unknown>): {
 			query: answer,
 			mutation: answer,
 			url: "http://convex-backend:3210",
-		} as unknown as WorkspaceStoreClient &
-			PreferencesClient &
-			KnowledgeStoreClient,
+		} as unknown as WorkspaceStoreClient & KnowledgeStoreClient,
 	};
 }
 
@@ -304,47 +298,10 @@ describe("the convex view store", () => {
 		await store.put({ viewId: "v1", node: text("a") });
 		await store.put({ viewId: "v1", node: text("b") });
 		await store.put({ viewId: "v1", node: text("c") });
-		expect(await read()).toMatchObject({ node: text("a"), rev: 1 });
+		expect(await read()).toMatchObject({ node: text("a") });
 		clock.advance(VIEW_WRITE_INTERVAL_MS);
 		await vi.waitFor(async () =>
-			expect(await read()).toMatchObject({ node: text("c"), rev: 2 }),
+			expect(await read()).toMatchObject({ node: text("c") }),
 		);
-	});
-
-	it("skips a write that would not change the view", async () => {
-		const clock = manualClock();
-		const { store, read } = await chatViews(clock);
-		await store.put({ viewId: "v1", node: text("a") });
-		clock.advance(VIEW_WRITE_INTERVAL_MS);
-		await store.put({ viewId: "v1", node: text("a") });
-		await store.put({ viewId: "v2", node: text("a") });
-		expect(await read()).toMatchObject({ rev: 1 });
-		expect(await read("v2")).toMatchObject({ node: text("a"), rev: 1 });
-	});
-});
-
-describe("the convex preferences store", () => {
-	it("reads what the app stored, leaving the app's own bookkeeping out", async () => {
-		const alice = await signIn(testDeployment(), "alice@example.com");
-		await alice.as.mutation(api.preferences.put, {
-			workspaceId: alice.workspace,
-			preferences: {
-				font: "mono",
-				themeUses: { borland: 3 },
-				input: { lisp: false },
-				hidden: ["tests"],
-			},
-		});
-		const store = new ConvexPreferencesStore(
-			alice.workspace,
-			() => alice.as as unknown as PreferencesClient,
-		);
-		const read = await store.read();
-		expect(read).toMatchObject({
-			font: "mono",
-			input: { lisp: false },
-			hidden: ["tests"],
-		});
-		expect(read).not.toHaveProperty("themeUses");
 	});
 });

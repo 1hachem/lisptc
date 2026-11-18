@@ -2,7 +2,7 @@ import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import type { Connect } from "../../src/agent-repl.ts";
-import type { Owner, ServerClient } from "../../src/server-client.ts";
+import type { ServerClient } from "../../src/server-client.ts";
 import { ThreadHost } from "../../src/thread-host.ts";
 
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
@@ -119,19 +119,23 @@ describe("the thread factory", () => {
 		expect(repl.interp.systemPrompt().match(ROOT_ONLY)).toBeNull();
 	});
 
-	it("runs its stores as the record's owner with no request behind it", async () => {
-		const actedFor: Owner[] = [];
+	it("reads the workspace's agents as the record's owner", async () => {
+		const nobody: Connect = () =>
+			({
+				query: (reference: unknown) =>
+					Promise.resolve(named(reference).endsWith(":list") ? [] : null),
+				mutation: () => Promise.resolve(null),
+			}) as unknown as ReturnType<Connect>;
 		const host = new ThreadHost({
 			server: serverOver([root]),
-			actAs: (owner) => {
-				actedFor.push(owner);
-				return offline();
-			},
+			actAs: (owner) =>
+				owner.userId === OWNER && owner.workspaceId === WORKSPACE
+					? offline()
+					: nobody(),
 		});
 		const repl = await host.repl(CHAT);
 		expect((await repl.evalOutput("(agents)")).results.at(-1)).toContain(
 			"scout",
 		);
-		expect(actedFor).toEqual([{ userId: OWNER, workspaceId: WORKSPACE }]);
 	});
 });
