@@ -37,13 +37,23 @@ function repl(host: Partial<SemanticHost>) {
 	};
 }
 
-export function judging(answer: Answer) {
+export interface Budget {
+	calls?: number;
+}
+
+function spend(seen: unknown[], budget: Budget): void {
+	if (budget.calls !== undefined && seen.length > budget.calls)
+		throw new Error(`model asked more than ${budget.calls} times`);
+}
+
+export function judging(answer: Answer, budget: Budget = {}) {
 	const seen: JudgeRequest[] = [];
 	const systemOne: SystemOneModel = {
 		provider: "test",
 		model: "jev-test",
 		judge: async (req) => {
 			seen.push(req);
+			spend(seen, budget);
 			const answers: Record<string, Verdict> = {};
 			for (const [id, question] of Object.entries(req.questions))
 				answers[id] = answer(question, id, req);
@@ -53,17 +63,27 @@ export function judging(answer: Answer) {
 	return { seen, ...repl({ systemOne }) };
 }
 
-export function embedding(vectors: Record<string, number[]>) {
+export function embedding(
+	vectors: Record<string, number[]>,
+	budget: Budget & { model?: string; once?: boolean } = {},
+) {
 	const seen: EmbedRequest[] = [];
+	const served = new Set<string>();
 	const embedder: EmbeddingModel = {
 		provider: "test",
 		model: "embed-test",
 		embed: async (req) => {
 			seen.push(req);
+			spend(seen, budget);
+			if (budget.model !== undefined && req.model !== budget.model)
+				throw new Error(`no model ${req.model ?? "by default"}`);
 			return {
 				vectors: req.inputs.map((text) => {
 					const v = vectors[text];
 					if (v === undefined) throw new Error(`no test vector for ${text}`);
+					if (budget.once && served.has(text))
+						throw new Error(`${text} embedded twice`);
+					served.add(text);
 					return v;
 				}),
 				model: "embed-test",
