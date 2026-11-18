@@ -1094,7 +1094,7 @@ export function memoryExtension(
 		asks: [FORGET_ALL],
 		prompt: host.prompt(),
 		prelude: PRELUDE,
-		postlude: `${host.languageMemories().trimEnd()}\n\n${host.memories()}`,
+		postlude: host.memories(),
 		session: memorySession(bank),
 	});
 }

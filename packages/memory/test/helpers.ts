@@ -10,7 +10,6 @@ import {
 
 export const bareHost: MemoryHost = {
 	...memoryHost,
-	languageMemories: () => "",
 	memories: () => "",
 };
 

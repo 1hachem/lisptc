@@ -73,7 +73,6 @@ describe("a host with no filesystem behind it still builds", () => {
 			store,
 			clock: { now: () => 0 },
 			prompt: () => "",
-			languageMemories: memoryHost.languageMemories,
 			memories: memoryHost.memories,
 			search: memoryHost.search,
 			recognize: () => new Map(),

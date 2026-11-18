@@ -1,9 +1,11 @@
 import { boot, Interp, runSync } from "@repo/interpreter/lisp";
-import { Cell, listToArray, newSym } from "@repo/interpreter/objects";
+import { Cell, type List, listToArray } from "@repo/interpreter/objects";
 import { str } from "@repo/interpreter/print";
 import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
 import { describe, expect, it } from "vitest";
+import { memoryExtension } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
+import { VolatileStore } from "../src/ports.ts";
 
 function freshInterp(): Interp {
 	const interp = new Interp();
@@ -15,22 +17,20 @@ function ev(source: string, interp: Interp = freshInterp()): string {
 	return str(runSync(interp, source));
 }
 
-function memoryBodies(source: string): string {
-	const interp = freshInterp();
-	runSync(
-		interp,
-		`(setq bodies nil)
-(defmacro memory (key &rest declared) \`(setq bodies (cons ,(car (last declared)) bodies)))
-(defmacro area (name &rest declared) nil)`,
-	);
-	runSync(interp, source);
-	const bodies = interp.getGlobal(newSym("bodies"));
-	return (bodies instanceof Cell ? listToArray(bodies) : [])
-		.reverse()
+function shippedBodies(): string {
+	const interp = new Interp({
+		extensions: [
+			memoryExtension({ ...memoryHost, store: new VolatileStore() }),
+		],
+	});
+	boot(interp);
+	const forms = runSync(interp, "(memory/_every)");
+	return (forms instanceof Cell ? listToArray(forms) : [])
+		.map((form) => listToArray(form as List)[3])
 		.join("\n");
 }
 
-const LANGUAGE_TEXT = `${LANGUAGE_REFERENCE}\n${memoryBodies(memoryHost.languageMemories())}`;
+const LANGUAGE_TEXT = `${LANGUAGE_REFERENCE}\n${shippedBodies()}`;
 
 describe("the language reference", () => {
 	it("documents multiplication", () => {
