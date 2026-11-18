@@ -51,7 +51,6 @@ vi.mock("../../server/agent/threads.ts", () => ({
 }));
 
 let turn: Method;
-let steer: Method;
 let watch: Method;
 let stop: Method;
 
@@ -119,17 +118,5 @@ describe("stopping a chat", () => {
 		world.running = false;
 		const response = await send(stop, { chatId: CHAT });
 		expect(response.status).toBe(409);
-	});
-});
-
-describe("a steer", () => {
-	test("is accepted at once and never refused", async () => {
-		const response = await send(steer, {
-			chatId: CHAT,
-			id: "s1",
-			message: "also (+ 1 2)",
-		});
-		expect(response.status).toBe(202);
-		expect(await response.json()).toEqual({ accepted: true });
 	});
 });

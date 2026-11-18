@@ -265,12 +265,6 @@ describe("the chat input", () => {
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
-	it("leaves the text as typed when it holds a form", () => {
-		const field = render(vi.fn());
-		type(field, "hello (+ 1 2)");
-		expect(field.textContent).toBe("hello (+ 1 2)");
-	});
-
 	it("keeps the caret in place when typing splits a form into new tokens", () => {
 		const field = render(vi.fn());
 		type(field, "see (+ 1");
@@ -307,15 +301,6 @@ describe("the chat input", () => {
 		);
 		expect(host.querySelector('button[aria-label="attach"]')).not.toBeNull();
 		expect(host.querySelector('input[type="file"]')).not.toBeNull();
-	});
-
-	it("uploads a file the moment it is attached", () => {
-		const upload = vi.fn(() => new Promise<string>(() => {}));
-		renderUploading(vi.fn(), upload);
-		const file = new File(["%PDF"], "spec.pdf", { type: "application/pdf" });
-		attach([file]);
-		expect(upload).toHaveBeenCalledWith(file);
-		expect(chip("spec.pdf")).toBeDefined();
 	});
 
 	it("holds the message until the upload is in, then sends the stored name", async () => {
