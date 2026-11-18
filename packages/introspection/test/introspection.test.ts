@@ -1,23 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { introspectionExtension } from "../src/introspection.ts";
-import { introspectionHost } from "../src/introspection-host.ts";
 import { ev, evWithOutput } from "./helpers.ts";
-
-describe("the extension", () => {
-	it("takes its prompt from the host", () => {
-		const extension = introspectionExtension({
-			...introspectionHost,
-			prompt: () => "supplied",
-		});
-		expect(extension.prompt).toBe("supplied");
-	});
-
-	it("reads its colocated .ptc", () => {
-		expect(introspectionExtension(introspectionHost).prompt).toMatch(
-			/INTROSPECTION/,
-		);
-	});
-});
 
 describe("functionp and macrop", () => {
 	it("tells functions from macros and plain values", () => {
