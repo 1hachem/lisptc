@@ -1,7 +1,13 @@
 import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval } from "@repo/interpreter/drive";
+import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { boot, type Installable, runAsync } from "@repo/interpreter/lisp";
+import {
+	boot,
+	type Installable,
+	runAsync,
+	runSync,
+} from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -31,11 +37,7 @@ import {
 	memoryExtension,
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
-import {
-	recognizeNothing,
-	VolatileStore,
-	WHEN_FIRES_AT,
-} from "../src/ports.ts";
+import { VolatileStore, WHEN_FIRES_AT } from "../src/ports.ts";
 import { bareHost, written } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
@@ -174,18 +176,27 @@ describe("built-in memories", () => {
 			extensions: [memoryExtension(memoryHost)],
 		});
 		boot(interp);
-		const bank = new MemoryBank(
-			new VolatileStore(),
-			memoryHost.clock,
-			memoryHost.search,
-			recognizeNothing,
+		const keys = str(
+			runSync(interp, '(mapcar car (memory/builtins "memory"))'),
 		);
-		bank.declareIn(interp);
-		expect([...bank.builtins().keys()]).toEqual(
-			expect.arrayContaining([
-				"internal/memory/triggers",
-				"internal/memory/call-triggers",
-			]),
+		expect(keys).toContain('"internal/memory/triggers"');
+		expect(keys).toContain('"internal/memory/call-triggers"');
+	});
+
+	it("come back with an image as they were, without booting again", () => {
+		const installed = (postlude: string) =>
+			new ConversationInterpreter({
+				extensions: [
+					memoryExtension({ ...bareHost, store: new VolatileStore() }),
+					carrying(postlude),
+				],
+			});
+		const saved = installed(BROWSER);
+		boot(saved);
+		const back = installed("");
+		restore(back, snapshot(saved));
+		expect(str(runSync(back, "(mapcar car (memory/builtins))"))).toContain(
+			'"internal/deploy/notes"',
 		);
 	});
 
@@ -244,7 +255,7 @@ describe("built-in memories", () => {
 		])
 			await expect(ev(f, code)).rejects.toThrow(/built-in memories/);
 		await ev(f, "(memory/forget-all)");
-		expect(f.bank.builtins().has("internal/deploy/notes")).toBe(true);
+		expect(await drive(f.bank.lookup("internal/deploy/notes"))).toBeDefined();
 	});
 
 	it("never fade", async () => {
@@ -252,7 +263,7 @@ describe("built-in memories", () => {
 		const f = fixture({ clock: { now: () => ms.now } });
 		ms.now = 52 * HALF_LIFE_MS;
 		await f.hear("deploy it");
-		const notes = f.bank.builtins().get("internal/deploy/notes");
+		const notes = await drive(f.bank.lookup("internal/deploy/notes"));
 		expect(notes && f.bank.strength(notes)).toBe(1);
 	});
 
@@ -291,33 +302,36 @@ describe("built-in memories", () => {
 		const long = Array.from({ length: MAX_BUILTIN_WORDS + 1 }, () => "w").join(
 			" ",
 		);
-		const f = fixture({
-			memories: `(memory "internal/t/long" :when "the test asks for it" "${long}")`,
-		});
-		expect(() => f.bank.builtins()).toThrow(/at most/);
+		expect(() =>
+			fixture({
+				memories: `(memory "internal/t/long" :when "the test asks for it" "${long}")`,
+			}),
+		).toThrow(/at most/);
 	});
 
 	it("refuse two built-ins under one key", () => {
-		const f = fixture({
-			memories:
-				'(memory "internal/t/a" :when "the test asks for it" "one")\n(memory "internal/t/a" :when "the test asks for it" "two")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/share this key/);
+		expect(() =>
+			fixture({
+				memories:
+					'(memory "internal/t/a" :when "the test asks for it" "one")\n(memory "internal/t/a" :when "the test asks for it" "two")',
+			}),
+		).toThrow(/share this key/);
 	});
 
-	it("keep a body over several lines, as written", () => {
+	it("keep a body over several lines, as written", async () => {
 		const f = fixture({
 			memories:
 				'(memory "internal/t/a" :when "the test asks for it"\n  "first line\n  (load-mcp \\"x\\")")\n',
 		});
-		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
+		expect((await drive(f.bank.lookup("internal/t/a")))?.body).toBe(
 			'first line\n  (load-mcp "x")',
 		);
 	});
 
 	it("refuse a key outside the internal namespace", () => {
-		const f = fixture({ memories: '(memory "mcp/local" "one")' });
-		expect(() => f.bank.builtins()).toThrow(/internal namespace/);
+		expect(() => fixture({ memories: '(memory "mcp/local" "one")' })).toThrow(
+			/internal namespace/,
+		);
 	});
 
 	it("keep the internal namespace from the agent's own memories", async () => {
@@ -331,39 +345,45 @@ describe("built-in memories", () => {
 	});
 
 	it("refuse a body that is not a string", () => {
-		const f = fixture({ memories: `(memory "internal/t/a" '(one))` });
-		expect(() => f.bank.builtins()).toThrow(/needs a body string/);
+		expect(() =>
+			fixture({ memories: `(memory "internal/t/a" '(one))` }),
+		).toThrow(/needs a body string/);
 	});
 
 	it("refuse a memory with no hook", () => {
-		const f = fixture({ memories: '(memory "internal/t/a" "one")' });
-		expect(() => f.bank.builtins()).toThrow(/needs a hook/);
+		expect(() =>
+			fixture({ memories: '(memory "internal/t/a" "one")' }),
+		).toThrow(/needs a hook/);
 	});
 
 	it("refuse a memory with no body", () => {
-		const f = fixture({
-			memories: '(memory "internal/t/a")\n\n(memory "internal/t/b" "two")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/needs a body/);
+		expect(() =>
+			fixture({
+				memories: '(memory "internal/t/a")\n\n(memory "internal/t/b" "two")',
+			}),
+		).toThrow(/needs a body/);
 	});
 
 	it("refuse a :when with no situation", () => {
-		const f = fixture({ memories: '(memory "internal/t/a" :when "" "one")' });
-		expect(() => f.bank.builtins()).toThrow(/describing the situation/);
+		expect(() =>
+			fixture({ memories: '(memory "internal/t/a" :when "" "one")' }),
+		).toThrow(/describing the situation/);
 	});
 
 	it("refuse a situation written as an :on trigger", () => {
-		const f = fixture({
-			memories: '(memory "internal/t/a" :on (when "x") "one")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/written with :when/);
+		expect(() =>
+			fixture({
+				memories: '(memory "internal/t/a" :on (when "x") "one")',
+			}),
+		).toThrow(/written with :when/);
 	});
 
 	it("refuse a memory with both :when and :on", () => {
-		const f = fixture({
-			memories: '(memory "internal/t/a" :when "x" :on (user "y") "one")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/not both/);
+		expect(() =>
+			fixture({
+				memories: '(memory "internal/t/a" :when "x" :on (user "y") "one")',
+			}),
+		).toThrow(/not both/);
 	});
 });
 
@@ -528,12 +548,12 @@ describe("the when trigger", () => {
 		);
 	});
 
-	it("builds a built-in body from the globals the extension sets", () => {
+	it("builds a built-in body from the globals the extension sets", async () => {
 		const f = fixture({
 			memories:
 				'(memory "internal/t/a" :when "x" (format nil "halves every ~d days" *memory-half-life-days*))',
 		});
-		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
+		expect((await drive(f.bank.lookup("internal/t/a")))?.body).toBe(
 			"halves every 7 days",
 		);
 	});

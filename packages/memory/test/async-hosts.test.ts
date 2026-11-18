@@ -135,7 +135,8 @@ describe("built-ins loading on the first message, over a store that answers with
 
 		await driveAsync(bank.hear(interp));
 
-		expect(bank.builtins().get("internal/t/formatted")?.body).toBe("3 steps");
+		const { value } = await driveAsync(bank.lookup("internal/t/formatted"));
+		expect(value?.body).toBe("3 steps");
 	});
 });
 

@@ -122,7 +122,7 @@ function plain(key: string, lastUsed = 0): MemoryWrite {
 	});
 }
 
-const DECLARED_KEYS = "(mapcar (lambda (entry) (car entry)) *memories*)";
+const DECLARED_KEYS = "(hash-table-keys *memory/table*)";
 
 describe("remembering and recalling", () => {
 	it("stores prose and hands it back on a matching query", async () => {
@@ -282,6 +282,34 @@ describe("triggers", () => {
 		await ev(f, `(memory/remember "t" "note" :on '(call (concat)))`);
 
 		expect(await f.step('(setq x (concat "a" "b"))')).toContain("t: note");
+	});
+
+	it("matches a call whose head is a regular expression", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "s" "note" :on '(call (string-.*)))`);
+
+		expect(await f.step('(echo "hi")')).not.toContain("s: note");
+		expect(await f.step(`(string-join '("a") ",")`)).toContain("s: note");
+	});
+
+	it("fires on a call to any of the forms an any-of names", async () => {
+		const f = fixture();
+		await ev(
+			f,
+			`(memory/remember "j" "note" :on '(call (any-of (concat) (string-join))))`,
+		);
+
+		expect(await f.step('(echo "hi")')).not.toContain("j: note");
+		expect(await f.step(`(string-join '("a") ",")`)).toContain("j: note");
+	});
+
+	it("fires on a call made after a remembered memory was revised", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "r" "old" :on '(call (concat)))`);
+		await ev(f, `(memory/remember "r" "new" :on '(call (string-join)))`);
+
+		expect(await f.step('(concat "a" "b")')).not.toContain("r:");
+		expect(await f.step(`(string-join '("a") ",")`)).toContain("r: new");
 	});
 
 	it("fires on every step when the trigger names no pattern", async () => {

@@ -98,7 +98,7 @@ describe("the agent the app serves", () => {
 		);
 		expect(
 			await ev(
-				"(filter (lambda (entry) (not (stringp (car (last entry))))) *memories*)",
+				`(filter (lambda (form) (and (string-prefix? "internal/" (cadr form)) (not (stringp (nth 3 form))))) (memory/_every))`,
 			),
 		).toBe("nil");
 	});
