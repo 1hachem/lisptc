@@ -13,6 +13,7 @@
     "test": "turbo run test --concurrency=2",
     "test:coverage": "turbo run test:coverage --concurrency=2",
     "coverage:merge": "node --no-warnings --experimental-transform-types ./scripts/merge-coverage.ts",
+    "test:shards": "node --no-warnings --experimental-transform-types ./scripts/test-shards.ts",
     "test:watch": "turbo run test:watch",
     "test:evals": "turbo run test:evals",
     "test:nvim": "bash editors/nvim/tests/run.sh",

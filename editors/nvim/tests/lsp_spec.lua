@@ -6,13 +6,14 @@ describe("lisptc.lsp", function()
 		assert.are.same({ ".git" }, config.root_markers)
 	end)
 
-	it("launches the LSP server pinned to the shared session key", function()
+	it("launches the LSP server pinned to the shared session key, with the root env file loaded", function()
 		assert.are.same({
 			"env",
 			"LISPTC_SESSION=lisptc",
 			"node",
 			"--no-warnings",
 			"--experimental-transform-types",
+			"--env-file-if-exists=" .. vim.fn.expand("~/lisptc/.env"),
 			vim.fn.expand("~/lisptc/apps/lsp/src/server.ts"),
 			"--stdio",
 		}, config.cmd)

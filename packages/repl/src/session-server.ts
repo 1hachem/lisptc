@@ -13,6 +13,7 @@ import { MemoryRepl } from "./repl.ts";
 
 export interface SteppedEntry {
 	output: string;
+	results: readonly string[];
 	asks: readonly Ask[];
 }
 
@@ -24,7 +25,7 @@ interface Request {
 	values?: Record<string, unknown>;
 }
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 interface Reply {
 	id: number;
@@ -65,7 +66,11 @@ async function handle(repl: MemoryRepl, req: Request): Promise<unknown> {
 			return repl.eval(req.code ?? "");
 		case "step": {
 			const out = await repl.evalOutput(req.code ?? "");
-			return { output: out.user, asks: openAsks(out.entries) };
+			return {
+				output: out.user,
+				results: out.results,
+				asks: openAsks(out.entries),
+			};
 		}
 		case "answer":
 			return (await repl.invokeUi(req.action ?? "", req.values ?? {})).user;

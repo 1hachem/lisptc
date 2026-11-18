@@ -1,7 +1,7 @@
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { StepHold } from "@repo/interpreter/errors";
-import { journal } from "@repo/interpreter/journal";
-import { Interp, runSync } from "@repo/interpreter/lisp";
+import { bufferSink } from "@repo/interpreter/journal";
+import { type Interp, runSync } from "@repo/interpreter/lisp";
 import { prelude } from "@repo/interpreter/prelude";
 import { openSession } from "@repo/interpreter/session";
 import { type Asks, asksKind } from "@repo/journal-catalog/asks";
@@ -26,14 +26,14 @@ const loginClient: McpClient = {
 
 function session() {
 	const extension = mcpExtension({ ...mcpHost, client: loginClient });
-	const interp = new Interp({ extensions: [extension] });
+	const interp = new ConversationInterpreter({ extensions: [extension] });
 	runSync(interp, prelude);
 	return { interp, hooks: openSession([extension]) };
 }
 
 async function step(interp: Interp, run: () => Promise<unknown>) {
-	const buffer = bufferTransport();
-	const detach = interp.channels.pipe(buffer);
+	const buffer = bufferSink();
+	const detach = interp.journal.pipe(buffer);
 	try {
 		return {
 			buffer,
@@ -47,8 +47,8 @@ async function step(interp: Interp, run: () => Promise<unknown>) {
 	}
 }
 
-function asksOf(buffer: ReturnType<typeof bufferTransport>): Asks {
-	return view(buffer.collect(journal), asksKind);
+function asksOf(buffer: ReturnType<typeof bufferSink>): Asks {
+	return view(buffer.entries, asksKind);
 }
 
 describe("a load that needs a login", () => {
@@ -83,8 +83,6 @@ describe("a load that needs a login", () => {
 		expect(asksOf(buffer).answered).toMatchObject({
 			"s-123": { accepted: true },
 		});
-		expect(hooks.message.run(() => undefined, buffer)).toContain(
-			'(load-mcp "acme")',
-		);
+		expect(buffer.collect(note).at(-1)?.content).toContain('(load-mcp "acme")');
 	});
 });

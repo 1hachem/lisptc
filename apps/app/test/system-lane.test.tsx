@@ -128,7 +128,7 @@ async function mount(view: React.ReactNode = <ChatView />) {
 	return host;
 }
 
-describe("the system channel", () => {
+describe("the system lane", () => {
 	it("keeps what the system told the agent out of the chat", async () => {
 		const host = await mount();
 		expect(host.textContent).toContain("write a");

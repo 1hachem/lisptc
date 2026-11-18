@@ -1,16 +1,22 @@
 import { fileURLToPath } from "node:url";
 import { replEnv } from "@repo/env/repl";
-import type { ChannelTransport } from "@repo/interpreter/channels";
-import { bufferTransport } from "@repo/interpreter/channels-host";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { setExit } from "@repo/interpreter/core-builtins";
 import { EvalException, StepHold } from "@repo/interpreter/errors";
-import { journal } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { EndOfFile } from "@repo/interpreter/objects";
+import {
+	bufferSink,
+	type Hitch,
+	hitch,
+	type Printed,
+	printed,
+	type Sink,
+} from "@repo/interpreter/journal";
+import { runAsync, runSync } from "@repo/interpreter/lisp";
+import { EndOfFile, Unspecified } from "@repo/interpreter/objects";
 import { prelude } from "@repo/interpreter/prelude";
+import { str } from "@repo/interpreter/print";
 import { Reader } from "@repo/interpreter/reader";
 import { openSession } from "@repo/interpreter/session";
-import { type Note, note, output } from "@repo/interpreter/topics";
 import type { Ask, AskChoice } from "@repo/journal-catalog/asks";
 import { openAsks, question, runAsking } from "@repo/repl/asks";
 import type { Repl } from "@repo/repl/repl";
@@ -30,12 +36,13 @@ const write = (s: string): void => {
 	process.stdout.write(s);
 };
 
-const stdoutTransport = (): ChannelTransport => ({
+const stdoutSink = (): Sink => ({
 	send(e) {
-		if (e.topic === output.name) {
-			if (e.to.includes("user")) write(String(e.payload));
-		} else if (e.topic === note.name) {
-			const n = e.payload as Note;
+		if (e.kind === printed.name) {
+			const p = e.value as Printed;
+			if (p.to.includes("user")) write(p.text);
+		} else if (e.kind === hitch.name) {
+			const n = e.value as Hitch;
 			if (n.kind === "skipped") write(`skipped ${n.text}\n`);
 		}
 		return true;
@@ -43,22 +50,39 @@ const stdoutTransport = (): ChannelTransport => ({
 });
 
 class InteractiveRepl implements Repl {
-	private currentInterp: Interp;
+	private currentInterp: ConversationInterpreter;
 	private readonly extensions = cliExtensions();
 	private readonly hooks = openSession(this.extensions);
+	private stepping = false;
+	private depth = 0;
 
 	constructor() {
 		this.currentInterp = this.freshInterp();
 	}
 
-	get interp(): Interp {
+	get interp(): ConversationInterpreter {
 		return this.currentInterp;
 	}
 
-	private freshInterp(): Interp {
-		const interp = new Interp({ extensions: this.extensions });
+	private freshInterp(): ConversationInterpreter {
+		const interp = new ConversationInterpreter({
+			extensions: this.extensions,
+		});
 		runSync(interp, prelude);
-		interp.channels.pipe(stdoutTransport());
+		interp.journal.pipe(stdoutSink());
+		const repl = this;
+		interp.hooks.evalForm.use(function* (i, form, next) {
+			if (!repl.stepping) return yield* next(i, form);
+			repl.depth++;
+			let value: unknown;
+			try {
+				value = yield* next(i, form);
+			} finally {
+				repl.depth--;
+			}
+			if (repl.depth === 0 && value !== Unspecified) write(`${str(value)}\n`);
+			return value;
+		});
 		return interp;
 	}
 
@@ -97,31 +121,43 @@ class InteractiveRepl implements Repl {
 
 	async step(code: string): Promise<readonly Ask[]> {
 		const interp = this.currentInterp;
-		const buffer = bufferTransport();
-		const detach = interp.channels.pipe(buffer);
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
+		this.stepping = true;
+		this.depth = 0;
 		try {
 			await this.hooks.evalStep.run(
 				async (ctx) => {
 					await runAsync(ctx.interp, ctx.code);
 				},
-				{ interp, code, emit: write },
+				{ interp, code, author: "user" },
 			);
 		} catch (ex) {
 			if (!(ex instanceof StepHold)) throw ex;
 		} finally {
+			this.stepping = false;
 			detach();
+			for (const { content } of buffer.collect(note)) write(`${content}\n`);
 		}
-		return openAsks(buffer.collect(journal));
+		return openAsks(buffer.entries);
 	}
 
 	private async answer(choice: AskChoice): Promise<void> {
 		const { action, values } = choice.answer;
-		await this.hooks.invoke.run(
-			() => {
-				throw new EvalException("no ui surface on this repl", action, false);
-			},
-			{ interp: this.currentInterp, action, values },
-		);
+		const interp = this.currentInterp;
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
+		try {
+			await this.hooks.invoke.run(
+				() => {
+					throw new EvalException("no ui surface on this repl", action, false);
+				},
+				{ interp, action, values },
+			);
+		} finally {
+			detach();
+			for (const { content } of buffer.collect(note)) write(`${content}\n`);
+		}
 	}
 }
 
@@ -159,8 +195,9 @@ async function attachLoop(): Promise<void> {
 		accum = "";
 		const refused = await runAsking({
 			run: async () => {
-				const { output, asks } = await client.step(code);
+				const { output, results, asks } = await client.step(code);
 				write(output);
+				for (const result of results) write(`${result}\n`);
 				return asks;
 			},
 			reply: (ask) => readLine(question(ask)),

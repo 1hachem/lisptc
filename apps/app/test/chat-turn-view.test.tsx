@@ -6,8 +6,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/chat-view.tsx";
 import { TraceLines } from "../src/components/trace-view.tsx";
 import { CallTimeline } from "../src/components/turn-intent.tsx";
-import { CHANNELS, type ChannelId } from "../src/lib/channels.ts";
 import type { ChatMessage } from "../src/lib/chat.tsx";
+import { LANES, type LaneId } from "../src/lib/lanes.ts";
 import { traceOpen } from "../src/lib/panel-ops.ts";
 import { SideTraceProvider } from "../src/lib/side-trace.tsx";
 import { TraceSourceProvider } from "../src/lib/trace-source.tsx";
@@ -384,7 +384,7 @@ describe("a call's progress", () => {
 });
 
 describe("the trace", () => {
-	it("shows the code each step ran and only what it sent back to the model, every channel on", async () => {
+	it("shows the code each step ran and only what it sent back to the model, every lane on", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
 		const text = host.textContent ?? "";
 
@@ -394,7 +394,7 @@ describe("the trace", () => {
 		expect(text).not.toContain("RESULT-VALUE");
 	});
 
-	it("marks every block a trace draws with its channel's icon, and the chat with none", async () => {
+	it("marks every block a trace draws with its lane's icon, and the chat with none", async () => {
 		const host = await mount(<TraceLines messages={MESSAGES} />);
 		const labels = (root: HTMLElement) =>
 			[...root.querySelectorAll("svg[aria-label]")].map((icon) =>
@@ -407,8 +407,8 @@ describe("the trace", () => {
 		session.messages = MESSAGES;
 		const chat = await mount(<ChatView />);
 
-		for (const channel of ["ui", "output", "model"])
-			expect(labels(chat)).not.toContain(channel);
+		for (const lane of ["ui", "output", "model"])
+			expect(labels(chat)).not.toContain(lane);
 	});
 
 	it("folds a user message and a system event to one line, unfolded in place into one message", async () => {
@@ -456,7 +456,7 @@ describe("the trace", () => {
 		expect(row?.textContent).not.toContain("▸");
 	});
 
-	it("has no errors channel, and shows what the model saw of a failed step", async () => {
+	it("has no errors lane, and shows what the model saw of a failed step", async () => {
 		const host = await mount(
 			<TraceLines
 				messages={[
@@ -573,7 +573,7 @@ describe("the trace", () => {
 		expect(host.querySelector('[data-message-id="i1"]')).toBeNull();
 	});
 
-	const CHANNEL_TRACE: ChatMessage[] = [
+	const LANE_TRACE: ChatMessage[] = [
 		{
 			id: "h1",
 			type: "human",
@@ -632,7 +632,7 @@ describe("the trace", () => {
 		},
 	];
 
-	const MARKS: Record<ChannelId, string> = {
+	const MARKS: Record<LaneId, string> = {
 		user: "make a chart",
 		assistant: "(draw-chart)",
 		output: "MODEL-MARK",
@@ -646,7 +646,7 @@ describe("the trace", () => {
 	};
 
 	async function traced() {
-		const host = await mount(<TraceLines messages={CHANNEL_TRACE} />);
+		const host = await mount(<TraceLines messages={LANE_TRACE} />);
 		const you = host.querySelector<HTMLButtonElement>(
 			'[data-trace-message="you"] > button',
 		);
@@ -660,8 +660,8 @@ describe("the trace", () => {
 		) as HTMLButtonElement;
 
 	it.each(
-		CHANNELS.map((c) => [c.id, c.label] as const),
-	)("hides the %s channel its toolbar turns off", async (id, label) => {
+		LANES.map((c) => [c.id, c.label] as const),
+	)("hides the %s lane its toolbar turns off", async (id, label) => {
 		const host = await traced();
 		expect(host.textContent).toContain(MARKS[id]);
 
@@ -672,15 +672,15 @@ describe("the trace", () => {
 		expect(host.textContent).not.toContain(MARKS[id]);
 	});
 
-	it("hides every channel at once without breaking the trace", async () => {
+	it("hides every lane at once without breaking the trace", async () => {
 		const host = await traced();
-		for (const { label } of CHANNELS)
+		for (const { label } of LANES)
 			await act(async () => toggleOf(host, label).click());
 
 		for (const mark of Object.values(MARKS))
 			expect(host.textContent).not.toContain(mark);
 		expect(host.querySelectorAll('button[aria-pressed="false"]').length).toBe(
-			CHANNELS.length,
+			LANES.length,
 		);
 	});
 });

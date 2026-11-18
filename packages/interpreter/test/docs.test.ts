@@ -1,4 +1,4 @@
-import { output } from "@repo/interpreter/topics";
+import { printed } from "@repo/interpreter/journal";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runSync } from "../src/lisp.ts";
@@ -76,8 +76,8 @@ describe("doc answers whoever asked, model included", () => {
 	it("emits the signature and description on the model channel", () => {
 		const interp = freshInterp();
 		let seen = "";
-		output.on(interp.channels, (text, e) => {
-			if (e.to.includes("model")) seen += text;
+		interp.journal.on(printed, (p) => {
+			if (p.to.includes("model")) seen += p.text;
 		});
 		runSync(interp, "(doc 'car)");
 		expect(seen).toBe(
@@ -88,8 +88,8 @@ describe("doc answers whoever asked, model included", () => {
 	it("tells the model when a name is undocumented", () => {
 		const interp = freshInterp();
 		let seen = "";
-		output.on(interp.channels, (text, e) => {
-			if (e.to.includes("model")) seen += text;
+		interp.journal.on(printed, (p) => {
+			if (p.to.includes("model")) seen += p.text;
 		});
 		runSync(interp, "(doc 'no-such-binding)");
 		expect(seen).toBe("no-such-binding: undocumented\n");

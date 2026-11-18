@@ -7,7 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { useChatSession } from "./chat.tsx";
+import { isNoteMessage, useChatSession } from "./chat.tsx";
 
 interface Mood {
 	state: StateId;
@@ -53,7 +53,7 @@ const AgentContext = createContext<Agent | null>(null);
 
 export function AgentProvider({ children }: { children: React.ReactNode }) {
 	const { lastType, isLoading, error, fresh } = useChatSession((state) => ({
-		lastType: state.messages[state.messages.length - 1]?.type,
+		lastType: state.messages.filter((m) => !isNoteMessage(m)).at(-1)?.type,
 		isLoading: state.isLoading,
 		error: state.error,
 		fresh: state.fresh,

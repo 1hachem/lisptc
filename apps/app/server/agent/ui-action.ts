@@ -42,7 +42,7 @@ export const uiAction = {
 		if (messageId !== undefined)
 			await recordEntries(convex, chatId, messageId, entries);
 		console.log(
-			`ui action chat=${chatId} action=${action}${result.message ? " sent" : ""}${result.error ? " error" : ""}`,
+			`ui action chat=${chatId} action=${action}${result.error ? " error" : ""}`,
 		);
 		return Response.json(reply);
 	},

@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "repl": "node --no-warnings --experimental-transform-types src/cli.ts",
-    "repl:attach": "node --no-warnings --experimental-transform-types src/cli.ts --attach",
+    "repl:attach": "node --no-warnings --experimental-transform-types --env-file-if-exists=../../.env src/cli.ts --attach",
     "repl:kill": "node --no-warnings --experimental-transform-types src/cli.ts --kill"
   },
   "dependencies": {

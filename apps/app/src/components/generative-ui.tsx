@@ -5,7 +5,6 @@ import { type PropsOf, type Tag, widgetOf } from "@repo/ui-catalog";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { reportIssue } from "../lib/analytics.tsx";
-import { useChatSession } from "../lib/chat.tsx";
 import { startPanelDrag } from "../lib/panel-ops.ts";
 import { usePanels } from "../lib/panels.tsx";
 import { postUiAction } from "../lib/ui-action.ts";
@@ -298,7 +297,6 @@ function View({
 	node: ViewNode;
 	expired: boolean;
 }) {
-	const send = useChatSession((state) => state.send);
 	const [output, setOutput] = useState("");
 	const [failed, setFailed] = useState(false);
 	const [busy, setBusy] = useState(false);
@@ -311,7 +309,6 @@ function View({
 				const data = await postUiAction(chatId, action, values);
 				setOutput(typeof data.output === "string" ? data.output : "");
 				setFailed(Boolean(data.error));
-				if (data.message) void send(data.message);
 			} catch (ex) {
 				reportIssue(ex, { $exception_source: "ui action" });
 				setFailed(true);

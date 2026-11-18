@@ -1,6 +1,5 @@
 import { compare, isNumeric } from "@repo/interpreter/arith";
 import { EvalException, messageOf } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
 import { type Interp, runSync, type StateCodec } from "@repo/interpreter/lisp";
 import {
 	arrayToList,
@@ -91,7 +90,7 @@ function tracker(interp: Interp, host: SemanticHost): Track {
 			ms?: number,
 			error?: unknown,
 		): void =>
-			record(interp.channels, activityKind, {
+			interp.journal.write(activityKind, {
 				kind: "semantic",
 				icon: "meaning",
 				label: form,

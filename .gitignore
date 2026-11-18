@@ -36,3 +36,5 @@ next-env.d.ts
 packages/backend/.env.local
 
 .env.local
+
+.ua/

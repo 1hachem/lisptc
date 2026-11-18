@@ -209,27 +209,29 @@ describe("driving the view", () => {
 });
 
 describe("handing a turn back to the agent", () => {
-	it("returns a handler's message beside its view", async () => {
+	it("returns a handler's message as a request beside its view", async () => {
 		const r = memoryRepl();
 		await r.evalOutput(`
 			(ui/render (ui/form (lambda (v) (ui/render (ui/text "asking…")) (ui/send "find" (cdr (assoc "q" v))))
 				(ui/input :name "q") :submit "ask"))
 		`);
 		const out = await r.invokeUi("a1", { q: "auth" });
-		expect(out.message).toBe("find auth");
+		expect(out.notes).toEqual([
+			{ role: "user", source: "a1", content: "find auth" },
+		]);
 		expect(shownView(out)).toBeDefined();
 	});
 
 	it("reports no message for a click that only rendered", async () => {
 		const r = memoryRepl();
 		await r.evalOutput(PANEL);
-		expect((await r.invokeUi("a1")).message).toBeUndefined();
+		expect((await r.invokeUi("a1")).notes).toEqual([]);
 	});
 
-	it("does not carry a send from an ordinary eval into the next click", async () => {
+	it("delivers no send from an ordinary eval, then or on the next click", async () => {
 		const r = memoryRepl();
-		expect((await r.evalOutput('(ui/send "stray")')).message).toBe("stray");
+		expect((await r.evalOutput('(ui/send "stray")')).notes).toEqual([]);
 		await r.evalOutput(PANEL);
-		expect((await r.invokeUi("a1")).message).toBeUndefined();
+		expect((await r.invokeUi("a1")).notes).toEqual([]);
 	});
 });

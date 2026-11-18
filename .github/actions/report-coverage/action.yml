@@ -1,0 +1,69 @@
+name: Coverage
+description: Merge the test coverage, report it on the PR, and on main publish the badge and record the test timings
+
+inputs:
+  runs:
+    description: Directory holding the turbo run summaries of every shard
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Merge coverage
+      shell: bash
+      run: pnpm coverage:merge
+
+    - name: Report coverage on the PR
+      if: github.event_name == 'pull_request'
+      uses: davelosert/vitest-coverage-report-action@v2
+      with:
+        json-summary-path: ./coverage/coverage-summary.json
+        json-final-path: ./coverage/coverage-final.json
+
+    - name: Publish the coverage badge
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      shell: bash
+      env:
+        HUSKY: "0"
+      run: |
+        dir="$RUNNER_TEMP/badges"
+        if git ls-remote --exit-code --heads origin badges >/dev/null; then
+          git fetch origin badges
+          git worktree add -B badges "$dir" origin/badges
+        else
+          git worktree add --orphan -b badges "$dir"
+        fi
+        cp coverage/badge.json "$dir/coverage.json"
+        cp coverage/badge-interpreter.json "$dir/coverage-interpreter.json"
+        cd "$dir"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add coverage.json coverage-interpreter.json
+        if ! git diff --cached --quiet; then
+          git commit -m "chore: update the coverage badge"
+          git push origin badges
+        fi
+
+    - name: Record the test timings
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      shell: bash
+      run: |
+        pnpm -s test:shards record test-timings.json "${{ inputs.runs }}" > "$RUNNER_TEMP/test-timings.json"
+        mv "$RUNNER_TEMP/test-timings.json" test-timings.json
+
+    - name: Save the test timings
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v4
+      with:
+        path: test-timings.json
+        key: test-timings-${{ github.run_id }}
+
+    - name: Delete the superseded test timings
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh cache list --repo "$GITHUB_REPOSITORY" --key test-timings- --limit 100 --json id,key \
+          --jq '.[] | select(.key != "test-timings-${{ github.run_id }}") | .id' \
+          | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"

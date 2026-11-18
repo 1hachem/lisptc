@@ -1,6 +1,6 @@
+import { print } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
 import { newSym } from "@repo/interpreter/objects";
-import { output } from "@repo/interpreter/topics";
 import { describe, expect, it } from "vitest";
 import { memoryRepl } from "./helpers.ts";
 
@@ -9,7 +9,7 @@ function emittingAfterTheStep(interp: Interp): void {
 		newSym("later"),
 		interp.makeBuiltIn("later", 0, () => {
 			setTimeout(() =>
-				output.emit(interp.channels, {
+				print(interp.journal, {
 					user: "signed out\n",
 					model: "signed out\n",
 				}),

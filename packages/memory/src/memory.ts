@@ -1,8 +1,7 @@
 import { quotient } from "@repo/interpreter/arith";
-import type { Channels } from "@repo/interpreter/channels";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
-import { record } from "@repo/interpreter/journal";
+import type { Journal } from "@repo/interpreter/journal";
 import {
 	detachedState,
 	type Interp,
@@ -205,7 +204,7 @@ const stepCodec: StateCodec<Step> = {
 };
 
 export class MemoryBank {
-	private channels?: Channels;
+	private journal?: Journal;
 	private depth = 0;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
@@ -247,8 +246,8 @@ export class MemoryBank {
 		return this.clock.now();
 	}
 
-	attach(channels: Channels): void {
-		this.channels = channels;
+	attach(journal: Journal): void {
+		this.journal = journal;
 	}
 
 	reset(): void {
@@ -431,7 +430,7 @@ export class MemoryBank {
 			pending: step.pending + line,
 			surfaced: [...step.surfaced, surfaced],
 		});
-		record(this.channels, memoryKind, surfaced);
+		this.journal?.write(memoryKind, surfaced);
 	}
 }
 
@@ -474,22 +473,27 @@ function startText(memories: FiredMemory[]): string {
 
 export const memorySlot = slot<MemoryBank>("memory");
 
+const SOURCE = "memory";
+
 function memorySession(bank: MemoryBank): (hooks: SessionHooks) => void {
 	return (hooks) => {
 		hooks.fill(memorySlot, bank);
 		hooks.beginStep.use(function* (ctx, next) {
+			const { conversation } = ctx.interp;
 			const started = yield* bank.start(ctx.interp);
-			if (started.length > 0) ctx.emit(startText(started));
+			if (started.length > 0) conversation.append(SOURCE, startText(started));
 			const heard = yield* bank.hear(ctx.interp);
-			if (heard.length > 0) ctx.emit(heardText(heard));
+			if (heard.length > 0) conversation.append(SOURCE, heardText(heard));
 			yield* next(ctx);
 		});
 		hooks.evalStep.use(async (ctx, next) => {
-			ctx.emit((await driveAsync(bank.beginStep(ctx.code, ctx.interp))).value);
+			const before = (await driveAsync(bank.beginStep(ctx.code, ctx.interp)))
+				.value;
 			try {
 				await next(ctx);
 			} finally {
-				ctx.emit((await driveAsync(bank.endStep())).value);
+				const after = (await driveAsync(bank.endStep())).value;
+				ctx.interp.conversation.append(SOURCE, before + after);
 			}
 		});
 	};
@@ -550,7 +554,7 @@ function memoryToAlist(bank: MemoryBank, memory: Memory): unknown {
 
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
-	bank.attach(interp.channels);
+	bank.attach(interp.journal);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
 		yield* bank.onCall(i, form);

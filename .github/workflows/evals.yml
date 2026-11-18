@@ -28,8 +28,6 @@ jobs:
       - name: Setup pnpm and Node.js
         uses: ./.github/actions/setup
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       # The action takes one secret-path per step and has no multi-path input,
       # so each path the evals need is its own step.
