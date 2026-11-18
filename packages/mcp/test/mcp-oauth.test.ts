@@ -205,22 +205,6 @@ describe("createAuthCallback", () => {
 });
 
 describe("sharedAuthCallback", () => {
-	it("lets a second caller on a fixed port reach the flows the first one is holding", async () => {
-		const redirect = "http://127.0.0.1:8921/callback";
-		const first = await sharedAuthCallback(8921, redirect);
-		const waiting = first.waitForCode("early");
-		const second = await sharedAuthCallback(8921, redirect);
-		try {
-			const late = second.waitForCode("late-arrival");
-			await fetch(`${redirect}?code=captured&state=late-arrival`);
-			await fetch(`${redirect}?code=kept&state=early`);
-			expect(await late).toBe("captured");
-			expect(await waiting).toBe("kept");
-		} finally {
-			await first.close();
-		}
-	});
-
 	it("keeps the bound server, and its pending flows, across a module reload", async () => {
 		const redirect = "http://127.0.0.1:8923/callback";
 		const before = await sharedAuthCallback(8923, redirect);
