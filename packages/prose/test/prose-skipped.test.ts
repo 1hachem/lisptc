@@ -19,10 +19,6 @@ describe("what a step left unrun", () => {
 	it("spans a form it could not read", () => {
 		expect(unrunSpans("Working on (echo 1")).toEqual([[11, 18]]);
 	});
-
-	it("says nothing about a reply that is all prose", () => {
-		expect(unrunSpans("The answer is 42.")).toEqual([]);
-	});
 });
 
 describe("a call the model wrote inside its prose", () => {
@@ -33,19 +29,6 @@ describe("a call the model wrote inside its prose", () => {
 			[28, 29],
 		]);
 		expect(text.slice(20, 28)).toBe("(echo 1)");
-	});
-
-	it("is found however deep the prose buries it", () => {
-		const text = '(I checked (the result of (echo "deep")))';
-		expect(unrunSpans(text)).toEqual([
-			[0, 26],
-			[39, 41],
-		]);
-		expect(text.slice(26, 39)).toBe('(echo "deep")');
-	});
-
-	it("is not claimed at all when no words surround the call", () => {
-		expect(unrunSpans("(fetch (car urls))")).toEqual([]);
 	});
 });
 

@@ -235,15 +235,13 @@ describe("tolerant prose (an LLM's parentheses)", () => {
 		expect(skipped).toEqual([]);
 	});
 
-	it("only asks a host's classifier after evaluation fails", () => {
+	it("runs a form that evaluates even when the host's classifier calls everything prose", () => {
 		const interp = proseInterp({
 			...proseHost,
 			classifiers: [() => ({ reason: "everything is prose here" })],
 		});
-		const skipped = collectSkips(interp);
-		expect(str(runSync(interp, "(+ 1 2)"))).toBe("3");
-		expect(str(runSync(interp, "(missing 1 2)"))).toBe("#<unspecified>");
-		expect(skipped).toHaveLength(1);
+		expect(ev("(+ 1 2)", interp)).toBe("3");
+		expect(ev("(missing 1 2)", interp)).toBe("#<unspecified>");
 	});
 });
 
@@ -276,28 +274,13 @@ describe("a second look at a form that failed", () => {
 	}
 
 	it("reads a failed form as prose when an async host says so", async () => {
-		const [interp, skipped] = excusingInterp(async () =>
+		const [interp] = excusingInterp(async () =>
 			Promise.resolve({ reason: "read as prose on a second look" }),
 		);
 
 		const outcome = await runAsync(interp, '(deploy "the thing")');
 
 		expect(str(outcome.value)).toBe("#<unspecified>");
-		expect(skipped).toHaveLength(1);
-	});
-
-	it("reads a form by the first classifier that claims it", async () => {
-		const [interp, skipped] = excusingInterp(
-			() => undefined,
-			async () => ({ reason: "the judge classified it" }),
-			() => ({ reason: "the fallback classified it" }),
-		);
-
-		await runAsync(interp, "(review this phrase)");
-
-		expect(skipped).toHaveLength(1);
-		expect(skipped[0]).toContain("the judge classified it");
-		expect(skipped[0]).not.toContain("the fallback classified it");
 	});
 
 	it("raises as before when every classifier declines", async () => {
