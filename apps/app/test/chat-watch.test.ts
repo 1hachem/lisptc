@@ -31,10 +31,12 @@ const human: ChatMessage = { id: "h", type: "human", content: "hi" };
 const ask: ChatMessage = { id: "ask", type: "tool", content: "r is waiting" };
 
 describe("what the watch stream shows", () => {
-	test("reads an event split across chunks", () => {
+	test("reads an event split across chunks at any point", () => {
 		const whole = sse("values", { messages: [human] });
-		const watched = watch(whole.slice(0, 9), whole.slice(9));
-		expect(shownMessages(watched)).toEqual([human]);
+		for (let cut = 1; cut < whole.length; cut++)
+			expect(
+				shownMessages(watch(whole.slice(0, cut), whole.slice(cut))),
+			).toEqual([human]);
 	});
 
 	test("follows a turn it did not start through its statuses", () => {

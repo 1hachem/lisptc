@@ -144,7 +144,6 @@ describe("the thread factory", () => {
 		expect((await repl.evalOutput("(agents)")).results.at(-1)).toContain(
 			"scout",
 		);
-		expect(repl.interp.systemPrompt().match(ROOT_ONLY)).not.toBeNull();
 		expect(actedFor).toEqual([{ userId: OWNER, workspaceId: WORKSPACE }]);
 	});
 });

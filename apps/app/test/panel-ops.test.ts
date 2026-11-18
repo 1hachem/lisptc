@@ -32,10 +32,26 @@ function transfer(): DataTransfer {
 }
 
 describe("dragging a file into the panel", () => {
-	it("carries the file across as the tab it opens", () => {
-		const data = transfer();
-		startPanelDrag(data, report);
-		expect(readPanelDrag(data)?.content).toEqual(report);
+	it("opens the dragged file once however often it is dropped", () => {
+		const drop = (content: PanelContent) => {
+			const data = transfer();
+			startPanelDrag(data, content);
+			const dragged = readPanelDrag(data);
+			if (!dragged) throw new Error("the drag carried nothing");
+			return {
+				op: "open" as const,
+				tab: dragged.id,
+				split: "here" as const,
+				content: dragged.content,
+			};
+		};
+		const other: PanelContent = { ...report, name: "q4.pdf" };
+		const layout = applyPanelOps(emptyLayout<PanelContent>(), [
+			drop(report),
+			drop(report),
+			drop(other),
+		]);
+		expect(allTabs(layout).map((t) => t.content)).toEqual([report, other]);
 	});
 
 	it("reads nothing from a drag that carries something else", () => {
