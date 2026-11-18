@@ -3,8 +3,7 @@ import { driveSync, settled } from "@repo/interpreter/drive";
 import { effect } from "@repo/interpreter/effects";
 import { EvalException } from "@repo/interpreter/errors";
 import { bufferSink, type JournalBuffer } from "@repo/interpreter/journal";
-import { runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import {
 	type AgentTurn,
@@ -22,7 +21,7 @@ function fresh() {
 	const clock = { at: 1000, now: () => clock.at };
 	const extension = intentExtension({ ...intentHost, clock });
 	const interp = new ConversationInterpreter({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	const hooks = newSessionHooks();
 	extension.session?.(hooks);
 	return { interp, hooks, clock };

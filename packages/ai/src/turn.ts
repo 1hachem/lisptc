@@ -24,6 +24,7 @@ import {
 	lineRecord,
 	mailLine,
 	type PostedLine,
+	ranByUser,
 } from "./line.ts";
 import type { Mail } from "./mailbox.ts";
 import { MAX_STEPS, systemPromptFor } from "./prompts/lisp.ts";
@@ -168,7 +169,7 @@ async function* takeSteers({
 			continue;
 		}
 		const { message, quiet, entries, notes } = evaluated;
-		lines.push(line, { kind: "result", text: message.content });
+		lines.push(line, ranByUser(message.content));
 		if (!quiet) taken += 1;
 		yield { type: "evaluated", message };
 		yield* recorded(entries);
@@ -451,6 +452,16 @@ export async function* runAgentTurn(
 	options: TurnOptions,
 ): AsyncGenerator<TurnEvent> {
 	const turn = newTurn(options, messages);
+	for await (const event of playTurn(turn, options)) {
+		if (event.type === "entry") turn.telemetry.entry(event.entry);
+		yield event;
+	}
+}
+
+async function* playTurn(
+	turn: Turn,
+	options: TurnOptions,
+): AsyncGenerator<TurnEvent> {
 	const { repl, signal } = turn;
 	const startedAt = Date.now();
 

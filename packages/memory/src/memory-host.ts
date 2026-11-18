@@ -10,7 +10,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { memoryEnv } from "@repo/env/memory";
 import { EvalException } from "@repo/interpreter/errors";
-import { type Awaitable, systemClock } from "@repo/shared/host";
+import {
+	type Awaitable,
+	type PromptSource,
+	systemClock,
+} from "@repo/shared/host";
 import { filePrompt } from "@repo/shared/host-node";
 import { memorySearchEngine } from "./memory-search.ts";
 import {
@@ -173,9 +177,14 @@ export function scopedMemoryStore(scope?: string): MemoryStore {
 }
 
 const memoryPrompt = filePrompt(new URL("./memory.ptc", import.meta.url));
-const memoryMemories = filePrompt(
+const languageMemories = filePrompt(
+	new URL("./lang.memories.ptc", import.meta.url),
+);
+const ownMemories = filePrompt(
 	new URL("./memory.memories.ptc", import.meta.url),
 );
+const memoryMemories: PromptSource = () =>
+	`${languageMemories().trimEnd()}\n\n${ownMemories()}`;
 
 export function memoryHostFor(scope?: string): MemoryHost {
 	return {

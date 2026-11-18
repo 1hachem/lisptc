@@ -70,7 +70,7 @@ export function promisesExtension(host: PromisesHost): InterpExtension {
 				return { reported };
 			});
 		},
-		{ prompt: host.prompt(), memories: host.memories() },
+		{ prompt: host.prompt(), postlude: host.memories() },
 	);
 }
 

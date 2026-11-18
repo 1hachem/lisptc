@@ -186,6 +186,6 @@ export function registerOnboarding(
 export function onboardingExtension(host: OnboardingHost): InterpExtension {
 	return Object.assign(
 		(interp: Interp): void => registerOnboarding(interp, host.store),
-		{ prompt: host.prompt(), memories: host.memories() },
+		{ prompt: host.prompt(), postlude: host.memories() },
 	);
 }

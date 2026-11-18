@@ -1,9 +1,8 @@
 import type { Conversation } from "@repo/interpreter/conversation";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { type List, listToArray, newSym } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { viewKind } from "@repo/journal-catalog/view";
 import {
@@ -109,7 +108,7 @@ function fresh(): {
 	const views = new MemoryViewStore();
 	const host = uiHostFor({ panel, views });
 	const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, surface, ui: collector(interp, views), ops };
 }
 
@@ -734,7 +733,7 @@ describe("the panel beside the chat", () => {
 		const interp = new Interp({
 			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		return { ops, ev: (code: string) => str(runSync(interp, code)) };
 	}
 
@@ -844,7 +843,7 @@ describe("the widget form table", () => {
 	});
 
 	it("ships one memory per widget, carrying its signature", () => {
-		const { memories } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		const { postlude } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
 		const { interp } = fresh();
 		runSync(
 			interp,
@@ -852,7 +851,7 @@ describe("the widget form table", () => {
 (defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
 (defmacro area (name &rest declared) nil)`,
 		);
-		runSync(interp, memories ?? "");
+		runSync(interp, postlude ?? "");
 		const bodies = new Map(
 			listToArray(interp.getGlobal(newSym("shipped")) as List).map(
 				(entry) => listToArray(entry as List) as [string, string],
@@ -871,7 +870,7 @@ describe("the view store", () => {
 		const views = new MemoryViewStore();
 		const host = uiHostFor({ panel: panelOf([]).panel, views });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-		runSync(interp, prelude);
+		boot(interp);
 		return { surface, views, interp, ui: collector(interp, views) };
 	}
 
@@ -1023,7 +1022,7 @@ describe("tours", () => {
 		const views = new MemoryViewStore();
 		const host = uiHostFor({ panel: panelOf([]).panel, views, tours });
 		const interp = new Interp({ extensions: [uiExtension(host, { surface })] });
-		runSync(interp, prelude);
+		boot(interp);
 		return {
 			surface,
 			tours,
@@ -1149,7 +1148,7 @@ describe("tours", () => {
 		const interp = new Interp({
 			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		expect(str(runSync(interp, "(ui/trace)"))).toBe("t");
 		expect(str(runSync(interp, "(ui/trace nil)"))).toBe("t");
 		expect(str(runSync(interp, "(ui/trace t)"))).toBe("t");
@@ -1161,7 +1160,7 @@ describe("tours", () => {
 		const interp = new Interp({
 			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		expect(str(runSync(interp, "(ui/trace)"))).toBe("nil");
 	});
 
@@ -1170,7 +1169,7 @@ describe("tours", () => {
 		const interp = new Interp({
 			extensions: [uiExtension(uiHostFor({ panel }))],
 		});
-		runSync(interp, prelude);
+		boot(interp);
 		expect(str(runSync(interp, '(ui/open "account" :split "right")'))).toBe(
 			'"page:account"',
 		);
@@ -1199,7 +1198,7 @@ describe("tours", () => {
 	});
 
 	function shipped(): Map<string, string> {
-		const { memories } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
+		const { postlude } = uiExtension(uiHostFor({ panel: panelOf([]).panel }));
 		const { interp } = touring();
 		runSync(
 			interp,
@@ -1207,7 +1206,7 @@ describe("tours", () => {
 (defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
 (defmacro area (name &rest declared) nil)`,
 		);
-		runSync(interp, memories ?? "");
+		runSync(interp, postlude ?? "");
 		return new Map(
 			listToArray(interp.getGlobal(newSym("shipped")) as List).map(
 				(entry) => listToArray(entry as List) as [string, string],

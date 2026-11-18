@@ -672,4 +672,12 @@ export const prelude = `
 (defmacro unwind-protect (form &rest cleanup)
   "Evaluate form and return its value, then run cleanup forms however form exits: normally, by an error, a throw, a return-from or a loop break."
   \`(_unwind-protect (lambda () ,form) (lambda () ,@cleanup)))
+
+(defmacro memory (key &rest declared)
+  "A declaration in a .memories.ptc file an extension ships. Here it does nothing; an extension that files memories defines it."
+  nil)
+
+(defmacro area (name &rest declared)
+  "A declaration in a .memories.ptc file an extension ships. Here it does nothing; an extension that files memories defines it."
+  nil)
 `;

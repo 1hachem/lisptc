@@ -21,6 +21,8 @@ const recognized = z.object({
 	scores: z.record(z.string(), z.number().min(0).max(1)),
 	fired: z.array(firedMemory).optional(),
 	error: z.string().optional(),
+	failedAreas: z.array(z.string()).optional(),
+	latencyMs: z.number().nonnegative().optional(),
 });
 
 export type Recognized = z.infer<typeof recognized>;

@@ -1,7 +1,6 @@
 import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, settled } from "@repo/interpreter/drive";
-import { Interp, runAsync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { bootAsync, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
 import { type FunctionReference, getFunctionName } from "convex/server";
@@ -29,7 +28,7 @@ async function served(): Promise<(code: string) => Promise<string>> {
 	const interp = new Interp({
 		extensions: await workspaceExtensions(WORKSPACE, offline),
 	});
-	await runAsync(interp, prelude);
+	await bootAsync(interp);
 	return async (code) => str((await runAsync(interp, code)).value, false);
 }
 
@@ -99,7 +98,7 @@ describe("the agent the app serves", () => {
 		);
 		expect(
 			await ev(
-				"(filter (lambda (entry) (not (stringp (car (last entry))))) *memories*)",
+				`(filter (lambda (form) (and (string-prefix? "internal/" (cadr form)) (not (stringp (nth 3 form))))) (memory/_every))`,
 			),
 		).toBe("nil");
 	});
@@ -131,7 +130,7 @@ describe("the agent the app serves", () => {
 			desktop,
 		});
 		const interp = new ConversationInterpreter({ extensions });
-		await runAsync(interp, prelude);
+		await bootAsync(interp);
 		const hooks = openSession(extensions);
 		const step = () =>
 			driveAsync(hooks.beginStep.run(() => settled(undefined), { interp }));

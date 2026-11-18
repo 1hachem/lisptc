@@ -105,7 +105,7 @@ export interface ThreadScope {
 }
 
 function loopMemories(): InterpExtension {
-	return Object.assign(() => undefined, { memories: LOOP_MEMORIES });
+	return Object.assign(() => undefined, { postlude: LOOP_MEMORIES });
 }
 
 export async function workspaceExtensions(

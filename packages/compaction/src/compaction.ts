@@ -908,7 +908,7 @@ export function compactionExtension(
 		{
 			compactor,
 			prompt: host.prompt(),
-			memories: host.memories(),
+			postlude: host.memories(),
 			session: compactionSession(compactor),
 		},
 	);

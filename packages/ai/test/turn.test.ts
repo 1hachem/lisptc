@@ -421,7 +421,7 @@ describe("the agent turn", () => {
 		expect(seen[1].messages.at(-2)?.content).toMatch(/lisptc>$/);
 	});
 
-	test("a steer's lisp runs when the steer is taken, and the model reads its result as REPL output after the steer", async () => {
+	test("a steer's lisp runs when the steer is taken, and the model reads its result as a lisp-repl note after the steer", async () => {
 		script = [[{ text: "(+ 1 2)" }], [{ text: "done." }]];
 		const pending = [
 			{ kind: "user" as const, id: "s1", text: "(+ 40 2)", forms: true },
@@ -436,7 +436,7 @@ describe("the agent turn", () => {
 		});
 		expect(seen[1].messages.slice(-2).map((m) => m.content)).toEqual([
 			"(+ 40 2)",
-			"(no output)\nlisptc>",
+			"from lisp-repl:\nthe user ran the code in their message above:\n\n(no output)",
 		]);
 	});
 

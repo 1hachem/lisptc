@@ -1,5 +1,4 @@
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { describe, expect, it } from "vitest";
 import { onboardingExtension } from "../src/onboarding.ts";
@@ -36,7 +35,7 @@ function fresh(store: OnboardingStore = new VolatileOnboardingStore()) {
 	const interp = new Interp({
 		extensions: [onboardingExtension(onboardingHostFor(store))],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, store };
 }
 
@@ -139,14 +138,14 @@ describe("onboarding scripts", () => {
 
 	it("stores the example its memory shows", async () => {
 		const { interp, store } = fresh();
-		const { memories } = onboardingExtension(onboardingHostFor(store));
+		const { postlude } = onboardingExtension(onboardingHostFor(store));
 		runSync(
 			interp,
 			`(setq shipped nil)
 (defmacro memory (key &rest declared) \`(setq shipped (cons (list ,key ,(car (last declared))) shipped)))
 (defmacro area (name &rest declared) nil)`,
 		);
-		runSync(interp, memories ?? "");
+		runSync(interp, postlude ?? "");
 		const body = str(
 			runSync(
 				interp,

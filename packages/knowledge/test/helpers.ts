@@ -1,5 +1,4 @@
-import { Interp, runAsync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { bootAsync, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import type { AttachedFile } from "@repo/shared/files";
 import { view } from "@repo/shared/journal";
@@ -41,7 +40,7 @@ export async function world(
 			),
 		],
 	});
-	await runAsync(interp, prelude);
+	await bootAsync(interp);
 	const shown: AttachedFile[] = [];
 	interp.journal.onAny((entry) =>
 		shown.push(...view([entry], attachmentsKind).flat()),

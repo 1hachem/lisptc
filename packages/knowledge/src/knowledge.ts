@@ -90,7 +90,7 @@ export function knowledgeExtension(host: KnowledgeHost): KnowledgeExtension {
 		{
 			asks: [...KNOWLEDGE_ASKS, ...ATTACHMENT_ASKS, ...BIN_ASKS],
 			prompt: host.prompt(),
-			memories: host.memories(),
+			postlude: host.memories(),
 			session: attachSession,
 		},
 	);

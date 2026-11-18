@@ -65,7 +65,7 @@ export function semanticExtension(host: SemanticHost): InterpExtension {
 		(interp: Interp): void => registerSemantic(interp, host),
 		{
 			prompt: host.prompt(),
-			memories: host.memories(),
+			postlude: host.memories(),
 		},
 	);
 }

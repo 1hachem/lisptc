@@ -1,6 +1,5 @@
 import { bufferSink } from "@repo/interpreter/journal";
-import { Interp, runAsync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { bootAsync, Interp, runAsync } from "@repo/interpreter/lisp";
 import {
 	type ActivityEntry,
 	activityKind,
@@ -46,7 +45,7 @@ async function activityOf(
 		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
-	await runAsync(interp, prelude);
+	await bootAsync(interp);
 	const buffer = bufferSink();
 	const detach = interp.journal.pipe(buffer);
 	try {

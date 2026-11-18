@@ -1,0 +1,80 @@
+lisptc — semantic: the % forms, judged by meaning instead of by value.
+Needs OPENROUTER_API_KEY in the top-level .env. Send one form at a time
+and the REPL prints its value.
+
+A % in front of a plain form asks the same question by meaning.
+
+Probabilities: a yes/no question answered with a number from 0 to 1,
+so you set the threshold.
+(%p "I was charged twice, please give my money back" "is a refund request")
+(%p "the app crashes when I open settings" "is a refund request")
+
+%p-each asks every item in one call.
+(%p-each '("love it" "worst purchase ever" "it is fine") "is a complaint")
+
+Picking: %choose returns the option exactly as written. :none lets it
+refuse every option, and :min sets how sure it must be.
+(%choose "the app crashes when I open settings" '(:billing :technical :other))
+(%choose "what a lovely sunset" '(:billing :technical) :none :unsure :min 0.6)
+
+Rating: %score is 0 (very low) to 4 (very high) , or your own levels.
+(%score "the server is down and customers cannot pay" "urgency")
+(%score "can you change my avatar color" "urgency" '("can wait" "today" "right now"))
+
+Predicates give t or nil. Equal values and numbers answer without a call.
+(%= "Hi there!" "Hello!")
+(%= 2 2.0)
+
+:context compares by one aspect only.
+(%= "Get out." "Please leave." :context "politeness")
+(%< "a cat" "a horse" :by "size")
+(%is-a '(:name "Ada" :born 1815) "person data")
+
+%enough? returning nil means ask the user rather than guess.
+(%enough? '("from Paris" "to Tokyo") "to book the flight")
+
+Lists: the whole list goes in one call.
+(setq animals '("granite" "golden retriever" "oak tree" "tabby cat"))
+(%find "a pet" animals)
+(%filter "a pet" animals)
+(%count-if "alive" animals)
+
+(setq tickets
+  '("typo on the pricing page"
+    "checkout fails for every customer"
+    "dark mode would be nice"))
+(%sort tickets :by "urgency" :desc t)
+(%max tickets :by "impact on revenue")
+
+Branching: one call picks the clause, and its body runs as plain Lisp.
+(defun route (ticket)
+  (%cond ticket
+    ("asks for a refund" :refund)
+    ("reports a bug" :bug)
+    (t :escalate)))
+(route "you billed me for a plan I cancelled, I want it back")
+(route "the export button does nothing")
+(%case "38 degrees and no cloud" (:hot "stay in") (:mild "walk") (t "check again"))
+
+Embeddings: meaning as numbers. %similarity is a cosine, near 1 for
+the same meaning.
+(length (%embed "a refund request"))
+(%similarity "I want my money back" "please refund me")
+(%similarity "I want my money back" "the weather is nice")
+
+The first of two near-duplicates is kept.
+(%remove-duplicates '("reset my password" "I forgot my password" "cancel my plan"))
+(%cluster '("refund please" "charged twice" "app crashes" "login loops forever"))
+(head (%sort tickets :near "payments are broken") 1)
+(%outliers '("apple" "banana" "cherry" "carburetor"))
+
+With :examples, %choose picks the option whose example is nearest,
+with no probability call.
+(%choose "my card was declined" '(:billing :technical)
+  :examples '((:billing "I was charged twice") (:technical "the app crashes")))
+
+Fallback: a % call can time out or fail, so guard the costly guesses.
+(try
+  (%p "ship it?" "is safe to deploy" :timeout 1)
+  (catch (e)
+    0))

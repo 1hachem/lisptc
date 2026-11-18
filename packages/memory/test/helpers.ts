@@ -1,6 +1,4 @@
-import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { str } from "@repo/interpreter/print";
-import { LANGUAGE_MEMORIES } from "@repo/interpreter/source";
 import { memoryHost } from "../src/memory-host.ts";
 import {
 	type Memory,
@@ -10,13 +8,10 @@ import {
 	memoryToSource,
 } from "../src/ports.ts";
 
-export const bareHost: MemoryHost = { ...memoryHost, memories: () => "" };
-
-export class MemoryInterp extends ConversationInterpreter {
-	override builtinMemories(): readonly string[] {
-		return super.builtinMemories().filter((text) => text !== LANGUAGE_MEMORIES);
-	}
-}
+export const bareHost: MemoryHost = {
+	...memoryHost,
+	memories: () => "",
+};
 
 export function written(memory: Memory): MemoryWrite {
 	return {

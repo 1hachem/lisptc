@@ -5,9 +5,8 @@ import {
 	snapshot,
 } from "@repo/interpreter/image";
 import { bufferSink, type Printed, printed } from "@repo/interpreter/journal";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
+import { boot, Interp, runAsync, runSync } from "@repo/interpreter/lisp";
 import { type List, listToArray, newSym } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { newSessionHooks } from "@repo/interpreter/session";
 import { activityKind } from "@repo/journal-catalog/activity";
@@ -98,7 +97,7 @@ function session(threads?: FakeThreads) {
 		}),
 	);
 	const interp = new Interp({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	return { interp, extension, folder };
 }
 
@@ -647,7 +646,7 @@ describe("a spawn or a send", () => {
 function subAgent() {
 	const extension = subAgentExtension(subAgentHost());
 	const interp = new Interp({ extensions: [extension] });
-	runSync(interp, prelude);
+	boot(interp);
 	const hooks = newSessionHooks();
 	extension.session?.(hooks);
 	const answer = (code: string) => hooks.answer.run((_i, c) => c, interp, code);
@@ -664,7 +663,7 @@ describe("the sub-agent extension", () => {
 (setq area (macro (name &rest _) (list 'setq 'areas (list 'cons name 'areas))))
 (setq memory (macro (key &rest _) (list 'setq 'keys (list 'cons key 'keys))))`,
 		);
-		runSync(interp, subAgentExtension(subAgentHost()).memories ?? "");
+		runSync(interp, subAgentExtension(subAgentHost()).postlude ?? "");
 		expect(str(interp.getGlobal(newSym("areas")))).toBe('("sub-agent")');
 		const keys = listToArray(interp.getGlobal(newSym("keys")) as List);
 		expect(keys.length).toBeGreaterThan(0);

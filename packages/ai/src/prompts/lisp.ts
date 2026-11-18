@@ -25,6 +25,7 @@ LANGUAGE AND MEMORY:
 15. Read-only globals: \`conversation\`, \`user-messages\`, \`assistant-messages\`, \`steps-taken\`. Exact earlier text, long numbers, ids, links: read from them, never retype. [internal/ai/conversation]
 16. Lisp in thinking never runs.
 17. LEARN FROM EVERY MISTAKE: store fix with \`memory/remember\` before moving on.
+
 `;
 
 export function systemPromptFor(interp: Interp): string {

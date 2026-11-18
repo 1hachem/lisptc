@@ -186,7 +186,7 @@ export function intentExtension(host: IntentHost): InterpExtension {
 		(interp: Interp): void => registerIntent(interp, clock),
 		{
 			prompt: host.prompt(),
-			memories: host.memories(),
+			postlude: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.turnStart.use((ctx, next) => {
 					statesOf.get(ctx.interp)?.log.set([]);

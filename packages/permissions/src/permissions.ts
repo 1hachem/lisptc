@@ -91,7 +91,7 @@ export class SessionRules {
 	) {}
 
 	readWith(reader: ConfigReader): void {
-		this.reader ??= reader;
+		this.reader = reader;
 	}
 
 	get current(): PermissionRules {
@@ -356,7 +356,12 @@ export function permissionsExtension(
 		name: string,
 		args: readonly unknown[],
 	): Promise<void> | undefined {
-		if (armed === 0 || name.startsWith(OWN_FORMS)) return undefined;
+		if (
+			armed === 0 ||
+			name.startsWith(OWN_FORMS) ||
+			interp.ownerOf(newSym(name)) !== undefined
+		)
+			return undefined;
 		const { verdict, reason } = rules.decide(name);
 		if (verdict === "allow") return undefined;
 		if (verdict === "deny")
@@ -441,7 +446,7 @@ export function permissionsExtension(
 		{
 			rules,
 			prompt: host.prompt(),
-			memories: host.memories(),
+			postlude: host.memories(),
 			session(hooks: SessionHooks): void {
 				hooks.evalStep.use((ctx, next) =>
 					adopting(ctx.interp, () => next(ctx)),

@@ -1,4 +1,10 @@
-import type { Area, Cue, Situation, Turn } from "@repo/shared/recognition";
+import {
+	type Area,
+	type Cue,
+	PartialRecognition,
+	type Situation,
+	type Turn,
+} from "@repo/shared/recognition";
 import type { SystemOneModel, Verdict } from "@repo/shared/system-one";
 import {
 	AREA_LACKS,
@@ -103,8 +109,9 @@ export function memorySystem(
 		const signal = AbortSignal.timeout(timeoutMs);
 		const state = { platform: PLATFORM, ...latestOf(situation.conversation) };
 		const gates = new Map(areas.map((area) => [area.name, area]));
+		const groups = [...grouped(cues, areas)];
 		const settled = await Promise.allSettled(
-			[...grouped(cues, areas)].map(async ([name, members]) => {
+			groups.map(async ([name, members]) => {
 				const area = gates.get(name);
 				const gate = area !== undefined && !area.open;
 				const { answers } = await model.judge(
@@ -157,8 +164,19 @@ export function memorySystem(
 		const judged = settled.flatMap((area) =>
 			area.status === "fulfilled" ? [area.value] : [],
 		);
-		const failed = settled.find((area) => area.status === "rejected");
-		if (judged.length === 0 && failed !== undefined) throw failed.reason;
-		return new Map(judged.flatMap((scores) => [...scores]));
+		const failed = settled.flatMap((area, at) =>
+			area.status === "rejected"
+				? [{ name: groups[at]?.[0] || "unfiled", reason: area.reason }]
+				: [],
+		);
+		const scores = new Map(judged.flatMap((scored) => [...scored]));
+		const [first] = failed;
+		if (first === undefined) return scores;
+		if (judged.length === 0) throw first.reason;
+		throw new PartialRecognition(
+			scores,
+			failed.map(({ name }) => name),
+			first.reason,
+		);
 	};
 }

@@ -7,6 +7,7 @@ return {
 		"node",
 		"--no-warnings",
 		"--experimental-transform-types",
+		"--env-file-if-exists=" .. vim.fn.expand("~/lisptc/.env"),
 		vim.fn.expand("~/lisptc/apps/lsp/src/server.ts"),
 		"--stdio",
 	},

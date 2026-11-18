@@ -31,3 +31,15 @@ export type Recognize = (
 	cues: readonly Cue[],
 	areas?: readonly Area[],
 ) => Awaitable<ReadonlyMap<string, number>>;
+
+export class PartialRecognition extends Error {
+	constructor(
+		readonly scores: ReadonlyMap<string, number>,
+		readonly failed: readonly string[],
+		reason: unknown,
+	) {
+		super(
+			`recognition failed for ${failed.join(", ")}: ${reason instanceof Error ? reason.message : String(reason)}`,
+		);
+	}
+}

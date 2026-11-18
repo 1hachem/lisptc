@@ -152,7 +152,13 @@ export function wireLines(messages: readonly ChatMessageInput[]): Line[] {
 	const lines: Line[] = [];
 	for (const message of messages) {
 		const line = wireLine(message);
-		if (line !== undefined) lines.push(line);
+		if (line === undefined) continue;
+		const previous = lines.at(-1);
+		lines.push(
+			line.kind === "result" && previous !== undefined && isPrompt(previous)
+				? ranByUser(line.text)
+				: line,
+		);
 	}
 	return lines;
 }
@@ -167,6 +173,23 @@ function replOutcome(content: string): { output: string; error: boolean } {
 			};
 	} catch {}
 	return { output: content, error: false };
+}
+
+export function ranByUser(result: string): Line {
+	const { output, error } = replOutcome(result);
+	return {
+		kind: "record",
+		record: {
+			role: "user",
+			source: "lisp-repl",
+			content: [
+				error
+					? "the user ran the code in their message above, and it failed:"
+					: "the user ran the code in their message above:",
+				output,
+			].join("\n\n"),
+		},
+	};
 }
 
 function transcript(content: string): string {

@@ -107,7 +107,7 @@ function defineMemoryGlobals(interp: Interp): void {
 export function agentsExtension(host: AgentsHost): AgentsExtension {
 	return Object.assign((interp: Interp): void => registerAgents(interp, host), {
 		prompt: host.prompt(),
-		memories: host.memories(),
+		postlude: host.memories(),
 		asks: [DEFINE, BOUNDED_DEFINE, KEEP, FORGET],
 	});
 }
@@ -115,7 +115,7 @@ export function agentsExtension(host: AgentsHost): AgentsExtension {
 export function subAgentExtension(host: SubAgentHost): InterpExtension {
 	return Object.assign((interp: Interp): void => registerExports(interp), {
 		prompt: host.prompt(),
-		memories: host.memories(),
+		postlude: host.memories(),
 		session(hooks: SessionHooks): void {
 			hooks.answer.use((interp, code, next) =>
 				withExports(interp, next(interp, code)),

@@ -1,6 +1,5 @@
 import { EvalException } from "@repo/interpreter/errors";
-import { Interp, runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import type { EmbeddingModel, EmbedRequest } from "@repo/shared/embedding";
 import type {
@@ -22,7 +21,7 @@ function repl(host: Partial<SemanticHost>) {
 	const interp = new Interp({
 		extensions: [semanticExtension({ ...semanticHost, ...host })],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return {
 		ev: async (code: string): Promise<string> =>
 			str((await runAsync(interp, code)).value),

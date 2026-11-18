@@ -3,33 +3,17 @@ import { z } from "zod";
 import { driveSync } from "../src/drive.ts";
 import { EvalException } from "../src/errors.ts";
 import {
+	boot,
 	type Installable,
-	type Interp,
+	Interp,
 	runAsync,
 	runSync,
 } from "../src/lisp.ts";
-import { Cell, Keyword, listToArray, newSym } from "../src/objects.ts";
+import { Cell, Keyword, newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
 import { LispPromise } from "../src/promise.ts";
-import { LANGUAGE_MEMORIES, LANGUAGE_REFERENCE } from "../src/source.ts";
+import { LANGUAGE_REFERENCE } from "../src/source.ts";
 import { ev, freshInterp } from "./helpers.ts";
-
-function memoryBodies(source: string): string {
-	const interp = freshInterp();
-	runSync(
-		interp,
-		`(setq bodies nil)
-(defmacro memory (key &rest declared) \`(setq bodies (cons ,(car (last declared)) bodies)))
-(defmacro area (name &rest declared) nil)`,
-	);
-	runSync(interp, source);
-	const bodies = interp.getGlobal(newSym("bodies"));
-	return (bodies instanceof Cell ? listToArray(bodies) : [])
-		.reverse()
-		.join("\n");
-}
-
-const LANGUAGE_TEXT = `${LANGUAGE_REFERENCE}\n${memoryBodies(LANGUAGE_MEMORIES)}`;
 
 describe("arityOf", () => {
 	it("reads the arity of a builtin", () => {
@@ -75,87 +59,38 @@ describe("extensions", () => {
 		expect(freshInterp().systemPrompt()).toBe(LANGUAGE_REFERENCE);
 	});
 
-	it("collects the built-in memories each extension carries, in order, out of the prompt", () => {
+	it("says it has booted only once every postlude has run", () => {
+		const seen: Installable = Object.assign(() => {}, {
+			postlude: "(setq during *booted*)",
+		});
+		const interp = new Interp({ extensions: [seen] });
+		expect(ev("*booted*", interp)).toBe("nil");
+		boot(interp);
+		expect(ev("(list during *booted*)", interp)).toBe("(nil t)");
+		expect(() => ev("(setq *booted* nil)", interp)).toThrow(/owned by boot/);
+	});
+
+	it("counts as booted even when a postlude fails", () => {
+		const broken: Installable = Object.assign(() => {}, {
+			postlude: "(no-such-form)",
+		});
+		const interp = new Interp({ extensions: [broken] });
+		expect(() => boot(interp)).toThrow(/no-such-form/);
+		expect(ev("*booted*", interp)).toBe("t");
+	});
+
+	it("boots every extension's prelude before any extension's postlude", () => {
 		const first: Installable = Object.assign(() => {}, {
-			memories: '(memory "a")\nfirst',
+			prelude: "(setq order nil) (defun note (x) (setq order (cons x order)))",
+			postlude: '(note "first postlude")',
 		});
-		const bare: Installable = () => {};
 		const second: Installable = Object.assign(() => {}, {
-			memories: '(memory "b")\nsecond',
+			prelude: '(note "second prelude")',
+			postlude: '(note "second postlude")',
 		});
-		const interp = freshInterp({ extensions: [first, bare, second] });
-		expect(interp.builtinMemories()).toEqual([
-			LANGUAGE_MEMORIES,
-			'(memory "a")\nfirst',
-			'(memory "b")\nsecond',
-		]);
-		expect(interp.systemPrompt()).toBe(LANGUAGE_REFERENCE);
-	});
-});
-
-describe("the language reference", () => {
-	it("documents multiplication", () => {
-		expect(LANGUAGE_TEXT).toContain("(* n...) product, 1 if none");
-	});
-
-	it.each([
-		["(* 2 3)", "6"],
-		["(* 2 3.0)", "6.0"],
-	])("shows %s is %s, and it is", (form, value) => {
-		expect(LANGUAGE_TEXT).toContain(`${form} is ${value}`);
-		expect(ev(form)).toBe(value);
-	});
-
-	it("shows a mapcar that squares", () => {
-		const form = "(mapcar (lambda (n) (* n n)) '(1 2 3))";
-		expect(LANGUAGE_TEXT).toContain(`${form} gives (1 4 9)`);
-		expect(ev(form)).toBe("(1 4 9)");
-	});
-
-	it.each([
-		[`(get-in '(:theme (:accent "red")) :theme :accent)`, '"red"'],
-		[
-			`(set-in '(:theme (:accent "red")) "blue" :theme :accent)`,
-			'(:theme (:accent "blue"))',
-		],
-		["(update-in '(:n 1) (lambda (n) (+ n 1)) :n)", "(:n 2)"],
-		["(remove-in '(:a 1 :b 2) :a)", "(:b 2)"],
-	])("shows %s gives %s, and it does", (form, value) => {
-		expect(LANGUAGE_TEXT).toContain(`${form} gives ${value}`);
-		expect(ev(form)).toBe(value);
-	});
-
-	it("names let* as the sequential binding", () => {
-		expect(LANGUAGE_TEXT).toContain(
-			"(let* ((name val) ...) body...) sequential",
-		);
-		expect(ev("(let* ((a 1) (b (+ a 1))) b)")).toBe("2");
-	});
-
-	it("names the earmuffed globals that exist", () => {
-		expect(LANGUAGE_TEXT).toContain("Globals: *gensym-counter*, *version*.");
-		expect(() => ev("*gensym-counter*")).not.toThrow();
-		expect(() => ev("*version*")).not.toThrow();
-	});
-
-	it("shows a swap that quasiquotes a gensym temporary", () => {
-		const swap =
-			"(defmacro swap (a b)\n  (let ((tmp (gensym)))\n    `(let ((,tmp ,a)) (setq ,a ,b) (setq ,b ,tmp))))";
-		expect(LANGUAGE_TEXT).toContain(swap);
-		const interp = freshInterp();
-		runSync(interp, swap);
-		expect(ev("(let ((x 1) (y 2)) (swap x y) (list x y))", interp)).toBe(
-			"(2 1)",
-		);
-		expect(ev("(let ((tmp 1) (x 2)) (swap tmp x) (list tmp x))", interp)).toBe(
-			"(2 1)",
-		);
-	});
-
-	it("shows a try whose handler runs", () => {
-		expect(LANGUAGE_TEXT).toContain('(try\n  (error "boom")');
-		expect(ev('(try (error "boom") (catch (e) (concat "failed: " e)))')).toBe(
-			'"failed: boom"',
+		const interp = freshInterp({ extensions: [first, second] });
+		expect(ev("(reverse order)", interp)).toBe(
+			'("second prelude" "first postlude" "second postlude")',
 		);
 	});
 });

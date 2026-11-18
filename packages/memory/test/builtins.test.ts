@@ -1,6 +1,13 @@
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval } from "@repo/interpreter/drive";
+import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { type Installable, runAsync, runSync } from "@repo/interpreter/lisp";
+import {
+	boot,
+	type Installable,
+	runAsync,
+	runSync,
+} from "@repo/interpreter/lisp";
 import {
 	arrayToList,
 	Cell,
@@ -8,18 +15,18 @@ import {
 	listToArray,
 	newSym,
 } from "@repo/interpreter/objects";
-import { prelude } from "@repo/interpreter/prelude";
 import { str } from "@repo/interpreter/print";
 import { openSession } from "@repo/interpreter/session";
 import { memoryKind, recognizedKind } from "@repo/journal-catalog/memory";
 import type { Clock } from "@repo/shared/host";
 import { type Entry, view } from "@repo/shared/journal";
-import type {
-	Area,
-	Cue,
-	Recognize,
-	Situation,
-	Turn,
+import {
+	type Area,
+	type Cue,
+	PartialRecognition,
+	type Recognize,
+	type Situation,
+	type Turn,
 } from "@repo/shared/recognition";
 import { describe, expect, it } from "vitest";
 import {
@@ -31,19 +38,15 @@ import {
 	memoryExtension,
 } from "../src/memory.ts";
 import { memoryHost } from "../src/memory-host.ts";
-import {
-	recognizeNothing,
-	VolatileStore,
-	WHEN_FIRES_AT,
-} from "../src/ports.ts";
-import { bareHost, MemoryInterp, written } from "./helpers.ts";
+import { VolatileStore, WHEN_FIRES_AT } from "../src/ports.ts";
+import { bareHost, written } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
 }
 
-function carrying(memories: string): Installable {
-	return Object.assign(() => {}, { memories });
+function carrying(postlude: string): Installable {
+	return Object.assign(() => {}, { postlude });
 }
 
 const BROWSER = `
@@ -87,7 +90,7 @@ function recognizing(
 }
 
 interface Fixture {
-	interp: MemoryInterp;
+	interp: ConversationInterpreter;
 	bank: MemoryBank;
 	hear(text: string): Promise<string[]>;
 	step(code: string, result: string): Promise<string[]>;
@@ -106,10 +109,10 @@ function fixture(
 		options.recognize,
 	);
 	const extension = memoryExtension({ ...bareHost, store }, { bank });
-	const interp = new MemoryInterp({
+	const interp = new ConversationInterpreter({
 		extensions: [extension, carrying(options.memories ?? BROWSER)],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	openSession([extension]);
 	const buffer = bufferSink();
 	interp.journal.pipe(buffer);
@@ -170,22 +173,60 @@ async function ev(f: Fixture, code: string): Promise<string> {
 
 describe("built-in memories", () => {
 	it("ships the memory package's own built-ins, parsed and listed", () => {
-		const interp = new MemoryInterp({
+		const interp = new ConversationInterpreter({
 			extensions: [memoryExtension(memoryHost)],
 		});
-		const bank = new MemoryBank(
-			new VolatileStore(),
-			memoryHost.clock,
-			memoryHost.search,
-			recognizeNothing,
+		boot(interp);
+		const keys = str(
+			runSync(interp, '(mapcar car (memory/builtins "memory"))'),
 		);
-		bank.declareIn(interp);
-		expect([...bank.builtins().keys()]).toEqual(
-			expect.arrayContaining([
-				"internal/memory/triggers",
-				"internal/memory/call-triggers",
-			]),
+		expect(keys).toContain('"internal/memory/triggers"');
+		expect(keys).toContain('"internal/memory/call-triggers"');
+	});
+
+	it("come back with an image as they were, without booting again", () => {
+		const installed = (postlude: string) =>
+			new ConversationInterpreter({
+				extensions: [
+					memoryExtension({ ...bareHost, store: new VolatileStore() }),
+					carrying(postlude),
+				],
+			});
+		const saved = installed(BROWSER);
+		boot(saved);
+		const back = installed("");
+		restore(back, snapshot(saved));
+		expect(str(runSync(back, "(mapcar car (memory/builtins))"))).toContain(
+			'"internal/deploy/notes"',
 		);
+	});
+
+	it("are filed in tables the agent reads but cannot write", async () => {
+		const f = fixture();
+		expect(
+			await ev(f, '(car (gethash "internal/deploy/notes" *memory/table*))'),
+		).toContain("deploys go through task deploy");
+		for (const code of [
+			'(remhash "internal/deploy/notes" *memory/table*)',
+			"(clrhash *memory/kinds*)",
+			"(setq *memory/table* nil)",
+			"(defun memory/_entry (key) nil)",
+			"(setq memory nil)",
+		])
+			await expect(ev(f, code)).rejects.toThrow(/read-only|owned by memory/);
+		expect(await f.hear("deploy the app")).toEqual(["internal/deploy/notes"]);
+	});
+
+	it("are declared only while the interpreter boots", async () => {
+		const f = fixture();
+		for (const code of [
+			'(memory "internal/t/late" :when "the test asks for it" "too late")',
+			'(area "late" :when "the test asks for it")',
+		])
+			await expect(ev(f, code)).rejects.toThrow(
+				/only while the interpreter boots/,
+			);
+		expect(await drive(f.bank.lookup("internal/t/late"))).toBeUndefined();
 	});
 
 	it("fire on their own trigger, out of any store", async () => {
@@ -243,7 +284,7 @@ describe("built-in memories", () => {
 		])
 			await expect(ev(f, code)).rejects.toThrow(/built-in memories/);
 		await ev(f, "(memory/forget-all)");
-		expect(f.bank.builtins().has("internal/deploy/notes")).toBe(true);
+		expect(await drive(f.bank.lookup("internal/deploy/notes"))).toBeDefined();
 	});
 
 	it("never fade", async () => {
@@ -251,7 +292,7 @@ describe("built-in memories", () => {
 		const f = fixture({ clock: { now: () => ms.now } });
 		ms.now = 52 * HALF_LIFE_MS;
 		await f.hear("deploy it");
-		const notes = f.bank.builtins().get("internal/deploy/notes");
+		const notes = await drive(f.bank.lookup("internal/deploy/notes"));
 		expect(notes && f.bank.strength(notes)).toBe(1);
 	});
 
@@ -290,33 +331,36 @@ describe("built-in memories", () => {
 		const long = Array.from({ length: MAX_BUILTIN_WORDS + 1 }, () => "w").join(
 			" ",
 		);
-		const f = fixture({
-			memories: `(memory "internal/t/long" :when "the test asks for it" "${long}")`,
-		});
-		expect(() => f.bank.builtins()).toThrow(/at most/);
+		expect(() =>
+			fixture({
+				memories: `(memory "internal/t/long" :when "the test asks for it" "${long}")`,
+			}),
+		).toThrow(/at most/);
 	});
 
 	it("refuse two built-ins under one key", () => {
-		const f = fixture({
-			memories:
-				'(memory "internal/t/a" :when "the test asks for it" "one")\n(memory "internal/t/a" :when "the test asks for it" "two")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/share this key/);
+		expect(() =>
+			fixture({
+				memories:
+					'(memory "internal/t/a" :when "the test asks for it" "one")\n(memory "internal/t/a" :when "the test asks for it" "two")',
+			}),
+		).toThrow(/share this key/);
 	});
 
-	it("keep a body over several lines, as written", () => {
+	it("keep a body over several lines, as written", async () => {
 		const f = fixture({
 			memories:
 				'(memory "internal/t/a" :when "the test asks for it"\n  "first line\n  (load-mcp \\"x\\")")\n',
 		});
-		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
+		expect((await drive(f.bank.lookup("internal/t/a")))?.body).toBe(
 			'first line\n  (load-mcp "x")',
 		);
 	});
 
 	it("refuse a key outside the internal namespace", () => {
-		const f = fixture({ memories: '(memory "mcp/local" "one")' });
-		expect(() => f.bank.builtins()).toThrow(/internal namespace/);
+		expect(() => fixture({ memories: '(memory "mcp/local" "one")' })).toThrow(
+			/internal namespace/,
+		);
 	});
 
 	it("keep the internal namespace from the agent's own memories", async () => {
@@ -330,39 +374,45 @@ describe("built-in memories", () => {
 	});
 
 	it("refuse a body that is not a string", () => {
-		const f = fixture({ memories: `(memory "internal/t/a" '(one))` });
-		expect(() => f.bank.builtins()).toThrow(/needs a body string/);
+		expect(() =>
+			fixture({ memories: `(memory "internal/t/a" '(one))` }),
+		).toThrow(/needs a body string/);
 	});
 
 	it("refuse a memory with no hook", () => {
-		const f = fixture({ memories: '(memory "internal/t/a" "one")' });
-		expect(() => f.bank.builtins()).toThrow(/needs a hook/);
+		expect(() =>
+			fixture({ memories: '(memory "internal/t/a" "one")' }),
+		).toThrow(/needs a hook/);
 	});
 
 	it("refuse a memory with no body", () => {
-		const f = fixture({
-			memories: '(memory "internal/t/a")\n\n(memory "internal/t/b" "two")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/needs a body/);
+		expect(() =>
+			fixture({
+				memories: '(memory "internal/t/a")\n\n(memory "internal/t/b" "two")',
+			}),
+		).toThrow(/needs a body/);
 	});
 
 	it("refuse a :when with no situation", () => {
-		const f = fixture({ memories: '(memory "internal/t/a" :when "" "one")' });
-		expect(() => f.bank.builtins()).toThrow(/describing the situation/);
+		expect(() =>
+			fixture({ memories: '(memory "internal/t/a" :when "" "one")' }),
+		).toThrow(/describing the situation/);
 	});
 
 	it("refuse a situation written as an :on trigger", () => {
-		const f = fixture({
-			memories: '(memory "internal/t/a" :on (when "x") "one")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/written with :when/);
+		expect(() =>
+			fixture({
+				memories: '(memory "internal/t/a" :on (when "x") "one")',
+			}),
+		).toThrow(/written with :when/);
 	});
 
 	it("refuse a memory with both :when and :on", () => {
-		const f = fixture({
-			memories: '(memory "internal/t/a" :when "x" :on (user "y") "one")',
-		});
-		expect(() => f.bank.builtins()).toThrow(/not both/);
+		expect(() =>
+			fixture({
+				memories: '(memory "internal/t/a" :when "x" :on (user "y") "one")',
+			}),
+		).toThrow(/not both/);
 	});
 });
 
@@ -388,12 +438,25 @@ describe("the when trigger", () => {
 		const { recognize } = recognizing({ [ASK]: 0.42 });
 		const f = fixture({ recognize });
 		await f.hear("open my browser");
-		expect(view(f.entries(), recognizedKind)).toEqual([
+		expect(view(f.entries(), recognizedKind)).toMatchObject([
 			{
 				message: "open my browser",
 				scores: { "internal/browser/local": 0.42 },
 			},
 		]);
+	});
+
+	it("records how long recognition took, by the extension's clock", async () => {
+		const ms = { now: 0 };
+		const f = fixture({
+			clock: { now: () => ms.now },
+			recognize: () => {
+				ms.now += 250;
+				return new Map([["internal/browser/local", 0.1]]);
+			},
+		});
+		await f.hear("open my browser");
+		expect(view(f.entries(), recognizedKind)[0]?.latencyMs).toBe(250);
 	});
 
 	it("hands each memory to the recognizer with its key, area, situation and gist", async () => {
@@ -527,12 +590,12 @@ describe("the when trigger", () => {
 		);
 	});
 
-	it("builds a built-in body from the globals the extension sets", () => {
+	it("builds a built-in body from the globals the extension sets", async () => {
 		const f = fixture({
 			memories:
 				'(memory "internal/t/a" :when "x" (format nil "halves every ~d days" *memory-half-life-days*))',
 		});
-		expect(f.bank.builtins().get("internal/t/a")?.body).toBe(
+		expect((await drive(f.bank.lookup("internal/t/a")))?.body).toBe(
 			"halves every 7 days",
 		);
 	});
@@ -579,8 +642,29 @@ describe("the when trigger", () => {
 			recognize: () => Promise.reject(new Error("timed out")),
 		});
 		expect(await f.hear("deploy now")).toEqual(["internal/deploy/notes"]);
-		expect(view(f.entries(), recognizedKind)).toEqual([
+		expect(view(f.entries(), recognizedKind)).toMatchObject([
 			{ message: "deploy now", scores: {}, error: "timed out" },
+		]);
+	});
+
+	it("fires what the answered areas scored, and records the areas that failed", async () => {
+		const f = fixture({
+			recognize: () =>
+				Promise.reject(
+					new PartialRecognition(
+						new Map([["internal/browser/local", 0.9]]),
+						["deploy"],
+						new Error("timed out"),
+					),
+				),
+		});
+		expect(await f.hear("open the page")).toContain("internal/browser/local");
+		expect(view(f.entries(), recognizedKind)).toMatchObject([
+			{
+				scores: { "internal/browser/local": 0.9 },
+				error: "recognition failed for deploy: timed out",
+				failedAreas: ["deploy"],
+			},
 		]);
 	});
 

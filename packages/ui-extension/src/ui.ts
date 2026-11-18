@@ -746,7 +746,7 @@ export function uiExtension(
 		{
 			surface,
 			prompt: host.prompt(),
-			memories: [host.memories().trimEnd(), widgetMemories(), anchorMemories()]
+			postlude: [host.memories().trimEnd(), widgetMemories(), anchorMemories()]
 				.join("\n\n")
 				.concat("\n"),
 			session(hooks: SessionHooks): void {

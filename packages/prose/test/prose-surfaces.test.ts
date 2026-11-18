@@ -1,7 +1,4 @@
-import {
-	LANGUAGE_MEMORIES,
-	LANGUAGE_REFERENCE,
-} from "@repo/interpreter/source";
+import { LANGUAGE_REFERENCE } from "@repo/interpreter/source";
 import { checkSyntax } from "@repo/language-service/syntax";
 import { describe, expect, it } from "vitest";
 import { evProse } from "./helpers.ts";
@@ -36,10 +33,5 @@ describe("prose is allowed on every surface the model meets", () => {
 describe("the language reference teaches prose", () => {
 	it("says the text around the forms is ignored", () => {
 		expect(LANGUAGE_REFERENCE).toMatch(/text around them is prose/i);
-	});
-
-	it("says there is no comment syntax", () => {
-		const language = [LANGUAGE_REFERENCE, LANGUAGE_MEMORIES].join("\n");
-		expect(language).toMatch(/there is no comment syntax/i);
 	});
 });

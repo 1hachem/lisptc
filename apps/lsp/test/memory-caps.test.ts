@@ -1,5 +1,4 @@
-import { Interp, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, Interp } from "@repo/interpreter/lisp";
 import {
 	languageService,
 	symbolsOf,
@@ -12,7 +11,7 @@ import { docExtensions } from "../src/extensions.ts";
 
 function diagnose(text: string): string[] {
 	const interp = new Interp({ extensions: docExtensions() });
-	runSync(interp, prelude);
+	boot(interp);
 	const service = languageService(symbolTable(symbolsOf(interp)));
 	return service
 		.diagnostics(

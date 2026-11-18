@@ -1,12 +1,11 @@
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { note } from "@repo/interpreter/conversation";
+import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { restore, snapshot } from "@repo/interpreter/image";
 import { bufferSink } from "@repo/interpreter/journal";
-import { runAsync, runSync } from "@repo/interpreter/lisp";
-import { prelude } from "@repo/interpreter/prelude";
+import { boot, runAsync } from "@repo/interpreter/lisp";
 import { str } from "@repo/interpreter/print";
 import { type InterpExtension, openSession } from "@repo/interpreter/session";
 import { memoryKind } from "@repo/journal-catalog/memory";
@@ -33,7 +32,7 @@ import {
 	type MemoryWrite,
 	VolatileStore,
 } from "../src/ports.ts";
-import { bareHost, MemoryInterp, written } from "./helpers.ts";
+import { bareHost, written } from "./helpers.ts";
 
 function drive<T>(gen: Eval<T>): Promise<T> {
 	return driveAsync(gen).then((outcome) => outcome.value);
@@ -50,7 +49,7 @@ function shown(noted: {
 }
 
 interface Fixture {
-	interp: MemoryInterp;
+	interp: ConversationInterpreter;
 	bank: MemoryBank;
 	step(code: string): Promise<string>;
 }
@@ -59,10 +58,10 @@ function fixture(
 	bank: MemoryBank = new MemoryBank(new VolatileStore()),
 	extras: InterpExtension[] = [],
 ): Fixture {
-	const interp = new MemoryInterp({
+	const interp = new ConversationInterpreter({
 		extensions: [memoryExtension(bareHost, { bank }), ...extras],
 	});
-	runSync(interp, prelude);
+	boot(interp);
 	return {
 		interp,
 		bank,
@@ -123,7 +122,7 @@ function plain(key: string, lastUsed = 0): MemoryWrite {
 	});
 }
 
-const DECLARED_KEYS = "(mapcar (lambda (entry) (car entry)) *memories*)";
+const DECLARED_KEYS = "(hash-table-keys *memory/table*)";
 
 describe("remembering and recalling", () => {
 	it("stores prose and hands it back on a matching query", async () => {
@@ -283,6 +282,34 @@ describe("triggers", () => {
 		await ev(f, `(memory/remember "t" "note" :on '(call (concat)))`);
 
 		expect(await f.step('(setq x (concat "a" "b"))')).toContain("t: note");
+	});
+
+	it("matches a call whose head is a regular expression", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "s" "note" :on '(call (string-.*)))`);
+
+		expect(await f.step('(echo "hi")')).not.toContain("s: note");
+		expect(await f.step(`(string-join '("a") ",")`)).toContain("s: note");
+	});
+
+	it("fires on a call to any of the forms an any-of names", async () => {
+		const f = fixture();
+		await ev(
+			f,
+			`(memory/remember "j" "note" :on '(call (any-of (concat) (string-join))))`,
+		);
+
+		expect(await f.step('(echo "hi")')).not.toContain("j: note");
+		expect(await f.step(`(string-join '("a") ",")`)).toContain("j: note");
+	});
+
+	it("fires on a call made after a remembered memory was revised", async () => {
+		const f = fixture();
+		await ev(f, `(memory/remember "r" "old" :on '(call (concat)))`);
+		await ev(f, `(memory/remember "r" "new" :on '(call (string-join)))`);
+
+		expect(await f.step('(concat "a" "b")')).not.toContain("r:");
+		expect(await f.step(`(string-join '("a") ",")`)).toContain("r: new");
 	});
 
 	it("fires on every step when the trigger names no pattern", async () => {
@@ -526,10 +553,10 @@ describe("triggers", () => {
 		const f = fixture(bank);
 		await ev(f, `(memory/remember "always" "here" :on '(step))`);
 
-		const quiet = new MemoryInterp({
+		const quiet = new ConversationInterpreter({
 			extensions: [memoryExtension(bareHost, { bank })],
 		});
-		runSync(quiet, prelude);
+		boot(quiet);
 
 		expect(shown(await drive(bank.endStep()))).toBe("");
 	});

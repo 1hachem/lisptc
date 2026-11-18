@@ -1,12 +1,13 @@
 import { quotient } from "@repo/interpreter/arith";
+import { LispHashTable } from "@repo/interpreter/collections";
 import type { Conversation } from "@repo/interpreter/conversation";
 import { driveAsync, type Eval, settled } from "@repo/interpreter/drive";
 import { EvalException } from "@repo/interpreter/errors";
 import type { Journal } from "@repo/interpreter/journal";
 import {
+	booted,
 	detachedState,
 	type Interp,
-	runSync,
 	type State,
 	type StateCodec,
 } from "@repo/interpreter/lisp";
@@ -40,13 +41,14 @@ import {
 import type { Clock } from "@repo/shared/host";
 import { systemClock } from "@repo/shared/host";
 import { formsOnly } from "@repo/shared/lisp-forms";
-import type {
-	Area,
-	AreaGate,
-	Cue,
-	Recognize,
-	Situation,
-	Turn,
+import {
+	type Area,
+	type AreaGate,
+	type Cue,
+	PartialRecognition,
+	type Recognize,
+	type Situation,
+	type Turn,
 } from "@repo/shared/recognition";
 import type { SearchEngine } from "@repo/shared/search";
 import { z } from "zod";
@@ -205,24 +207,82 @@ function gistOf(memory: Memory): string {
 }
 
 const LIST = "memory/list";
-const DECLARED_MEMORIES = "*memories*";
-const DECLARED_AREAS = "*areas*";
+const SETTLE = "memory/_settle";
+const DECLARE_MEMORY = "memory/_declare";
+const DECLARE_AREA = "memory/_declare-area";
+const ENTRY = "memory/_entry";
+const OF_KIND = "memory/_of-kind";
+const CALLING = "memory/_calling";
+const EVERY = "memory/_every";
+const REMEMBERED_KEYS = "memory/_remembered-keys";
+const GATES = "memory/_gates";
+const UNKEYED = "";
 
-const DECLARED = "memory/declared";
-const BUILT_BODY = "memory/built-body";
-const DECLARE = `
+const TABLE = "*memory/table*";
+const KINDS = "*memory/kinds*";
+const HEADS = "*memory/heads*";
+const AREA_TABLE = "*memory/areas*";
+
+const TABLES: readonly (readonly [string, string])[] = [
+	[
+		TABLE,
+		"Every memory, built-in or read from the store, by key, as (form kind heads).",
+	],
+	[
+		KINDS,
+		"The keys of the memories each trigger kind fires, in the order they were filed.",
+	],
+	[
+		HEADS,
+		"The keys of the call memories each form name fires; those whose pattern names no form are under the empty string.",
+	],
+	[
+		AREA_TABLE,
+		"The situation that opens each area to recognition, in the order the areas were declared.",
+	],
+];
+
+const MEMORY_OWNER = "memory";
+
+const READERS = [ENTRY, OF_KIND, CALLING, EVERY, REMEMBERED_KEYS, GATES];
+
+const PRELUDE = `
+(defun ${ENTRY} (key)
+  "The form of the memory filed under key, or nil."
+  (car (gethash key *memory/table*)))
+
+(defun ${OF_KIND} (kind)
+  "The forms of the memories a trigger of kind fires."
+  (mapcar ${ENTRY} (gethash kind *memory/kinds*)))
+
+(defun ${CALLING} (heads)
+  "The forms of the call memories filed under any of the form names in heads, or under none."
+  (mapcar ${ENTRY}
+          (remove-duplicates
+            (apply append (mapcar (lambda (head) (gethash head *memory/heads*))
+                                  (cons "${UNKEYED}" heads))))))
+
+(defun ${EVERY} ()
+  "The forms of every memory, built-in or remembered."
+  (mapcar car (hash-table-values *memory/table*)))
+
+(defun ${REMEMBERED_KEYS} ()
+  "The keys of the remembered memories filed from the store."
+  (remove-if (lambda (key) (string-prefix? "${INTERNAL}" key))
+             (hash-table-keys *memory/table*)))
+
+(defun ${GATES} ()
+  "Every declared area as (name situation), in the order they were declared."
+  (mapcar (lambda (pair) (list (car pair) (cdr pair)))
+          (hash-table-alist *memory/areas*)))
+
 (setq memory
   (macro (key &rest declared)
-    (list 'progn
-          (list 'setq '${DECLARED_MEMORIES}
-                (list 'cons (list 'quote (cons key declared)) '${DECLARED_MEMORIES}))
-          '${DECLARED})))
+    (list '${DECLARE_MEMORY} (list 'quote (cons key declared)))))
 (setq area
   (macro (name &rest declared)
-    (list 'progn
-          (list 'setq '${DECLARED_AREAS}
-                (list 'cons (list 'quote (cons name declared)) '${DECLARED_AREAS}))
-          '${DECLARED})))
+    (list '${DECLARE_AREA} (list 'quote (cons name declared)))))
+(${SETTLE})
 `;
 
 function isDeclaration(form: unknown): boolean {
@@ -233,21 +293,45 @@ function isDeclaration(form: unknown): boolean {
 	);
 }
 
-function withBody(interp: Interp, declared: unknown): unknown {
-	const parts = listToArray(declared as List);
-	const body = parts.at(-1);
-	if (parts.length < 2 || !(body instanceof Cell)) return declared;
-	const built = newSym(BUILT_BODY);
-	runSync(interp, `(progn (setq ${BUILT_BODY} ${str(body)}) ${DECLARED})`);
-	const text = interp.getGlobal(built);
-	interp.defineGlobal(built, null);
-	return arrayToList([...parts.slice(0, -1), text]);
+function quoted(x: unknown): unknown {
+	return arrayToList([newSym("quote"), x]);
 }
 
-function declaredIn(interp: Interp, name: string): unknown[] {
-	const declared = interp.getGlobal(newSym(name));
-	return declared instanceof Cell ? listToArray(declared).reverse() : [];
+const LITERAL_NAME = /^[A-Za-z0-9_\-/:<>=!&%~@]+$/;
+
+function headsOf(pattern: unknown): string[] | undefined {
+	const combinator = combinatorIn(pattern);
+	if (combinator === "not") return undefined;
+	if (combinator !== undefined) {
+		const parts = listToArray((pattern as Cell).cdr as List).map(headsOf);
+		if (combinator === "all") return parts.find((part) => part !== undefined);
+		const keyed = parts.filter((part) => part !== undefined);
+		return keyed.length === parts.length ? keyed.flat() : undefined;
+	}
+	if (!(pattern instanceof Cell) || !(pattern.car instanceof Sym))
+		return undefined;
+	const name = pattern.car.name;
+	return name !== ANYTHING && LITERAL_NAME.test(name) ? [name] : undefined;
 }
+
+function fileUnder(table: LispHashTable, name: unknown, key: string): void {
+	const filed = listToArray((table.get(name)?.[1] ?? null) as List);
+	table.set(name, arrayToList([...filed, key]));
+}
+
+function dropFrom(table: LispHashTable, name: unknown, key: string): void {
+	const filed = listToArray((table.get(name)?.[1] ?? null) as List);
+	table.set(name, arrayToList(filed.filter((filedKey) => filedKey !== key)));
+}
+
+function headsIn(form: unknown, into: Set<string> = new Set()): Set<string> {
+	if (!(form instanceof Cell)) return into;
+	if (form.car instanceof Sym) into.add(form.car.name);
+	for (let rest: unknown = form; rest instanceof Cell; rest = rest.cdr)
+		headsIn(rest.car, into);
+	return into;
+}
+
 const AREAS = "memory/areas";
 
 function entryOf(memory: Memory): unknown {
@@ -336,17 +420,9 @@ const countCodec: StateCodec<number> = {
 	fromLisp: (x) => Number(x),
 };
 
-const runtimeCodec: StateCodec<readonly Memory[] | undefined> = {
-	toLisp: (memories) =>
-		memories === undefined
-			? null
-			: new Cell("read", arrayToList(memories.map(memoryToForm))),
-	fromLisp: (read) =>
-		read instanceof Cell
-			? listToArray(read.cdr as List).flatMap(
-					(form) => formToMemory(form) ?? [],
-				)
-			: undefined,
+const flagCodec: StateCodec<boolean> = {
+	toLisp: (flag) => flag || null,
+	fromLisp: (x) => x === true,
 };
 
 function surfacedLine(memory: Memory): string {
@@ -438,13 +514,8 @@ export class MemoryBank {
 	private journal?: Journal;
 	private step: State<Step> = detachedState(QUIET);
 	private heardState: State<number> | undefined;
-	private declaredIn: Interp | undefined;
-	private declarations:
-		| { memories: ReadonlyMap<string, Memory>; areas: readonly AreaGate[] }
-		| undefined;
-	private loadingBuiltins = false;
-	private runtime: State<readonly Memory[] | undefined> =
-		detachedState(undefined);
+	private interp: Interp | undefined;
+	private storeRead: State<boolean> = detachedState(false);
 
 	private get heard(): number {
 		return this.heardState?.get() ?? 0;
@@ -467,89 +538,127 @@ export class MemoryBank {
 			QUIET,
 			"What the memory bank has fired, opened and surfaced in the current step, and the recall words it has shown and held back.",
 		);
-		this.runtime = interp.state(
-			"memory/runtime",
-			runtimeCodec,
-			undefined,
-			'Nil until the store is read, then ("read" . memories) with the remembered memories as (memory ...) forms, read from the store once and answered from here after. Every write, update or forget made in this session empties it, so the next read goes back to the store. Built-ins are never copied here.',
+		this.storeRead = interp.state(
+			"memory/store-read",
+			flagCodec,
+			false,
+			"Whether the remembered memories have been read from the store into the memory tables. Every write, update or forget made in this session clears it and drops them from the tables, so the next read goes back to the store. Built-ins stay filed.",
 		);
-	}
-
-	gates(): readonly AreaGate[] {
-		return this.declared().areas;
 	}
 
 	declareIn(interp: Interp): void {
-		this.declaredIn = interp;
-		this.declarations = undefined;
+		this.interp = interp;
 	}
 
-	builtins(): ReadonlyMap<string, Memory> {
-		return this.declared().memories;
+	private installed(): Interp {
+		if (this.interp === undefined)
+			throw new EvalException(
+				"the memory bank reads its memories only once it is installed in an interpreter",
+				null,
+			);
+		return this.interp;
 	}
 
-	private declared(): {
-		memories: ReadonlyMap<string, Memory>;
-		areas: readonly AreaGate[];
-	} {
-		if (this.declarations !== undefined) return this.declarations;
-		const interp = this.declaredIn;
-		if (interp === undefined || this.loadingBuiltins)
-			return { memories: new Map(), areas: [] };
-		this.loadingBuiltins = true;
-		try {
-			this.declarations = this.loadBuiltins(interp);
-		} finally {
-			this.loadingBuiltins = false;
-		}
-		return this.declarations;
-	}
-
-	private loadBuiltins(interp: Interp): {
-		memories: ReadonlyMap<string, Memory>;
-		areas: readonly AreaGate[];
-	} {
-		interp.defineGlobal(newSym(DECLARED_MEMORIES), null);
-		interp.defineGlobal(newSym(DECLARED_AREAS), null);
-		for (const source of interp.builtinMemories()) runSync(interp, source);
-		const memories = new Map<string, Memory>();
-		const evaluated = declaredIn(interp, DECLARED_MEMORIES).map((declared) =>
-			withBody(interp, declared),
+	private *ask(name: string, ...args: unknown[]): Eval<unknown> {
+		return yield* this.installed().evalGen(
+			arrayToList([newSym(name), ...args.map(quoted)]),
+			null,
 		);
-		interp.defineGlobal(
-			newSym(DECLARED_MEMORIES),
-			arrayToList([...evaluated].reverse()),
+	}
+
+	private *filed(name: string, ...args: unknown[]): Eval<Memory[]> {
+		const forms = listToArray((yield* this.ask(name, ...args)) as List);
+		return forms.flatMap((form) => formToMemory(form) ?? []);
+	}
+
+	private table(name: string): LispHashTable {
+		return this.installed().getGlobal(newSym(name)) as LispHashTable;
+	}
+
+	private file(memory: Memory): void {
+		this.unfile(memory.key);
+		const kind = memory.on?.kind ?? null;
+		const heads =
+			kind === "call" ? (headsOf(memory.on?.pattern) ?? [UNKEYED]) : [];
+		this.table(TABLE).set(
+			memory.key,
+			arrayToList([memoryToForm(memory), kind, arrayToList(heads)]),
 		);
-		for (const declared of evaluated) {
-			const memory = builtinFrom(declared);
-			if (memories.has(memory.key))
-				throw new EvalException(
-					"two built-in memories share this key",
-					memory.key,
-				);
-			if (wordCount(bodyText(memory.body)) > MAX_BUILTIN_WORDS)
-				throw new EvalException(
-					`a built-in memory body holds at most ${MAX_BUILTIN_WORDS} words; split it and link the parts`,
-					memory.key,
-				);
-			memories.set(memory.key, memory);
-		}
-		const areas = new Map<string, AreaGate>();
-		for (const declared of declaredIn(interp, DECLARED_AREAS)) {
-			const gate = areaFrom(declared);
-			if (areas.has(gate.name))
-				throw new EvalException("two areas share this name", gate.name);
-			areas.set(gate.name, gate);
-		}
-		return { memories, areas: [...areas.values()] };
+		if (kind !== null) fileUnder(this.table(KINDS), kind, memory.key);
+		for (const head of heads) fileUnder(this.table(HEADS), head, memory.key);
+	}
+
+	private unfile(key: string): void {
+		const filed = this.table(TABLE).get(key)?.[1];
+		if (filed === undefined) return;
+		this.table(TABLE).delete(key);
+		const [, kind, heads] = listToArray(filed as List);
+		if (typeof kind === "string") dropFrom(this.table(KINDS), kind, key);
+		for (const head of listToArray(heads as List))
+			dropFrom(this.table(HEADS), head, key);
+	}
+
+	private refuseAfterBoot(declared: unknown): void {
+		if (booted(this.installed()))
+			throw new EvalException(
+				"built-ins are declared only while the interpreter boots, from the .memories.ptc an extension ships; remember yours with memory/remember",
+				declared,
+				false,
+			);
+	}
+
+	*declare(declared: unknown): Eval<void> {
+		this.refuseAfterBoot(declared);
+		const parts = listToArray(declared as List);
+		const body = parts.at(-1);
+		const built =
+			parts.length >= 2 && body instanceof Cell
+				? [...parts.slice(0, -1), yield* this.installed().evalGen(body, null)]
+				: parts;
+		const memory = builtinFrom(arrayToList(built));
+		if ((yield* this.ask(ENTRY, memory.key)) !== null)
+			throw new EvalException(
+				"two built-in memories share this key",
+				memory.key,
+			);
+		if (wordCount(bodyText(memory.body)) > MAX_BUILTIN_WORDS)
+			throw new EvalException(
+				`a built-in memory body holds at most ${MAX_BUILTIN_WORDS} words; split it and link the parts`,
+				memory.key,
+			);
+		this.file(memory);
+	}
+
+	declareArea(declared: unknown): void {
+		this.refuseAfterBoot(declared);
+		const gate = areaFrom(declared);
+		const areas = this.table(AREA_TABLE);
+		if (areas.get(gate.name) !== undefined)
+			throw new EvalException("two areas share this name", gate.name);
+		areas.set(gate.name, gate.situation);
+	}
+
+	*gates(): Eval<AreaGate[]> {
+		return listToArray((yield* this.ask(GATES)) as List).map((entry) => {
+			const [name, situation] = listToArray(entry as List) as [string, string];
+			return { name, situation };
+		});
+	}
+
+	*builtins(): Eval<Memory[]> {
+		return (yield* this.filed(EVERY)).filter((memory) =>
+			this.isBuiltin(memory),
+		);
 	}
 
 	isBuiltin(memory: Memory): boolean {
-		return this.builtins().has(memory.key);
+		return memory.key.startsWith(INTERNAL);
 	}
 
 	*lookup(key: string): Eval<Memory | undefined> {
-		return this.builtins().get(key) ?? (yield* this.remembered(key));
+		yield* this.load();
+		const form = yield* this.ask(ENTRY, key);
+		return form === null ? undefined : formToMemory(form);
 	}
 
 	*remembered(key: string): Eval<Memory | undefined> {
@@ -558,67 +667,69 @@ export class MemoryBank {
 	}
 
 	private decode(stored: StoredMemory): Memory | undefined {
-		const interp = this.declaredIn;
-		if (interp === undefined)
-			throw new EvalException(
-				"the memory bank reads the store only once it is installed in an interpreter",
-				stored.key,
-			);
-		if ("source" in stored) return this.admit(interp, stored.source);
+		if ("source" in stored) return this.admit(stored.source);
+		const interp = this.installed();
 		const memory = recordToMemory(stored, (text) => interp.read(text));
 		return memory === undefined
 			? undefined
-			: this.admit(interp, str(memoryToSource(memory)));
+			: this.admit(str(memoryToSource(memory)));
 	}
 
-	private admit(interp: Interp, source: string): Memory | undefined {
-		this.builtins();
-		const declared = newSym(DECLARED_MEMORIES);
-		const before = interp.getGlobal(declared);
+	private admit(source: string): Memory | undefined {
+		let memory: Memory;
 		try {
-			const form = interp.read(source);
+			const form = this.installed().read(source);
 			if (
 				!(form instanceof Cell) ||
 				!(form.car instanceof Sym) ||
 				form.car.name !== "memory"
 			)
 				return undefined;
-			runSync(interp, source);
-			const entry = (interp.getGlobal(declared) as Cell).car;
-			const memory = rememberedFrom(entry);
-			const others = (before instanceof Cell ? listToArray(before) : []).filter(
-				(other) => !(other instanceof Cell && other.car === memory.key),
-			);
-			interp.defineGlobal(declared, new Cell(entry, arrayToList(others)));
-			return memory;
+			memory = rememberedFrom(form.cdr);
 		} catch {
-			interp.defineGlobal(declared, before);
 			return undefined;
 		}
+		this.file(memory);
+		return memory;
+	}
+
+	private *load(): Eval<void> {
+		if (this.storeRead.get()) return;
+		for (const found of yield* settled(this.store.all())) this.decode(found);
+		this.storeRead.set(true);
 	}
 
 	*everything(): Eval<Memory[]> {
-		const known = this.runtime.get();
-		if (known === undefined) return yield* this.reload();
-		return [...this.builtins().values(), ...known];
-	}
-
-	private *reload(): Eval<Memory[]> {
-		const stored = (yield* settled(this.store.all())).flatMap(
-			(found) => this.decode(found) ?? [],
-		);
-		this.runtime.set(stored);
-		return [...this.builtins().values(), ...stored];
+		yield* this.load();
+		return yield* this.filed(EVERY);
 	}
 
 	*listed(hook?: TriggerKind): Eval<Memory[]> {
-		return (yield* this.everything()).filter(
-			(memory) => hook === undefined || memory.on?.kind === hook,
-		);
+		if (hook === undefined) return yield* this.everything();
+		yield* this.load();
+		return yield* this.filed(OF_KIND, hook);
 	}
 
-	private stale(): void {
-		this.runtime.set(undefined);
+	private *stale(): Eval<void> {
+		const keys = listToArray((yield* this.ask(REMEMBERED_KEYS)) as List);
+		for (const key of keys) this.unfile(key as string);
+		this.storeRead.set(false);
+	}
+
+	private *candidates(event: MemoryEvent): Eval<Memory[]> {
+		yield* this.load();
+		if (event.recognized !== undefined) {
+			const found: Memory[] = [];
+			for (const [key, score] of event.recognized) {
+				if (score < WHEN_FIRES_AT) continue;
+				const memory = yield* this.lookup(key);
+				if (memory !== undefined) found.push(memory);
+			}
+			return found;
+		}
+		if (event.form !== undefined)
+			return yield* this.filed(CALLING, arrayToList([...headsIn(event.form)]));
+		return yield* this.filed(OF_KIND, event.kind);
 	}
 
 	private change(next: Partial<Step>): void {
@@ -727,11 +838,18 @@ export class MemoryBank {
 		if (cues.length === 0) return;
 		let scores: ReadonlyMap<string, number> = new Map();
 		let error: string | undefined;
+		let failedAreas: readonly string[] | undefined;
+		const startedAt = this.now();
 		try {
 			scores = yield* settled(this.recognize(situation, cues, repl.areas));
 		} catch (ex) {
+			if (ex instanceof PartialRecognition) {
+				scores = ex.scores;
+				failedAreas = ex.failed;
+			}
 			error = ex instanceof Error ? ex.message : String(ex);
 		}
+		const latencyMs = Math.max(0, this.now() - startedAt);
 		if (scores.size === 0 && error === undefined) return;
 		const before = this.step.get().surfaced.length;
 		if (scores.size > 0)
@@ -746,6 +864,8 @@ export class MemoryBank {
 			scores: Object.fromEntries(scores),
 			...(fired.length === 0 ? {} : { fired }),
 			...(error === undefined ? {} : { error }),
+			...(failedAreas === undefined ? {} : { failedAreas: [...failedAreas] }),
+			latencyMs,
 		});
 	}
 
@@ -798,18 +918,18 @@ export class MemoryBank {
 				source: str(memoryToSource(memory)),
 			}),
 		);
-		this.stale();
+		yield* this.stale();
 	}
 
 	*forget(key: string): Eval<boolean> {
 		const dropped = yield* settled(this.store.delete(key));
-		this.stale();
+		yield* this.stale();
 		return dropped;
 	}
 
 	*forgetAll(): Eval<number> {
 		const dropped = yield* settled(this.store.clear());
-		this.stale();
+		yield* this.stale();
 		return dropped;
 	}
 
@@ -889,9 +1009,9 @@ export class MemoryBank {
 		interp: Interp,
 		at: Cascade = TOP,
 	): Eval<void> {
-		if (!this.step.get().stepping || this.loadingBuiltins) return;
+		if (!this.step.get().stepping) return;
 		const shown = event.kind === "when" ? notedKeys(interp) : undefined;
-		for (const memory of yield* this.everything()) {
+		for (const memory of yield* this.candidates(event)) {
 			const on = memory.on;
 			if (on === undefined || on.kind !== event.kind) continue;
 			if (!fires(memory.key, on, event)) continue;
@@ -995,7 +1115,8 @@ export function memoryExtension(
 		bank,
 		asks: [FORGET_ALL],
 		prompt: host.prompt(),
-		memories: host.memories(),
+		prelude: PRELUDE,
+		postlude: host.memories(),
 		session: memorySession(bank),
 	});
 }
@@ -1073,18 +1194,22 @@ function situationOf(memory: Memory): unknown {
 		: triggerToForm(memory.on);
 }
 
+function documentDeclarations(interp: Interp): void {
+	interp.setDoc("memory", {
+		signature:
+			'(memory "key" [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links ("key"...)] "body")',
+		doc: `Declare a built-in memory, in a .memories.ptc file an extension ships. Its body holds at most ${MAX_BUILTIN_WORDS} words; split a longer one and link the parts.`,
+		wordCaps: [{ position: 1, words: MAX_BUILTIN_WORDS }],
+	});
+	interp.setDoc("area", {
+		signature: '(area "name" :when "situation")',
+		doc: "Declare the area a .memories.ptc file's memories are filed under, and the situation that opens it to recognition.",
+	});
+}
+
 export function registerMemory(interp: Interp, bank: MemoryBank): void {
 	bank.keepStateIn(interp);
 	bank.attach(interp.journal);
-	interp.defineGlobal(newSym(DECLARED), Unspecified);
-	interp.defineGlobal(newSym(BUILT_BODY), null, {
-		signature: BUILT_BODY,
-		doc: "Where a built-in memory's body lands while it is evaluated, so the evaluation reports nothing in a step.",
-	});
-	interp.setDoc(DECLARED, {
-		signature: DECLARED,
-		doc: "What a memory or area declaration returns: nothing, so declaring one reports nothing.",
-	});
 	interp.defineGlobal(
 		newSym("*memory-half-life-days*"),
 		BigInt(HALF_LIFE_MS / DAY_MS),
@@ -1101,17 +1226,48 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 			doc: "The kinds of event an :on trigger can name.",
 		},
 	);
-	runSync(interp, DECLARE);
-	interp.setDoc("memory", {
-		signature:
-			'(memory "key" [:when "situation" [:unless "situation"] | :on (kind "pattern")] [:links ("key"...)] "body")',
-		doc: `Declare a built-in memory, in a .memories.ptc file an extension ships. Its body holds at most ${MAX_BUILTIN_WORDS} words; split a longer one and link the parts.`,
-		wordCaps: [{ position: 1, words: MAX_BUILTIN_WORDS }],
-	});
-	interp.setDoc("area", {
-		signature: '(area "name" :when "situation")',
-		doc: "Declare the area a .memories.ptc file's memories are filed under, and the situation that opens it to recognition.",
-	});
+	for (const [name, doc] of TABLES) {
+		interp.defineGlobal(newSym(name), new LispHashTable(), {
+			signature: name,
+			doc,
+		});
+		interp.seal(newSym(name), MEMORY_OWNER);
+	}
+	interp.def(
+		SETTLE,
+		0,
+		`(${SETTLE})`,
+		"Give memory and area the documentation the memory extension declares them with, over the core's placeholders, and seal them and the forms that read the memory tables, so only this extension defines them.",
+		z.tuple([]),
+		() => {
+			documentDeclarations(interp);
+			for (const name of ["memory", "area", ...READERS])
+				interp.seal(newSym(name), MEMORY_OWNER);
+			return Unspecified;
+		},
+	);
+	interp.defGen(
+		DECLARE_MEMORY,
+		1,
+		`(${DECLARE_MEMORY} declaration)`,
+		"File a built-in memory, as the memory form declares it: check it, build its body, and put it in the memory tables. Returns nothing, so declaring one reports nothing.",
+		z.tuple([z.unknown()]),
+		function* ([declared]): Eval {
+			yield* bank.declare(declared);
+			return Unspecified;
+		},
+	);
+	interp.def(
+		DECLARE_AREA,
+		1,
+		`(${DECLARE_AREA} declaration)`,
+		"File an area, as the area form declares it, with the situation that opens it to recognition. Returns nothing.",
+		z.tuple([z.unknown()]),
+		([declared]) => {
+			bank.declareArea(declared);
+			return Unspecified;
+		},
+	);
 	bank.declareIn(interp);
 
 	interp.hooks.evalForm.use(function* (i, form, next): Eval {
@@ -1230,13 +1386,13 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		"memory/builtins",
 		-1,
 		"(builtins [area])",
 		'List the built-in memories each extension ships, as (key situation): the :when situation that fires it, or its :on trigger. With an area, such as "mcp", only the keys under it. Recall one by key to read its body.',
 		z.tuple([zList]),
-		([rest]) => {
+		function* ([rest]): Eval {
 			const [area] = listToArray(rest);
 			if (area !== undefined && typeof area !== "string")
 				throw new EvalException(
@@ -1245,7 +1401,7 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 				);
 			const prefix = area?.replace(/\/$/, "");
 			return arrayToList(
-				[...bank.builtins().values()]
+				(yield* bank.builtins())
 					.filter(
 						(memory) => prefix === undefined || areaFor(memory.key) === prefix,
 					)
@@ -1254,23 +1410,25 @@ export function registerMemory(interp: Interp, bank: MemoryBank): void {
 		},
 	);
 
-	interp.def(
+	interp.defGen(
 		AREAS,
 		-1,
 		"(areas [:when])",
 		"List the areas the built-in memories are filed under, as (area count), in the order the extensions ship them. Pass one to memory/builtins to list its keys. With :when, the areas that declare a gate, as (area situation): recognition opens an area when its situation holds, or when the last step called one of its forms, and only then weighs its memories.",
 		z.tuple([zList]),
-		([rest]) => {
+		function* ([rest]): Eval {
 			const [hook] = listToArray(rest);
 			if (hook !== undefined) {
 				if (hookOf(hook) !== "when")
 					throw new EvalException("areas are gated by :when only", hook);
 				return arrayToList(
-					bank.gates().map((gate) => arrayToList([gate.name, gate.situation])),
+					(yield* bank.gates()).map((gate) =>
+						arrayToList([gate.name, gate.situation]),
+					),
 				);
 			}
 			const counts = new Map<string, number>();
-			for (const key of bank.builtins().keys())
+			for (const { key } of yield* bank.builtins())
 				counts.set(areaFor(key), (counts.get(areaFor(key)) ?? 0) + 1);
 			return arrayToList(
 				[...counts].map(([area, count]) => arrayToList([area, BigInt(count)])),
