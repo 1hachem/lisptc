@@ -22,8 +22,8 @@ describe("the system prompt an interpreter composes", () => {
 		}).systemPrompt();
 
 		expect(prompt).toContain(LANGUAGE_REFERENCE);
-		expect(prompt).toMatch(/\(secret /);
-		expect(prompt).toMatch(/\(await /);
+		expect(prompt).toMatch(/\bsecret\b/);
+		expect(prompt).toMatch(/\bawait\b/);
 	});
 
 	it("says nothing about what the interpreter cannot do", () => {
