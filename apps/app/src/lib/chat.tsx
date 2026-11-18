@@ -446,7 +446,7 @@ export interface Briefed {
 	agent?: { prompt: string };
 }
 
-export function briefingOf(chat: Briefed | undefined): ChatMessage[] {
+function briefingOf(chat: Briefed | undefined): ChatMessage[] {
 	if (chat?.agent === undefined || chat.parentChatId === undefined) return [];
 	return [
 		{

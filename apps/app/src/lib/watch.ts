@@ -12,14 +12,14 @@ export interface Watched {
 	readonly failure?: string;
 }
 
-export const UNWATCHED: Watched = { snapshot: [], relayed: [], status: "idle" };
+const UNWATCHED: Watched = { snapshot: [], relayed: [], status: "idle" };
 
 export interface SseEvent {
 	readonly event: string;
 	readonly data: unknown;
 }
 
-export function readSse(buffer: string): { events: SseEvent[]; rest: string } {
+function readSse(buffer: string): { events: SseEvent[]; rest: string } {
 	const blocks = buffer.split("\n\n");
 	const rest = blocks.pop() ?? "";
 	const events: SseEvent[] = [];
@@ -53,10 +53,7 @@ function withDelta(messages: ChatMessage[], delta: ChatMessage): ChatMessage[] {
 	return messages.map((message, i) => (i === at ? merged : message));
 }
 
-export function applyWatched(
-	watched: Watched,
-	{ event, data }: SseEvent,
-): Watched {
+function applyWatched(watched: Watched, { event, data }: SseEvent): Watched {
 	switch (event) {
 		case "values":
 			return {
