@@ -97,5 +97,6 @@ spec:
                 secretKeyRef:
                   name: lisptc-seed
                   key: {{ . }}
+                  optional: true
             {{- end }}
             {{- end }}
