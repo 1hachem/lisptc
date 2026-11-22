@@ -118,9 +118,16 @@ function render(code: string): {
 }
 
 describe("building a view", () => {
-	it("renders nothing until ui/render is called", () => {
+	it("renders a widget a top-level form returns", () => {
 		const { interp, ui } = fresh();
-		runSync(interp, '(ui/stack (ui/text "hi"))');
+		const result = runSync(interp, '(ui/stack (ui/text "hi"))');
+		expect(ui.takeView()).toMatchObject({ tag: "stack" });
+		expect(str(result)).toBe('"rendered stack, 2 elements, 0 actions"');
+	});
+
+	it("renders nothing for a widget bound with setq or built inside a form", () => {
+		const { interp, ui } = fresh();
+		runSync(interp, '(setq v (ui/text "hi")) (length (list (ui/text "x")))');
 		expect(ui.takeView()).toBeUndefined();
 	});
 
@@ -476,6 +483,16 @@ describe("actions", () => {
 		await surface.invoke("a1", {});
 		await surface.invoke("a1", {});
 		expect(str(runSync(interp, "(identity clicks)"))).toBe("2");
+	});
+
+	it("renders the widget a handler returns", async () => {
+		const { surface, ui } = render(
+			'(ui/render (ui/button "go" (lambda () (ui/text "went"))))',
+		);
+		await click(surface, ui, "a1");
+		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
+			props: { text: "went" },
+		});
 	});
 
 	it("hands a handler that takes an argument the submitted fields", async () => {
