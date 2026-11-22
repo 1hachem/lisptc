@@ -323,6 +323,23 @@ describe("the display widgets", () => {
 		});
 	});
 
+	it("folds a collapsible shut unless :open is given", () => {
+		expect(
+			render('(ui/render (ui/collapsible "Steps" (ui/markdown "1. load")))')
+				.view,
+		).toEqual({
+			tag: "collapsible",
+			props: { title: "Steps" },
+			children: [{ tag: "markdown", props: { text: "1. load" }, children: [] }],
+		});
+		expect(
+			render('(ui/render (ui/collapsible "Steps" "load" :open t))').view,
+		).toMatchObject({
+			props: { title: "Steps", open: true },
+			children: [{ tag: "text", props: { text: "load" } }],
+		});
+	});
+
 	it("prints a non-string ui/text the way echo would", () => {
 		expect(render("(ui/render (ui/text 42))").view).toEqual({
 			tag: "text",
@@ -786,6 +803,7 @@ describe("the catalog the frontend draws from", () => {
 			     (ui/badge "b") (ui/badge "b" :tone "warn")
 			     (ui/kpi "k" 2) (ui/kpi "k" 2 :hint "h")
 			     (ui/row (ui/card "c" "x"))
+			     (ui/collapsible "c" "x") (ui/collapsible "c" "x" :open t)
 			     (ui/button "go" (lambda () nil))
 			     (ui/form (lambda (v) v)
 			       (ui/input :name "q" :label "Q" :placeholder "p" :value "v")

@@ -214,6 +214,26 @@ export const WIDGET_FORMS = {
 			children: childNodes(rest),
 		}),
 	}),
+	collapsible: form({
+		when: "the agent has a long answer to give, with several parts, steps or details the user may not all want to read",
+		arity: -2,
+		signature: "(ui/collapsible title child... [:open t])",
+		brief:
+			"titled section, folded shut until user clicks title. :open t starts it unfolded. Bare string child becomes ui/text.",
+		example: '(ui/collapsible "Details" (ui/markdown "**all** green"))',
+		doc: "A section the user unfolds by clicking its title. It starts folded unless `:open t` is given. Use it to keep a long answer short: say the gist in prose or a `ui/markdown`, and put each part's detail in a collapsible titled with what it holds, so the user opens only what they want to read.",
+		args: z.tuple([zString, zList]),
+		build: ([title, rest]) => {
+			const { values, options: given } = splitKeywordArgs(rest, ["open"]);
+			return {
+				props: {
+					title,
+					open: booleanOption(plistOptions(given, ["open"]), "open"),
+				},
+				children: childNodes(values),
+			};
+		},
+	}),
 	button: form({
 		when: "a view needs a button that runs something when it is clicked",
 		arity: 2,

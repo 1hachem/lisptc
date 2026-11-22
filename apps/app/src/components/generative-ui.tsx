@@ -150,6 +150,14 @@ const WIDGETS: Renderers = {
 			{kids}
 		</div>
 	),
+	collapsible: ({ props, kids }) => (
+		<details open={props.open === true} className="min-w-0">
+			<summary className="cursor-pointer font-bold text-accent">
+				{props.title}
+			</summary>
+			<div className="mt-2 flex min-w-0 flex-col gap-2 pl-4">{kids}</div>
+		</details>
+	),
 	heading: ({ props }) => (
 		<div className="font-bold text-accent">{props.text}</div>
 	),
