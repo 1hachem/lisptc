@@ -26,6 +26,8 @@ spec:
         path: charts/lisptc
         helm:
           valuesObject:
+            infisical:
+              envSlug: dev
             preview:
               enabled: true
               number: "{{ .number }}"
