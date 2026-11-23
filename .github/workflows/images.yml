@@ -61,7 +61,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: prod
+          env-slug: ${{ env.PREVIEW == 'true' && 'dev' || 'prod' }}
           secret-path: /web
           export-type: file
           file-output-path: /../web-build-vars
@@ -74,7 +74,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: prod
+          env-slug: dev
           secret-path: /tailnet
           export-type: env
 
@@ -178,7 +178,7 @@ jobs:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-          env-slug: prod
+          env-slug: dev
           secret-path: /tailnet
           export-type: env
 
