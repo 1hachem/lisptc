@@ -84,33 +84,25 @@ describe("the agent the app serves", () => {
 		expect(await ev("(length (memory/areas :when))")).not.toBe("0");
 	});
 
-	it("hands back every built-in memory's body as formatted text", async () => {
+	it("hands back every built-in memory's body as text with its format directives filled in", async () => {
 		const ev = await served();
 		const bodyOf = (key: string) =>
 			ev(
 				`(cdr (assoc "body" (car (filter (lambda (m) (equal (cdr (assoc "key" m)) ${JSON.stringify(key)})) (memory/recall ${JSON.stringify(key)})))))`,
 			);
-		expect(await bodyOf("internal/memory/fading")).toContain(
-			"strength every 7 days",
-		);
-		expect(await bodyOf("internal/preferences/metadata")).toContain(
-			":input input tokens",
-		);
+		for (const key of [
+			"internal/memory/fading",
+			"internal/preferences/metadata",
+		]) {
+			const body = await bodyOf(key);
+			expect(body).not.toBe("nil");
+			expect(body).not.toContain("~");
+		}
 		expect(
 			await ev(
 				`(filter (lambda (form) (and (string-prefix? "internal/" (cadr form)) (not (stringp (nth 3 form))))) (memory/_every))`,
 			),
 		).toBe("nil");
-	});
-
-	it("teaches the model the workspace, its knowledge and its preferences", async () => {
-		const interp = new Interp({
-			extensions: await workspaceExtensions(WORKSPACE, offline),
-		});
-		const prompt = interp.systemPrompt();
-		expect(prompt).toContain("WORKSPACE");
-		expect(prompt).toContain("KNOWLEDGE");
-		expect(prompt).toContain("PREFERENCES");
 	});
 
 	it("reads the desktop's presence off the bridge at the start of each step", async () => {

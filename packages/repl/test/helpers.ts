@@ -1,7 +1,6 @@
 import { effect } from "@repo/interpreter/effects";
 import { hitch } from "@repo/interpreter/journal";
 import type { Interp } from "@repo/interpreter/lisp";
-import { llmSlot, type Observed } from "@repo/interpreter/observe";
 import type { InterpExtension, SessionHooks } from "@repo/interpreter/session";
 import { AgentRepl, MemoryRepl } from "../src/repl.ts";
 
@@ -9,11 +8,6 @@ export function extension(
 	session: (hooks: SessionHooks) => void,
 ): InterpExtension {
 	return Object.assign((_interp: Interp): void => {}, { session });
-}
-
-export function observedExtension(): InterpExtension {
-	const observed: Observed = {};
-	return extension((hooks) => hooks.fill(llmSlot, observed));
 }
 
 export function answering(): InterpExtension {

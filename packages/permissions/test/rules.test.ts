@@ -1,7 +1,8 @@
-import { Interp } from "@repo/interpreter/lisp";
+import { Interp, runAsync } from "@repo/interpreter/lisp";
 import { Cell } from "@repo/interpreter/objects";
 import { describe, expect, it } from "vitest";
 import { type PermissionRules, readRules } from "../src/rules.ts";
+import { session } from "./helpers.ts";
 
 const interp = new Interp();
 
@@ -13,7 +14,7 @@ const CONFIG = `
 Anything outside a form is prose, so a config can explain itself.
 
 (permission/default ask)
-(permission/allow + - * car cdr list str/*)
+(permission/allow + - * car cdr list quote str/*)
 (permission/deny eval :reason "no code built from strings")
 (permission/ask memory/forget-all)
 
@@ -34,6 +35,13 @@ function form(source: string): Cell {
 	return read;
 }
 
+async function check(
+	source: string,
+	name: string,
+): Promise<string | undefined> {
+	return (await session(source).step(`(permission/check '${name})`)).value;
+}
+
 describe("a permissions config", () => {
 	const rules = parseRules(CONFIG);
 
@@ -49,14 +57,18 @@ describe("a permissions config", () => {
 		["github/delete_repo", "deny"],
 		["github/list_secrets", "ask"],
 		["github/admin_users", "deny"],
-	])("decides %s as %s", (name, verdict) => {
-		expect(rules.decide(name).verdict).toBe(verdict);
+	])("checks %s as %s", async (name, verdict) => {
+		expect(await check(CONFIG, name)).toBe(verdict);
 	});
 
-	it("carries the reason of the rule that won", () => {
-		expect(rules.decide("github/delete_repo").reason).toBe(
-			"nothing destructive on github",
+	it("refuses a call with the reason of the rule that won", async () => {
+		const s = session(
+			'(permission/ask string-* :reason "strings are reviewed") (permission/deny string-upcase :reason "shouting is off")',
 		);
+		const run = await s.step('(string-upcase "a")');
+		expect(run.failed).toBe(true);
+		expect(run.report).toContain("shouting is off");
+		expect(run.report).not.toContain("strings are reviewed");
 	});
 
 	it("reads a bare * as the multiplication form, not as everything", () => {
@@ -66,34 +78,34 @@ describe("a permissions config", () => {
 		).toBe("deny");
 	});
 
-	it("hides a tool, whatever an allow says", () => {
-		const hiding = parseRules(
-			"(permission/server gh (allow *) (hide admin_*))",
-		);
-		expect(hiding.tool("gh", "admin_users")).toBe(false);
-		expect(hiding.tool("gh", "list")).toBe(true);
-		expect(hiding.decide("gh/admin_users").verdict).toBe("deny");
+	it("hides a tool from the mcp policy and denies it, whatever an allow says", async () => {
+		const hiding = "(permission/server gh (allow *) (hide admin_*))";
+		const { rules: policy } = session(hiding).extension;
+		expect(policy.tool("gh", "admin_users")).toBe(false);
+		expect(policy.tool("gh", "list")).toBe(true);
+		expect(await check(hiding, "gh/admin_users")).toBe("deny");
 	});
 
-	it("shows only what an only form names, hiding the rest of that server", () => {
-		const playwright = parseRules(
-			"(permission/server playwright (only browser_navigate))",
-		);
-		expect(playwright.tool("playwright", "browser_navigate")).toBe(true);
-		expect(playwright.tool("playwright", "browser_navigate_back")).toBe(false);
-		expect(playwright.tool("playwright", "browser_click")).toBe(false);
-		expect(playwright.decide("playwright/browser_click").verdict).toBe("deny");
-		expect(playwright.decide("playwright/browser_navigate").verdict).toBe(
+	it("shows only what an only form names, hiding the rest of that server", async () => {
+		const playwright = "(permission/server playwright (only browser_navigate))";
+		const { rules: policy } = session(playwright).extension;
+		expect(policy.tool("playwright", "browser_navigate")).toBe(true);
+		expect(policy.tool("playwright", "browser_navigate_back")).toBe(false);
+		expect(policy.tool("playwright", "browser_click")).toBe(false);
+		expect(policy.tool("github", "list_issues")).toBe(true);
+		expect(await check(playwright, "playwright/browser_click")).toBe("deny");
+		expect(await check(playwright, "playwright/browser_navigate")).toBe(
 			"allow",
 		);
-		expect(playwright.tool("github", "list_issues")).toBe(true);
 	});
 
-	it("still lets a verdict govern a tool an only form shows", () => {
-		const asked = parseRules(
-			"(permission/server playwright (only browser_navigate) (ask browser_navigate))",
-		);
-		expect(asked.decide("playwright/browser_navigate").verdict).toBe("ask");
+	it("still lets a verdict govern a tool an only form shows", async () => {
+		expect(
+			await check(
+				"(permission/server playwright (only browser_navigate) (ask browser_navigate))",
+				"playwright/browser_navigate",
+			),
+		).toBe("ask");
 	});
 
 	it("answers for whole servers", () => {
@@ -106,14 +118,16 @@ describe("a permissions config", () => {
 	});
 
 	it("never lets a deny-server bring a hidden server back into view", () => {
-		const both = parseRules(
+		const { rules: policy } = session(
 			"(permission/hide-server x) (permission/deny-server x)",
-		);
-		expect(both.server("x")).toEqual({ access: "hidden" });
+		).extension;
+		expect(policy.server("x")).toEqual({ access: "hidden" });
 	});
 
-	it("allows everything when the config is empty", () => {
-		expect(parseRules("").decide("eval").verdict).toBe("allow");
+	it("allows everything when the config is empty", async () => {
+		const s = session("");
+		expect((await s.step("(permission/check 'eval)")).value).toBe("allow");
+		expect((await s.step('(string-upcase "a")')).value).toBe('"A"');
 	});
 
 	it.each([
@@ -125,8 +139,10 @@ describe("a permissions config", () => {
 		["(permission/server gh)", "names no rules"],
 		["(permission/server gh (hide-server x))", "unknown server rule"],
 		["(permission/allow car", "ends inside a form"],
-	])("refuses %s", (source, message) => {
-		expect(() => parseRules(source)).toThrow(message);
+	])("refuses the config %s", async (source, message) => {
+		await expect(
+			runAsync(session(source).interp, "(permission/check 'car)"),
+		).rejects.toThrow(message);
 	});
 });
 
@@ -134,22 +150,6 @@ describe("changing a config one form at a time", () => {
 	const base = parseRules(
 		"(permission/default ask) (permission/server pw (only nav))",
 	);
-
-	it("names only what a rule names, never the default", () => {
-		const named = parseRules(
-			"(permission/default allow) (permission/deny permission/delete) (permission/allow permission/*)",
-		);
-		expect(named.named("permission/delete")?.verdict).toBe("deny");
-		expect(named.named("permission/server")?.verdict).toBe("allow");
-		expect(base.named("permission/deny")).toBeUndefined();
-	});
-
-	it("appends the form to the source and decides by it", () => {
-		const next = base.with(form("(permission/deny eval)"));
-		expect(next.decide("eval").verdict).toBe("deny");
-		expect(next.source).toContain("(permission/deny eval)");
-		expect(next.source).toContain("(permission/default ask)");
-	});
 
 	it("refuses a form that does not parse, and leaves the config alone", () => {
 		expect(() => base.with(form("(permission/permit eval)"))).toThrow(

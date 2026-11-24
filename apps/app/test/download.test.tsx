@@ -5,9 +5,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { DownloadButton } from "../src/components/stored-file.tsx";
 
-const reported = vi.hoisted(() => vi.fn());
-
-vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: reported }));
+vi.mock("../src/lib/analytics.tsx", () => ({ reportIssue: () => {} }));
 
 const STORAGE = "https://deployment.test/api/storage/abc";
 
@@ -23,8 +21,7 @@ afterEach(() => {
 });
 
 async function clicked(response: Response) {
-	const fetched = vi.fn(async () => response);
-	vi.stubGlobal("fetch", fetched);
+	vi.stubGlobal("fetch", async () => response);
 	const blobs: Blob[] = [];
 	vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
 		blobs.push(blob as Blob);
@@ -37,7 +34,6 @@ async function clicked(response: Response) {
 	) {
 		opened.push({ href: this.href, download: this.download });
 	});
-	const open = vi.spyOn(window, "open");
 
 	const host = document.createElement("div");
 	const root = createRoot(host);
@@ -50,37 +46,31 @@ async function clicked(response: Response) {
 	await act(async () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 	});
-	return { host, fetched, blobs, opened, open, root };
+	return { host, blobs, opened, root };
 }
 
 describe("downloading a stored file", () => {
-	it("saves it through a same-origin blob and never opens the storage url", async () => {
-		const { host, fetched, blobs, opened, open, root } = await clicked(
+	it("saves an html file under its name as plain bytes, never rendering it", async () => {
+		const { blobs, opened, root } = await clicked(
 			new Response("<script>alert(1)</script>", {
 				headers: { "Content-Type": "text/html" },
 			}),
 		);
 
-		expect(fetched).toHaveBeenCalledWith(STORAGE);
-		expect(blobs).toHaveLength(1);
+		expect(opened.map((saved) => saved.download)).toEqual(["page.html"]);
 		expect(blobs[0]?.type).toBe("application/octet-stream");
-		expect(opened).toEqual([{ href: "blob:app/1", download: "page.html" }]);
-		expect(open).not.toHaveBeenCalled();
-		expect(host.querySelector(`a[href="${STORAGE}"]`)).toBeNull();
+		expect(await blobs[0]?.text()).toBe("<script>alert(1)</script>");
 		root.unmount();
 	});
 
-	it("shows the failure when storage refuses", async () => {
+	it("saves nothing and says the download failed when storage refuses", async () => {
 		vi.spyOn(console, "warn").mockImplementation(() => {});
 		const { host, opened, root } = await clicked(
 			new Response("gone", { status: 404 }),
 		);
 
 		expect(opened).toEqual([]);
-		const button = host.querySelector("button");
-		expect(button?.textContent).toBe("download failed");
-		expect(button?.title).toBe("download answered 404");
-		expect(reported).toHaveBeenCalled();
+		expect(host.textContent).toContain("download failed");
 		root.unmount();
 	});
 });

@@ -38,7 +38,7 @@ export function mentionOf({ folder, name }: Mentionable): string {
 	return /\s/.test(path) ? `@"${path}"` : `@${path}`;
 }
 
-export function matchingMentions(
+function matchingMentions(
 	files: readonly Mentionable[],
 	query: string,
 ): Mentionable[] {

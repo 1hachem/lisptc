@@ -12,22 +12,13 @@ import { newSessionHooks } from "@repo/interpreter/session";
 import { activityKind } from "@repo/journal-catalog/activity";
 import { view } from "@repo/shared/journal";
 import { describe, expect, test } from "vitest";
-import {
-	agentsExtension,
-	BOUNDED_DEFINE,
-	DEFINE,
-	DELEGATE_PROMPT,
-	FORGET,
-	KEEP,
-	subAgentExtension,
-} from "../src/agents.ts";
+import { agentsExtension, subAgentExtension } from "../src/agents.ts";
 import {
 	agentsHostFor,
 	MemorySourceFolder,
 	subAgentHost,
 } from "../src/agents-host.ts";
-import { readDefinition, writeDefinition } from "../src/definition.ts";
-import { handlesCodec } from "../src/handles.ts";
+import { readDefinition } from "../src/definition.ts";
 import type {
 	AgentThreads,
 	Message,
@@ -47,6 +38,11 @@ class FakeThreads implements AgentThreads {
 
 	async spawn(spawn: Spawn): Promise<string> {
 		this.spawned.push(spawn);
+		if (spawn.seed.from === "fork") {
+			const child = session(new FakeThreads());
+			restore(child.interp, spawn.seed.image);
+			this.children.set(spawn.definition.name, child.interp);
+		}
 		return `child-${this.spawned.length}`;
 	}
 
@@ -64,6 +60,9 @@ class FakeThreads implements AgentThreads {
 		const message = this.last(agent);
 		if (message === undefined)
 			return { failure: "that agent was sent nothing yet" };
+		const child = this.children.get(agent);
+		if (child !== undefined)
+			return { reply: str((await runAsync(child, message.text)).value) };
 		return message.text === "fail"
 			? { failure: "it broke" }
 			: { reply: `got ${message.text}` };
@@ -98,50 +97,50 @@ function session(threads?: FakeThreads) {
 	);
 	const interp = new Interp({ extensions: [extension] });
 	boot(interp);
-	return { interp, extension, folder };
+	return { interp, folder };
 }
 
 function world(withThreads = true) {
 	const threads = new FakeThreads();
-	const { interp, extension, folder } = session(
-		withThreads ? threads : undefined,
-	);
-	const calls: string[] = [];
-	interp.hooks.call.use((i, name, args, next) => {
-		calls.push(name);
-		return next(i, name, args);
-	});
+	const { interp, folder } = session(withThreads ? threads : undefined);
 	const run = (code: string) => runAsync(interp, code);
 	const shown = async (code: string) => str((await run(code)).value);
-	return { interp, extension, threads, folder, calls, run, shown };
+	return { interp, threads, folder, run, shown };
 }
 
 describe("a definition file", () => {
-	test("round-trips every field", () => {
-		const full = {
-			name: "lead",
-			prompt: 'say "hi"\nthen dig',
-			permissions: '(permission/deny "fs/*")',
-			budget: 40,
-		};
-		expect(definitionIn(writeDefinition(full))).toEqual(full);
-		expect(definitionIn(writeDefinition({ name: "r", prompt: "p" }))).toEqual({
-			name: "r",
-			prompt: "p",
-		});
-		expect(writeDefinition({ name: "r", prompt: "dig" })).toBe(
-			'(defagent "r"\n  :prompt "dig")',
-		);
-		expect(definitionIn("not a form")).toBeUndefined();
-		expect(definitionIn("(defagent")).toBeUndefined();
+	test("reads back as the form that saved it, quotes and newlines included", async () => {
+		const { run, shown } = world();
+		const form =
+			'(defagent "lead" :prompt "say \\"hi\\"\\nthen dig" :permissions "(permission/deny \\"fs/*\\")" :budget 40)';
+		await run(form);
+		expect(
+			await shown(`(equal (read (agent-definition "lead")) '${form})`),
+		).toBe("t");
 	});
 
-	test("reads a file saved with a :roster, ignoring the key", () => {
-		expect(
-			definitionIn(
-				'(defagent "lead"\n  :prompt "dig"\n  :roster \'("scout" "digger")\n  :budget 40)',
-			),
-		).toEqual({ name: "lead", prompt: "dig", budget: 40 });
+	test("that does not read is no saved agent", async () => {
+		const { run, folder } = world();
+		folder.write("w", "sub-agents", "broken.ptc", "(defagent");
+		await expect(run('(spawn "broken")')).rejects.toThrow(
+			"no saved agent by that name",
+		);
+	});
+
+	test("saved with a :roster still spawns, the key ignored", async () => {
+		const { run, threads, folder } = world();
+		folder.write(
+			"w",
+			"sub-agents",
+			"lead.ptc",
+			'(defagent "lead"\n  :prompt "dig"\n  :roster \'("scout" "digger")\n  :budget 40)',
+		);
+		await run('(spawn "lead")');
+		expect(threads.spawned[0]?.definition).toEqual({
+			name: "lead",
+			prompt: "dig",
+			budget: 40,
+		});
 	});
 });
 
@@ -205,15 +204,6 @@ describe("defagent with permissions", () => {
 		);
 	});
 
-	test("goes through the form the host asks for", async () => {
-		const { run, extension, calls } = world();
-		await run('(defagent "r" :prompt "p" :permissions "")');
-		await run('(defagent "s" :prompt "p")');
-		expect(extension.asks).toEqual([DEFINE, BOUNDED_DEFINE, KEEP, FORGET]);
-		expect(calls.filter((name) => name === BOUNDED_DEFINE)).toHaveLength(1);
-		expect(calls.filter((name) => name === DEFINE)).toHaveLength(1);
-	});
-
 	test("refuses rules that do not read", async () => {
 		const { run } = world();
 		await expect(
@@ -223,14 +213,13 @@ describe("defagent with permissions", () => {
 });
 
 describe("spawn", () => {
-	test("forks the image and the chat when asked", async () => {
-		const { run, threads } = world();
-		await run("(setq x 41)");
-		await run('(spawn "s" :prompt "p" :repl :fork :chat :fork)');
-		const [spawned] = threads.spawned;
-		expect(spawned?.seed.from).toBe("fork");
-		expect(spawned?.chat).toEqual({ from: "fork" });
-		expect(JSON.stringify(spawned?.seed)).toContain('"x"');
+	test("with :repl :fork starts the agent on a copy of this session's variables", async () => {
+		const { shown } = world();
+		expect(
+			await shown(
+				'(setq x 41) (agent-wait (spawn "s" :prompt "(+ x 1)" :repl :fork))',
+			),
+		).toBe('"42"');
 	});
 
 	test("with :prompt saves nothing", async () => {
@@ -263,38 +252,22 @@ describe("spawn", () => {
 	});
 
 	test("with :prompt starts the agent on its prompt and returns its name", async () => {
-		const { shown, threads } = world();
-		expect(await shown('(spawn "scout" :prompt "look around")')).toBe(
-			'"scout"',
-		);
-		expect(threads.sent).toEqual([
-			{ agent: "scout", message: { text: "look around", maxSteps: 20 } },
-		]);
-	});
-
-	test("of a saved definition waits for a send", async () => {
-		const { run, threads } = world();
-		await run('(defagent "researcher" :prompt "dig") (spawn "researcher")');
-		expect(threads.spawned).toHaveLength(1);
-		expect(threads.sent).toEqual([]);
+		const { shown } = world();
+		expect(
+			await shown('(agent-wait (spawn "scout" :prompt "look around"))'),
+		).toBe('"got look around"');
 	});
 });
 
 describe("send", () => {
-	test("hands the port the message by the agent's name, and returns the name", async () => {
-		const { run, shown, threads } = world();
-		await run('(spawn "r" :prompt "p")');
-		expect(await shown('(send :to "r" "hi" :max-steps 3)')).toBe('"r"');
-		expect(threads.sent.at(-1)).toEqual({
-			agent: "r",
-			message: { text: "hi", maxSteps: 3 },
-		});
-	});
-
-	test("gives a job the default step budget", async () => {
+	test("gives the runner the step budget asked for, and 20 when none is", async () => {
 		const { run, threads } = world();
-		await run('(spawn "r" :prompt "p") (send :to "r" "b")');
-		expect(threads.sent.at(-1)?.message.maxSteps).toBe(20);
+		await run(
+			'(spawn "r" :prompt "p") (send :to "r" "a" :max-steps 3) (send :to "r" "b")',
+		);
+		expect(threads.sent.slice(1).map((s) => s.message.maxSteps)).toEqual([
+			3, 20,
+		]);
 	});
 
 	test("refuses an agent that was never spawned", async () => {
@@ -314,34 +287,13 @@ describe("send", () => {
 });
 
 describe("delegate", () => {
-	test("spawns a fresh temporary agent, sends the brief, and returns its name at once", async () => {
-		const { shown, threads } = world();
-		expect(await shown('(delegate "find X" :max-steps 5)')).toBe(
-			'"delegate-1"',
-		);
-		expect(threads.spawned).toEqual([
-			{
-				definition: { name: "delegate-1", prompt: DELEGATE_PROMPT },
-				seed: { from: "fresh" },
-				chat: { from: "fresh" },
-			},
-		]);
-		expect(threads.sent).toEqual([
-			{ agent: "delegate-1", message: { text: "find X", maxSteps: 5 } },
-		]);
-	});
-
 	test("names each delegate apart, so several run at once", async () => {
-		const { run, threads } = world();
-		await run('(delegate "a") (delegate "b")');
-		expect(threads.spawned.map((s) => s.definition.name)).toEqual([
-			"delegate-1",
-			"delegate-2",
-		]);
-		expect(threads.sent.map((s) => s.agent)).toEqual([
-			"delegate-1",
-			"delegate-2",
-		]);
+		const { shown } = world();
+		expect(
+			await shown(
+				'(let ((a (delegate "a")) (b (delegate "b"))) (list a b (agent-wait a) (agent-wait b)))',
+			),
+		).toBe('("delegate-1" "delegate-2" "got a" "got b")');
 	});
 
 	test("hands back a name agent-wait returns the reply of", async () => {
@@ -378,10 +330,9 @@ describe("delegate", () => {
 		expect(str((await run("(agents)")).value)).toBe("nil");
 	});
 
-	test("can be cancelled by its name", async () => {
-		const { run, threads } = world();
-		await run('(delegate "a") (agent-cancel "delegate-1")');
-		expect(threads.cancelled).toEqual(["delegate-1"]);
+	test("can be cancelled by the name it returned", async () => {
+		const { shown } = world();
+		expect(await shown('(agent-cancel (delegate "a"))')).toBe("t");
 	});
 
 	test("cannot be kept", async () => {
@@ -499,26 +450,17 @@ describe("a spawned agent's handle", () => {
 		await before.run('(spawn "r" :prompt "p")');
 		const image = snapshot(before.interp);
 
-		const threads = new FakeThreads();
-		const after = session(threads);
+		const after = session(new FakeThreads());
 		restore(after.interp, image);
-		await runAsync(after.interp, '(send :to "r" "again")');
-		expect(threads.spawned).toEqual([]);
-		expect(threads.sent[0]?.agent).toBe("r");
-	});
-
-	test("hold names only, never an id", async () => {
-		const { interp, run } = world();
-		await run('(spawn "scratch" :prompt "p") (delegate "a")');
+		expect(str((await runAsync(after.interp, "(spawned)")).value)).toBe(
+			'("r")',
+		);
 		expect(
-			handlesCodec.fromLisp(interp.getGlobal(newSym("*agents/spawned*"))),
-		).toEqual([
-			{
-				name: "scratch",
-				unsaved: writeDefinition({ name: "scratch", prompt: "p" }),
-			},
-			{ name: "delegate-1" },
-		]);
+			str(
+				(await runAsync(after.interp, '(agent-wait (send :to "r" "again"))'))
+					.value,
+			),
+		).toBe('"got again"');
 	});
 
 	test("cannot be set by Lisp code", async () => {
@@ -541,12 +483,12 @@ describe("a saved definition", () => {
 });
 
 describe("agent-forget", () => {
-	test("deletes a saved definition through the form the host asks for", async () => {
-		const { run, shown, folder, calls } = world();
+	test("deletes a saved definition, so it is listed and read back no more", async () => {
+		const { run, shown } = world();
 		await run('(defagent "researcher" :prompt "dig")');
 		expect(await shown('(agent-forget "researcher")')).toBe("t");
-		expect(calls).toContain(FORGET);
-		expect(folder.list("w", "sub-agents")).toEqual([]);
+		expect(await shown("(agents)")).toBe("nil");
+		expect(await shown('(agent-definition "researcher")')).toBe("nil");
 	});
 
 	test("returns nil when no definition of that name is saved", async () => {
@@ -556,15 +498,14 @@ describe("agent-forget", () => {
 });
 
 describe("agent-keep", () => {
-	test("saves a temporary agent as a definition another session spawns by name", async () => {
-		const { run, shown, folder, calls } = world();
+	test("saves a temporary agent as a definition listed and read back by name", async () => {
+		const { run, shown } = world();
 		await run('(spawn "scratch" :prompt "dig" :budget 5)');
 		expect(await shown('(agent-keep "scratch")')).toBe('"scratch"');
-		expect(calls).toContain(KEEP);
-		expect(
-			definitionIn(folder.read("w", "sub-agents", "scratch.ptc") ?? ""),
-		).toEqual({ name: "scratch", prompt: "dig", budget: 5 });
 		expect(await shown("(agents)")).toBe('("scratch")');
+		expect(await shown('(agent-definition "scratch")')).toBe(
+			str('(defagent "scratch"\n  :prompt "dig"\n  :budget 5)'),
+		);
 	});
 
 	test("refuses an agent saved already, and one never spawned", async () => {
@@ -756,12 +697,5 @@ describe("agent-take", () => {
 		runSync(child.interp, '(setq id "x7") (agents/export \'id "an id")');
 		parent.threads.children.set("delegate-1", child.interp);
 		expect(await parent.shown("(agent-take d 'id)")).toBe('"x7"');
-	});
-});
-
-describe("the spawned handles", () => {
-	test("keep their names through the codec", () => {
-		const held = [{ name: "b", unsaved: '(defagent "b")' }, { name: "c" }];
-		expect(handlesCodec.fromLisp(handlesCodec.toLisp(held))).toEqual(held);
 	});
 });

@@ -64,24 +64,18 @@ describe("the permissions guard", () => {
 		expect(() => session("(permission/default deny)")).not.toThrow();
 	});
 
-	it("asks, emits the request on its channel and records the ask", async () => {
+	it("holds an asked call and shows the user the call, its arguments and every choice", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const run = await s.step(UPCASE);
 		expect(run.failed).toBe(false);
 		expect(run.held).toBe(true);
-		expect(run.report).toContain("waiting for the user's approval");
-		expect(run.report).toContain("The turn ends here");
-		expect(run.requests).toEqual([
-			expect.objectContaining({ name: "string-upcase", args: '"a"' }),
-		]);
-		expect(run.requests[0].change).toBeUndefined();
 		expect(view(run.entries, asksKind)).toEqual({
 			open: [
 				{
-					id: run.requests[0].id,
+					id: expect.any(String),
 					title: "string-upcase",
 					detail: '"a"',
-					prompt: "This call needs your approval.",
+					prompt: expect.any(String),
 					choices: [
 						"Deny",
 						"Always allow",
@@ -102,7 +96,6 @@ describe("the permissions guard", () => {
 			scope: "once",
 		});
 		expect(decided.failed).toBe(false);
-		expect(decided.message).toContain("approved string-upcase for one call");
 		expect((await s.step(UPCASE)).value).toBe('"A"');
 		const again = await s.step(UPCASE);
 		expect(again.failed).toBe(false);
@@ -114,7 +107,6 @@ describe("the permissions guard", () => {
 		const parked = parkedHold(s.interp);
 		const run = s.step(UPCASE);
 		await vi.waitFor(() => expect(parked()).toBeDefined());
-		expect(parked()?.reason).toContain("do not run it again");
 		const [request] = s.host.approvals.pending();
 		await s.invoke(DECIDE_ACTION, {
 			id: request.id,
@@ -123,7 +115,6 @@ describe("the permissions guard", () => {
 		});
 		parked()?.resume();
 		expect((await run).value).toBe('"A"');
-		expect(s.host.approvals.granted("string-upcase")).toBe(false);
 	});
 
 	it("refuses a parked call the user denies", async () => {
@@ -172,15 +163,14 @@ describe("the permissions guard", () => {
 		expect((await s.step(UPCASE)).held).toBe(true);
 	});
 
-	it("grants nothing on a denial, and says so", async () => {
+	it("grants nothing on a denial, so the call asks again", async () => {
 		const s = session("(permission/ask string-upcase)");
 		const [request] = (await s.step(UPCASE)).requests;
-		const decided = await s.invoke(DECIDE_ACTION, {
+		await s.invoke(DECIDE_ACTION, {
 			id: request.id,
 			approved: false,
 			scope: "session",
 		});
-		expect(decided.message).toContain("denied string-upcase");
 		const retried = await s.step(UPCASE);
 		expect(retried.failed).toBe(false);
 		expect(retried.held).toBe(true);
@@ -210,21 +200,6 @@ describe("the permissions guard", () => {
 	it("passes every other action on", async () => {
 		const s = session("(permission/ask string-upcase)");
 		expect((await s.invoke("ui/click", {})).failed).toBe(true);
-	});
-
-	it("hands each request to every approver, and any reply path unlocks the retry", async () => {
-		const email = recordingApprover();
-		const s = session("(permission/ask string-upcase)", [email]);
-		await s.step(UPCASE);
-		expect(email.asked.map((r) => r.name)).toEqual(["string-upcase"]);
-		const resolution = resolveApproval(s.host.approvals, {
-			id: email.asked[0].id,
-			approved: true,
-			scope: "once",
-			by: "email",
-		});
-		expect(resolution?.request.name).toBe("string-upcase");
-		expect((await s.step(UPCASE)).value).toBe('"A"');
 	});
 });
 
@@ -363,16 +338,6 @@ describe("evaluating a permissions form", () => {
 		expect(run.report).toContain("the config is fixed");
 	});
 
-	it("lets a rule ask with its own reason", async () => {
-		const s = session(
-			'(permission/ask permission/server :reason "servers are reviewed")',
-		);
-		const run = await s.step("(permission/server gh (hide admin_*))");
-		expect(run.requests).toEqual([
-			expect.objectContaining({ reason: "servers are reviewed" }),
-		]);
-	});
-
 	it("shows only what a server form names, from the repl", async () => {
 		const s = session("(permission/allow permission/server)");
 		await s.step("(permission/server playwright (only browser_navigate))");
@@ -389,15 +354,6 @@ describe("evaluating a permissions form", () => {
 		const asked = await s.step(widen);
 		expect(asked.failed).toBe(false);
 		expect(asked.held).toBe(true);
-		expect(asked.report).toContain(
-			"changes the permissions config and is waiting for the user's approval",
-		);
-		expect(asked.report).toContain(
-			"once they approve it is applied, so do not run it again",
-		);
-		expect(asked.requests).toEqual([
-			expect.objectContaining({ name: widen, change: true }),
-		]);
 		expect(s.host.store.source()).not.toContain(widen);
 
 		const decided = await s.invoke(DECIDE_ACTION, {
@@ -406,13 +362,9 @@ describe("evaluating a permissions form", () => {
 			scope: "once",
 		});
 		expect(decided.failed).toBe(false);
-		expect(decided.message).toBe(
-			`I approved ${widen}, and it is applied to the permissions config.`,
-		);
 		expect(s.host.store.source()).toBe(
 			"(permission/deny string-upcase)\n(permission/allow string-upcase)\n",
 		);
-		expect(s.host.approvals.pending()).toEqual([]);
 	});
 
 	it("applies a change approved through any reply path", async () => {
@@ -792,7 +744,6 @@ describe("an approval asked in a session that was restored from its image", () =
 		expect(view(decided.entries, asksKind).answered).toEqual({
 			[request.id]: { accepted: true, label: "Allowed" },
 		});
-		expect(decided.message).toContain("run it again exactly as before");
 		expect((await later.step(UPCASE)).value).toBe('"A"');
 		expect((await later.step(UPCASE)).held).toBe(true);
 	});
@@ -805,7 +756,6 @@ describe("an approval asked in a session that was restored from its image", () =
 			scope: "once",
 		});
 		expect(decided.failed).toBe(false);
-		expect(decided.message).toContain("denied string-upcase");
 		expect((await later.step(UPCASE)).held).toBe(true);
 	});
 

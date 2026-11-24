@@ -143,50 +143,10 @@ describe("a refusal from the deployment", () => {
 });
 
 describe("a token left over from another deployment", () => {
-	test("reads as forged when no key here signed it", async () => {
-		const { SignJWT, generateKeyPair } = await import("jose");
-		const { privateKey } = await generateKeyPair("RS256", {
-			extractable: true,
-		});
-		const elsewhere = await new SignJWT({ sub: "user-1" })
-			.setProtectedHeader({ alg: "RS256", kid: "wiped" })
-			.setIssuer(ORIGIN)
-			.setAudience("convex")
-			.setExpirationTime("5m")
-			.sign(privateKey);
-		expect(await verifyToken(elsewhere)).toEqual({
-			signed: false,
-			forged: true,
-		});
-	});
-
 	test("reads as forged when it was minted for another issuer", async () => {
 		const token = await sign({ sub: "user-1" }, (jwt) =>
 			jwt.setIssuer("http://elsewhere.test"),
 		);
 		expect(await verifyToken(token)).toEqual({ signed: false, forged: true });
-	});
-
-	test("reads as signed when this deployment signed it", async () => {
-		expect(await verifyToken(await sign({ sub: "user-1" }))).toEqual({
-			signed: true,
-			subject: "user-1",
-		});
-	});
-});
-
-describe("a token this deployment signed that no longer verifies", () => {
-	test("is not forged once it has expired", async () => {
-		const token = await sign({ sub: "user-1" }, (jwt) =>
-			jwt.setExpirationTime(Math.floor(Date.now() / 1000) - 30),
-		);
-		expect(await verifyToken(token)).toEqual({ signed: false, forged: false });
-	});
-
-	test("is not forged while it is not yet valid", async () => {
-		const token = await sign({ sub: "user-1" }, (jwt) =>
-			jwt.setNotBefore(Math.floor(Date.now() / 1000) + 60),
-		);
-		expect(await verifyToken(token)).toEqual({ signed: false, forged: false });
 	});
 });

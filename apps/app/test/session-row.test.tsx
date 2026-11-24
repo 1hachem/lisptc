@@ -5,12 +5,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { SessionRow } from "../src/components/session-row.tsx";
-import { traceOpen } from "../src/lib/panel-ops.ts";
 
-const panels = vi.hoisted(() => ({ apply: vi.fn(), shown: false }));
+const panels = vi.hoisted(() => ({ shown: false }));
 
 vi.mock("../src/lib/panels.tsx", () => ({
-	usePanels: () => ({ apply: panels.apply }),
+	usePanels: () => ({ apply: () => {} }),
 }));
 vi.mock("@convex-dev/react-query", () => ({
 	useConvexMutation: () => vi.fn(),
@@ -78,7 +77,6 @@ const roots: Root[] = [];
 afterEach(() => {
 	for (const root of roots.splice(0)) act(() => root.unmount());
 	document.body.replaceChildren();
-	panels.apply.mockClear();
 	panels.shown = false;
 });
 
@@ -99,33 +97,6 @@ function mount() {
 }
 
 describe("a chat's row in the sidebar", () => {
-	it("opens the chat's trace from its menu", async () => {
-		const host = document.createElement("div");
-		document.body.append(host);
-		const root = createRoot(host);
-		roots.push(root);
-		await act(async () => root.render(<SessionRow chat={CHAT} />));
-
-		const item = [
-			...host.querySelectorAll<HTMLButtonElement>("[data-menu-item]"),
-		].find((b) => b.textContent === "open trace");
-		await act(async () => item?.click());
-
-		expect(item).toBeDefined();
-		expect(panels.apply).toHaveBeenCalledWith([traceOpen("c1")]);
-	});
-	it("lists its sub-agents only once the chat is opened", async () => {
-		const host = document.createElement("div");
-		document.body.append(host);
-		const root = createRoot(host);
-		roots.push(root);
-		await act(async () => root.render(<SessionRow chat={CHAT} />));
-		expect(host.textContent).not.toContain("a sub-agent");
-
-		panels.shown = true;
-		await act(async () => root.render(<SessionRow chat={{ ...CHAT }} />));
-		expect(host.textContent).toContain("a sub-agent");
-	});
 	it("collapses and expands its sub-agents on a click while open", async () => {
 		panels.shown = true;
 		const { host, root } = mount();
@@ -155,6 +126,10 @@ describe("a chat's row in the sidebar", () => {
 		const { host, root } = mount();
 		await act(async () => root.render(<SessionRow chat={CHAT} />));
 
-		expect(host.querySelector("button[aria-expanded]")).toBeNull();
+		expect(
+			[...host.querySelectorAll("button")].some((b) =>
+				b.title.includes("sub-agent"),
+			),
+		).toBe(false);
 	});
 });

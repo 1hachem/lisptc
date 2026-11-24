@@ -130,12 +130,6 @@ async function mount(view: React.ReactNode = <ChatView />) {
 }
 
 describe("the system lane", () => {
-	it("is a lane the trace toggles", () => {
-		expect(LANES.find((c) => c.id === "system")).toMatchObject({
-			label: "system",
-		});
-	});
-
 	it("keeps what the system told the agent out of the chat", async () => {
 		const host = await mount();
 		expect(host.textContent).toContain("write a");
@@ -144,21 +138,9 @@ describe("the system lane", () => {
 
 	it("draws what the system told the agent in the trace, and never as the user's words", async () => {
 		const host = await mount(<TraceLines messages={session.messages} />);
-		for (const row of host.querySelectorAll<HTMLButtonElement>(
-			"[data-trace-message] > button",
-		))
-			await act(async () => row.click());
-
-		expect(host.textContent).toContain(NOTE);
-		expect(
-			host.querySelector('[data-trace-message="system"]')?.textContent,
-		).toContain(NOTE);
-		const userLines = [
-			...host.querySelectorAll('[data-trace-message="you"]'),
-		].map((line) => [
-			line.textContent,
-			line.querySelector("svg")?.getAttribute("aria-label"),
-		]);
-		expect(userLines).toEqual([["write a", "you"]]);
+		const row = (label: string) =>
+			host.querySelector(`[aria-label="${label}"]`)?.closest("button");
+		expect(row("system")?.textContent).toContain(NOTE);
+		expect(row("you")?.textContent).not.toContain(NOTE);
 	});
 });

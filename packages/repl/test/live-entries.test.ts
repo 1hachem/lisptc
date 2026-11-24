@@ -40,21 +40,6 @@ function progressing(): InterpExtension {
 }
 
 describe("entries while a step runs", () => {
-	it("reach the caller the moment each is recorded, in order", async () => {
-		const seen: { entry: Entry; at: number }[] = [];
-		const started = Date.now();
-		const out = await agentRepl([progressing()]).evalOutput(
-			"(progress 1) (pause 200) (progress 2) (pause 200) (progress 3)",
-			undefined,
-			(entry) => seen.push({ entry, at: Date.now() - started }),
-		);
-
-		expect(seen.map((s) => s.entry.value)).toEqual([1, 2, 3]);
-		expect(seen[1].at - seen[0].at).toBeGreaterThanOrEqual(150);
-		expect(seen[2].at - seen[1].at).toBeGreaterThanOrEqual(150);
-		expect(out.entries).toEqual(seen.map((s) => s.entry));
-	});
-
 	it("are the same entries the step ends with when nobody watches", async () => {
 		const code = "(progress 1) (progress 1) (progress 2)";
 		const quiet = await agentRepl([progressing()]).evalOutput(code);

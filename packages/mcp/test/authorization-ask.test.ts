@@ -1,9 +1,13 @@
-import { ConversationInterpreter, note } from "@repo/interpreter/conversation";
+import { ConversationInterpreter } from "@repo/interpreter/conversation";
 import { StepHold } from "@repo/interpreter/errors";
 import { bufferSink } from "@repo/interpreter/journal";
 import { boot, type Interp, runSync } from "@repo/interpreter/lisp";
 import { openSession } from "@repo/interpreter/session";
-import { type Asks, asksKind } from "@repo/journal-catalog/asks";
+import {
+	type Asks,
+	asksKind,
+	unansweredAsks,
+} from "@repo/journal-catalog/asks";
 import { view } from "@repo/shared/journal";
 import { describe, expect, it } from "vitest";
 import { mcpExtension } from "../src/mcp.ts";
@@ -69,19 +73,31 @@ describe("a load that needs a login", () => {
 		expect(ask?.choices.find((c) => c.accepts)?.opens).toBe(AUTH_URL);
 	});
 
-	it("records the answer and tells the model to load the server again", async () => {
+	it("closes the ask as declined when the user picks its refusing choice", async () => {
 		const { interp, hooks } = session();
-		const { buffer, thrown } = await step(interp, () =>
-			hooks.invoke.run(() => Promise.reject(new Error("unhandled")), {
+		const buffer = bufferSink();
+		const detach = interp.journal.pipe(buffer);
+		try {
+			await Promise.resolve()
+				.then(() =>
+					runSync(
+						interp,
+						'(load-mcp :name "acme" :url "https://acme.example/mcp")',
+					),
+				)
+				.catch(() => undefined);
+			const [ask] = asksOf(buffer).open ?? [];
+			const refusal = ask?.choices.find((c) => !c.accepts);
+			if (ask === undefined || refusal === undefined)
+				throw new Error("no refusing choice");
+			await hooks.invoke.run(() => Promise.reject(new Error("unhandled")), {
 				interp,
-				action: "mcp/authorize",
-				values: { id: "s-123", server: "acme", approved: true },
-			}),
-		);
-		expect(thrown).toBeUndefined();
-		expect(asksOf(buffer).answered).toEqual({
-			"s-123": { accepted: true, label: "Authorized" },
-		});
-		expect(buffer.collect(note).at(-1)?.content).toContain('(load-mcp "acme")');
+				...refusal.answer,
+			});
+			expect(unansweredAsks(asksOf(buffer))).toEqual([]);
+			expect(asksOf(buffer).answered?.[ask.id]?.accepted).toBe(false);
+		} finally {
+			detach();
+		}
 	});
 });

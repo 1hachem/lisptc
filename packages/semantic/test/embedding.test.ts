@@ -11,22 +11,21 @@ const VECTORS: Record<string, number[]> = {
 };
 
 describe("%embed", () => {
-	it("returns the embedding as a list of numbers", async () => {
-		const { ev } = embedding({ refund: [0.5, -0.25] });
-		expect(await ev('(%embed "refund")')).toBe("(0.5 -0.25)");
-	});
-
 	it("embeds the same text once in a session", async () => {
-		const { ev, seen } = embedding(VECTORS);
+		const { ev } = embedding(VECTORS, { once: true });
 		await ev('(%embed "refund")');
-		await ev('(%similarity "refund" "bug")');
-		expect(seen.map((r) => r.inputs)).toEqual([["refund"], ["bug"]]);
+		expect(await ev('(%similarity "refund" "bug")')).toBe("0.0");
 	});
 
 	it("asks for the model :model names", async () => {
-		const { ev, seen } = embedding(VECTORS);
-		await ev('(%embed "refund" :model "other-embedder")');
-		expect(seen[0]?.model).toBe("other-embedder");
+		const { ev, failure } = embedding(
+			{ refund: [0.5, -0.25] },
+			{ model: "other-embedder" },
+		);
+		expect(await ev('(%embed "refund" :model "other-embedder")')).toBe(
+			"(0.5 -0.25)",
+		);
+		expect(await failure('(%embed "refund")')).toContain("no model");
 	});
 });
 
@@ -49,13 +48,12 @@ describe("%similarity", () => {
 
 describe("%remove-duplicates", () => {
 	it("drops elements that mean the same as an earlier one, in one call", async () => {
-		const { ev, seen } = embedding(VECTORS);
+		const { ev } = embedding(VECTORS, { calls: 1 });
 		expect(
 			await ev(
 				'(%remove-duplicates (list "refund" "bug" "money back" "weather"))',
 			),
 		).toBe('("refund" "bug" "weather")');
-		expect(seen).toHaveLength(1);
 	});
 
 	it("keeps elements apart that fall under :min", async () => {
@@ -66,9 +64,8 @@ describe("%remove-duplicates", () => {
 	});
 
 	it("drops equal elements without embedding", async () => {
-		const { ev, seen } = embedding({});
+		const { ev } = embedding({}, { calls: 0 });
 		expect(await ev('(%remove-duplicates (list "a" "a" "a"))')).toBe('("a")');
-		expect(seen).toHaveLength(0);
 	});
 });
 
@@ -100,14 +97,13 @@ describe("%cluster", () => {
 });
 
 describe("%sort :near", () => {
-	it("orders the elements by distance in meaning from the query, closest first", async () => {
-		const { ev, seen } = embedding(VECTORS);
+	it("orders the elements by distance in meaning from the query, closest first, in one call", async () => {
+		const { ev } = embedding(VECTORS, { calls: 1 });
 		expect(
 			await ev(
 				'(%sort (list "weather" "bug" "money back") :near "give me my money")',
 			),
 		).toBe('("money back" "bug" "weather")');
-		expect(seen).toHaveLength(1);
 	});
 
 	it("orders farthest first with :desc t", async () => {
@@ -132,11 +128,10 @@ describe("%sort :near", () => {
 	});
 
 	it("puts an element equal to the query first without embedding", async () => {
-		const { ev, seen } = embedding({});
+		const { ev } = embedding({}, { calls: 0 });
 		expect(await ev('(%sort (list "refund" "refund") :near "refund")')).toBe(
 			'("refund" "refund")',
 		);
-		expect(seen).toHaveLength(0);
 	});
 
 	it("refuses :by and :near together", async () => {
@@ -149,11 +144,10 @@ describe("%sort :near", () => {
 
 describe("%similarity-each", () => {
 	it("measures the value against every element in one call", async () => {
-		const { ev, seen } = embedding(VECTORS);
+		const { ev } = embedding(VECTORS, { calls: 1 });
 		expect(
 			await ev('(%similarity-each "refund" (list "refund" "weather"))'),
 		).toBe("(1.0 0.0)");
-		expect(seen).toEqual([{ inputs: ["refund", "weather"] }]);
 	});
 });
 
@@ -175,9 +169,8 @@ describe("%outliers", () => {
 	});
 
 	it("finds none in a list of equal elements, without embedding", async () => {
-		const { ev, seen } = embedding({});
+		const { ev } = embedding({}, { calls: 0 });
 		expect(await ev('(%outliers (list "a" "a"))')).toBe("nil");
-		expect(seen).toHaveLength(0);
 	});
 });
 
@@ -200,13 +193,12 @@ describe("%choose :examples", () => {
 	});
 
 	it("answers an exact example without embedding", async () => {
-		const { ev, seen } = embedding({});
+		const { ev } = embedding({}, { calls: 0 });
 		expect(
 			await ev(
 				`(%choose "crash" '(:billing :technical :other) :examples ${EXAMPLES})`,
 			),
 		).toBe(":technical");
-		expect(seen).toHaveLength(0);
 	});
 
 	it("returns the :none value when no example is :min similar", async () => {

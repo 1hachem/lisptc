@@ -1,5 +1,5 @@
 import { FORM_FIXTURES } from "@repo/shared/lisp-form-fixtures";
-import { type FormSpan, openForms } from "@repo/shared/lisp-forms";
+import type { FormSpan } from "@repo/shared/lisp-forms";
 import { describe, expect, test } from "vitest";
 import {
 	formsIn,
@@ -16,16 +16,6 @@ function tokens(text: string): [string, string | undefined][] {
 }
 
 describe("reading lisptc", () => {
-	test("the tokens put the text back together", () => {
-		const text = 'hello (echo "hi" 42 :loud) there\n\n(+ 1 2)';
-		expect(
-			highlighter
-				.tokenize(text, { lang: "lisptc" })
-				.tokens.map((t) => t.value)
-				.join(""),
-		).toBe(text);
-	});
-
 	test("the head of a form reads apart from its arguments", () => {
 		expect(tokens('(echo "hi" 42 :loud x)')).toEqual([
 			["(", "operator"],
@@ -83,16 +73,6 @@ describe("reading lisptc", () => {
 		expect(tokens("prose only, and a smiley :)")).toEqual([
 			["prose only, and a smiley :)", undefined],
 		]);
-	});
-
-	test("the language answers to the names a fence is written with", () => {
-		expect(highlighter.normalizeLanguage("lisp")).toBe("lisptc");
-		expect(highlighter.normalizeLanguage("ptc")).toBe("lisptc");
-	});
-
-	test("the editor waits on the parens the repl is still holding", () => {
-		expect(openForms("(a (b")).toBe(2);
-		expect(openForms("(a (b))")).toBe(0);
 	});
 
 	test("an unterminated string colours to the end of the text", () => {

@@ -17,8 +17,10 @@ test('each command runs one walk.sh move and shows what it printed', async ($, o
 	])
 })
 
-test('a refused move shows the reason walk.sh gave', async ($, on) => {
-	on('process.run', async () => ({ value: { exitCode: 1, stdout: '', stderr: 'No stop 13: the walk has 12.\n' } }))
+test('a refused move shows the reason walk.sh gave, not what it printed', async ($, on) => {
+	on('process.run', async () => ({
+		value: { exitCode: 1, stdout: 'Stop at next\n', stderr: 'No stop 13: the walk has 12.\n' },
+	}))
 
 	expect(await $.command.run({ command: 'hunk-next' })).toMatchObject({
 		text: 'No stop 13: the walk has 12.',

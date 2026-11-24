@@ -1,5 +1,5 @@
 import type { TestConvex } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api.js";
 import { ATTACHMENT_TTL_MS, MAX_KNOWLEDGE_BYTES } from "../convex/limits.ts";
 import type schema from "../convex/schema.ts";
@@ -12,6 +12,15 @@ function uploaded(t: TestConvex<typeof schema>, body: BlobPart, type: string) {
 async function blobs(t: TestConvex<typeof schema>) {
 	return await t.run((ctx) => ctx.db.system.query("_storage").collect());
 }
+
+function earlier(ms: number) {
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	vi.setSystemTime(Date.now() - ms);
+}
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 describe("attachments", () => {
 	it("holds an attached file apart from knowledge, and serves it", async () => {
@@ -205,22 +214,20 @@ describe("attachments", () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
+		earlier(ATTACHMENT_TTL_MS + 1);
+		await alice.as.mutation(api.files.add, {
+			folder: "attachments",
+			workspaceId,
+			name: "old.txt",
+			storageId: await uploaded(t, "old", "text/plain"),
+		});
+		vi.useRealTimers();
 		await alice.as.mutation(api.files.add, {
 			folder: "attachments",
 			workspaceId,
 			name: "new.txt",
 			storageId: await uploaded(t, "new", "text/plain"),
 		});
-		const old = await uploaded(t, "old", "text/plain");
-		await t.run((ctx) =>
-			ctx.db.insert("attachments", {
-				workspaceId,
-				name: "old.txt",
-				storageId: old,
-				size: 3,
-				attachedAt: Date.now() - ATTACHMENT_TTL_MS - 1,
-			}),
-		);
 		await t.mutation(internal.files.expire, {});
 		expect(
 			(
@@ -233,36 +240,28 @@ describe("attachments", () => {
 		expect(
 			(await alice.as.query(api.bin.list, { workspaceId })).map((f) => f.name),
 		).toEqual(["old.txt"]);
-		expect(await blobs(t)).toHaveLength(2);
 	});
 
 	it("keeps expiring when the bin holds every numbered copy of a name", async () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
-		const filler = await uploaded(t, "filler", "text/plain");
-		const old = await uploaded(t, "old", "text/plain");
-		const attachedId = await t.run(async (ctx) => {
-			for (const name of [
-				"old.txt",
-				...Array.from({ length: 99 }, (_, i) => `old (${i + 2}).txt`),
-			])
-				await ctx.db.insert("bin", {
-					workspaceId,
-					name,
-					from: "attachments",
-					storageId: filler,
-					size: 6,
-					binnedAt: Date.now(),
-				});
-			return await ctx.db.insert("attachments", {
+		for (let copy = 0; copy <= 100; copy++)
+			await alice.as.mutation(api.files.add, {
+				folder: "knowledge",
 				workspaceId,
 				name: "old.txt",
-				storageId: old,
-				size: 3,
-				attachedAt: Date.now() - ATTACHMENT_TTL_MS - 1,
+				storageId: await uploaded(t, `copy ${copy}`, "text/plain"),
 			});
+		const before = (await alice.as.query(api.bin.list, { workspaceId })).length;
+		earlier(ATTACHMENT_TTL_MS + 1);
+		await alice.as.mutation(api.files.add, {
+			folder: "attachments",
+			workspaceId,
+			name: "old.txt",
+			storageId: await uploaded(t, "old", "text/plain"),
 		});
+		vi.useRealTimers();
 		await t.mutation(internal.files.expire, {});
 		expect(
 			await alice.as.query(api.files.list, {
@@ -270,8 +269,10 @@ describe("attachments", () => {
 				workspaceId,
 			}),
 		).toEqual([]);
-		const binned = await alice.as.query(api.bin.list, { workspaceId });
-		expect(binned).toHaveLength(101);
-		expect(binned.map((f) => f.name)).toContain(`old (${attachedId}).txt`);
+		const binned = (await alice.as.query(api.bin.list, { workspaceId })).map(
+			(f) => f.name,
+		);
+		expect(binned).toHaveLength(before + 1);
+		expect(new Set(binned).size).toBe(binned.length);
 	});
 });

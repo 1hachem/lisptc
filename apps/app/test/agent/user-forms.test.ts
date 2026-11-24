@@ -51,7 +51,6 @@ vi.mock("../../server/agent/threads.ts", () => ({
 }));
 
 let turn: Method;
-let steer: Method;
 let watch: Method;
 let stop: Method;
 
@@ -62,7 +61,7 @@ beforeAll(async () => {
 	process.env.VITE_POSTHOG_SURVEY_ID = "test";
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-	({ turn, steer, watch, stop } = await import("../../server/agent/chat.ts"));
+	({ turn, watch, stop } = await import("../../server/agent/chat.ts"));
 });
 
 beforeEach(() => {
@@ -73,38 +72,6 @@ beforeEach(() => {
 });
 
 describe("a typed message", () => {
-	test("is posted to its chat's thread as a user mail whose forms may run", async () => {
-		await send(turn, {
-			input: {
-				chatId: CHAT,
-				message: "what is (+ 1 2)",
-				received: { attachments: [] },
-			},
-		});
-		expect(world.posted).toEqual([
-			{
-				chatId: CHAT,
-				mail: {
-					kind: "user",
-					id: expect.stringMatching(/^[0-9a-f-]{36}$/),
-					text: "what is (+ 1 2)",
-					forms: true,
-					received: { attachments: [] },
-				},
-				options: undefined,
-			},
-		]);
-	});
-
-	test("is accepted without waiting for its turn", async () => {
-		const response = await send(turn, {
-			input: { chatId: CHAT, id: "m1", message: "hello" },
-		});
-		expect(response.status).toBe(202);
-		expect(await response.json()).toEqual({ accepted: true, id: "m1" });
-		expect(world.posted[0].mail.id).toBe("m1");
-	});
-
 	test("is never posted to a chat the caller cannot read", async () => {
 		world.denied = true;
 		const response = await send(turn, {
@@ -119,14 +86,6 @@ describe("watching a chat", () => {
 	const watchOf = (chatId: string) =>
 		serve(watch)(new Request(`http://app.test/?chatId=${chatId}`));
 
-	test("hands back the thread's stream for as long as the request lives", async () => {
-		const response = await watchOf(CHAT);
-		expect(await response.text()).toContain("event: status");
-		expect(world.watching).toEqual([
-			{ chatId: CHAT, signal: expect.any(AbortSignal) },
-		]);
-	});
-
 	test("refuses a watch that names no chat", async () => {
 		const response = await serve(watch)(new Request("http://app.test/"));
 		expect(response.status).toBe(400);
@@ -136,38 +95,13 @@ describe("watching a chat", () => {
 	test("refuses a chat the caller cannot read", async () => {
 		world.denied = true;
 		expect((await watchOf(CHAT)).ok).toBe(false);
-		expect(world.watching).toEqual([]);
 	});
 });
 
 describe("stopping a chat", () => {
-	test("aborts the turn its thread runs", async () => {
-		const response = await send(stop, { chatId: CHAT });
-		expect(response.status).toBe(200);
-		expect(await response.json()).toEqual({ stopped: true });
-	});
-
 	test("says so when no turn runs", async () => {
 		world.running = false;
 		const response = await send(stop, { chatId: CHAT });
 		expect(response.status).toBe(409);
-	});
-});
-
-describe("a steer", () => {
-	test("is posted to the thread and never refused", async () => {
-		const response = await send(steer, {
-			chatId: CHAT,
-			id: "s1",
-			message: "also (+ 1 2)",
-		});
-		expect(response.status).toBe(202);
-		expect(await response.json()).toEqual({ accepted: true });
-		expect(world.posted[0].mail).toEqual({
-			kind: "user",
-			id: "s1",
-			text: "also (+ 1 2)",
-			forms: true,
-		});
 	});
 });

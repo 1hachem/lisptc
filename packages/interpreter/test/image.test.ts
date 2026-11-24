@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { extract, ImageError, implant, snapshot } from "../src/image.ts";
-import { Interp, runSync, type State } from "../src/lisp.ts";
+import { Interp, runSync } from "../src/lisp.ts";
 import { newSym } from "../src/objects.ts";
 import { str } from "../src/print.ts";
 import type { LispPromise } from "../src/promise.ts";
-import { ev, freshInterp, imageOf, roundTrip } from "./helpers.ts";
+import {
+	ev,
+	evAsync,
+	freshInterp,
+	imageOf,
+	roundTrip,
+	withSettle,
+} from "./helpers.ts";
 
 function imagedAfter(setup: string): Interp {
 	const interp = freshInterp();
@@ -57,10 +64,8 @@ describe("an image", () => {
 	});
 
 	it("keeps the gensym counter", () => {
-		const interp = freshInterp();
-		ev("(gensym)", interp);
-		const counter = ev("*gensym-counter*", interp);
-		expect(ev("*gensym-counter*", roundTrip(interp))).toBe(counter);
+		const back = imagedAfter("(setq *gensym-counter* 100)");
+		expect(ev("(gensym)", back)).toBe("#:G100");
 	});
 
 	it("keeps macros, docs and sources", () => {
@@ -83,13 +88,6 @@ describe("an image", () => {
 		ev("(setq kept gone-soon)", interp);
 		const back = roundTrip(interp);
 		expect(() => ev("(kept)", back)).toThrow("builtin no longer exists");
-	});
-
-	it("is plain JSON", () => {
-		const interp = freshInterp();
-		ev('(setq data (list 1 2.5 "x" :k))', interp);
-		const image = snapshot(interp);
-		expect(JSON.parse(JSON.stringify(image))).toEqual(image);
 	});
 
 	it("refuses a value it has no form for", () => {
@@ -118,11 +116,19 @@ describe("an image", () => {
 				save: (x) => (x as Handle).id,
 				restore: (data) => new Handle(data as string),
 			});
+			interp.def(
+				"handle-id",
+				1,
+				"(handle-id h)",
+				"",
+				z.tuple([z.instanceof(Handle)]),
+				([h]) => h.id,
+			);
 		};
 		const interp = freshInterp({ extensions: [codec] });
 		interp.defineGlobal(newSym("h"), new Handle("h1"));
 		const back = roundTrip(interp, { extensions: [codec] });
-		expect(back.getGlobal(newSym("h"))).toEqual(new Handle("h1"));
+		expect(ev("(handle-id h)", back)).toBe('"h1"');
 		expect(() => roundTrip(interp)).toThrow("no extension restores handle");
 	});
 });
@@ -141,14 +147,11 @@ describe("a promise in an image", () => {
 		);
 		ev("(setq done (now) waiting (never))", interp);
 		await (interp.getGlobal(newSym("done")) as LispPromise);
-		const back = roundTrip(interp);
-		const done = back.getGlobal(newSym("done")) as LispPromise;
-		expect(done.state).toBe("fulfilled");
-		expect(await done).toBe(42n);
-		const waiting = back.getGlobal(newSym("waiting")) as LispPromise;
-		expect(waiting.state).toBe("rejected");
-		await expect(waiting.promise()).rejects.toThrow("interrupted by restore");
-		expect(back.async.pending()).toEqual([]);
+		const back = withSettle(roundTrip(interp));
+		expect(await evAsync("(settle done)", back)).toBe("42");
+		await expect(evAsync("(settle waiting)", back)).rejects.toThrow(
+			"interrupted by restore",
+		);
 	});
 
 	it("keeps a rejected promise's reason", async () => {
@@ -214,24 +217,15 @@ describe("extension state", () => {
 		expect(interp.docs().get("*ext/count*")?.doc).toBe("How many.");
 	});
 
-	it("cannot be declared twice", () => {
-		const interp = new Interp();
-		interp.state("ext/count", counter, 0, "");
-		expect(() => interp.state("ext/count", counter, 0, "")).toThrow(
-			"state declared twice",
-		);
-	});
-
-	it("survives an image, and the new interpreter's handle reads it", () => {
-		let handle: State<number> | undefined;
-		const ext = (interp: Interp): void => {
-			handle = interp.state("ext/count", counter, 0, "");
-		};
-		const interp = new Interp({ extensions: [ext] });
+	it("survives an image, read back from Lisp", () => {
+		const declare = (interp: Interp) =>
+			interp.state("ext/count", counter, 0, "");
+		const interp = new Interp({ extensions: [(i) => declare(i).set(5)] });
 		runSync(interp, "nil");
-		handle?.set(5);
-		roundTrip(interp, { extensions: [ext] });
-		expect(handle?.get()).toBe(5);
+		const back = roundTrip(interp, {
+			extensions: [(i) => void declare(i)],
+		});
+		expect(ev("*ext/count*", back)).toBe("5");
 	});
 });
 
@@ -247,16 +241,12 @@ describe("a value taken out of an image", () => {
 	}
 
 	it("carries nested data, and only what the global reaches", () => {
-		const from = freshInterp();
-		ev(
+		const into = carried(
 			'(setq other (list 9 9 9) rows (list (list :sku "a" :price 2.5)))',
-			from,
+			"rows",
 		);
-		const fragment = extract(imageOf(from), "rows");
-		expect(JSON.stringify(fragment)).not.toContain('"9"');
-		const into = freshInterp();
-		into.defineGlobal(newSym("rows"), implant(into, fragment));
 		expect(ev("(car rows)", into)).toBe('(:sku "a" :price 2.5)');
+		expect(() => ev("other", into)).toThrow(/void variable/);
 	});
 
 	it("keeps a cycle and shared structure", () => {

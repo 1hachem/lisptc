@@ -1,76 +1,49 @@
-import { driveAsync } from "@repo/interpreter/drive";
-import { boot, Interp, runAsync } from "@repo/interpreter/lisp";
 import { MemoryBank, memoryExtension } from "@repo/memory-extension";
 import { memoryHost } from "@repo/memory-extension/host";
 import { VolatileStore } from "@repo/memory-extension/ports";
 import { proseExtension } from "@repo/prose-extension";
 import { proseHost } from "@repo/prose-extension/host";
 import { describe, expect, it } from "vitest";
+import { memoryRepl } from "./helpers.ts";
 
-function fixture(prose = proseExtension(proseHost)): {
-	interp: Interp;
-	bank: MemoryBank;
-} {
-	const bank = new MemoryBank(new VolatileStore());
-	const interp = new Interp({
-		extensions: [memoryExtension(memoryHost, { bank }), prose],
-	});
-	boot(interp);
-	return { interp, bank };
-}
-
-async function step(
-	interp: Interp,
-	bank: MemoryBank,
-	code: string,
-): Promise<string> {
-	const before = await driveAsync(bank.beginStep(code, interp));
-	await runAsync(interp, code);
-	const after = (await driveAsync(bank.endStep())).value;
-	return [...before.value.memories, ...after.memories]
-		.map((m) => `${m.key}: ${m.body}\n`)
-		.join("");
+function repl(prose = proseExtension(proseHost)) {
+	const r = memoryRepl([
+		memoryExtension(memoryHost, { bank: new MemoryBank(new VolatileStore()) }),
+		prose,
+	]);
+	const fired = async (code: string) =>
+		(await r.evalOutput(code)).notes.map((said) => said.content).join("\n");
+	return { r, fired };
 }
 
 describe("memory and prose", () => {
 	it("keeps an error trigger quiet when prose excuses the form", async () => {
-		const { interp, bank } = fixture(
+		const { r, fired } = repl(
 			proseExtension({
 				...proseHost,
 				classifiers: [() => ({ reason: "read as prose" })],
 			}),
 		);
-		await runAsync(
-			interp,
+		await r.eval(
 			`(memory/remember "voids" "define it first" :on '(error "undefined"))`,
 		);
-		expect(await step(interp, bank, '(deploy "the thing")')).not.toContain(
-			"voids",
-		);
+		expect(await fired('(deploy "the thing")')).not.toContain("voids");
 	});
 
 	it("fires prose triggers around forms", async () => {
-		const { interp, bank } = fixture();
-		await runAsync(
-			interp,
-			`(memory/remember "todos" "finish it" :on '(prose "TODO"))`,
-		);
-		expect(await step(interp, bank, "TODO check this\n(+ 1 1)")).toContain(
+		const { r, fired } = repl();
+		await r.eval(`(memory/remember "todos" "finish it" :on '(prose "TODO"))`);
+		expect(await fired("TODO check this\n(+ 1 1)")).toContain(
 			"todos: finish it",
 		);
 	});
 
 	it("combines prose text patterns", async () => {
-		const { interp, bank } = fixture();
-		await runAsync(
-			interp,
+		const { r, fired } = repl();
+		await r.eval(
 			`(memory/remember "u" "note" :on '(prose (any-of "deploy" "ship")))`,
 		);
-		expect(await step(interp, bank, "ship it now\n(+ 1 1)")).toContain(
-			"u: note",
-		);
-		expect(await step(interp, bank, "nothing here\n(+ 1 1)")).not.toContain(
-			"u: note",
-		);
+		expect(await fired("ship it now\n(+ 1 1)")).toContain("u: note");
+		expect(await fired("nothing here\n(+ 1 1)")).not.toContain("u: note");
 	});
 });

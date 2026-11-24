@@ -58,9 +58,10 @@ describe("the report store", () => {
 		expect(await localStore(join(dir, "nothing")).list()).toEqual([]);
 	});
 
-	test("no credentials falls back to the filesystem", async () => {
+	test("no credentials writes the report to the filesystem", async () => {
 		const { reportStore } = await storage({});
-		expect(reportStore().describe()).toBe(`${dir}/`);
+		await reportStore().write("run.json", '{"ok":true}\n');
+		expect(readFileSync(join(dir, "run.json"), "utf8")).toBe('{"ok":true}\n');
 	});
 
 	test("credentials make R2 the default, under the prefix", async () => {
@@ -82,7 +83,8 @@ describe("the report store", () => {
 			R2_BUCKET: "lisptc",
 			EVAL_STORAGE: "local",
 		});
-		expect(reportStore().describe()).toBe(`${dir}/`);
+		await reportStore().write("run.json", '{"ok":true}\n');
+		expect(readFileSync(join(dir, "run.json"), "utf8")).toBe('{"ok":true}\n');
 	});
 
 	test("EVAL_STORAGE=r2 without credentials is an error, not a silent local write", async () => {

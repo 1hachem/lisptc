@@ -28,7 +28,7 @@ export interface World {
 	store: MemoryPreferencesStore;
 }
 
-export const HOST_CHOICES = {
+const HOST_CHOICES = {
 	fonts: [{ id: "geist", name: "Geist" }],
 	motions: [
 		{ id: "slide", name: "rows slide" },

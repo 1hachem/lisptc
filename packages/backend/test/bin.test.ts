@@ -9,7 +9,7 @@ import {
 	UNCLAIMED_UPLOAD_TTL_MS,
 } from "../convex/limits.ts";
 import type schema from "../convex/schema.ts";
-import { signIn, testDeployment } from "./helpers.ts";
+import { renewSession, signIn, testDeployment } from "./helpers.ts";
 
 type Alice = Awaited<ReturnType<typeof signIn>>;
 
@@ -179,8 +179,11 @@ describe("bin", () => {
 		const binned = (await alice.as.query(api.bin.list, { workspaceId })).map(
 			(f) => f.name,
 		);
-		const numbered = `${"a".repeat(MAX_FILE_NAME - 7)} (2).md`;
-		expect(binned.sort()).toEqual([numbered, name].sort());
+		expect(binned).toHaveLength(2);
+		expect(binned).toContain(name);
+		const numbered = binned.find((n) => n !== name) ?? "";
+		expect(numbered).toMatch(/^a+ \(2\)\.md$/);
+		expect(numbered.length).toBeLessThanOrEqual(MAX_FILE_NAME);
 		expect(
 			await alice.as.mutation(api.bin.restore, {
 				workspaceId,
@@ -294,25 +297,23 @@ describe("bin", () => {
 		const t = testDeployment();
 		const alice = await signIn(t, "alice@example.com");
 		const workspaceId = alice.workspace;
-		for (const [name, binnedAt] of [
-			["fresh.md", Date.now()],
-			["stale.md", Date.now() - BIN_TTL_MS - 1],
-		] as const) {
-			const storageId = await stored(t, name);
-			await t.run((ctx) =>
-				ctx.db.insert("bin", {
-					workspaceId,
-					name,
-					from: "knowledge",
-					storageId,
-					size: name.length,
-					binnedAt,
-				}),
-			);
-		}
+		await inKnowledge(t, alice, "stale.md");
+		await inKnowledge(t, alice, "fresh.md");
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		vi.setSystemTime(Date.now() - BIN_TTL_MS - 1);
+		await alice.as.mutation(api.files.remove, {
+			folder: "knowledge",
+			workspaceId,
+			name: "stale.md",
+		});
+		vi.useRealTimers();
+		await alice.as.mutation(api.files.remove, {
+			folder: "knowledge",
+			workspaceId,
+			name: "fresh.md",
+		});
 		await t.mutation(internal.bin.empty, {});
 		expect((await folders(alice)).bin).toEqual(["knowledge/fresh.md"]);
-		expect(await blobs(t)).toHaveLength(1);
 	});
 });
 
@@ -366,38 +367,51 @@ describe("an upload a file already claimed", () => {
 describe("an upload no file claimed", () => {
 	afterEach(() => vi.useRealTimers());
 
-	it("is freed a day on, while every claimed blob stays", async () => {
+	it("is freed a day on, while every claimed file stays served", async () => {
 		vi.useFakeTimers();
 		const t = testDeployment();
-		const alice = await signIn(t, "alice@example.com");
-		const workspaceId = alice.workspace;
+		const signed = await signIn(t, "alice@example.com");
+		const workspaceId = signed.workspace;
 		const unclaimed = await stored(t, "lost");
-		await inKnowledge(t, alice, "kept.txt");
-		await inAttachments(t, alice, "attached.txt");
-		await inKnowledge(t, alice, "binned.txt");
-		await alice.as.mutation(api.files.remove, {
+		await inKnowledge(t, signed, "kept.txt");
+		await inAttachments(t, signed, "attached.txt");
+		await inKnowledge(t, signed, "binned.txt");
+		await signed.as.mutation(api.files.remove, {
 			folder: "knowledge",
 			workspaceId,
 			name: "binned.txt",
 		});
 		vi.setSystemTime(Date.now() + UNCLAIMED_UPLOAD_TTL_MS + 1);
+		const alice = await renewSession(t, signed);
 		const fresh = await stored(t, "in flight");
-		const before = (await blobs(t)).map((blob) => blob._id);
 		await t.mutation(internal.uploads.sweep, {});
-		const after = (await blobs(t)).map((blob) => blob._id);
-		expect(after).toHaveLength(before.length - 1);
-		expect(after).not.toContain(unclaimed);
-		expect(after).toContain(fresh);
-		const held = await t.run(async (ctx) => [
-			...(await ctx.db.query("knowledge").collect()),
-			...(await ctx.db.query("attachments").collect()),
-			...(await ctx.db.query("bin").collect()),
-		]);
-		expect(held.map((row) => row.name).sort()).toEqual([
-			"attached.txt",
-			"binned.txt",
-			"kept.txt",
-		]);
-		for (const row of held) expect(after).toContain(row.storageId);
+		await expect(
+			alice.as.mutation(api.files.add, {
+				folder: "knowledge",
+				workspaceId,
+				name: "lost.txt",
+				storageId: unclaimed,
+			}),
+		).rejects.toThrow("NO_UPLOAD");
+		expect(
+			await alice.as.mutation(api.files.add, {
+				folder: "knowledge",
+				workspaceId,
+				name: "fresh.txt",
+				storageId: fresh,
+			}),
+		).toEqual({ name: "fresh.txt" });
+		for (const [folder, name] of [
+			["knowledge", "kept.txt"],
+			["attachments", "attached.txt"],
+		] as const)
+			expect(
+				(await alice.as.query(api.files.get, { folder, workspaceId, name }))
+					?.url,
+			).toEqual(expect.any(String));
+		expect(
+			(await alice.as.query(api.bin.get, { workspaceId, name: "binned.txt" }))
+				?.url,
+		).toEqual(expect.any(String));
 	});
 });

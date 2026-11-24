@@ -45,42 +45,15 @@ async function activityOf(
 }
 
 describe("a model call from lisp", () => {
-	it("reports started, then done under the form that was called", async () => {
-		const { activity, states } = await activityOf(
-			async () => ({ text: "hi", provider: "digitalocean", model: "gemma" }),
-			'(write "greet me")',
-		);
-		expect(states).toEqual(["started", "done"]);
-		expect(activity).toEqual([
-			{
-				kind: "llm",
-				icon: "model",
-				label: "write",
-				state: "done",
-				id: "llm-1",
-				startedAt: 1000,
-				ms: 25,
-			},
-		]);
-	});
-
-	it("reports failed when the model call fails, and numbers each call", async () => {
-		const { activity } = await activityOf(async (req) => {
+	it("shows each call started, then done or failed with the reason and how long it took", async () => {
+		const { activity, states } = await activityOf(async (req) => {
 			if (req.model === "broken") throw new Error("down");
 			return { text: "ok" };
 		}, '(write "a") (write "b" :model "broken")');
-		expect(
-			activity?.map((a) => [
-				a.id,
-				a.label,
-				a.state,
-				a.startedAt,
-				a.ms,
-				a.error,
-			]),
-		).toEqual([
-			["llm-1", "write", "done", 1000, 25, undefined],
-			["llm-2", "write", "failed", 1050, 25, "down"],
+		expect(states).toEqual(["started", "done", "started", "failed"]);
+		expect(activity.map((a) => [a.label, a.state, a.ms, a.error])).toEqual([
+			["write", "done", 25, undefined],
+			["write", "failed", 25, "down"],
 		]);
 	});
 });

@@ -50,8 +50,10 @@ describe("what the interpreter's hitches become in a trace", () => {
 
 	test("a clean step leaves no hitch behind", () => {
 		const trace = ran("(+ 1 2)");
-		expect(trace.events.filter((e) => e.kind === "hitch")).toEqual([]);
 		expect(verdict(trace, "(defcheck it (eventually (skipped)))")).toBe(
+			"false",
+		);
+		expect(verdict(trace, "(defcheck it (eventually (errored)))")).toBe(
 			"false",
 		);
 	});

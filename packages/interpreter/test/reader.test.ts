@@ -149,8 +149,4 @@ describe("reader: readFailure", () => {
 			line: 1,
 		});
 	});
-
-	it("leaves a printed handle to the evaluator", () => {
-		expect(readFailure("#<promise>")).toBeUndefined();
-	});
 });

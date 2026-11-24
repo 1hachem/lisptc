@@ -32,5 +32,5 @@ belongs behind the cache.
 
 ## Tests
 
-`test/` covers the cache and the capabilities the server advertises. The language itself is tested in
+`test/` drives the server over LSP stdio and checks what it completes from the shared session. The language itself is tested in
 `@repo/language-service`.

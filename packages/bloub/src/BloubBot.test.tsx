@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BloubBot } from "./BloubBot";
 import { BotEngine } from "./bot/engine";
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from "./bot/expressions";
-import { DEMI_VIEWBOX, RAYON } from "./bot/repere";
+import { RAYON } from "./bot/repere";
 import { DEFAULT_SHAPE, SHAPE_BY_ID } from "./bot/skins";
 import type { StateId } from "./bot/states";
+import { animer, dessiner } from "./test-helpers";
 
 function moteurTemoin(state: StateId = "idle") {
 	return new BotEngine(
@@ -32,44 +33,14 @@ async function monter(node: React.ReactNode) {
 				root.render(suivant);
 			});
 		},
-		demonter: async () => {
-			await act(async () => {
-				root.unmount();
-			});
-		},
 	};
 }
 
-beforeAll(() => {
-	(
-		globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-	).IS_REACT_ACT_ENVIRONMENT = true;
+afterEach(() => {
+	vi.unstubAllGlobals();
 });
 
 describe("BloubBot", () => {
-	it("rend le repere du moteur, pas le sien", async () => {
-		const { svg } = await monter(<BloubBot frozenAt={0} />);
-		expect(svg().getAttribute("viewBox")).toBe(
-			`${-DEMI_VIEWBOX} ${-DEMI_VIEWBOX} ${DEMI_VIEWBOX * 2} ${DEMI_VIEWBOX * 2}`,
-		);
-	});
-
-	it("rend exactement le corps echantillonne par le moteur", async () => {
-		const { svg } = await monter(<BloubBot frozenAt={0} />);
-		const attendu = moteurTemoin().sample(0);
-		const corps = svg().querySelector("mask > path");
-		expect(corps?.getAttribute("d")).toBe(attendu.bodyPath);
-	});
-
-	it("percerait les yeux dans le masque et non par-dessus le corps", async () => {
-		const { svg } = await monter(<BloubBot frozenAt={0} />);
-		const attendu = moteurTemoin().sample(0);
-		expect(svg().querySelectorAll("mask path")).toHaveLength(
-			1 + attendu.eyes.length,
-		);
-		expect(attendu.eyes.length).toBeGreaterThan(0);
-	});
-
 	it("redessine quand `frozenAt` bouge", async () => {
 		const { svg, rendre } = await monter(<BloubBot frozenAt={0} />);
 		const premier = svg().querySelector("mask > path")?.getAttribute("d");
@@ -81,50 +52,23 @@ describe("BloubBot", () => {
 		expect(attendu.bodyPath).not.toBe(premier);
 	});
 
-	it("rend les anneaux de l orbite avec un degrade par arc", async () => {
-		const { svg } = await monter(<BloubBot frozenAt={0.5} state="orbit" />);
-		const attendu = moteurTemoin("orbit").sample(0.5);
-		expect(attendu.arcs.length).toBeGreaterThan(0);
-		expect(svg().querySelectorAll("linearGradient")).toHaveLength(
-			attendu.arcs.length,
-		);
-	});
-
-	it("accepte une couleur d interface a la place de celles du catalogue", async () => {
-		const { svg } = await monter(<BloubBot frozenAt={0} ink="var(--fg)" />);
-		expect(svg().querySelector("rect")?.getAttribute("fill")).toBe("var(--fg)");
-	});
-
-	it("ne laisse pas le montage ecraser un etat pose a l arret", async () => {
-		const vus: StateId[] = [];
-		const vraiRaf = globalThis.requestAnimationFrame;
-		globalThis.requestAnimationFrame = () => 0;
-		try {
-			const { demonter } = await monter(
-				<BloubBot state="thinking" onStateChange={(id) => vus.push(id)} />,
-			);
-			expect(vus).toEqual([]);
-			await demonter();
-		} finally {
-			globalThis.requestAnimationFrame = vraiRaf;
-		}
+	it("montre l etat pose a l arret, sans jouer le cycle par-dessus au montage", async () => {
+		const bot = await animer({ state: "thinking" });
+		const image = await bot.avancer(1.5);
+		expect(image.yeux).toHaveLength(0);
+		await bot.demonter();
 	});
 
 	it("grossit les yeux sur place quand l hote le demande", async () => {
-		const { svg, rendre } = await monter(<BloubBot frozenAt={0} />);
-		const pose = svg()
-			.querySelector("mask path + path")
-			?.getAttribute("transform");
-		expect(pose).toMatch(/^matrix\(/);
-		await rendre(<BloubBot frozenAt={0} eyeScale={1.25} />);
-		expect(
-			svg().querySelector("mask path + path")?.getAttribute("transform"),
-		).toBe(`${pose} scale(1.25)`);
-	});
-
-	it("porte l etiquette qu on lui donne", async () => {
-		const { svg } = await monter(<BloubBot frozenAt={0} ariaLabel="Bloub" />);
-		expect(svg().getAttribute("role")).toBe("img");
-		expect(svg().getAttribute("aria-label")).toBe("Bloub");
+		const bot = await dessiner({ frozenAt: 0 });
+		const avant = bot.image().yeux;
+		const apres = (await bot.rendre({ eyeScale: 1.25 })).yeux;
+		expect(apres).toHaveLength(avant.length);
+		for (const [i, oeil] of apres.entries()) {
+			expect(oeil.x).toBeCloseTo(avant[i]!.x, 5);
+			expect(oeil.y).toBeCloseTo(avant[i]!.y, 5);
+			expect(oeil.hauteur / avant[i]!.hauteur).toBeCloseTo(1.25, 5);
+		}
+		await bot.demonter();
 	});
 });

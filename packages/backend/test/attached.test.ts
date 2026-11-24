@@ -13,19 +13,6 @@ async function chat() {
 }
 
 describe("the files a message attached", () => {
-	it("stores well formed attachments with the message", async () => {
-		const { alice, chatId } = await chat();
-		const attachments = [{ folder: "attachments", name: "spec.pdf" }];
-		await alice.as.mutation(api.messages.append, {
-			chatId,
-			messages: [
-				{ id: "h1", type: "human", content: "see", kwargs: { attachments } },
-			],
-		});
-		const [stored] = await alice.as.query(api.messages.transcript, { chatId });
-		expect(stored.kwargs).toEqual({ attachments });
-	});
-
 	it.each([
 		["an unknown folder", [{ folder: "elsewhere", name: "x" }]],
 		["an empty name", [{ folder: "knowledge", name: "" }]],

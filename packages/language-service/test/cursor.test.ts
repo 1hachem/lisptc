@@ -1,45 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { enclosingCallHead, markdownFor, symbolAt } from "../src/cursor.ts";
+import { markdownFor, symbolAt } from "../src/cursor.ts";
+import { languageService, symbolTable } from "../src/index.ts";
 
 function doc(content: string): TextDocument {
 	return TextDocument.create("file:///test.lisp", "lisp", 1, content);
 }
 
-describe("enclosingCallHead", () => {
+const service = languageService(
+	symbolTable(
+		["playwright/browser_navigate", "outer", "inner"].map((name) => ({
+			name,
+		})),
+	),
+);
+
+describe("the call the cursor is in", () => {
 	it("finds the head of the call the cursor is nested in", () => {
 		const document = doc('(playwright/browser_navigate :url "x")');
-		expect(enclosingCallHead(document, { line: 0, character: 34 })).toBe(
-			"playwright/browser_navigate",
-		);
-	});
-
-	it("returns undefined outside of any call", () => {
-		const document = doc("foo bar");
 		expect(
-			enclosingCallHead(document, { line: 0, character: 3 }),
-		).toBeUndefined();
-	});
-
-	it("picks the innermost enclosing call for nested forms", () => {
-		const document = doc("(outer (inner :k");
-		expect(enclosingCallHead(document, { line: 0, character: 16 })).toBe(
-			"inner",
-		);
+			service.callAt(document, { line: 0, character: 34 })?.entry.name,
+		).toBe("playwright/browser_navigate");
 	});
 
 	it("is not thrown off by a paren inside a string", () => {
 		const document = doc('(outer (inner ")" :k');
-		expect(enclosingCallHead(document, { line: 0, character: 20 })).toBe(
-			"inner",
-		);
+		expect(
+			service.callAt(document, { line: 0, character: 20 })?.entry.name,
+		).toBe("inner");
 	});
 
-	it("returns undefined right after the opening paren with no head yet", () => {
-		const document = doc("(");
-		expect(
-			enclosingCallHead(document, { line: 0, character: 1 }),
-		).toBeUndefined();
+	it("is nothing right after the opening paren with no head yet", () => {
+		expect(service.callAt(doc("("), { line: 0, character: 1 })).toBeUndefined();
 	});
 });
 
@@ -68,22 +60,31 @@ describe("symbolAt", () => {
 });
 
 describe("markdownFor", () => {
-	it("returns undefined when there is neither a signature nor a doc", () => {
-		expect(markdownFor(undefined, undefined)).toBeUndefined();
-		expect(markdownFor(undefined, "")).toBeUndefined();
-	});
-
-	it("returns the bare doc body when there is no signature", () => {
-		expect(markdownFor(undefined, "does a thing")).toBe("does a thing");
-	});
-
-	it("fences the signature and appends the doc body", () => {
-		expect(markdownFor("(foo x)", "does a thing")).toBe(
-			"```lisp\n(foo x)\n```\ndoes a thing",
-		);
-	});
-
 	it("still renders the fenced signature when the doc is empty", () => {
 		expect(markdownFor("(foo x)", undefined)).toBe("```lisp\n(foo x)\n```\n");
+	});
+});
+
+describe("hover over a symbol", () => {
+	const hovered = languageService(
+		symbolTable([
+			{ name: "bare" },
+			{ name: "blank", doc: "" },
+			{ name: "told", doc: "does a thing" },
+		]),
+	);
+	const at = (name: string) =>
+		hovered.hover(doc(`(${name})`), { line: 0, character: 2 });
+
+	it("shows nothing when there is neither a signature nor a doc", () => {
+		expect(at("bare")).toBeNull();
+		expect(at("blank")).toBeNull();
+	});
+
+	it("shows the bare doc body when there is no signature", () => {
+		expect(at("told")?.contents).toEqual({
+			kind: "markdown",
+			value: "does a thing",
+		});
 	});
 });

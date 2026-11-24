@@ -4,12 +4,11 @@ import {
 	type ServerMessage,
 	SILENT_FOR_TOO_LONG_MS,
 } from "@repo/desktop-protocol";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DesktopRegistry } from "../../server/desktop/registry.ts";
 import {
 	type DesktopSocket,
 	DesktopSockets,
-	type Presence,
 } from "../../server/desktop/sockets.ts";
 
 const user = "user-1" as Id<"users">;
@@ -18,7 +17,6 @@ const MACHINE = { id: "m1", label: "laptop" };
 function world() {
 	let clock = 0;
 	const registry = new DesktopRegistry();
-	const withdrawn: Presence[] = [];
 	const sockets = new DesktopSockets({
 		registry,
 		authenticate: async (token) => (token === "good" ? user : null),
@@ -28,9 +26,7 @@ function world() {
 			connection: "c1",
 		}),
 		seen: async () => {},
-		withdraw: async (presence) => {
-			withdrawn.push(presence);
-		},
+		withdraw: async () => {},
 		now: () => clock,
 	});
 	const socket: DesktopSocket & {
@@ -50,22 +46,17 @@ function world() {
 	const pass = (ms: number) => {
 		clock += ms;
 	};
-	return { registry, sockets, socket, say, pass, withdrawn };
-}
-
-describe("the desktop socket", () => {
-	it("answers a ping with a pong", async () => {
-		const { socket, say } = world();
-		await say({
+	const signIn = () =>
+		say({
 			type: "auth",
 			token: "good",
 			version: PROTOCOL_VERSION,
 			machine: MACHINE,
 		});
-		await say({ type: "ping" });
-		expect(socket.sent).toEqual([{ type: "welcome" }, { type: "pong" }]);
-	});
+	return { registry, sockets, socket, say, signIn, pass };
+}
 
+describe("the desktop socket", () => {
 	it("tells an older desktop to upgrade", async () => {
 		const { socket, say } = world();
 		await say({ type: "auth", token: "good", version: 2, machine: MACHINE });
@@ -75,56 +66,32 @@ describe("the desktop socket", () => {
 		expect(socket.closed).toBe(4426);
 	});
 
-	it("withdraws every desktop's presence when the server shuts down", async () => {
-		const { registry, sockets, socket, say, withdrawn } = world();
-		await say({
-			type: "auth",
-			token: "good",
-			version: PROTOCOL_VERSION,
-			machine: MACHINE,
-		});
+	it("closes every desktop as offline when the server shuts down", async () => {
+		const { registry, sockets, socket, signIn } = world();
+		await signIn();
 		await sockets.closeAll();
-		expect(withdrawn).toEqual([
-			{ userId: user, machineId: MACHINE.id, connection: "c1" },
-		]);
-		expect(registry.connected(user)).toBe(false);
 		expect(socket.closed).toBe(1012);
+		expect(registry.for(user).connected()).toBe(false);
 	});
 
-	it("drops a desktop that went silent and withdraws its presence", async () => {
-		const { registry, sockets, socket, say, pass, withdrawn } = world();
-		await say({
-			type: "auth",
-			token: "good",
-			version: PROTOCOL_VERSION,
-			machine: MACHINE,
-		});
-		expect(registry.connected(user)).toBe(true);
+	it("closes a desktop that went silent and counts it offline", async () => {
+		const { registry, sockets, socket, signIn, pass } = world();
+		await signIn();
 		pass(SILENT_FOR_TOO_LONG_MS + 1);
 		sockets.sweep();
-		await vi.waitFor(() =>
-			expect(withdrawn).toEqual([
-				{ userId: user, machineId: MACHINE.id, connection: "c1" },
-			]),
-		);
 		expect(socket.closed).toBe(4408);
-		expect(registry.connected(user)).toBe(false);
+		expect(registry.for(user).connected()).toBe(false);
 	});
 
 	it("keeps a desktop that keeps pinging", async () => {
-		const { registry, sockets, socket, say, pass } = world();
-		await say({
-			type: "auth",
-			token: "good",
-			version: PROTOCOL_VERSION,
-			machine: MACHINE,
-		});
+		const { registry, sockets, socket, say, signIn, pass } = world();
+		await signIn();
 		for (let beat = 0; beat < 5; beat += 1) {
 			pass(SILENT_FOR_TOO_LONG_MS - 1);
 			await say({ type: "ping" });
 			sockets.sweep();
 		}
 		expect(socket.closed).toBeUndefined();
-		expect(registry.connected(user)).toBe(true);
+		expect(registry.for(user).connected()).toBe(true);
 	});
 });

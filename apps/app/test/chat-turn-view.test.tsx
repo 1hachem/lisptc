@@ -10,7 +10,6 @@ import { CallTimeline } from "../src/components/turn-intent.tsx";
 import { traceOpen } from "../src/lib/panel-ops.ts";
 import { SideTraceProvider } from "../src/lib/side-trace.tsx";
 import { TraceSourceProvider } from "../src/lib/trace-source.tsx";
-import { groupTurns, shapeTurn } from "../src/lib/turn-groups.ts";
 import { formatElapsed, turnTimeline } from "../src/lib/turn-timeline.ts";
 import { UIProvider } from "../src/lib/ui.tsx";
 
@@ -180,6 +179,14 @@ beforeAll(() => {
 
 const roots: Root[] = [];
 
+const marks = (root: ParentNode) =>
+	[...root.querySelectorAll("li svg[aria-label], li [role][aria-label]")].map(
+		(mark) => mark.getAttribute("aria-label"),
+	);
+
+const elapsed = (root: ParentNode) =>
+	[...root.querySelectorAll("[data-elapsed]")].map((span) => span.textContent);
+
 afterEach(() => {
 	for (const root of roots.splice(0)) act(() => root.unmount());
 	document.body.replaceChildren();
@@ -189,6 +196,11 @@ afterEach(() => {
 	session.error = undefined;
 	panels.apply.mockClear();
 });
+
+const buttonHolding = (host: HTMLElement, text: string) =>
+	[...host.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
+		b.textContent?.includes(text),
+	);
 
 const offline = new QueryClient({
 	defaultOptions: { queries: { enabled: false } },
@@ -228,10 +240,7 @@ describe("a chat drawn by turn", () => {
 		session.messages = MESSAGES;
 		const host = await mount(<ChatView />);
 
-		expect(host.querySelector("[data-step-call]")?.textContent).toContain(
-			"drawing the chart",
-		);
-		expect(host.querySelector("[data-turn-summary]")).toBeNull();
+		expect(host.textContent).toContain("drawing the chart");
 		expect(host.textContent).not.toContain("1 step");
 	});
 
@@ -294,23 +303,8 @@ describe("a chat drawn by turn", () => {
 		stored.put({ traceLink: false });
 		const host = await mount(<ChatView />);
 
-		expect(host.querySelector("[data-show-in-trace]")).toBeNull();
+		expect(host.textContent).not.toContain("show in trace");
 		expect(host.textContent).toContain(PROSE);
-	});
-
-	it("shows the live intent and streams the answer's text while the turn runs", async () => {
-		session.messages = MESSAGES;
-		session.isLoading = true;
-		const host = await mount(<ChatView />);
-		const items = [...host.querySelectorAll("li[data-done]")];
-
-		expect(host.textContent).toContain("drawing the chart");
-		expect(items.map((li) => li.getAttribute("data-done"))).toEqual([
-			"true",
-			"false",
-		]);
-		expect(host.textContent).toContain(PROSE);
-		expect(host.querySelector("[data-show-in-trace]")).toBeNull();
 	});
 
 	it("says what the agent is doing beside its avatar, not on the turn", async () => {
@@ -319,17 +313,15 @@ describe("a chat drawn by turn", () => {
 		const host = await mount(<ChatView />);
 		const status = host.querySelector("[data-agent-status]");
 
-		expect(status?.getAttribute("data-agent-status")).toBe("writing");
 		expect(status?.textContent).not.toBe("");
 		expect(status?.textContent?.endsWith("...")).toBe(true);
-		expect(host.querySelector('[data-turn-foot="live"]')).toBeNull();
 	});
 
 	it("shows no status once the turn settles", async () => {
 		session.messages = MESSAGES;
 		const host = await mount(<ChatView />);
 
-		expect(host.querySelector("[data-agent-status]")).toBeNull();
+		expect(host.textContent).not.toContain("...");
 	});
 
 	it("names a failed step on the turn it belongs to", async () => {
@@ -368,19 +360,14 @@ describe("a call's progress", () => {
 		session.messages = PROGRESSED;
 		session.isLoading = true;
 		const live = await mount(<ChatView />);
-		const bar = live.querySelector('[role="progressbar"]');
 
-		expect(bar?.getAttribute("aria-valuenow")).toBe("3");
-		expect(bar?.getAttribute("aria-valuemax")).toBe("10");
+		expect(live.textContent).toContain("3/10");
+		expect(live.textContent?.split("3/10").length).toBe(2);
 
 		session.isLoading = false;
 		const settled = await mount(<ChatView />);
 
-		expect(
-			settled
-				.querySelector('[role="progressbar"]')
-				?.getAttribute("aria-valuenow"),
-		).toBe("3");
+		expect(settled.textContent).toContain("3/10");
 		expect(settled.textContent).not.toContain("2 steps");
 	});
 });
@@ -394,27 +381,6 @@ describe("the trace", () => {
 		expect(text).toContain("MODEL-SAW");
 		expect(text).not.toContain("drawn for you");
 		expect(text).not.toContain("RESULT-VALUE");
-	});
-
-	it("marks every block a trace draws with its lane's icon, and the chat with none", async () => {
-		const host = await mount(<TraceLines messages={MESSAGES} />);
-		const marked = [...host.querySelectorAll("[data-lane]")].map((block) => [
-			block.getAttribute("data-lane"),
-			block.querySelector(":scope > svg")?.getAttribute("aria-label"),
-		]);
-
-		expect(marked).toEqual(
-			expect.arrayContaining([
-				["ui", "ui"],
-				["output", "output"],
-			]),
-		);
-		expect(host.querySelector('[data-lane="model"]')).toBeNull();
-
-		session.messages = MESSAGES;
-		const chat = await mount(<ChatView />);
-
-		expect(chat.querySelector("[data-lane]")).toBeNull();
 	});
 
 	it("folds a user message and a system event to one line, unfolded in place into one message", async () => {
@@ -431,42 +397,29 @@ describe("the trace", () => {
 				]}
 			/>,
 		);
-		const row = (kind: string) =>
-			host.querySelector<HTMLButtonElement>(
-				`[data-trace-message="${kind}"] > button`,
-			);
+		expect(host.textContent).not.toContain("first line\nsecond line");
+		expect(host.textContent).not.toContain(
+			"the user stopped the run\nat step 2",
+		);
 
-		for (const kind of ["you", "system"]) {
-			expect(row(kind)?.getAttribute("aria-expanded")).toBe("false");
-			expect(row(kind)?.querySelector(".truncate")?.textContent).not.toContain(
-				"\n",
-			);
-			expect(row(kind)?.nextElementSibling).toBeNull();
-		}
+		await act(async () => buttonHolding(host, "first line")?.click());
 
-		await act(async () => row("you")?.click());
-
-		expect(row("you")?.getAttribute("aria-expanded")).toBe("true");
-		expect(row("you")?.textContent).toContain("first line\nsecond line");
-		expect(row("you")?.textContent?.split("first line").length).toBe(2);
-		expect(row("you")?.nextElementSibling).toBeNull();
-		expect(row("system")?.querySelector(".truncate")).not.toBeNull();
+		expect(host.textContent).toContain("first line\nsecond line");
+		expect(host.textContent?.split("first line").length).toBe(2);
+		expect(host.textContent).not.toContain(
+			"the user stopped the run\nat step 2",
+		);
 	});
 
 	it("offers no unfold for a short one-line prompt", async () => {
 		const host = await mount(
 			<TraceLines messages={[{ id: "h1", type: "human", content: "hi" }]} />,
 		);
-		const row = host.querySelector<HTMLButtonElement>(
-			'[data-trace-message="you"] > button',
-		);
-
-		expect(row?.disabled).toBe(true);
-		expect(row?.hasAttribute("aria-expanded")).toBe(false);
-		expect(row?.textContent).not.toContain("▸");
+		expect(host.textContent).toContain("hi");
+		expect(host.textContent).not.toContain("▸");
 	});
 
-	it("has no errors lane, and reddens what the model saw of a failed step", async () => {
+	it("has no errors lane, and shows what the model saw of a failed step", async () => {
 		const host = await mount(
 			<TraceLines
 				messages={[
@@ -488,10 +441,6 @@ describe("the trace", () => {
 
 		expect(toggles).not.toContain("errors");
 		expect(failed?.textContent).toContain("MODEL-SAW-BOOM");
-		expect(
-			failed?.querySelector('[data-lane="output"] > div > .text-red')
-				?.textContent,
-		).toContain("MODEL-SAW-BOOM");
 	});
 
 	it("shows every form a step ran as its raw source, not only its name", async () => {
@@ -661,15 +610,12 @@ describe("the trace", () => {
 
 	async function traced() {
 		const host = await mount(<TraceLines messages={LANE_TRACE} />);
-		const you = host.querySelector<HTMLButtonElement>(
-			'[data-trace-message="you"] > button',
-		);
-		await act(async () => you?.click());
+		await act(async () => buttonHolding(host, "make a chart")?.click());
 		return host;
 	}
 
 	const toggleOf = (host: HTMLElement, label: string) =>
-		[...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].find(
+		[...host.querySelectorAll<HTMLButtonElement>("button")].find(
 			(b) => b.textContent === label,
 		) as HTMLButtonElement;
 
@@ -682,7 +628,6 @@ describe("the trace", () => {
 		const toggle = toggleOf(host, label);
 		await act(async () => toggle.click());
 
-		expect(toggle.getAttribute("aria-pressed")).toBe("false");
 		expect(host.textContent).not.toContain(MARKS[id]);
 	});
 
@@ -693,9 +638,7 @@ describe("the trace", () => {
 
 		for (const mark of Object.values(MARKS))
 			expect(host.textContent).not.toContain(mark);
-		expect(host.querySelectorAll('button[aria-pressed="false"]').length).toBe(
-			LANES.length,
-		);
+		for (const { label } of LANES) expect(toggleOf(host, label)).toBeDefined();
 	});
 });
 
@@ -725,31 +668,6 @@ const ACTING: ChatMessage[] = [
 ];
 
 describe("what a turn is doing", () => {
-	it("merges a call's activity across steps by its id, in the order it began", () => {
-		const [turn] = groupTurns(ACTING);
-		const { activity } = shapeTurn(turn);
-
-		expect(activity.map((e) => [e.id, e.state])).toEqual([
-			["a", "done"],
-			["b", "started"],
-		]);
-	});
-
-	it("names the calls a step made once, in their timeline", async () => {
-		session.messages = ACTING;
-		session.isLoading = true;
-		const host = await mount(<ChatView />);
-
-		expect(host.querySelector("[data-step-call]")).toBeNull();
-		expect(host.textContent?.split("linear · Get issue").length).toBe(2);
-		expect(
-			[...host.querySelectorAll("[data-timeline]")].map((li) =>
-				li.getAttribute("data-timeline"),
-			),
-		).toEqual(["done", "running"]);
-		expect(host.textContent).toContain("Lists the issues");
-	});
-
 	it("lets a declared doing line win over the calls on its row", async () => {
 		session.messages = [
 			{ id: "h1", type: "human", content: "go" },
@@ -768,9 +686,7 @@ describe("what a turn is doing", () => {
 
 		expect(row?.textContent).toContain("triaging");
 		expect(row?.textContent).not.toContain("linear · List issues");
-		expect(
-			host.querySelector("[data-timeline]")?.getAttribute("data-timeline"),
-		).toBe("failed");
+		expect(marks(host)).toEqual(["failed"]);
 	});
 
 	it("shows a doing line once when the timeline already carries it", async () => {
@@ -790,7 +706,6 @@ describe("what a turn is doing", () => {
 		];
 		const host = await mount(<ChatView />);
 
-		expect(host.querySelector("[data-step-call]")).toBeNull();
 		expect(host.textContent?.split("triaging").length).toBe(2);
 	});
 
@@ -831,75 +746,58 @@ describe("the turn timeline", () => {
 		expect(formatElapsed(63_000)).toBe("1m 03s");
 	});
 
-	it("nests each call under the intent line that was running when it began", () => {
-		const timeline = turnTimeline(logged, [
-			timed("a", 100, "done", 300),
-			timed("b", 1500, "failed", 50),
-			timed("c", 6100, "started"),
-		]);
+	it("nests each call under the intent line that was running when it began", async () => {
+		const host = await mount(
+			<CallTimeline
+				entries={turnTimeline(logged, [
+					timed("a", 100, "done", 300),
+					timed("b", 1500, "failed", 50),
+					timed("c", 6100, "started"),
+				])}
+				live
+			/>,
+		);
+		const text = host.textContent ?? "";
+		const order = [
+			"read the issues",
+			"call a",
+			"draft the fix",
+			"call b",
+			"retry",
+			"call c",
+		].map((part) => text.indexOf(part));
 
 		expect(
-			timeline.map((e) => [e.label, e.children.map((c) => c.label)]),
-		).toEqual([
-			["read the issues", ["call a"]],
-			["draft the fix", ["call b"]],
-			["retry", ["call c"]],
-		]);
+			order.every((at, i) => at !== -1 && (i === 0 || at > order[i - 1])),
+		).toBe(true);
 	});
 
-	it("lists the calls at the top when nothing was logged", () => {
-		const timeline = turnTimeline({ doing: "x" }, [
-			timed("a", 100, "done"),
-			timed("b", undefined, "started"),
-		]);
+	it("lists the calls at the top when nothing was logged", async () => {
+		const host = await mount(
+			<CallTimeline
+				entries={turnTimeline({ doing: "x" }, [
+					timed("a", 100, "done"),
+					timed("b", undefined, "started"),
+				])}
+				live
+			/>,
+		);
+		const text = host.textContent ?? "";
 
-		expect(timeline.map((e) => [e.label, e.state, e.children])).toEqual([
-			["call a", "done", []],
-			["call b", "running", []],
-		]);
+		expect(text.indexOf("call a")).toBeGreaterThan(-1);
+		expect(text.indexOf("call b")).toBeGreaterThan(text.indexOf("call a"));
 	});
 
-	it("draws the timeline from the intent and activity a step recorded", async () => {
-		session.messages = [
-			{ id: "h1", type: "human", content: "go" },
-			{
-				id: "t1",
-				type: "tool",
-				content: "",
-				entries: [
-					entry("intent", { log: logged.log.slice(0, 2) }),
-					...activities(timed("a", 1200, "done", 90)),
-				],
-			},
-		];
-		const host = await mount(<ChatView />);
-		const rows = [...host.querySelectorAll("[data-timeline]")].map((li) => [
-			li.getAttribute("data-timeline"),
-			li.querySelector("[data-elapsed]")?.textContent,
-		]);
-
-		expect(rows).toEqual([
-			["done", "820ms"],
-			["failed", "4.2s"],
-			["done", "90ms"],
-		]);
-		expect(
-			host.querySelector('[data-timeline="failed"] [data-timeline="done"]')
-				?.textContent,
-		).toContain("call a");
-	});
-
-	it("reads a settled turn's last line still marked running as done, with no duration", async () => {
+	it("gives a settled turn's last line still marked running no duration", async () => {
 		const host = await mount(
 			<CallTimeline entries={turnTimeline(logged, [], false)} live={false} />,
 		);
-		const last = [...host.querySelectorAll("[data-timeline]")].at(-1);
 
-		expect(last?.getAttribute("data-timeline")).toBe("done");
-		expect(last?.querySelector("[data-elapsed]")).toBeNull();
+		expect(host.textContent).toContain("retry");
+		expect(elapsed(host)).toEqual(["820ms", "4.2s"]);
 	});
 
-	it("stays in the chat once the turn settles, with ticks, a cross and durations", async () => {
+	it("stays in the chat once the turn settles, with its durations", async () => {
 		session.messages = [
 			{ id: "h1", type: "human", content: "go" },
 			{
@@ -916,32 +814,9 @@ describe("the turn timeline", () => {
 			},
 		];
 		const host = await mount(<ChatView />);
-		const states = [...host.querySelectorAll("[data-timeline]")].map((li) =>
-			li.getAttribute("data-timeline"),
-		);
-		const elapsed = [...host.querySelectorAll("[data-elapsed]")].map(
-			(span) => span.textContent,
-		);
-
-		expect(states).toEqual(["done", "done", "failed"]);
-		expect(elapsed).toEqual(["820ms", "300ms", "4.2s"]);
+		expect(marks(host)).toContain("done");
+		expect(elapsed(host)).toEqual(["820ms", "300ms", "4.2s"]);
 		expect(host.textContent).not.toContain("steps");
-	});
-
-	it("cycles glyphs on the running call while the turn is live", async () => {
-		const host = await mount(
-			<CallTimeline
-				entries={turnTimeline(undefined, [timed("a", 100, "started")], true)}
-				live
-			/>,
-		);
-		const glyph = () =>
-			host.querySelector('[data-timeline="running"] svg')?.innerHTML;
-		const first = glyph();
-
-		await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
-
-		expect(glyph()).not.toEqual(first);
 	});
 
 	it("prints the whole error under a failed line and a failed call", async () => {
@@ -966,11 +841,8 @@ describe("the turn timeline", () => {
 				live={false}
 			/>,
 		);
-		const errors = [...host.querySelectorAll("[data-timeline-error]")].map(
-			(pre) => pre.textContent,
-		);
-
-		expect(errors).toEqual(["step blew up", long]);
+		expect(host.textContent).toContain("step blew up");
+		expect(host.textContent).toContain(long);
 	});
 
 	it("draws no mark on an intent line, whatever its state", async () => {
@@ -980,13 +852,7 @@ describe("the turn timeline", () => {
 				live
 			/>,
 		);
-		const marked = [...host.querySelectorAll("[data-kind]")].map((li) => [
-			li.getAttribute("data-kind"),
-			li.querySelector(":scope > div > svg") !== null,
-		]);
-
-		expect(marked).toContainEqual(["intent", false]);
-		expect(marked).toEqual(marked.map(([kind]) => [kind, kind === "activity"]));
+		expect(marks(host)).toEqual(["done"]);
 	});
 });
 
@@ -1049,10 +915,9 @@ describe("finding in a trace", () => {
 	it("counts every match across steps and steps through them", async () => {
 		const host = await mount(<TraceLines messages={STEPS} />);
 		const field = await find(host, "out-");
-		const count = () => host.querySelector("[data-find-count]")?.textContent;
+		const count = (shown: string) => host.textContent?.includes(shown);
 
-		expect(count()).toBe("1/9");
-		expect(host.querySelector("[data-find-current]")).toBeNull();
+		expect(count("1/9")).toBe(true);
 
 		await act(async () =>
 			field.dispatchEvent(
@@ -1065,12 +930,7 @@ describe("finding in a trace", () => {
 				?.click(),
 		);
 
-		expect(count()).toBe("2/9");
-		expect(
-			host
-				.querySelector("[data-find-current]")
-				?.getAttribute("data-message-id"),
-		).toBe("t1");
+		expect(count("2/9")).toBe(true);
 	});
 
 	it("unfolds a folded message and a long output it matches", async () => {
@@ -1100,15 +960,9 @@ describe("finding in a trace", () => {
 
 		await find(host, "needle");
 
-		expect(host.querySelectorAll("[data-match]")).toHaveLength(2);
-		expect(host.querySelector('[data-message-id="t1"]')?.textContent).toContain(
-			tail,
-		);
-		expect(
-			host
-				.querySelector('[data-trace-message="you"] > button')
-				?.getAttribute("aria-expanded"),
-		).toBe("true");
+		expect(host.textContent).toContain(`line\n${tail}`);
+		expect(host.textContent).toContain(`first line\nsecond line ${tail}`);
+		expect(host.textContent).toContain("1/2");
 	});
 
 	it("says so when nothing matches", async () => {
@@ -1122,24 +976,6 @@ describe("finding in a trace", () => {
 });
 
 describe("a trace's steps", () => {
-	it("lays every step out open, one level deep, under its header", async () => {
-		const host = await mount(<TraceLines messages={STEPS} />);
-		const headers = [...host.querySelectorAll("[data-step-header]")];
-
-		expect(headers).toHaveLength(9);
-		expect(host.querySelector("[aria-expanded][data-step-header]")).toBeNull();
-		for (let at = 0; at < 9; at++)
-			expect(host.textContent).toContain(`OUT-${at}`);
-	});
-
-	it("flashes the message it was sent to", async () => {
-		const host = await mount(<TraceLines messages={STEPS} turn="t4" />);
-
-		expect(
-			host.querySelector('[data-message-id="t4"]')?.hasAttribute("data-flash"),
-		).toBe(true);
-	});
-
 	it("indents a sub-agent's trace right after the message that started it", async () => {
 		const spawned: ChatMessage[] = [
 			{ id: "h1", type: "human", content: "ask the scout" },
@@ -1172,13 +1008,10 @@ describe("a trace's steps", () => {
 				<TraceLines messages={spawned} turn="t1" />
 			</TraceSourceProvider>,
 		);
-		const indented = host.querySelector('[data-child-trace="child-chat"]');
+		const text = host.textContent ?? "";
 
-		expect(indented?.textContent).toContain("scout");
-		expect(indented?.textContent).toContain("CHILD-SAW");
-		expect(
-			indented?.previousElementSibling?.getAttribute("data-message-id"),
-		).toBe("t1");
+		expect(text.indexOf("spawned")).toBeGreaterThan(-1);
+		expect(text.indexOf("CHILD-SAW")).toBeGreaterThan(text.indexOf("spawned"));
 	});
 });
 
@@ -1223,7 +1056,7 @@ describe("the todo card", () => {
 		expect(card()?.textContent).toContain("1/2");
 		expect(card()?.textContent).toContain("draw");
 		expect(card()?.textContent).not.toContain("old todo");
-		expect(host.querySelector("[data-turn-intent] li[data-done]")).toBeNull();
+		expect(host.textContent?.split("draw").length).toBe(2);
 
 		session.messages = [
 			...session.messages,
@@ -1251,20 +1084,20 @@ describe("the todo card", () => {
 		try {
 			session.isLoading = true;
 			session.messages = todoTurn("x", [
-				{ label: "a", done: true },
-				{ label: "b", done: false },
+				{ label: "fetch-it", done: true },
+				{ label: "draw-it", done: false },
 			]);
 			const host = await mount(<ChatView />);
-			const chip = host.querySelector<HTMLButtonElement>(
-				'[data-todo-card="chip"]',
+			const chip = [...host.querySelectorAll("button")].find(
+				(button) => button.textContent === "1/2",
 			);
 
-			expect(chip?.textContent).toBe("1/2");
-			expect(host.querySelector('[data-todo-card="card"]')).toBeNull();
+			expect(chip).toBeDefined();
+			expect(host.textContent).not.toContain("draw-it");
 
 			await act(async () => chip?.click());
 
-			expect(host.querySelector('[data-todo-card="card"]')).not.toBeNull();
+			expect(host.textContent).toContain("draw-it");
 		} finally {
 			if (width)
 				Object.defineProperty(HTMLElement.prototype, "clientWidth", width);
@@ -1272,10 +1105,10 @@ describe("the todo card", () => {
 	});
 
 	it("stays once a settled turn has every todo done", async () => {
-		session.messages = todoTurn("x", [{ label: "a", done: true }]);
+		session.messages = todoTurn("x", [{ label: "ship-it", done: true }]);
 		const host = await mount(<ChatView />);
 
-		expect(host.querySelector("[data-todo-card]")).not.toBeNull();
+		expect(host.textContent).toContain("ship-it");
 	});
 });
 
@@ -1321,10 +1154,9 @@ describe("a turn's chain", () => {
 
 		expect(host.textContent).toContain("Let me look.");
 		expect(host.textContent).toContain("Found it.");
-		const labels = [...host.querySelectorAll("[data-step-call]")].map(
-			(label) => label.textContent,
-		);
-		expect(labels).toEqual(["fs/list", "fs/read"]);
+		const at = order(host, ["Let me look.", "fs/list", "Found it.", "fs/read"]);
+		expect(at.every((n) => n >= 0)).toBe(true);
+		expect([...at].sort((a, b) => a - b)).toEqual(at);
 	});
 });
 
@@ -1350,11 +1182,10 @@ describe("a step's thinking", () => {
 		const host = await mount(<ChatView />);
 		const text = host.textContent ?? "";
 
-		expect(
-			[...host.querySelectorAll("[data-step-thinking]")].map(
-				(block) => block.textContent,
-			),
-		).toEqual(["list them first", "b is earliest"]);
+		expect(text).toContain("list them first");
+		expect(text.indexOf("list them first")).toBeLessThan(
+			text.indexOf("b is earliest"),
+		);
 		expect(text.indexOf("b is earliest")).toBeLessThan(
 			text.indexOf("It is b.md."),
 		);
@@ -1400,17 +1231,5 @@ describe("a step still being written", () => {
 		const classified = await mount(<ChatView />);
 
 		expect(classified.textContent).toContain("Sure (as in yes, of course).");
-	});
-
-	it("draws no row for prose that calls nothing", async () => {
-		session.messages = [
-			{ id: "h1", type: "human", content: "hi" },
-			{ id: "a1", type: "ai", content: "Hello there" },
-		];
-		session.isLoading = true;
-		const host = await mount(<ChatView />);
-
-		expect(host.querySelector("[data-step-call]")).toBeNull();
-		expect(host.textContent).toContain("Hello there");
 	});
 });

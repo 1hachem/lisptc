@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { api } from "../convex/_generated/api.js";
 import { clamp } from "../convex/lib/clamp.ts";
-import { CONVEX_DOCUMENT_BYTES, MAX_MESSAGE_BYTES } from "../convex/limits.ts";
+import { MAX_MESSAGE_BYTES } from "../convex/limits.ts";
+import { signIn, testDeployment } from "./helpers.ts";
 
 const encoder = new TextEncoder();
 
@@ -8,45 +10,51 @@ function size(content: string, kwargs: Record<string, unknown> | undefined) {
 	return encoder.encode(JSON.stringify({ content, kwargs })).length;
 }
 
-describe("clamp", () => {
-	it("keeps a message that fits", () => {
-		const kwargs = { meta: { durationMs: 12 } };
-		expect(clamp("hello", kwargs)).toEqual({
-			content: "hello",
-			kwargs,
-			truncated: false,
-		});
+async function stored(kwargs: Record<string, unknown>) {
+	const t = testDeployment();
+	const alice = await signIn(t, "alice@example.com");
+	const chatId = await alice.as.mutation(api.chats.create, {
+		workspaceId: alice.workspace,
+		title: "work",
 	});
+	await alice.as.mutation(api.messages.append, {
+		chatId,
+		messages: [
+			{
+				id: "h1",
+				type: "ai",
+				content: "x".repeat(MAX_MESSAGE_BYTES * 2),
+				kwargs,
+			},
+		],
+	});
+	const [message] = await alice.as.query(api.messages.transcript, { chatId });
+	return message;
+}
 
-	it("holds a truncated message under the document ceiling", () => {
-		const clamped = clamp("x".repeat(MAX_MESSAGE_BYTES * 4), {
-			ui: "y".repeat(MAX_MESSAGE_BYTES * 4),
+describe("an oversized message", () => {
+	it("is stored truncated, under the message ceiling", async () => {
+		const message = await stored({
+			ui: "y".repeat(MAX_MESSAGE_BYTES * 2),
 			meta: { durationMs: 12 },
 		});
-		expect(clamped.truncated).toBe(true);
-		expect(size(clamped.content, clamped.kwargs)).toBeLessThan(
+		expect(message.truncated).toBe(true);
+		expect(size(message.content, message.kwargs)).toBeLessThan(
 			MAX_MESSAGE_BYTES,
 		);
-		expect(MAX_MESSAGE_BYTES).toBeLessThan(CONVEX_DOCUMENT_BYTES);
 	});
 
-	it("drops the oversized field and keeps the small one", () => {
-		const clamped = clamp("x".repeat(MAX_MESSAGE_BYTES * 4), {
-			ui: "y".repeat(MAX_MESSAGE_BYTES * 4),
-			meta: { durationMs: 12 },
-		});
-		expect(clamped.kwargs).toEqual({ meta: { durationMs: 12 } });
-	});
-
-	it("keeps an entry's kind and the ask it is held on over a payload that would spend the budget first", () => {
-		const clamped = clamp("x".repeat(MAX_MESSAGE_BYTES * 4), {
-			value: "y".repeat(Math.floor(MAX_MESSAGE_BYTES / 2) - 64),
+	it("keeps an entry's kind and the ask it is held on when its payload is oversized", async () => {
+		const message = await stored({
+			value: "y".repeat(MAX_MESSAGE_BYTES * 2),
 			kind: "asks",
 			holding: "h1",
 		});
-		expect(clamped.kwargs).toMatchObject({ kind: "asks", holding: "h1" });
+		expect(message.kwargs).toMatchObject({ kind: "asks", holding: "h1" });
 	});
+});
 
+describe("clamp", () => {
 	it("never splits a multi-byte character", () => {
 		const clamped = clamp("é".repeat(MAX_MESSAGE_BYTES), undefined);
 		expect(clamped.truncated).toBe(true);

@@ -1,8 +1,8 @@
+import { Checks } from "@repo/checks/checks";
 import type { Trace } from "@repo/checks/trace";
 import { promisesExtension } from "@repo/promises-extension";
 import { promisesHost } from "@repo/promises-extension/host";
 import type { AgentRepl } from "@repo/repl/repl";
-import type { SecretsStore } from "@repo/secrets-extension/ports";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { type Harness, tracedRepl } from "./harness.ts";
 import {
@@ -46,12 +46,19 @@ function replFor(spec: MockSpec): Harness {
 	});
 }
 
+function verdict(trace: Trace, source: string): string {
+	const checks = new Checks(trace, source);
+	checks.evaluate(1);
+	return checks.results()[0]?.verdict ?? "missing";
+}
+
 describe("a mocked MCP server", () => {
 	let repl: AgentRepl;
 	let trace: Trace;
 
 	beforeEach(() => {
 		({ repl, trace } = replFor(PLAYWRIGHT));
+		trace.beginStep(1);
 	});
 
 	test("loads by its toolkit name and mints the real bindings", async () => {
@@ -62,26 +69,19 @@ describe("a mocked MCP server", () => {
 		expect(doc.user).toContain("(playwright/browser_navigate :url :string)");
 	});
 
-	test("records the call under the server name, with its arguments", async () => {
+	test("a check sees the call under the server name, with its arguments", async () => {
 		await repl.eval('(await (load-mcp "playwright"))');
 		await repl.eval('(playwright/browser_navigate :url "https://hyko.ai")');
 
-		expect(trace.events).toContainEqual(
-			expect.objectContaining({
-				kind: "connect",
-				server: "playwright",
-				ok: true,
-			}),
-		);
-		expect(trace.events).toContainEqual(
-			expect.objectContaining({
-				kind: "tool",
-				server: "playwright",
-				tool: "browser_navigate",
-				args: { url: "https://hyko.ai" },
-				ok: true,
-			}),
-		);
+		expect(
+			verdict(
+				trace,
+				'(defcheck it (eventually (called "playwright/browser_navigate" :url (matches "hyko"))))',
+			),
+		).toBe("true");
+		expect(
+			verdict(trace, '(defcheck it (eventually (called-server "playwright")))'),
+		).toBe("true");
 	});
 
 	test("still validates arguments against the tool schema", async () => {
@@ -103,39 +103,35 @@ describe("a mocked MCP server", () => {
 				flaky: { tools: [{ name: "go" }], calls: { go: { error: "boom" } } },
 			},
 		}));
+		trace.beginStep(1);
 		await repl.eval('(await (load-mcp :name "flaky" :command "none"))');
 
 		expect(await repl.eval("(flaky/go)")).toContain("boom");
-		expect(trace.events).toContainEqual(
-			expect.objectContaining({ kind: "tool", tool: "go", ok: false }),
-		);
+		expect(verdict(trace, "(defcheck it (eventually (errored)))")).toBe("true");
 	});
 
-	test("an unmocked server fails in-world, and warns its author", async () => {
+	test("an unmocked server fails in-world without naming the mock", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const output = await repl.eval('(await (load-mcp "linear"))');
 		expect(output).toContain('cannot start MCP server "linear"');
 		expect(output).not.toContain("mock");
-		expect(warn).toHaveBeenCalledWith(
-			expect.stringContaining("no mock for MCP server"),
-		);
 		warn.mockRestore();
 	});
 
-	test("a secret never lands in the trace", async () => {
-		let secrets: SecretsStore;
-		({ repl, trace, secrets } = replFor({
+	test("keeps a secret passed to a tool out of the recorded trace", async () => {
+		const run = replFor({
 			servers: {
 				api: { tools: [{ name: "send" }], calls: { send: { ok: true } } },
 			},
-		}));
-		secrets.set({ REPL_TOKEN: "s3cr3t-value" });
-		await repl.eval('(await (load-mcp :name "api" :command "none"))');
-		await repl.eval('(api/send :token (secret "REPL_TOKEN"))');
+		});
+		run.secrets.set({ REPL_TOKEN: "s3cr3t-value" });
+		run.trace.beginStep(1);
+		await run.repl.eval('(await (load-mcp :name "api" :command "none"))');
+		await run.repl.eval('(api/send :token (secret "REPL_TOKEN"))');
 
-		const call = trace.events.find((e) => e.kind === "tool");
-		expect(call).toBeDefined();
-		expect(JSON.stringify(call)).not.toContain("s3cr3t-value");
-		expect(JSON.stringify(call)).toContain("<redacted>");
+		expect(
+			verdict(run.trace, '(defcheck it (eventually (called-server "api")))'),
+		).toBe("true");
+		expect(JSON.stringify(run.trace.events)).not.toContain("s3cr3t-value");
 	});
 });

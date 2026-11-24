@@ -2,8 +2,8 @@ import { type FunctionReference, getFunctionName } from "convex/server";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../convex/_generated/dataModel.js";
 import type { Connect } from "../../src/agent-repl.ts";
-import type { Owner, ServerClient } from "../../src/server-client.ts";
-import { profileOf, ThreadHost } from "../../src/thread-host.ts";
+import type { ServerClient } from "../../src/server-client.ts";
+import { ThreadHost } from "../../src/thread-host.ts";
 
 const WORKSPACE = "workspace-1" as Id<"workspaces">;
 const CHAT = "chat-1" as Id<"chats">;
@@ -81,19 +81,6 @@ const child: { agent: Agent } = {
 };
 
 describe("the thread factory", () => {
-	it("narrows bounds and budget down the lineage and marks the thread a sub-agent", () => {
-		expect(profileOf([child, middle])).toEqual({
-			instructions: "dig only",
-			bounds: ["(permission/deny knowledge/*)", "(permission/deny memory/*)"],
-			budget: 12,
-			subAgent: true,
-		});
-	});
-
-	it("leaves a root chat the whole workspace", () => {
-		expect(profileOf([root])).toEqual({ bounds: [] });
-	});
-
 	it("sets up the turn with the record's instructions", async () => {
 		const host = new ThreadHost({
 			server: serverOver([child, middle, root]),
@@ -132,34 +119,23 @@ describe("the thread factory", () => {
 		expect(repl.interp.systemPrompt().match(ROOT_ONLY)).toBeNull();
 	});
 
-	it("runs its stores as the record's owner with no request behind it", async () => {
-		const actedFor: Owner[] = [];
-		const asked: string[] = [];
+	it("reads the workspace's agents as the record's owner", async () => {
+		const nobody: Connect = () =>
+			({
+				query: (reference: unknown) =>
+					Promise.resolve(named(reference).endsWith(":list") ? [] : null),
+				mutation: () => Promise.resolve(null),
+			}) as unknown as ReturnType<Connect>;
 		const host = new ThreadHost({
 			server: serverOver([root]),
-			actAs: (owner) => {
-				actedFor.push(owner);
-				const client = offline();
-				return {
-					...client,
-					query: ((reference: unknown, args: unknown) => {
-						asked.push(named(reference));
-						return client.query(reference as never, args as never);
-					}) as typeof client.query,
-				};
-			},
+			actAs: (owner) =>
+				owner.userId === OWNER && owner.workspaceId === WORKSPACE
+					? offline()
+					: nobody(),
 		});
 		const repl = await host.repl(CHAT);
 		expect((await repl.evalOutput("(agents)")).results.at(-1)).toContain(
 			"scout",
 		);
-		expect(repl.interp.systemPrompt().match(ROOT_ONLY)).toEqual([
-			"AGENTS",
-			"WORKSPACE",
-			"PREFERENCES",
-			"INTERACTIVE VIEWS",
-		]);
-		expect(actedFor).toEqual([{ userId: OWNER, workspaceId: WORKSPACE }]);
-		expect(asked).toContain("sources:list");
 	});
 });

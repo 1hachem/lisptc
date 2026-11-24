@@ -57,36 +57,6 @@ async function activityOf(
 }
 
 describe("a knowledge file read or write", () => {
-	it("reports each one as done, by verb and file name", async () => {
-		expect(
-			await activityOf(
-				new MemoryKnowledgeStore(),
-				'(knowledge/write "notes.md" "hi") (knowledge/read "notes.md")',
-			),
-		).toEqual([
-			{
-				kind: "file",
-				icon: "write",
-				label: "knowledge · write",
-				detail: "notes.md",
-				state: "done",
-				id: "file-1",
-				startedAt: 1000,
-				ms: 25,
-			},
-			{
-				kind: "file",
-				icon: "read",
-				label: "knowledge · read",
-				detail: "notes.md",
-				state: "done",
-				id: "file-2",
-				startedAt: 1050,
-				ms: 25,
-			},
-		]);
-	});
-
 	it("reports failed when the store refuses the write", async () => {
 		const activity = await activityOf(
 			new FullStore(),

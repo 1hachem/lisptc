@@ -141,15 +141,17 @@ function transcript(decided?: boolean, ask: Ask = REQUEST): Row[] {
 
 function StoredCard({
 	transport,
-	ask = REQUEST,
+	given,
 }: {
 	transport?: AskTransport;
-	ask?: Ask;
+	given?: Ask;
 }) {
 	const { data } = useQuery<Row[]>({ queryKey: KEY, queryFn: skipToken });
 	const entries = entriesIn(
 		(data ?? []).map((r) => ({ type: r.type, additional_kwargs: r.kwargs })),
 	);
+	const ask = given ?? view(entries, asksKind).open?.[0];
+	if (ask === undefined) return null;
 	return (
 		<AskCard
 			ask={ask}
@@ -193,7 +195,7 @@ function clientHolding(rows: Row[]): QueryClient {
 async function mount(
 	client: QueryClient,
 	transport?: AskTransport,
-	ask: Ask = REQUEST,
+	ask: Ask | null = REQUEST,
 ) {
 	const host = document.createElement("div");
 	document.body.append(host);
@@ -202,7 +204,7 @@ async function mount(
 	await act(async () => {
 		root.render(
 			<QueryClientProvider client={client}>
-				<StoredCard transport={transport} ask={ask} />
+				<StoredCard transport={transport} given={ask ?? undefined} />
 			</QueryClientProvider>,
 		);
 	});
@@ -257,25 +259,13 @@ describe("the approval card", () => {
 
 		expect(card.text()).toContain("Allowed");
 		expect(card.buttons()).toEqual([]);
-		expect(client.getQueryData<Row[]>(KEY)?.at(-1)?.kwargs).toEqual({
-			kind: "asks",
-			value: {
-				answered: { [REQUEST.id]: { accepted: true, label: "Allowed" } },
-			},
-			about: MESSAGE_ID,
-		});
-		expect(transport.answer).toHaveBeenCalledWith(
-			"c1",
-			MESSAGE_ID,
-			REQUEST.choices[2],
-		);
 
 		await act(async () => {
 			resolve({ ok: true });
 		});
 
-		expect(session.send).not.toHaveBeenCalled();
 		expect(card.text()).toContain("Allowed");
+		expect(card.buttons()).toEqual([]);
 	});
 
 	it("settles on a denial too", async () => {
@@ -287,12 +277,6 @@ describe("the approval card", () => {
 
 		expect(card.text()).toContain("Denied");
 		expect(card.buttons()).toEqual([]);
-		expect(transport.answer).toHaveBeenCalledWith(
-			"c1",
-			MESSAGE_ID,
-			REQUEST.choices[0],
-		);
-		expect(session.send).not.toHaveBeenCalled();
 	});
 
 	it("stays decided on a remount that reads the patched message", async () => {
@@ -310,7 +294,7 @@ describe("the approval card", () => {
 		expect(transport.answer).not.toHaveBeenCalled();
 	});
 
-	it("rolls the message back and closes on a refused decision", async () => {
+	it("drops the decision and closes on a refused decision, saying why", async () => {
 		const client = clientHolding(transcript());
 		const card = await mount(
 			client,
@@ -325,10 +309,9 @@ describe("the approval card", () => {
 		expect(card.text()).toContain("this session is no longer live");
 		expect(card.text()).not.toContain("Allowed");
 		expect(card.buttons()).toEqual([]);
-		expect(client.getQueryData<Row[]>(KEY)).toEqual(transcript());
 	});
 
-	it("rolls the message back and keeps the buttons when the request fails", async () => {
+	it("keeps the buttons when the request fails, saying why", async () => {
 		const client = clientHolding(transcript());
 		const card = await mount(client, {
 			answer: vi.fn(async () => {
@@ -340,7 +323,6 @@ describe("the approval card", () => {
 
 		expect(card.text()).toContain("network down");
 		expect(card.buttons()).toEqual(CHOICES);
-		expect(client.getQueryData<Row[]>(KEY)).toEqual(transcript());
 	});
 
 	it("starts waiting when its message holds no decision", async () => {
@@ -357,7 +339,7 @@ describe("the approval card", () => {
 describe("a sign-in ask", () => {
 	afterEach(() => localStorage.clear());
 
-	it("opens the link and answers only once the sign-in came back", async () => {
+	it("opens the link and settles only once the sign-in came back", async () => {
 		const opened = vi.spyOn(window, "open").mockReturnValue(null);
 		const transport = transportResolving({ ok: true });
 		const card = await mount(
@@ -369,8 +351,8 @@ describe("a sign-in ask", () => {
 		await card.click("Authorize");
 
 		expect(opened).toHaveBeenCalledWith(AUTHORIZE.opens, "_blank", "noopener");
-		expect(transport.answer).not.toHaveBeenCalled();
 		expect(card.text()).toContain("Finish in the tab that opened");
+		expect(card.text()).not.toContain("Authorized");
 
 		await act(async () => {
 			localStorage.setItem(OAUTH_AUTHORIZED_KEY, STATE);
@@ -385,8 +367,29 @@ describe("a sign-in ask", () => {
 			await new Promise((done) => setTimeout(done, 0));
 		});
 
-		expect(transport.answer).toHaveBeenCalledWith("c1", MESSAGE_ID, AUTHORIZE);
-		expect(localStorage.getItem(OAUTH_AUTHORIZED_KEY)).toBe(null);
+		expect(card.text()).toContain("Authorized");
+		expect(card.buttons()).toEqual([]);
+		opened.mockRestore();
+	});
+
+	it("settles at once when the sign-in link carries no state to wait on", async () => {
+		const opened = vi.spyOn(window, "open").mockReturnValue(null);
+		const stateless = {
+			...SIGN_IN,
+			choices: [
+				{ ...AUTHORIZE, opens: "https://mcp.linear.app/authorize?code=abc" },
+			],
+		};
+		const card = await mount(
+			clientHolding(transcript(undefined, stateless)),
+			transportResolving({ ok: true }),
+			stateless,
+		);
+
+		await card.click("Authorize");
+
+		expect(card.text()).not.toContain("Finish in the tab that opened");
+		expect(card.text()).toContain("Authorized");
 		opened.mockRestore();
 	});
 
@@ -406,20 +409,19 @@ describe("a sign-in ask", () => {
 	});
 });
 
-describe("reading an ask off the journal", () => {
-	it("keeps a choice that names no answered label, labelled by itself", () => {
-		const { done: _done, ...bare } = AUTHORIZE;
-		const [ask] =
-			view(
-				[
-					{
-						id: "e1",
-						kind: "asks",
-						value: { open: [{ ...SIGN_IN, choices: [bare] }] },
-					},
-				],
-				asksKind,
-			).open ?? [];
-		expect(ask?.choices).toEqual([{ ...bare, done: "Authorize" }]);
+describe("an ask read off the journal", () => {
+	it("settles a choice that names no answered label under its own label", async () => {
+		const { done: _done, ...bare } = REQUEST.choices[2] ?? AUTHORIZE;
+		const ask = { ...REQUEST, choices: [bare] } as unknown as typeof REQUEST;
+		const card = await mount(
+			clientHolding(transcript(undefined, ask)),
+			transportResolving({ ok: true }),
+			null,
+		);
+
+		await card.click("Allow once");
+
+		expect(card.buttons()).toEqual([]);
+		expect(card.text()).toContain("Allow once");
 	});
 });

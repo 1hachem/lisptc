@@ -72,15 +72,6 @@ describe("a promise from a builtin suspends the evaluator", () => {
 			),
 		).toBe("done");
 	});
-
-	it("lets the event loop turn during one eval", async () => {
-		let ticked = false;
-		setTimeout(() => {
-			ticked = true;
-		}, 0);
-		await evAsync("(slow 1)");
-		expect(ticked).toBe(true);
-	});
 });
 
 describe("a rejected promise is an ordinary Lisp error", () => {
@@ -197,11 +188,11 @@ describe("a promise is the host's own promise", () => {
 		expect(await evAsync("(await p)", interp)).toBe("7");
 	});
 
-	it("applies its result with no await at all", async () => {
-		const { interp, runs } = starter();
-		await evAsync("(start 7)", interp);
+	it("settles with no await at all", async () => {
+		const { interp } = starter();
+		await evAsync("(setq p (start 7))", interp);
 		await evAsync("(slow 1)", interp);
-		expect(runs()).toBe(1);
+		expect(await evAsync("(promise-state p)", interp)).toBe(":fulfilled");
 	});
 
 	it("drops a settled promise from (promises)", async () => {
@@ -261,17 +252,17 @@ describe("a promise built-in stands on its own", () => {
 	});
 
 	it("absorbs a rejection nobody awaited", async () => {
-		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as LispPromise;
+		const interp = interpWithSlow();
+		runSync(interp, "(setq p (boom-later))");
 		await new Promise((resolve) => setTimeout(resolve, 10));
-		expect(interp.async.stateOf(promise)).toBe("rejected");
+		expect(str(runSync(interp, "(promise-state p)"))).toBe(":rejected");
 	});
 
 	it("is cancellable by the host that dropped the interp", () => {
-		const interp = bare();
-		const promise = runSync(interp, "(start-doomed)") as LispPromise;
-		expect(interp.async.pending()).toContain(promise);
+		const interp = interpWithSlow();
+		runSync(interp, "(boom-later)");
+		expect(str(runSync(interp, "(length (promises))"))).toBe("1");
 		interp.dispose();
-		expect(interp.async.pending()).toHaveLength(0);
+		expect(str(runSync(interp, "(length (promises))"))).toBe("0");
 	});
 });

@@ -69,7 +69,7 @@ export function matchesCommand(command: Command, typed: string): boolean {
 	);
 }
 
-export function canonicalCommand(typed: string): string {
+function canonicalCommand(typed: string): string {
 	const name = typed.toLowerCase();
 	return (
 		commands.find(

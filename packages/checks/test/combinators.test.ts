@@ -385,21 +385,18 @@ describe("a call seen at both seams counts once", () => {
 });
 
 describe("answered matches the final reply", () => {
-	test("true when the answer carries what was asked for", () => {
-		const f = new Fixture().watch(
-			'(defcheck it (eventually (answered (matches "Build AI workflows"))))',
-		);
-		f.tick()
+	test("only an answer that carries the pattern satisfies it", () => {
+		const source =
+			'(defcheck it (eventually (answered (matches "Build AI workflows"))))';
+		const missed = new Fixture().watch(source);
+		missed.tick().stopped("I opened the page.").settle();
+		expect(missed.verdict("it")).toBe("false");
+
+		const found = new Fixture().watch(source);
+		found
+			.tick()
 			.stopped("The main heading is Build AI workflows visually.")
 			.settle();
-		expect(f.verdict("it")).toBe("true");
-	});
-
-	test("false when the agent halted without it", () => {
-		const f = new Fixture().watch(
-			'(defcheck it (eventually (answered (matches "Build AI workflows"))))',
-		);
-		f.tick().stopped("I opened the page.").settle();
-		expect(f.verdict("it")).toBe("false");
+		expect(found.verdict("it")).toBe("true");
 	});
 });

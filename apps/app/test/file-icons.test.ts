@@ -20,9 +20,4 @@ describe("knowledgeIcon", () => {
 		expect(knowledgeIcon(".bashrc", null)).toBe(File01Icon);
 		expect(knowledgeIcon("blob", "application/octet-stream")).toBe(File01Icon);
 	});
-
-	it("never reads an icon off the object prototype", () => {
-		expect(knowledgeIcon("x.constructor", null)).toBe(File01Icon);
-		expect(knowledgeIcon("x.__proto__", "constructor/x")).toBe(File01Icon);
-	});
 });

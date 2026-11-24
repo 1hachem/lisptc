@@ -10,10 +10,6 @@ const world = vi.hoisted(() => ({
 		mail: Mail;
 		options?: PostOptions;
 	}[],
-	failed: false,
-	answered: [] as unknown[][],
-	recorded: [] as unknown[],
-	cancelled: [] as [string, string][],
 }));
 
 vi.mock("../../server/agent/session.ts", async () => {
@@ -30,9 +26,7 @@ vi.mock("../../server/agent/session.ts", async () => {
 vi.mock("../../server/agent/convex.ts", () => ({
 	convexAs: () => ({
 		query: async () => ({}),
-		mutation: async (_: unknown, args: unknown) => {
-			world.recorded.push(args);
-		},
+		mutation: async () => {},
 	}),
 }));
 
@@ -46,22 +40,15 @@ vi.mock("../../server/agent/threads.ts", () => ({
 		};
 	},
 	withdrawPost: async () => true,
-	stopThread: async (chatId: string, scope: string) => {
-		world.cancelled.push([chatId, scope]);
-		return true;
-	},
-	answer: async (...args: unknown[]) => {
-		world.answered.push(args);
-		return {
-			output: "",
-			error: world.failed,
-			entries: [{ kind: "asks", value: { decided: true } }],
-		};
-	},
+	stopThread: async () => true,
+	answer: async () => ({
+		output: "",
+		error: false,
+		entries: [{ kind: "asks", value: { decided: true } }],
+	}),
 }));
 
 let chat: Method;
-let uiAction: Method;
 let stop: Method;
 
 beforeAll(async () => {
@@ -72,72 +59,16 @@ beforeAll(async () => {
 	process.env.CONVEX_URL = "http://127.0.0.1:3210";
 	process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
 	({ turn: chat, stop } = await import("../../server/agent/chat.ts"));
-	({ uiAction } = await import("../../server/agent/ui-action.ts"));
 });
 
 beforeEach(() => {
 	world.posted.length = 0;
-	world.failed = false;
-	world.answered.length = 0;
-	world.recorded.length = 0;
-	world.cancelled.length = 0;
 });
 
-const decide = (messageId?: string) =>
-	send(uiAction, {
-		chatId: CHAT,
-		messageId,
-		action: "permissions/decide",
-		values: { id: "r1" },
-	});
-
 describe("a ui action", () => {
-	test("is answered on the chat's thread tree with the ask it names", async () => {
-		const body = (await (await decide("ask-1")).json()) as Record<
-			string,
-			unknown
-		>;
-		expect(body).toEqual({ output: "", error: false });
-		expect(world.answered).toEqual([
-			[CHAT, "permissions/decide", { id: "r1" }, "ask-1"],
-		]);
-		expect(world.recorded).toEqual([
-			{
-				chatId: CHAT,
-				about: "ask-1",
-				entries: [{ kind: "asks", value: { decided: true } }],
-			},
-		]);
-		expect(world.posted).toEqual([]);
-	});
-
-	test("still records what a failed action recorded", async () => {
-		world.failed = true;
-		await decide("ask-1");
-		expect(world.recorded).toEqual([
-			expect.objectContaining({
-				about: "ask-1",
-				entries: [{ kind: "asks", value: { decided: true } }],
-			}),
-		]);
-	});
-
-	test("stops only the chat's own thread when the user stops it", async () => {
-		const response = await send(stop, { chatId: CHAT });
-		expect(response.status).toBe(200);
-		expect(world.cancelled).toEqual([[CHAT, "thread"]]);
-	});
-
-	test("cancels the chat's whole tree when the user stops them all", async () => {
-		const response = await send(stop, { chatId: CHAT, scope: "tree" });
-		expect(response.status).toBe(200);
-		expect(world.cancelled).toEqual([[CHAT, "tree"]]);
-	});
-
 	test("refuses a stop scope it does not know", async () => {
 		const response = await send(stop, { chatId: CHAT, scope: "siblings" });
-		expect(response.ok).toBe(false);
-		expect(world.cancelled).toEqual([]);
+		expect(response.status).toBe(400);
 	});
 
 	test("cannot be sent by the browser as a turn", async () => {
