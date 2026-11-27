@@ -10,7 +10,7 @@ alist as form handler, answers by rendering:
     (ui/select '(\"7\" \"30\" \"90\") :name \"d\" :value window
       :on-change (lambda (values) (ui/render (panel (cdr (assoc \"d\" values))))))
     (ui/table (issues-since window))))
-(ui/render (panel \"7\"))
+(panel \"7\")
 
 Text fields have no :on-change on purpose: each keystroke would round-trip,
 redrawing the field being typed in. Put ui/input in ui/form, let submit
@@ -71,8 +71,8 @@ note, \"user clicked search\".")
 - (ui/file-link text folder name) widget; click opens file in tab. List
   files user can open:
 
-(ui/render (ui/stack (ui/file-link \"Q3 report\" ~s \"q3.pdf\")
-    (ui/file-link \"photo\" ~s \"cat.png\")))
+(ui/stack (ui/file-link \"Q3 report\" ~s \"q3.pdf\")
+    (ui/file-link \"photo\" ~s \"cat.png\"))
 
 Open for user when they ask to see file; link when offering several."
     *ui-max-splits* *ui-folders* *ui-splits* *ui-default-split*
@@ -80,7 +80,7 @@ Open for user when they ask to see file; link when offering several."
     (car (cdr *ui-folders*)) (car *ui-folders*)))
 
 (memory "internal/ui/build" :when "the agent is about to build a visual view, dashboard, chart or interactive page"
-  "Build ui view and test it without rendering. ui/render only once it works.")
+  "Build ui view and test it without drawing: (setq v (panel)) binds, does not draw. Return it top-level only once it works.")
 
 (memory "internal/ui/basics" :when "the agent is about to show a table, form or buttons in chat, or any view the user can click or type into"
   "Example panel, a form whose action takes the alist, and a button whose action takes none:
@@ -92,15 +92,15 @@ Open for user when they ask to see file; link when offering several."
     (ui/form (lambda (values) (ui/render (results (cdr (assoc \"q\" values)))))
       (ui/input :name \"q\" :label \"filter\" :placeholder \"auth\")
       :submit \"search\")))
-(ui/render (panel))
+(panel)
 
 **Actions** are ordinary Lisp functions. Button or form action runs IN THIS
 REPL on use, NO model turn between: click, closure runs, view replaced, you
 are not asked. So every branch you anticipate is free.
-- Button action takes no argument: (lambda () (ui/render (panel))) . Form
+- Button action takes no argument: (lambda () (panel)) . Form
   action takes one: alist of every enclosed field's :name and contents, read
   with assoc.
-- Action answers via ui/render, replacing view in place; rendering nothing
+- Action answers by returning widget or via ui/render, replacing view in place; rendering nothing
   leaves view as is.
 - Field contents always strings, except ui/checkbox: real boolean, so
 (if (cdr (assoc \"o\" values)) ...) works. (read s) turns string into number.

@@ -57,6 +57,14 @@ describe("a step that renders", () => {
 		expect(out.model).not.toContain("#<ui:");
 	});
 
+	it("renders a widget a step leaves as its value, without ui/render", async () => {
+		const { r, node } = stored();
+		const out = await r.evalOutput('(ui/stack (ui/text "hi"))');
+		expect(node(out)).toMatchObject({ tag: "stack" });
+		expect(out.model).toContain("rendered stack");
+		expect(out.model).not.toContain("#<ui:");
+	});
+
 	it("leaves a text echo to compaction's cap", async () => {
 		const r = memoryRepl(modelFacing(new Compactor(2)));
 		const { model } = await r.evalOutput('(echo "one two three four")');

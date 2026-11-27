@@ -1,7 +1,16 @@
 INTERACTIVE VIEWS
 
-Chat body shows user only your prose and what ui/render draws. To show data, ui/render a **widget**.
+Chat body shows user only your prose and widgets you draw. Top-level form that returns **widget** draws it, no ui/render needed. ui/render only inside function. (setq v widget) does not draw.
 
 Widget constructors: names in ui-widgets. Each has own memory ui/widget-NAME; (doc 'ui/table) prints one.
 
 ui/render, ui/send, ui/open-file, ui/open-view, ui/close, ui/focus, ui/tabs, ui/file-link, ui/forget
+
+LONG ANSWERS
+
+Answer long: many parts, steps, options or details? Use ui/collapsible often. Prose and top ui/markdown = gist only, few lines. Each part's detail goes in own ui/collapsible, title says what it holds. Folded by default, user opens only what they want. :open t for part user must read now.
+
+(ui/stack
+  (ui/markdown "Six pieces left before first run. Build 1-6 against data/AAPL?")
+  (ui/collapsible "1. Extraction schema" (ui/markdown "Move demo.py ontology to own module, use as is on the 10-K."))
+  (ui/collapsible "6. kg build command" (ui/markdown "`kg build NAME PATHS --limit N`: load, chunk, extract, resolve, store.")))

@@ -118,9 +118,16 @@ function render(code: string): {
 }
 
 describe("building a view", () => {
-	it("renders nothing until ui/render is called", () => {
+	it("renders a widget a top-level form returns", () => {
 		const { interp, ui } = fresh();
-		runSync(interp, '(ui/stack (ui/text "hi"))');
+		const result = runSync(interp, '(ui/stack (ui/text "hi"))');
+		expect(ui.takeView()).toMatchObject({ tag: "stack" });
+		expect(str(result)).toBe('"rendered stack, 2 elements, 0 actions"');
+	});
+
+	it("renders nothing for a widget bound with setq or built inside a form", () => {
+		const { interp, ui } = fresh();
+		runSync(interp, '(setq v (ui/text "hi")) (length (list (ui/text "x")))');
 		expect(ui.takeView()).toBeUndefined();
 	});
 
@@ -323,6 +330,23 @@ describe("the display widgets", () => {
 		});
 	});
 
+	it("folds a collapsible shut unless :open is given", () => {
+		expect(
+			render('(ui/render (ui/collapsible "Steps" (ui/markdown "1. load")))')
+				.view,
+		).toEqual({
+			tag: "collapsible",
+			props: { title: "Steps" },
+			children: [{ tag: "markdown", props: { text: "1. load" }, children: [] }],
+		});
+		expect(
+			render('(ui/render (ui/collapsible "Steps" "load" :open t))').view,
+		).toMatchObject({
+			props: { title: "Steps", open: true },
+			children: [{ tag: "text", props: { text: "load" } }],
+		});
+	});
+
 	it("prints a non-string ui/text the way echo would", () => {
 		expect(render("(ui/render (ui/text 42))").view).toEqual({
 			tag: "text",
@@ -459,6 +483,16 @@ describe("actions", () => {
 		await surface.invoke("a1", {});
 		await surface.invoke("a1", {});
 		expect(str(runSync(interp, "(identity clicks)"))).toBe("2");
+	});
+
+	it("renders the widget a handler returns", async () => {
+		const { surface, ui } = render(
+			'(ui/render (ui/button "go" (lambda () (ui/text "went"))))',
+		);
+		await click(surface, ui, "a1");
+		expect(nodeToJson(ui.takeView() as never)).toMatchObject({
+			props: { text: "went" },
+		});
 	});
 
 	it("hands a handler that takes an argument the submitted fields", async () => {
@@ -786,6 +820,7 @@ describe("the catalog the frontend draws from", () => {
 			     (ui/badge "b") (ui/badge "b" :tone "warn")
 			     (ui/kpi "k" 2) (ui/kpi "k" 2 :hint "h")
 			     (ui/row (ui/card "c" "x"))
+			     (ui/collapsible "c" "x") (ui/collapsible "c" "x" :open t)
 			     (ui/button "go" (lambda () nil))
 			     (ui/form (lambda (v) v)
 			       (ui/input :name "q" :label "Q" :placeholder "p" :value "v")

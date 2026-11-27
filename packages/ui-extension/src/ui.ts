@@ -14,6 +14,7 @@ import {
 	newLispKeyword,
 	newSym,
 	Sym,
+	setqSym,
 	Unspecified,
 } from "@repo/interpreter/objects";
 import { plistOptions } from "@repo/interpreter/plist";
@@ -322,8 +323,13 @@ export class UiSurface {
 		const { value } = await driveAsync(
 			interp.evalGen(new Cell(fn, args), null),
 		);
+		if (value instanceof UiElement) await this.store?.put(this.render(value));
 		return value;
 	}
+}
+
+function isAssignment(form: unknown): boolean {
+	return form instanceof Cell && form.car === setqSym;
 }
 
 function quoted(x: unknown): unknown {
@@ -579,11 +585,17 @@ function registerUi(
 		return `rendered ${view.tag}, ${elements} element${elements === 1 ? "" : "s"}, ${actions} action${actions === 1 ? "" : "s"}`;
 	}
 
+	interp.hooks.evalForm.use(function* (i, form, next): Eval {
+		const value = yield* next(i, form);
+		if (!(value instanceof UiElement) || isAssignment(form)) return value;
+		return yield* renderView(value);
+	});
+
 	interp.defGen(
 		"ui/render",
 		1,
 		"(ui/render view)",
-		"Put a widget on the user's screen, replacing whatever this step rendered before. Returns a one-line summary, because the view is for the USER to read — describing it back to yourself would spend the context the widget just saved.",
+		"Put a widget on the user's screen, replacing whatever this step rendered before. A top-level form or an action that returns a widget renders it the same way, so this is for rendering from inside a function. Returns a one-line summary, because the view is for the USER to read — describing it back to yourself would spend the context the widget just saved.",
 		z.tuple([zAny]),
 		function* ([view]): Eval {
 			if (!(view instanceof UiElement))

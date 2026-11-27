@@ -47,6 +47,10 @@ export const catalog = {
 	stack: widget({}, { children: true }),
 	row: widget({}, { children: true }),
 	card: widget({ title: z.string() }, { children: true }),
+	collapsible: widget(
+		{ title: z.string(), open: z.boolean().optional() },
+		{ children: true },
+	),
 	button: widget(
 		{ label: z.string(), action: actionId },
 		{ actions: ["action"] },
